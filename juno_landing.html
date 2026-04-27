@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Juno — See which keywords turn into deals</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0c0c0b;
+    --surface: #141412;
+    --border: #222220;
+    --border-light: #2a2a28;
+    --text: #f0ead2;
+    --text-secondary: #8a8678;
+    --text-tertiary: #4a4840;
+    --accent: #c8f04a;
+    --accent-dim: #8aaa2e;
+    --red: #e05a4a;
+    --amber: #e09a30;
+    --green: #5ab87a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 48px;
+    height: 60px;
+    background: rgba(12,12,11,0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .nav-logo {
+    font-family: 'Instrument Serif', serif;
+    font-size: 22px;
+    color: var(--text);
+    letter-spacing: -0.02em;
+  }
+
+  .nav-logo span { color: var(--accent); }
+
+  .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    list-style: none;
+  }
+
+  .nav-links a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 400;
+    transition: color 0.2s;
+  }
+
+  .nav-links a:hover { color: var(--text); }
+
+  .nav-cta {
+    background: var(--accent);
+    color: #0c0c0b !important;
+    padding: 8px 20px;
+    border-radius: 6px;
+    font-weight: 600 !important;
+    font-size: 13px !important;
+    transition: opacity 0.2s !important;
+  }
+
+  .nav-cta:hover { opacity: 0.88; }
+
+  /* ── HERO ── */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 120px 24px 80px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -200px; left: 50%;
+    transform: translateX(-50%);
+    width: 800px; height: 800px;
+    background: radial-gradient(circle, rgba(200,240,74,0.06) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(200,240,74,0.08);
+    border: 1px solid rgba(200,240,74,0.2);
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 36px;
+    animation: fadeUp 0.6s ease both;
+  }
+
+  .hero-badge::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  h1 {
+    font-family: 'Instrument Serif', serif;
+    font-size: clamp(48px, 7vw, 88px);
+    line-height: 1.0;
+    letter-spacing: -0.03em;
+    margin-bottom: 28px;
+    max-width: 900px;
+    animation: fadeUp 0.6s 0.1s ease both;
+  }
+
+  h1 em {
+    font-style: italic;
+    color: var(--accent);
+  }
+
+  .hero-sub {
+    font-size: 18px;
+    color: var(--text-secondary);
+    max-width: 520px;
+    line-height: 1.7;
+    margin-bottom: 44px;
+    animation: fadeUp 0.6s 0.2s ease both;
+    font-weight: 300;
+  }
+
+  .hero-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    animation: fadeUp 0.6s 0.3s ease both;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #0c0c0b;
+    border: none;
+    padding: 13px 28px;
+    border-radius: 7px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.15s;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  .btn-primary:hover { opacity: 0.88; transform: translateY(-1px); }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-light);
+    padding: 13px 28px;
+    border-radius: 7px;
+    font-size: 15px;
+    font-weight: 400;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  .btn-secondary:hover { border-color: var(--text-secondary); color: var(--text); }
+
+  /* ── PRODUCT MOCKUP ── */
+  .mockup-wrap {
+    width: 100%;
+    max-width: 900px;
+    margin: 72px auto 0;
+    animation: fadeUp 0.8s 0.4s ease both;
+  }
+
+  .mockup {
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 40px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04);
+  }
+
+  .mockup-bar {
+    background: #1a1a18;
+    border-bottom: 1px solid var(--border);
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .mockup-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+  }
+
+  .mockup-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-tertiary);
+    margin-left: 8px;
+  }
+
+  .mockup-body {
+    padding: 24px;
+  }
+
+  .mockup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 20px;
+  }
+
+  .mockup-stat {
+    text-align: left;
+  }
+
+  .mockup-stat-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    margin-bottom: 4px;
+  }
+
+  .mockup-stat-value {
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -0.02em;
+  }
+
+  .mockup-stat-value.good { color: var(--accent); }
+  .mockup-stat-value.bad { color: var(--red); }
+
+  .mockup-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .mockup-table th {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 400;
+  }
+
+  .mockup-table td {
+    padding: 12px 12px;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(34,34,32,0.6);
+    vertical-align: middle;
+  }
+
+  .mockup-table tr:last-child td { border-bottom: none; }
+
+  .mockup-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+  .kw { color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; }
+  .spend { color: var(--text-secondary); }
+  .deals-good { color: var(--green); font-weight: 600; }
+  .deals-bad { color: var(--red); font-weight: 600; }
+  .cac-good { color: var(--green); font-weight: 500; }
+  .cac-bad { color: var(--red); font-weight: 500; }
+  .cac-warn { color: var(--amber); font-weight: 500; }
+
+  .action-tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 0.05em;
+  }
+
+  .tag-scale { background: rgba(90,184,122,0.12); color: var(--green); }
+  .tag-cut { background: rgba(224,90,74,0.12); color: var(--red); }
+  .tag-watch { background: rgba(224,154,48,0.12); color: var(--amber); }
+
+  /* ── SECTIONS ── */
+  section {
+    padding: 100px 48px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .section-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    margin-bottom: 20px;
+  }
+
+  h2 {
+    font-family: 'Instrument Serif', serif;
+    font-size: clamp(32px, 4vw, 52px);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    margin-bottom: 16px;
+  }
+
+  .section-sub {
+    font-size: 17px;
+    color: var(--text-secondary);
+    max-width: 560px;
+    line-height: 1.7;
+    margin-bottom: 56px;
+    font-weight: 300;
+  }
+
+  /* ── PROBLEM CARDS ── */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px;
+    transition: border-color 0.2s, transform 0.2s;
+  }
+
+  .card:hover { border-color: var(--border-light); transform: translateY(-2px); }
+
+  .card-icon {
+    width: 40px; height: 40px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    margin-bottom: 18px;
+  }
+
+  .card-icon.red { background: rgba(224,90,74,0.1); }
+  .card-icon.amber { background: rgba(224,154,48,0.1); }
+  .card-icon.green { background: rgba(90,184,122,0.1); }
+
+  .card h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: var(--text);
+  }
+
+  .card p {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.65;
+  }
+
+  /* ── HOW IT WORKS ── */
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    position: relative;
+  }
+
+  .steps::before {
+    content: '';
+    position: absolute;
+    top: 28px; left: calc(16.66% + 20px); right: calc(16.66% + 20px);
+    height: 1px;
+    background: linear-gradient(to right, var(--accent), var(--border-light), var(--accent));
+    opacity: 0.3;
+  }
+
+  .step {
+    padding: 0 24px;
+    text-align: center;
+  }
+
+  .step-num {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: rgba(200,240,74,0.08);
+    border: 1px solid rgba(200,240,74,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'DM Mono', monospace;
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--accent);
+    margin: 0 auto 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .step h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+
+  .step p {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.65;
+  }
+
+  /* ── DIVIDER ── */
+  .full-divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 0;
+  }
+
+  /* ── VS SECTION ── */
+  .vs-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  .vs-card {
+    border-radius: 10px;
+    padding: 28px;
+    border: 1px solid var(--border);
+  }
+
+  .vs-card.them { background: var(--surface); }
+  .vs-card.us { background: rgba(200,240,74,0.04); border-color: rgba(200,240,74,0.2); }
+
+  .vs-card-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .vs-card.us .vs-card-label { color: var(--accent); }
+
+  .vs-item {
+    display: flex;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .vs-item:last-child { border-bottom: none; }
+
+  .vs-icon { flex-shrink: 0; margin-top: 2px; }
+  .vs-item-text { color: var(--text-secondary); }
+  .vs-item-text strong { display: block; color: var(--text); font-weight: 500; margin-bottom: 2px; font-size: 13px; }
+
+  /* ── CTA ── */
+  .cta-section {
+    text-align: center;
+    padding: 100px 48px;
+    max-width: 700px;
+    margin: 0 auto;
+  }
+
+  .cta-section h2 { margin-bottom: 16px; }
+  .cta-section p { color: var(--text-secondary); font-size: 17px; margin-bottom: 40px; font-weight: 300; }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 32px 48px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .footer-logo {
+    font-family: 'Instrument Serif', serif;
+    font-size: 18px;
+    color: var(--text-secondary);
+  }
+
+  .footer-meta {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .fade-in {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+
+  .fade-in.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  @media (max-width: 768px) {
+    nav { padding: 0 20px; }
+    nav .nav-links { display: none; }
+    section { padding: 64px 24px; }
+    .card-grid { grid-template-columns: 1fr; }
+    .steps { grid-template-columns: 1fr; }
+    .steps::before { display: none; }
+    .vs-grid { grid-template-columns: 1fr; }
+    footer { flex-direction: column; gap: 12px; text-align: center; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">jun<span>o</span></div>
+  <ul class="nav-links">
+    <li><a href="#problem">Problem</a></li>
+    <li><a href="#how">How it works</a></li>
+    <li><a href="#vs">vs HubSpot</a></li>
+    <li><a href="#" class="nav-cta">Request access</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-badge">Now in beta</div>
+  <h1>You're paying for clicks.<br><em>Not customers.</em></h1>
+  <p class="hero-sub">Juno connects your Google Ads to your CRM so you can see exactly which keywords generate pipeline — and which ones are burning budget.</p>
+  <div class="hero-actions">
+    <button class="btn-primary" onclick="window.location.href='/auth/signin'">Get early access</button>
+    <button class="btn-secondary" onclick="document.getElementById('how').scrollIntoView({behavior:'smooth'})">See how it works</button>
+  </div>
+
+  <div class="mockup-wrap">
+    <div class="mockup">
+      <div class="mockup-bar">
+        <div class="mockup-dot" style="background:#ff5f57"></div>
+        <div class="mockup-dot" style="background:#febc2e"></div>
+        <div class="mockup-dot" style="background:#28c840"></div>
+        <span class="mockup-title">juno / keyword-attribution / last-90-days</span>
+      </div>
+      <div class="mockup-body">
+        <div class="mockup-header">
+          <div class="mockup-stat">
+            <div class="mockup-stat-label">Total ad spend</div>
+            <div class="mockup-stat-value">$14,200</div>
+          </div>
+          <div class="mockup-stat">
+            <div class="mockup-stat-label">Pipeline generated</div>
+            <div class="mockup-stat-value good">$186K</div>
+          </div>
+          <div class="mockup-stat">
+            <div class="mockup-stat-label">Budget to cut</div>
+            <div class="mockup-stat-value bad">$6,400</div>
+          </div>
+        </div>
+        <table class="mockup-table">
+          <thead>
+            <tr>
+              <th>Keyword</th>
+              <th>Spend/mo</th>
+              <th>Deals</th>
+              <th>True CAC</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="kw">"stripe alternative for startups"</td>
+              <td class="spend">$1,200</td>
+              <td class="deals-good">4</td>
+              <td class="cac-good">$300</td>
+              <td><span class="action-tag tag-scale">Scale 2x</span></td>
+            </tr>
+            <tr>
+              <td class="kw">"payment api developer"</td>
+              <td class="spend">$800</td>
+              <td class="deals-bad" style="color:var(--amber)">1</td>
+              <td class="cac-warn">$800</td>
+              <td><span class="action-tag tag-watch">Monitor</span></td>
+            </tr>
+            <tr>
+              <td class="kw">"fiserv competitor"</td>
+              <td class="spend">$1,800</td>
+              <td class="deals-bad" style="color:var(--amber)">1</td>
+              <td class="cac-warn">$1,800</td>
+              <td><span class="action-tag tag-watch">Test copy</span></td>
+            </tr>
+            <tr>
+              <td class="kw">"stripe pricing 2026"</td>
+              <td class="spend">$2,200</td>
+              <td class="deals-bad">0</td>
+              <td class="cac-bad">none</td>
+              <td><span class="action-tag tag-cut">Cut now</span></td>
+            </tr>
+            <tr>
+              <td class="kw">"payment processing startup"</td>
+              <td class="spend">$2,400</td>
+              <td class="deals-bad">0</td>
+              <td class="cac-bad">none</td>
+              <td><span class="action-tag tag-cut">Cut now</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr class="full-divider">
+
+<!-- PROBLEM -->
+<section id="problem">
+  <div class="fade-in">
+    <div class="section-label">The problem</div>
+    <h2>Google shows you clicks.<br>Not which ones close.</h2>
+    <p class="section-sub">B2B companies spend thousands on Google Ads with no visibility into which keywords actually drive pipeline. The data exists — Google just doesn't show it to you.</p>
+  </div>
+  <div class="card-grid fade-in">
+    <div class="card">
+      <div class="card-icon red">🔒</div>
+      <h3>Keywords are hidden</h3>
+      <p>Google removed 80% of search term visibility in 2020. You're optimizing for clicks on data that's been deliberately obscured.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon amber">🔗</div>
+      <h3>No CRM connection</h3>
+      <p>HubSpot captures the form fill but loses the keyword. Campaign level only — never deal level. The chain breaks between click and close.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon green">💸</div>
+      <h3>CAC is a mystery</h3>
+      <p>Without keyword-to-deal attribution, you can't calculate your true cost to acquire a customer. You're flying blind on your biggest marketing expense.</p>
+    </div>
+  </div>
+</section>
+
+<hr class="full-divider">
+
+<!-- HOW IT WORKS -->
+<section id="how">
+  <div class="fade-in" style="text-align:center; margin-bottom: 64px;">
+    <div class="section-label" style="text-align:center">How it works</div>
+    <h2>Three systems. One connection.</h2>
+    <p class="section-sub" style="margin: 0 auto 0;">Juno sits between Google Ads and your CRM. No migrations, no new workflows — just the attribution layer that was always missing.</p>
+  </div>
+  <div class="steps fade-in">
+    <div class="step">
+      <div class="step-num">01</div>
+      <h3>Connect Google Ads</h3>
+      <p>Pull keyword spend, click data, and search term reports via the Google Ads API. Tag every ad URL with UTM parameters that carry the keyword through to your landing page.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">02</div>
+      <h3>Link to your CRM</h3>
+      <p>Juno captures UTM parameters on form fill and stores them on the contact in HubSpot. The keyword attribution travels with the contact through every pipeline stage.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">03</div>
+      <h3>See CAC by keyword</h3>
+      <p>Ad spend divided by closed deals per keyword. A clear table showing what to scale, what to cut, and what to test. Updated daily, no spreadsheet required.</p>
+    </div>
+  </div>
+</section>
+
+<hr class="full-divider">
+
+<!-- VS HUBSPOT -->
+<section id="vs">
+  <div class="fade-in">
+    <div class="section-label">Why not just use HubSpot?</div>
+    <h2>Campaign level vs keyword level.<br>Contact vs deal.</h2>
+    <p class="section-sub">HubSpot has a Google Ads integration. It's not enough. Here's the exact difference.</p>
+  </div>
+  <div class="vs-grid fade-in">
+    <div class="vs-card them">
+      <div class="vs-card-label">
+        <span>HubSpot native</span>
+      </div>
+      <div class="vs-item">
+        <div class="vs-icon">✗</div>
+        <div class="vs-item-text"><strong>Campaign level only</strong>Can't show keyword-level attribution. You know the campaign worked — not which search term drove it.</div>
+      </div>
+      <div class="vs-item">
+        <div class="vs-icon">✗</div>
+        <div class="vs-item-text"><strong>Attribution stops at form fill</strong>Doesn't follow the contact to a closed deal. You can't connect ad spend to revenue.</div>
+      </div>
+      <div class="vs-item">
+        <div class="vs-icon">✗</div>
+        <div class="vs-item-text"><strong>GCLID breaks constantly</strong>Long B2B sales cycles, device switches, and Safari ITP all break GCLID. Defaults to direct traffic.</div>
+      </div>
+      <div class="vs-item">
+        <div class="vs-icon">✗</div>
+        <div class="vs-item-text"><strong>No CAC calculation</strong>Gives you data. Doesn't compute cost per closed deal per keyword. You do the math.</div>
+      </div>
+    </div>
+    <div class="vs-card us">
+      <div class="vs-card-label">
+        <span style="width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block"></span>
+        <span>Juno</span>
+      </div>
+      <div class="vs-item">
+        <div class="vs-icon" style="color:var(--accent)">✓</div>
+        <div class="vs-item-text"><strong>Keyword-level attribution</strong>Every keyword tracked individually — which exact search term drove which deal in your pipeline.</div>
+      </div>
+      <div class="vs-item">
+        <div class="vs-icon" style="color:var(--accent)">✓</div>
+        <div class="vs-item-text"><strong>Follows the deal to close</strong>Attribution doesn't stop at form fill. We track the contact all the way to closed/won in HubSpot.</div>
+      </div>
+      <div class="vs-item">
+        <div class="vs-icon" style="color:var(--accent)">✓</div>
+        <div class="vs-item-text"><strong>UTM-based — more durable</strong>UTM parameters persist through long B2B sales cycles better than GCLID. Less breakage, more signal.</div>
+      </div>
+      <div class="vs-item">
+        <div class="vs-icon" style="color:var(--accent)">✓</div>
+        <div class="vs-item-text"><strong>CAC computed automatically</strong>Spend divided by closed deals per keyword. One number, no spreadsheet needed.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="full-divider">
+
+<!-- CTA -->
+<div class="cta-section fade-in">
+  <div class="section-label" style="text-align:center">Get started</div>
+  <h2>Stop guessing which keywords work.</h2>
+  <p>Request early access and we'll run a free attribution audit on your Google Ads account — showing you exactly which keywords have driven pipeline and which ones have been burning budget.</p>
+  <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+    <button class="btn-primary" style="font-size:16px; padding:15px 36px;" onclick="window.location.href='/auth/signin'">Request free audit</button>
+    <button class="btn-secondary" style="font-size:16px; padding:15px 36px;">Book a call</button>
+  </div>
+</div>
+
+<hr class="full-divider">
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">juno</div>
+  <div class="footer-meta">© 2026 Juno · San Francisco, CA · chaska@caerusai.com</div>
+</footer>
+
+<script>
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add('visible');
+      }
+    });
+  }, { threshold: 0.1 });
+
+  document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+</script>
+
+</body>
+</html>

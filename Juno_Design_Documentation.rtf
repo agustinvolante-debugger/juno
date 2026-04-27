@@ -1,0 +1,85 @@
+{\rtf1\ansi\deff0
+{\fonttbl{\f0 Arial;}{\f1 Arial;}}
+{\colortbl;\red0\green0\blue0;}
+
+\f0\fs32\b Juno — Design Documentation\b0\fs24
+\par\par
+
+\fs20\b Overview\b0
+\par
+Juno is a B2B SaaS attribution tool that connects Google Ads to HubSpot CRM, enabling marketing teams and founders to see exactly which keywords generate pipeline and calculate true Customer Acquisition Cost (CAC) at the keyword level.
+\par\par
+
+\b Problem Being Solved\b0
+\par
+B2B companies running Google Ads have no visibility into which specific keywords close deals. HubSpot's native Google Ads integration only tracks at the campaign level and does not follow a contact through to a closed deal. Juno fills this gap by joining keyword spend data from Google Ads with deal data from HubSpot using UTM parameters.
+\par\par
+
+\b How the Google Ads API Is Used\b0
+\par
+Juno uses the Google Ads API to:
+\par
+1. Pull keyword-level spend, impressions, and clicks via the keyword_view resource
+\par
+2. Retrieve search term reports to identify irrelevant keyword matches
+\par
+3. Associate ad spend with specific keywords for attribution calculations
+\par\par
+Users authenticate via OAuth 2.0 and grant Juno read-only access to their Google Ads account. No data is modified. No automated bidding or policy changes are made.
+\par\par
+
+\b Data Flow Architecture\b0
+\par
+Step 1: User connects their Google Ads account via OAuth 2.0 (adwords scope, read-only)
+\par
+Step 2: Juno queries the Google Ads API for keyword spend data over the last 90 days
+\par
+Step 3: User connects their HubSpot CRM account
+\par
+Step 4: Juno reads contact UTM parameters and deal records from HubSpot
+\par
+Step 5: Juno joins keyword spend with closed deals via utm_term field (first-touch attribution)
+\par
+Step 6: Dashboard displays CAC per keyword with recommended actions (scale, monitor, cut)
+\par\par
+
+\b Tech Stack\b0
+\par
+- Frontend: Next.js 14, TypeScript, Tailwind CSS
+\par
+- Backend: Next.js API routes (serverless, hosted on Vercel)
+\par
+- Database: Supabase (PostgreSQL)
+\par
+- APIs: Google Ads API (read-only), HubSpot API
+\par
+- Auth: NextAuth.js with Google OAuth
+\par\par
+
+\b API Usage Policy Compliance\b0
+\par
+- Access type: Read-only. Juno does not modify any Google Ads data.
+\par
+- Data storage: Keyword metrics are stored in a private Supabase database, accessible only to the authenticated user.
+\par
+- No reselling: Data is used solely to compute attribution metrics for the account owner.
+\par
+- No automation: Juno does not automate any Google Ads operations or bidding.
+\par\par
+
+\b Target Users\b0
+\par
+B2B SaaS founders and marketing leaders at Series A-C companies spending $3,000-$50,000/month on Google Ads who use HubSpot as their CRM.
+\par\par
+
+\b Developer Information\b0
+\par
+Developer: Agustin (Chaska) Volante Silva
+\par
+Company: Caerus AI
+\par
+Website: caerusai.com
+\par
+Contact: chaska@caerusai.com
+\par
+}
