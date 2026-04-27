@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
@@ -8,7 +10,6 @@ export default async function Home() {
   const session = await getServerSession(authOptions)
   if (session) redirect('/dashboard')
 
-  // Serve the landing page for unauthenticated visitors
   const html = readFileSync(join(process.cwd(), 'juno_landing.html'), 'utf-8')
 
   return (
