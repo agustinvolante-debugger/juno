@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Juno — See which keywords turn into deals</title>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 <style>
   :root {
     --bg: #0c0c0b;
@@ -379,8 +380,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 18px;
-    margin-bottom: 18px;
+    margin: 0 auto 18px;
+  }
+
+  .card { text-align: center; }
+
+  .card-icon svg {
+    width: 20px; height: 20px;
+    stroke-width: 1.75;
   }
 
   .card-icon.red { background: rgba(224,90,74,0.1); }
@@ -675,17 +682,17 @@
   </div>
   <div class="card-grid fade-in">
     <div class="card">
-      <div class="card-icon red">🔒</div>
+      <div class="card-icon red"><i data-lucide="eye-off" style="color:var(--red)"></i></div>
       <h3>Keywords are hidden</h3>
       <p>Google removed 80% of search term visibility in 2020. You're optimizing for clicks on data that's been deliberately obscured.</p>
     </div>
     <div class="card">
-      <div class="card-icon amber">🔗</div>
+      <div class="card-icon amber"><i data-lucide="unlink" style="color:var(--amber)"></i></div>
       <h3>No CRM connection</h3>
       <p>HubSpot captures the form fill but loses the keyword. Campaign level only — never deal level. The chain breaks between click and close.</p>
     </div>
     <div class="card">
-      <div class="card-icon green">💸</div>
+      <div class="card-icon green"><i data-lucide="circle-help" style="color:var(--green)"></i></div>
       <h3>CAC is a mystery</h3>
       <p>Without keyword-to-deal attribution, you can't calculate your true cost to acquire a customer. You're flying blind on your biggest marketing expense.</p>
     </div>
@@ -795,6 +802,10 @@
   <div class="footer-logo">juno</div>
   <div class="footer-meta">© 2026 Juno · San Francisco, CA · <a href="mailto:chaska@usejuno.com" style="color:inherit;text-decoration:none;">chaska@usejuno.com</a></div>
 </footer>
+
+<script>
+  lucide.createIcons();
+</script>
 
 <script>
   const observer = new IntersectionObserver((entries) => {
