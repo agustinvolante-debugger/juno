@@ -46,7 +46,7 @@ export default function TermsOfService() {
 
         <Section title="1. Acceptance of Terms">
           <p>
-            By accessing or using Juno (the &ldquo;Service&rdquo;), operated by Caerus AI LLC (&ldquo;we,&rdquo;
+            By accessing or using Juno (the &ldquo;Service&rdquo;), operated by Juno AI LLC (&ldquo;we,&rdquo;
             &ldquo;us,&rdquo; or &ldquo;our&rdquo;), you agree to be bound by these Terms of Service.
             If you do not agree to these terms, do not use the Service.
           </p>
@@ -129,7 +129,7 @@ export default function TermsOfService() {
 
         <Section title="10. Limitation of Liability">
           <p>
-            To the maximum extent permitted by law, Caerus AI LLC shall not be liable for any indirect,
+            To the maximum extent permitted by law, Juno AI LLC shall not be liable for any indirect,
             incidental, special, consequential, or punitive damages, including but not limited to loss of
             profits, data, or business opportunities, arising out of or related to your use of the Service.
             Our total liability shall not exceed the amount you paid us in the twelve (12) months preceding
@@ -165,8 +165,8 @@ export default function TermsOfService() {
         <Section title="14. Contact Us">
           <p>
             If you have questions about these Terms, contact us at:<br />
-            <a href="mailto:chaska@caerusai.com" style={{ color: '#c8f04a' }}>chaska@caerusai.com</a><br />
-            Caerus AI LLC, San Francisco, CA
+            <a href="mailto:agustinvolantesilva@gmail.com" style={{ color: '#c8f04a' }}>agustinvolantesilva@gmail.com</a><br />
+            Juno AI LLC, San Francisco, CA
           </p>
         </Section>
       </main>

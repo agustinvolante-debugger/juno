@@ -46,12 +46,12 @@ export default function PrivacyPolicy() {
 
         <Section title="1. Who We Are">
           <p>
-            Juno (&ldquo;we,&rdquo; &ldquo;us,&rdquo; or &ldquo;our&rdquo;) is operated by Caerus AI LLC,
+            Juno (&ldquo;we,&rdquo; &ldquo;us,&rdquo; or &ldquo;our&rdquo;) is operated by Juno AI LLC,
             a company based in San Francisco, California. Juno is a keyword attribution platform that connects
             Google Ads data to CRM systems (such as HubSpot and RD Station) so businesses can measure
             Customer Acquisition Cost (CAC) by keyword.
           </p>
-          <p>Contact: <a href="mailto:chaska@caerusai.com" style={{ color: '#c8f04a' }}>chaska@caerusai.com</a></p>
+          <p>Contact: <a href="mailto:agustinvolantesilva@gmail.com" style={{ color: '#c8f04a' }}>agustinvolantesilva@gmail.com</a></p>
         </Section>
 
         <Section title="2. Information We Collect">
@@ -128,7 +128,7 @@ export default function PrivacyPolicy() {
             'Revoke OAuth access to your Google Ads or CRM accounts at any time through your Google or CRM account settings.',
             'Export your attribution data.',
           ]} />
-          <p>To exercise any of these rights, contact us at <a href="mailto:chaska@caerusai.com" style={{ color: '#c8f04a' }}>chaska@caerusai.com</a>.</p>
+          <p>To exercise any of these rights, contact us at <a href="mailto:agustinvolantesilva@gmail.com" style={{ color: '#c8f04a' }}>agustinvolantesilva@gmail.com</a>.</p>
         </Section>
 
         <Section title="9. Cookies">
@@ -148,8 +148,8 @@ export default function PrivacyPolicy() {
         <Section title="11. Contact Us">
           <p>
             If you have questions about this Privacy Policy or how we handle your data, contact us at:<br />
-            <a href="mailto:chaska@caerusai.com" style={{ color: '#c8f04a' }}>chaska@caerusai.com</a><br />
-            Caerus AI LLC, San Francisco, CA
+            <a href="mailto:agustinvolantesilva@gmail.com" style={{ color: '#c8f04a' }}>agustinvolantesilva@gmail.com</a><br />
+            Juno AI LLC, San Francisco, CA
           </p>
         </Section>
       </main>
