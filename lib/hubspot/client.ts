@@ -42,7 +42,8 @@ export async function fetchContacts(accessToken: string) {
   } while (after)
 
   return contacts.slice(0, MAX_CONTACTS).map((c) => ({
-    hubspot_id: c.id,
+    crm_id: c.id,
+    crm_provider: 'hubspot' as const,
     email: c.properties.email ?? null,
     utm_source: c.properties.utm_source ?? null,
     utm_medium: c.properties.utm_medium ?? null,
@@ -82,7 +83,8 @@ export async function fetchDeals(accessToken: string) {
   } while (after)
 
   return deals.map((d) => ({
-    hubspot_deal_id: d.id,
+    crm_deal_id: d.id,
+    crm_provider: 'hubspot' as const,
     deal_name: d.properties.dealname ?? '',
     stage: d.properties.dealstage ?? '',
     amount: d.properties.amount ? parseFloat(d.properties.amount) : null,

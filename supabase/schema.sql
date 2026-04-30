@@ -1,10 +1,11 @@
--- Run this in your Supabase SQL editor to set up the schema
+-- Juno database schema — run in Supabase SQL editor for fresh installs
+-- For existing installs, use the migration files in supabase/migrations/
 
--- OAuth tokens for Google Ads and HubSpot per user
+-- OAuth tokens for Google Ads, HubSpot, and RD Station per user
 create table oauth_tokens (
   id uuid primary key default gen_random_uuid(),
   user_id text not null,
-  provider text not null check (provider in ('google_ads', 'hubspot')),
+  provider text not null check (provider in ('google_ads', 'hubspot', 'rd_station_marketing', 'rd_station_crm')),
   access_token text not null,
   refresh_token text,
   expires_at timestamptz,
@@ -15,7 +16,7 @@ create table oauth_tokens (
   unique (user_id, provider)
 );
 
--- Keywords pulled from Google Ads
+-- Keywords and search terms pulled from Google Ads
 create table keywords (
   id uuid primary key default gen_random_uuid(),
   user_id text not null,
@@ -25,16 +26,21 @@ create table keywords (
   spend_monthly numeric(10,2) default 0,
   impressions integer default 0,
   clicks integer default 0,
+  source_type text not null default 'keyword' check (source_type in ('keyword', 'dsa_search_term', 'pmax_search_term', 'asset_group')),
+  target_id text,
+  landing_page text,
+  headline text,
   synced_at timestamptz default now(),
   created_at timestamptz default now(),
-  unique (user_id, keyword, campaign, ad_group)
+  unique (user_id, keyword, campaign, ad_group, source_type)
 );
 
--- Contacts pulled from HubSpot with UTM data
+-- Contacts pulled from CRM with UTM data
 create table contacts (
   id uuid primary key default gen_random_uuid(),
   user_id text not null,
-  hubspot_id text not null,
+  crm_id text not null,
+  crm_provider text not null default 'hubspot',
   email text,
   utm_source text,
   utm_medium text,
@@ -43,14 +49,15 @@ create table contacts (
   first_page_seen text,
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
-  unique (user_id, hubspot_id)
+  unique (user_id, crm_provider, crm_id)
 );
 
--- Deals pulled from HubSpot
+-- Deals pulled from CRM
 create table deals (
   id uuid primary key default gen_random_uuid(),
   user_id text not null,
-  hubspot_deal_id text not null,
+  crm_deal_id text not null,
+  crm_provider text not null default 'hubspot',
   contact_id uuid references contacts(id),
   deal_name text,
   stage text,
@@ -59,7 +66,7 @@ create table deals (
   is_closed_won boolean default false,
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
-  unique (user_id, hubspot_deal_id)
+  unique (user_id, crm_provider, crm_deal_id)
 );
 
 -- Attribution: keyword → contact → deal join results

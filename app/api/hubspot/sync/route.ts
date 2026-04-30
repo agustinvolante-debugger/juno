@@ -20,13 +20,13 @@ export async function POST() {
 
   const { data: upsertedContacts, error: cError } = await supabaseAdmin
     .from('contacts')
-    .upsert(contactRecords, { onConflict: 'user_id,hubspot_id' })
-    .select('id, hubspot_id')
+    .upsert(contactRecords, { onConflict: 'user_id,crm_provider,crm_id' })
+    .select('id, crm_id')
 
   if (cError) return NextResponse.json({ error: cError.message }, { status: 500 })
 
   const contactIdMap = new Map(
-    (upsertedContacts ?? []).map((c: any) => [c.hubspot_id, c.id])
+    (upsertedContacts ?? []).map((c: any) => [c.crm_id, c.id])
   )
 
   const deals = await fetchDeals(token)
@@ -37,7 +37,8 @@ export async function POST() {
 
     return {
       user_id: session.user.id,
-      hubspot_deal_id: d.hubspot_deal_id,
+      crm_deal_id: d.crm_deal_id,
+      crm_provider: 'hubspot' as const,
       contact_id: contactId,
       deal_name: d.deal_name,
       stage: d.stage,
@@ -50,7 +51,7 @@ export async function POST() {
 
   const { error: dError } = await supabaseAdmin
     .from('deals')
-    .upsert(dealRecords, { onConflict: 'user_id,hubspot_deal_id' })
+    .upsert(dealRecords, { onConflict: 'user_id,crm_provider,crm_deal_id' })
 
   if (dError) return NextResponse.json({ error: dError.message }, { status: 500 })
 

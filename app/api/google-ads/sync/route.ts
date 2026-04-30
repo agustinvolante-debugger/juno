@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabase'
-import { fetchKeywordReport } from '@/lib/google-ads/client'
+import { fetchKeywordReport, fetchDSASearchTermReport, fetchDSATargetMapping, fetchPMAXSearchTermReport } from '@/lib/google-ads/client'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(req: NextRequest) {
@@ -24,13 +24,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Google Ads not connected — please reconnect' }, { status: 400 })
     }
 
-    const keywords = await fetchKeywordReport(tokenRow.refresh_token, customer_id)
+    const refreshToken = tokenRow.refresh_token
 
-    if (keywords.length === 0) {
-      return NextResponse.json({ synced: 0, message: 'No active keywords found in the last 90 days' })
-    }
+    // 1. Sync standard keywords
+    const keywords = await fetchKeywordReport(refreshToken, customer_id)
 
-    const records = keywords.map((kw) => ({
+    const kwRecords = keywords.map((kw) => ({
       user_id: session.user.id,
       keyword: kw.keyword,
       campaign: kw.campaign,
@@ -38,16 +37,91 @@ export async function POST(req: NextRequest) {
       spend_monthly: kw.spend_monthly,
       impressions: kw.impressions,
       clicks: kw.clicks,
+      source_type: 'keyword' as const,
       synced_at: new Date().toISOString(),
     }))
 
-    const { error } = await supabaseAdmin
-      .from('keywords')
-      .upsert(records, { onConflict: 'user_id,keyword,campaign,ad_group' })
+    if (kwRecords.length > 0) {
+      const { error } = await supabaseAdmin
+        .from('keywords')
+        .upsert(kwRecords, { onConflict: 'user_id,keyword,campaign,ad_group,source_type' })
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    }
 
-    return NextResponse.json({ synced: records.length })
+    // 2. Sync DSA search terms (non-blocking — DSA campaigns may not exist)
+    let dsaCount = 0
+    try {
+      const dsaTerms = await fetchDSASearchTermReport(refreshToken, customer_id)
+
+      if (dsaTerms.length > 0) {
+        const dsaRecords = dsaTerms.map((t) => ({
+          user_id: session.user.id,
+          keyword: t.keyword,
+          campaign: t.campaign,
+          ad_group: t.ad_group,
+          spend_monthly: t.spend_monthly,
+          impressions: t.impressions,
+          clicks: t.clicks,
+          source_type: 'dsa_search_term' as const,
+          landing_page: t.landing_page,
+          headline: t.headline,
+          synced_at: new Date().toISOString(),
+        }))
+
+        await supabaseAdmin
+          .from('keywords')
+          .upsert(dsaRecords, { onConflict: 'user_id,keyword,campaign,ad_group,source_type' })
+
+        dsaCount = dsaRecords.length
+      }
+
+      // Store DSA target mapping for attribution resolution
+      const targetMapping = await fetchDSATargetMapping(refreshToken, customer_id)
+      if (Object.keys(targetMapping).length > 0) {
+        await supabaseAdmin
+          .from('oauth_tokens')
+          .update({ extra: { dsa_targets: targetMapping }, updated_at: new Date().toISOString() })
+          .eq('user_id', session.user.id)
+          .eq('provider', 'google_ads')
+      }
+    } catch (e: any) {
+      console.warn('DSA sync skipped (no DSA campaigns or API limitation):', e.message)
+    }
+
+    // 3. Sync PMAX search terms (non-blocking)
+    let pmaxCount = 0
+    try {
+      const pmaxTerms = await fetchPMAXSearchTermReport(refreshToken, customer_id)
+
+      if (pmaxTerms.length > 0) {
+        const pmaxRecords = pmaxTerms.map((t) => ({
+          user_id: session.user.id,
+          keyword: t.keyword,
+          campaign: t.campaign,
+          ad_group: t.ad_group,
+          spend_monthly: t.spend_monthly,
+          impressions: t.impressions,
+          clicks: t.clicks,
+          source_type: 'pmax_search_term' as const,
+          synced_at: new Date().toISOString(),
+        }))
+
+        await supabaseAdmin
+          .from('keywords')
+          .upsert(pmaxRecords, { onConflict: 'user_id,keyword,campaign,ad_group,source_type' })
+
+        pmaxCount = pmaxRecords.length
+      }
+    } catch (e: any) {
+      console.warn('PMAX sync skipped (no PMAX campaigns or API limitation):', e.message)
+    }
+
+    return NextResponse.json({
+      synced: kwRecords.length,
+      dsa_search_terms: dsaCount,
+      pmax_search_terms: pmaxCount,
+    })
   } catch (err: any) {
     console.error('Google Ads sync error:', err)
     return NextResponse.json(

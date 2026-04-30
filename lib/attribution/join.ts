@@ -1,7 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase'
 import { KeywordCAC } from '@/types'
 
-// First-touch attribution: keyword (via utm_term on contact) → contact → deal
 export async function runAttributionJoin(userId: string, from?: string, to?: string): Promise<KeywordCAC[]> {
   const dateFrom = from ?? new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
   const dateTo = to ?? new Date().toISOString().slice(0, 10)
@@ -40,10 +39,25 @@ export async function runAttributionJoin(userId: string, from?: string, to?: str
 
   if (dError) throw dError
 
-  // Build contact map: hubspot_id → contact
+  console.log(`Attribution: loaded ${keywords.length} keywords, ${contacts.length} contacts, ${deals.length} deals (range: ${dateFrom} to ${dateTo})`)
+
+  // 4. Load DSA target mapping (if available) for resolving dsa-<id> utm_terms
+  let dsaTargetMap: Record<string, string[]> = {}
+  const { data: tokenRow } = await supabaseAdmin
+    .from('oauth_tokens')
+    .select('extra')
+    .eq('user_id', userId)
+    .eq('provider', 'google_ads')
+    .single()
+
+  if (tokenRow?.extra && typeof tokenRow.extra === 'object' && 'dsa_targets' in tokenRow.extra) {
+    dsaTargetMap = tokenRow.extra.dsa_targets as Record<string, string[]>
+  }
+
+  // Build contact map: id → contact
   const contactMap = new Map(contacts.map((c: any) => [c.id, c]))
 
-  // Build deal→contact lookup: deal.contact_id → contact
+  // Build deal→contact lookup: deal.contact_id → deals[]
   const dealsByContactId = new Map<string, any[]>()
   for (const deal of deals) {
     if (!deal.contact_id) continue
@@ -53,11 +67,11 @@ export async function runAttributionJoin(userId: string, from?: string, to?: str
     dealsByContactId.get(deal.contact_id)!.push(deal)
   }
 
-  // 4. Compute CAC per keyword
+  // 5. Compute CAC per keyword/search term
   const kwMap = new Map<string, KeywordCAC>()
 
   for (const kw of keywords) {
-    const key = `${kw.keyword}|||${kw.campaign}`
+    const key = `${kw.keyword}|||${kw.campaign}|||${kw.source_type ?? 'keyword'}`
     if (!kwMap.has(key)) {
       kwMap.set(key, {
         keyword: kw.keyword,
@@ -67,6 +81,7 @@ export async function runAttributionJoin(userId: string, from?: string, to?: str
         total_deal_value: 0,
         cac: null,
         action: 'cut',
+        source_type: kw.source_type ?? 'keyword',
       })
     }
   }
@@ -79,18 +94,34 @@ export async function runAttributionJoin(userId: string, from?: string, to?: str
     const relatedDeals = dealsByContactId.get(contact.id) ?? []
     if (relatedDeals.length === 0) continue
 
-    // Find matching keyword entry
-    for (const [key, cacRow] of kwMap.entries()) {
-      if (cacRow.keyword.toLowerCase().trim() === utmTerm) {
-        cacRow.deal_count += relatedDeals.length
-        for (const deal of relatedDeals) {
-          cacRow.total_deal_value += deal.amount ?? 0
+    // Resolve DSA/AI Max target IDs to search terms
+    if (utmTerm.startsWith('dsa-') || utmTerm.startsWith('kwl-')) {
+      const resolvedTerms = dsaTargetMap[utmTerm] ?? dsaTargetMap[contact.utm_term ?? ''] ?? []
+      for (const term of resolvedTerms) {
+        const normalizedTerm = term.toLowerCase().trim()
+        for (const [, cacRow] of kwMap.entries()) {
+          if (cacRow.source_type === 'dsa_search_term' && cacRow.keyword.toLowerCase().trim() === normalizedTerm) {
+            cacRow.deal_count += relatedDeals.length
+            for (const deal of relatedDeals) {
+              cacRow.total_deal_value += deal.amount ?? 0
+            }
+          }
+        }
+      }
+    } else {
+      // Direct keyword match (standard search campaigns)
+      for (const [, cacRow] of kwMap.entries()) {
+        if (cacRow.keyword.toLowerCase().trim() === utmTerm) {
+          cacRow.deal_count += relatedDeals.length
+          for (const deal of relatedDeals) {
+            cacRow.total_deal_value += deal.amount ?? 0
+          }
         }
       }
     }
   }
 
-  // 5. Calculate CAC and assign action for each keyword
+  // 6. Calculate CAC and assign action for each keyword
   const results: KeywordCAC[] = []
   for (const row of kwMap.values()) {
     if (row.deal_count > 0) {
@@ -103,7 +134,7 @@ export async function runAttributionJoin(userId: string, from?: string, to?: str
   // Sort: deals desc, then spend desc
   results.sort((a, b) => b.deal_count - a.deal_count || b.spend_monthly - a.spend_monthly)
 
-  // 6. Persist attribution results
+  // 7. Persist attribution results
   await persistAttributions(userId, results)
 
   return results
@@ -112,7 +143,6 @@ export async function runAttributionJoin(userId: string, from?: string, to?: str
 function determineAction(row: KeywordCAC): 'scale' | 'monitor' | 'cut' {
   if (row.deal_count === 0) return 'cut'
   if (row.cac === null) return 'cut'
-  // Scale if CAC is low relative to deal value
   if (row.total_deal_value > 0 && row.cac < row.total_deal_value / row.deal_count * 0.2) {
     return 'scale'
   }
@@ -123,7 +153,6 @@ function determineAction(row: KeywordCAC): 'scale' | 'monitor' | 'cut' {
 async function persistAttributions(userId: string, rows: KeywordCAC[]) {
   if (rows.length === 0) return
 
-  // Clear old attributions for this user
   await supabaseAdmin.from('attributions').delete().eq('user_id', userId)
 
   const records = rows.map((r) => ({

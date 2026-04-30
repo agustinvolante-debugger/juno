@@ -3,14 +3,14 @@
 import { KeywordCAC } from '@/types'
 
 const DEMO_KEYWORDS: KeywordCAC[] = [
-  { keyword: 'crm software for startups', campaign: 'Brand — CRM', spend_monthly: 4200, deal_count: 6, total_deal_value: 57600, cac: 700, action: 'scale' },
-  { keyword: 'hubspot alternative b2b', campaign: 'Competitor — CRM', spend_monthly: 3100, deal_count: 4, total_deal_value: 38400, cac: 775, action: 'scale' },
-  { keyword: 'sales pipeline software', campaign: 'Generic — Pipeline', spend_monthly: 2800, deal_count: 2, total_deal_value: 19200, cac: 1400, action: 'monitor' },
-  { keyword: 'best crm 2026', campaign: 'Generic — CRM', spend_monthly: 1900, deal_count: 1, total_deal_value: 9600, cac: 1900, action: 'monitor' },
-  { keyword: 'crm free trial', campaign: 'Brand — CRM', spend_monthly: 3400, deal_count: 0, total_deal_value: 0, cac: null, action: 'cut' },
-  { keyword: 'customer management tool', campaign: 'Generic — CRM', spend_monthly: 2600, deal_count: 0, total_deal_value: 0, cac: null, action: 'cut' },
-  { keyword: 'salesforce vs hubspot', campaign: 'Competitor — CRM', spend_monthly: 1800, deal_count: 0, total_deal_value: 0, cac: null, action: 'cut' },
-  { keyword: 'crm pricing comparison', campaign: 'Generic — CRM', spend_monthly: 1500, deal_count: 0, total_deal_value: 0, cac: null, action: 'cut' },
+  { keyword: 'crm software for startups', campaign: 'Brand — CRM', spend_monthly: 4200, deal_count: 6, total_deal_value: 57600, cac: 700, action: 'scale', source_type: 'keyword' },
+  { keyword: 'hubspot alternative b2b', campaign: 'Competitor — CRM', spend_monthly: 3100, deal_count: 4, total_deal_value: 38400, cac: 775, action: 'scale', source_type: 'keyword' },
+  { keyword: 'sales pipeline software', campaign: 'Generic — Pipeline', spend_monthly: 2800, deal_count: 2, total_deal_value: 19200, cac: 1400, action: 'monitor', source_type: 'keyword' },
+  { keyword: 'best crm 2026', campaign: 'Generic — CRM', spend_monthly: 1900, deal_count: 1, total_deal_value: 9600, cac: 1900, action: 'monitor', source_type: 'keyword' },
+  { keyword: 'crm free trial', campaign: 'Brand — CRM', spend_monthly: 3400, deal_count: 0, total_deal_value: 0, cac: null, action: 'cut', source_type: 'keyword' },
+  { keyword: 'customer management tool', campaign: 'Generic — CRM', spend_monthly: 2600, deal_count: 0, total_deal_value: 0, cac: null, action: 'cut', source_type: 'keyword' },
+  { keyword: 'salesforce vs hubspot', campaign: 'Competitor — CRM', spend_monthly: 1800, deal_count: 0, total_deal_value: 0, cac: null, action: 'cut', source_type: 'keyword' },
+  { keyword: 'crm pricing comparison', campaign: 'Generic — CRM', spend_monthly: 1500, deal_count: 0, total_deal_value: 0, cac: null, action: 'cut', source_type: 'keyword' },
 ]
 
 const totalSpend = DEMO_KEYWORDS.reduce((s, k) => s + k.spend_monthly, 0)

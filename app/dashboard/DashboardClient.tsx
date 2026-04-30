@@ -8,6 +8,8 @@ import { DateRangePicker } from '@/components/DateRangePicker'
 import { DateRange } from 'react-day-picker'
 import { subDays, format } from 'date-fns'
 
+type CrmProvider = 'hubspot' | 'rd_station'
+
 export default function Dashboard() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -15,7 +17,16 @@ export default function Dashboard() {
 
   const [keywords, setKeywords] = useState<KeywordCAC[]>([])
   const [googleAdsConnected, setGoogleAdsConnected] = useState(false)
-  const hubspotConnected = true // using private app token, always available
+  const [crmProvider, setCrmProvider] = useState<CrmProvider>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('juno_crm_provider') as CrmProvider) ?? 'hubspot'
+    }
+    return 'hubspot'
+  })
+  const [rdMarketingConnected, setRdMarketingConnected] = useState(false)
+  const [rdCrmToken, setRdCrmToken] = useState('')
+  const [rdCrmSaved, setRdCrmSaved] = useState(false)
+  const hubspotConnected = true
   const [customerId, setCustomerId] = useState('')
   const [loading, setLoading] = useState('')
   const [toast, setToast] = useState('')
@@ -37,9 +48,19 @@ export default function Dashboard() {
     if (connected === 'hubspot') {
       showToast('HubSpot connected')
     }
+    if (connected === 'rd_station_marketing') {
+      setRdMarketingConnected(true)
+      showToast('RD Station Marketing connected')
+    }
     const error = searchParams.get('error')
     if (error) showToast(`Error: ${error.replace(/_/g, ' ')}`)
   }, [searchParams])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('juno_crm_provider', crmProvider)
+    }
+  }, [crmProvider])
 
   function showToast(msg: string) {
     setToast(msg)
@@ -57,33 +78,61 @@ export default function Dashboard() {
     const data = await res.json()
     setLoading('')
     if (data.error) return showToast(`Sync failed: ${data.error}`)
-    showToast(`Synced ${data.synced} keywords from Google Ads`)
+    const parts = [`${data.synced} keywords`]
+    if (data.dsa_search_terms) parts.push(`${data.dsa_search_terms} DSA search terms`)
+    if (data.pmax_search_terms) parts.push(`${data.pmax_search_terms} PMAX terms`)
+    showToast(`Synced ${parts.join(' · ')} from Google Ads`)
   }
 
-  async function syncHubspot() {
-    setLoading('hubspot')
-    const res = await fetch('/api/hubspot/sync', { method: 'POST' })
+  async function syncCRM() {
+    setLoading('crm')
+    const endpoint = crmProvider === 'hubspot' ? '/api/hubspot/sync' : '/api/rd-station/sync'
+    const res = await fetch(endpoint, { method: 'POST' })
     const data = await res.json()
     setLoading('')
     if (data.error) return showToast(`Sync failed: ${data.error}`)
-    showToast(`Synced ${data.contacts} contacts · ${data.deals} deals from HubSpot`)
+    if (crmProvider === 'rd_station') {
+      showToast(`Synced ${data.contacts} contacts · ${data.deals} deals (${data.linked_deals} linked) from RD Station`)
+    } else {
+      showToast(`Synced ${data.contacts} contacts · ${data.deals} deals from HubSpot`)
+    }
+  }
+
+  async function saveRdCrmToken() {
+    if (!rdCrmToken) return showToast('Enter your RD Station CRM API token')
+    setLoading('rd_crm_save')
+    const res = await fetch('/api/rd-station/crm/save-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: rdCrmToken }),
+    })
+    const data = await res.json()
+    setLoading('')
+    if (data.error) return showToast(`Failed: ${data.error}`)
+    setRdCrmSaved(true)
+    showToast('RD Station CRM token saved')
   }
 
   async function runAttribution() {
     setLoading('attribution')
-    const res = await fetch('/api/attribution/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined,
-        to: dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined,
-      }),
-    })
-    const data = await res.json()
-    setLoading('')
-    if (data.error) return showToast(`Attribution failed: ${data.error}`)
-    setKeywords(data.results)
-    showToast(`Attribution complete — ${data.results.length} keywords`)
+    try {
+      const res = await fetch('/api/attribution/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : undefined,
+          to: dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : undefined,
+        }),
+      })
+      const data = await res.json()
+      setLoading('')
+      if (data.error) return showToast(`Attribution failed: ${data.error}`)
+      setKeywords(data.results ?? [])
+      showToast(`Attribution complete — ${(data.results ?? []).length} keywords/search terms`)
+    } catch (err: any) {
+      setLoading('')
+      showToast(`Attribution failed: ${err.message}`)
+    }
   }
 
   const totalSpend = keywords.reduce((s, k) => s + k.spend_monthly, 0)
@@ -111,10 +160,37 @@ export default function Dashboard() {
       </nav>
 
       <div className="pt-20 px-8 max-w-6xl mx-auto pb-16">
+        {/* CRM SELECTOR */}
+        <div className="mb-6">
+          <div className="text-[#4a4840] text-xs font-mono uppercase tracking-widest mb-2">CRM</div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setCrmProvider('hubspot')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                crmProvider === 'hubspot'
+                  ? 'bg-[#c8f04a] text-[#0c0c0b]'
+                  : 'bg-[#2a2a28] text-[#8a8678] hover:bg-[#333330]'
+              }`}
+            >
+              HubSpot
+            </button>
+            <button
+              onClick={() => setCrmProvider('rd_station')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                crmProvider === 'rd_station'
+                  ? 'bg-[#c8f04a] text-[#0c0c0b]'
+                  : 'bg-[#2a2a28] text-[#8a8678] hover:bg-[#333330]'
+              }`}
+            >
+              RD Station
+            </button>
+          </div>
+        </div>
+
         {/* CONNECTIONS */}
         <div className="mb-10">
           <h2 className="font-serif text-2xl mb-6">Connections</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className={`grid grid-cols-1 ${crmProvider === 'rd_station' ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4`}>
             {/* Google Ads */}
             <div className="bg-[#141412] border border-[#222220] rounded-xl p-6">
               <div className="flex items-center justify-between mb-4">
@@ -155,25 +231,91 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* HubSpot */}
-            <div className="bg-[#141412] border border-[#222220] rounded-xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <div className="font-medium">HubSpot</div>
-                  <div className="text-[#8a8678] text-sm mt-0.5">
-                    <span className="text-[#5ab87a]">● Connected via private app</span>
+            {/* CRM Card(s) */}
+            {crmProvider === 'hubspot' ? (
+              <div className="bg-[#141412] border border-[#222220] rounded-xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <div className="font-medium">HubSpot</div>
+                    <div className="text-[#8a8678] text-sm mt-0.5">
+                      <span className="text-[#5ab87a]">● Connected via private app</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={syncCRM}
+                    disabled={loading === 'crm'}
+                    className="bg-[#c8f04a] text-[#0c0c0b] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+                  >
+                    {loading === 'crm' ? 'Syncing…' : 'Sync'}
+                  </button>
+                </div>
+                <p className="text-[#4a4840] text-xs">Pulls all contacts with UTM data and closed-won deals</p>
+              </div>
+            ) : (
+              <>
+                {/* RD Station Marketing */}
+                <div className="bg-[#141412] border border-[#222220] rounded-xl p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <div className="font-medium">RD Station Marketing</div>
+                      <div className="text-[#8a8678] text-sm mt-0.5">
+                        {rdMarketingConnected ? (
+                          <span className="text-[#5ab87a]">● Connected</span>
+                        ) : (
+                          'Not connected'
+                        )}
+                      </div>
+                    </div>
+                    <a
+                      href="/api/rd-station/marketing/connect"
+                      className="bg-[#c8f04a] text-[#0c0c0b] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity"
+                    >
+                      {rdMarketingConnected ? 'Reconnect' : 'Connect'}
+                    </a>
+                  </div>
+                  <p className="text-[#4a4840] text-xs">Contacts with UTM/traffic source data</p>
+                </div>
+
+                {/* RD Station CRM */}
+                <div className="bg-[#141412] border border-[#222220] rounded-xl p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <div className="font-medium">RD Station CRM</div>
+                      <div className="text-[#8a8678] text-sm mt-0.5">
+                        {rdCrmSaved ? (
+                          <span className="text-[#5ab87a]">● Token saved</span>
+                        ) : (
+                          'Token required'
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={syncCRM}
+                      disabled={loading === 'crm' || !rdCrmSaved}
+                      className="bg-[#c8f04a] text-[#0c0c0b] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+                    >
+                      {loading === 'crm' ? 'Syncing…' : 'Sync'}
+                    </button>
+                  </div>
+                  <div className="flex gap-2 mt-2">
+                    <input
+                      type="password"
+                      placeholder="CRM API instance token"
+                      value={rdCrmToken}
+                      onChange={(e) => setRdCrmToken(e.target.value)}
+                      className="flex-1 bg-[#0c0c0b] border border-[#2a2a28] rounded-lg px-3 py-2 text-sm text-[#f0ead2] placeholder-[#4a4840] focus:outline-none focus:border-[#c8f04a]"
+                    />
+                    <button
+                      onClick={saveRdCrmToken}
+                      disabled={loading === 'rd_crm_save'}
+                      className="bg-[#2a2a28] hover:bg-[#333330] text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {loading === 'rd_crm_save' ? 'Saving…' : 'Save'}
+                    </button>
                   </div>
                 </div>
-                <button
-                  onClick={syncHubspot}
-                  disabled={loading === 'hubspot'}
-                  className="bg-[#c8f04a] text-[#0c0c0b] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
-                >
-                  {loading === 'hubspot' ? 'Syncing…' : 'Sync'}
-                </button>
-              </div>
-              <p className="text-[#4a4840] text-xs">Pulls all contacts with UTM data and closed-won deals</p>
-            </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -183,10 +325,20 @@ export default function Dashboard() {
           <button
             onClick={async () => {
               setLoading('seed')
-              const res = await fetch('/api/dev/seed', { method: 'POST' })
-              const data = await res.json()
-              setLoading('')
-              showToast(`Seeded: ${data.keywords} keywords · ${data.contacts} contacts · ${data.deals} deals`)
+              try {
+                const res = await fetch('/api/dev/seed', { method: 'POST' })
+                const data = await res.json()
+                setLoading('')
+                const errs = data.errors
+                if (errs?.keywords || errs?.contacts || errs?.deals) {
+                  showToast(`Seed errors: ${errs.keywords || ''} ${errs.contacts || ''} ${errs.deals || ''}`)
+                } else {
+                  showToast(`Seeded: ${data.keywords} keywords · ${data.contacts} contacts · ${data.deals} deals`)
+                }
+              } catch (err: any) {
+                setLoading('')
+                showToast(`Seed failed: ${err.message}`)
+              }
             }}
             disabled={loading === 'seed'}
             className="bg-[#2a2a28] hover:bg-[#333330] text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
@@ -255,6 +407,7 @@ export default function Dashboard() {
                 <thead>
                   <tr className="border-b border-[#222220]">
                     <th className="text-left px-6 py-3 text-[#4a4840] text-xs font-mono uppercase tracking-widest font-normal">Keyword</th>
+                    <th className="text-left px-4 py-3 text-[#4a4840] text-xs font-mono uppercase tracking-widest font-normal">Source</th>
                     <th className="text-left px-6 py-3 text-[#4a4840] text-xs font-mono uppercase tracking-widest font-normal">Campaign</th>
                     <th className="text-left px-6 py-3 text-[#4a4840] text-xs font-mono uppercase tracking-widest font-normal">Spend/mo</th>
                     <th className="text-left px-6 py-3 text-[#4a4840] text-xs font-mono uppercase tracking-widest font-normal">Deals</th>
@@ -266,6 +419,9 @@ export default function Dashboard() {
                   {keywords.map((kw, i) => (
                     <tr key={i} className="border-b border-[#1a1a18] hover:bg-white/[0.02] transition-colors">
                       <td className="px-6 py-4 font-mono text-sm text-[#f0ead2]">{kw.keyword}</td>
+                      <td className="px-4 py-4">
+                        <SourceBadge sourceType={kw.source_type} />
+                      </td>
                       <td className="px-6 py-4 text-sm text-[#8a8678]">{kw.campaign}</td>
                       <td className="px-6 py-4 text-sm text-[#8a8678]">${kw.spend_monthly.toLocaleString()}</td>
                       <td className={`px-6 py-4 text-sm font-semibold ${kw.deal_count > 0 ? 'text-[#5ab87a]' : 'text-[#e05a4a]'}`}>
@@ -289,17 +445,10 @@ export default function Dashboard() {
           </>
         )}
 
-        {keywords.length === 0 && googleAdsConnected && hubspotConnected && (
+        {keywords.length === 0 && (
           <div className="text-center text-[#4a4840] mt-20">
-            <p className="text-lg">Run attribution to see your CAC by keyword</p>
-            <p className="text-sm mt-2">Make sure you&apos;ve synced both Google Ads and HubSpot first</p>
-          </div>
-        )}
-
-        {!googleAdsConnected && !hubspotConnected && (
-          <div className="text-center text-[#4a4840] mt-20">
-            <p className="text-lg">Connect Google Ads and HubSpot to get started</p>
-            <p className="text-sm mt-2">Both connections are required to calculate keyword-level CAC</p>
+            <p className="text-lg">Connect Google Ads and your CRM to get started</p>
+            <p className="text-sm mt-2">Sync both, then run attribution to see your CAC by keyword</p>
           </div>
         )}
       </div>
@@ -311,6 +460,28 @@ export default function Dashboard() {
         </div>
       )}
     </div>
+  )
+}
+
+function SourceBadge({ sourceType }: { sourceType: string }) {
+  if (sourceType === 'keyword') return null
+
+  const styles: Record<string, string> = {
+    dsa_search_term: 'bg-[#4a9aea]/10 text-[#4a9aea]',
+    pmax_search_term: 'bg-[#a855f7]/10 text-[#a855f7]',
+    asset_group: 'bg-[#8a8678]/10 text-[#8a8678]',
+  }
+
+  const labels: Record<string, string> = {
+    dsa_search_term: 'DSA',
+    pmax_search_term: 'PMAX',
+    asset_group: 'Asset Group',
+  }
+
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-mono font-semibold ${styles[sourceType] ?? ''}`}>
+      {labels[sourceType] ?? sourceType}
+    </span>
   )
 }
 

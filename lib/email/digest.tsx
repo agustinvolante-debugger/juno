@@ -15,12 +15,19 @@ export function buildDigestHtml({ userEmail, keywords, weekOf }: DigestEmailProp
   const budgetToCut = toCut.reduce((s, k) => s + k.spend_monthly, 0)
   const pctWasted = totalSpend > 0 ? Math.round((budgetToCut / totalSpend) * 100) : 0
 
+  const sourceLabel = (kw: KeywordCAC) => {
+    if (kw.source_type === 'dsa_search_term') return ' <span style="background:#4a9aea18;color:#4a9aea;padding:1px 5px;border-radius:3px;font-size:9px;font-family:monospace;font-weight:600">DSA</span>'
+    if (kw.source_type === 'pmax_search_term') return ' <span style="background:#a855f718;color:#a855f7;padding:1px 5px;border-radius:3px;font-size:9px;font-family:monospace;font-weight:600">PMAX</span>'
+    if (kw.source_type === 'asset_group') return ' <span style="background:#8a867818;color:#8a8678;padding:1px 5px;border-radius:3px;font-size:9px;font-family:monospace;font-weight:600">AG</span>'
+    return ''
+  }
+
   const kwRow = (kw: KeywordCAC) => {
     const actionColor = kw.action === 'scale' ? '#5ab87a' : kw.action === 'monitor' ? '#e09a30' : '#e05a4a'
     const actionLabel = kw.action === 'scale' ? 'Scale' : kw.action === 'monitor' ? 'Monitor' : 'Cut now'
     return `
       <tr>
-        <td style="padding:10px 12px;font-family:monospace;font-size:12px;color:#f0ead2;border-bottom:1px solid #222220">${kw.keyword}</td>
+        <td style="padding:10px 12px;font-family:monospace;font-size:12px;color:#f0ead2;border-bottom:1px solid #222220">${kw.keyword}${sourceLabel(kw)}</td>
         <td style="padding:10px 12px;font-size:13px;color:#8a8678;border-bottom:1px solid #222220">$${kw.spend_monthly.toLocaleString()}</td>
         <td style="padding:10px 12px;font-size:13px;color:${kw.deal_count > 0 ? '#5ab87a' : '#e05a4a'};font-weight:600;border-bottom:1px solid #222220">${kw.deal_count}</td>
         <td style="padding:10px 12px;font-size:13px;color:${actionColor};font-weight:500;border-bottom:1px solid #222220">${kw.cac !== null ? '$' + kw.cac.toLocaleString() : '—'}</td>
