@@ -1,6 +1,16 @@
 import { NextAuthOptions } from 'next-auth'
 import GoogleProvider from 'next-auth/providers/google'
 
+const ALLOWED_EMAILS = [
+  'agustinvolantesilva@gmail.com',
+  'avolantesilva@gmail.com',
+  'juanpablo.selame@gmail.com',
+  'cvolantesilva@gmail.com',
+  'martin.gajardo@maquinalista.com',
+  'artur.magalhaes@elebbre.com.br',
+  'renato.nascimento@elebbre.com.br',
+]
+
 export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
@@ -12,6 +22,9 @@ export const authOptions: NextAuthOptions = {
     strategy: 'jwt',
   },
   callbacks: {
+    async signIn({ user }) {
+      return ALLOWED_EMAILS.includes(user.email?.toLowerCase() ?? '')
+    },
     async jwt({ token, account }) {
       if (account) {
         token.accessToken = account.access_token
@@ -25,5 +38,6 @@ export const authOptions: NextAuthOptions = {
   },
   pages: {
     signIn: '/auth/signin',
+    error: '/auth/signin',
   },
 }
