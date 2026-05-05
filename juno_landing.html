@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Juno — See which keywords turn into deals</title>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 <style>
   :root {
     --bg: #0c0c0b;
@@ -380,14 +379,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0 auto 18px;
-  }
-
-  .card { text-align: center; }
-
-  .card-icon svg {
-    width: 20px; height: 20px;
-    stroke-width: 1.75;
+    font-size: 18px;
+    margin-bottom: 18px;
   }
 
   .card-icon.red { background: rgba(224,90,74,0.1); }
@@ -580,17 +573,18 @@
     <li><a href="#problem">Problem</a></li>
     <li><a href="#how">How it works</a></li>
     <li><a href="#vs">vs HubSpot</a></li>
-    <li><a href="https://calendly.com/agustinvolantesilva/30min" class="nav-cta">Book free audit</a></li>
-    <li><a href="/auth/signin" style="color:var(--text-secondary);font-size:13px;">Customer login →</a></li>
+    <li><a href="#vs-hs">vs HockeyStack</a></li>
+    <li><a href="#" class="nav-cta">Request access</a></li>
   </ul>
 </nav>
 
 <!-- HERO -->
 <div class="hero">
+  <div class="hero-badge">Now in beta</div>
   <h1>You're paying for clicks.<br><em>Not customers.</em></h1>
   <p class="hero-sub">Juno connects your Google Ads to your CRM so you can see exactly which keywords generate pipeline — and which ones are burning budget.</p>
   <div class="hero-actions">
-    <button class="btn-primary" onclick="window.location.href='https://calendly.com/agustinvolantesilva/30min'">Book a free audit</button>
+    <button class="btn-primary">Get early access</button>
     <button class="btn-secondary" onclick="document.getElementById('how').scrollIntoView({behavior:'smooth'})">See how it works</button>
   </div>
 
@@ -681,17 +675,17 @@
   </div>
   <div class="card-grid fade-in">
     <div class="card">
-      <div class="card-icon red"><i data-lucide="eye-off" style="color:var(--red)"></i></div>
+      <div class="card-icon red">🔒</div>
       <h3>Keywords are hidden</h3>
       <p>Google removed 80% of search term visibility in 2020. You're optimizing for clicks on data that's been deliberately obscured.</p>
     </div>
     <div class="card">
-      <div class="card-icon amber"><i data-lucide="unlink" style="color:var(--amber)"></i></div>
+      <div class="card-icon amber">🔗</div>
       <h3>No CRM connection</h3>
       <p>HubSpot captures the form fill but loses the keyword. Campaign level only — never deal level. The chain breaks between click and close.</p>
     </div>
     <div class="card">
-      <div class="card-icon green"><i data-lucide="circle-help" style="color:var(--green)"></i></div>
+      <div class="card-icon green">💸</div>
       <h3>CAC is a mystery</h3>
       <p>Without keyword-to-deal attribution, you can't calculate your true cost to acquire a customer. You're flying blind on your biggest marketing expense.</p>
     </div>
@@ -716,7 +710,7 @@
     <div class="step">
       <div class="step-num">02</div>
       <h3>Link to your CRM</h3>
-      <p>Juno captures UTM parameters on form fill and stores them on the contact in HubSpot. The keyword attribution travels with the contact through every pipeline stage.</p>
+      <p>Juno captures UTM parameters on form fill and stores them on the contact in your CRM. The keyword attribution travels with the contact through every pipeline stage.</p>
     </div>
     <div class="step">
       <div class="step-num">03</div>
@@ -784,13 +778,70 @@
 
 <hr class="full-divider">
 
+<!-- VS HOCKEYSTACK -->
+<section id="vs-hs">
+  <div class="fade-in">
+    <div class="section-label">Why not just use HockeyStack?</div>
+    <h2>Enterprise BI vs. keyword-level CAC.</h2>
+    <p class="section-sub">HockeyStack maps every touchpoint across your company. Juno answers one question: which keywords are closing deals.</p>
+  </div>
+  <div class="vs-grid fade-in">
+    <div class="vs-card them">
+      <div class="vs-card-label">
+        <span>HockeyStack</span>
+      </div>
+      <div class="vs-item">
+        <div class="vs-icon">✗</div>
+        <div class="vs-item-text"><strong>Weeks to implement</strong>Custom tracking scripts, data mapping, and a dedicated RevOps person to manage it. Not built for lean teams.</div>
+      </div>
+      <div class="vs-item">
+        <div class="vs-icon">✗</div>
+        <div class="vs-item-text"><strong>$25K+/year</strong>Enterprise pricing that requires budget approval. Hard to justify when you're optimizing $5K–$30K/month in ad spend.</div>
+      </div>
+      <div class="vs-item">
+        <div class="vs-icon">✗</div>
+        <div class="vs-item-text"><strong>Every touchpoint, all channels</strong>LinkedIn, G2, webinars, organic — hard to find the keyword-level signal buried in a multi-touch attribution map.</div>
+      </div>
+      <div class="vs-item">
+        <div class="vs-icon">✗</div>
+        <div class="vs-item-text"><strong>Built for executive reporting</strong>Complex ABM journeys for the C-suite. Not designed to tell you which keyword to cut or scale today.</div>
+      </div>
+    </div>
+    <div class="vs-card us">
+      <div class="vs-card-label">
+        <span style="width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block"></span>
+        <span>Juno</span>
+      </div>
+      <div class="vs-item">
+        <div class="vs-icon" style="color:var(--accent)">✓</div>
+        <div class="vs-item-text"><strong>Minutes to connect</strong>OAuth into Google Ads and HubSpot. No scripts, no data mapping, no RevOps hire needed.</div>
+      </div>
+      <div class="vs-item">
+        <div class="vs-icon" style="color:var(--accent)">✓</div>
+        <div class="vs-item-text"><strong>Built for growth-stage budgets</strong>A fraction of the cost. Designed for teams spending $3K–$50K/month who need answers, not infrastructure.</div>
+      </div>
+      <div class="vs-item">
+        <div class="vs-icon" style="color:var(--accent)">✓</div>
+        <div class="vs-item-text"><strong>Google Ads focus</strong>Which keyword closed which deal. One channel, full depth — no noise from channels you're not optimizing.</div>
+      </div>
+      <div class="vs-item">
+        <div class="vs-icon" style="color:var(--accent)">✓</div>
+        <div class="vs-item-text"><strong>Budget decisions today</strong>Scale, monitor, or cut — per keyword, with the CAC math already done. Action, not analysis.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="full-divider">
+
 <!-- CTA -->
 <div class="cta-section fade-in">
   <div class="section-label" style="text-align:center">Get started</div>
   <h2>Stop guessing which keywords work.</h2>
   <p>Request early access and we'll run a free attribution audit on your Google Ads account — showing you exactly which keywords have driven pipeline and which ones have been burning budget.</p>
   <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
-    <button class="btn-primary" style="font-size:16px; padding:15px 36px;" onclick="window.location.href='https://calendly.com/agustinvolantesilva/30min'">Book a free audit</button>
+    <button class="btn-primary" style="font-size:16px; padding:15px 36px;">Request free audit</button>
+    <button class="btn-secondary" style="font-size:16px; padding:15px 36px;">Book a call</button>
   </div>
 </div>
 
@@ -799,13 +850,8 @@
 <!-- FOOTER -->
 <footer>
   <div class="footer-logo">juno</div>
-  <div class="footer-meta">© 2026 Juno · San Francisco, CA · <a href="mailto:agustinvolantesilva@gmail.com" style="color:inherit;text-decoration:none;">agustinvolantesilva@gmail.com</a></div>
-  <div class="footer-meta" style="margin-top:8px;"><a href="/privacy" style="color:#8a8678;text-decoration:none;">Privacy Policy</a> · <a href="/terms" style="color:#8a8678;text-decoration:none;">Terms of Service</a></div>
+  <div class="footer-meta">© 2026 Juno · San Francisco, CA · agustinvolantesilva@gmail.com</div>
 </footer>
-
-<script>
-  lucide.createIcons();
-</script>
 
 <script>
   const observer = new IntersectionObserver((entries) => {
