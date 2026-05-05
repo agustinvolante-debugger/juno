@@ -26,7 +26,9 @@ export async function GET(req: NextRequest) {
   const tokens = await tokenRes.json()
 
   if (!tokens.access_token) {
-    return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/dashboard?error=google_ads_token_failed`)
+    console.error('Google Ads token exchange failed:', JSON.stringify(tokens))
+    const detail = tokens.error_description || tokens.error || 'unknown'
+    return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/dashboard?error=google_ads_token_failed&detail=${encodeURIComponent(detail)}`)
   }
 
   await supabaseAdmin.from('oauth_tokens').upsert({
