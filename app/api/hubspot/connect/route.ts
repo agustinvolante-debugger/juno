@@ -10,7 +10,7 @@ export async function GET() {
   const params = new URLSearchParams({
     client_id: process.env.HUBSPOT_CLIENT_ID!,
     redirect_uri: `${process.env.NEXTAUTH_URL}/api/hubspot/callback`,
-    scope: 'crm.objects.contacts.read crm.objects.deals.read',
+    scope: 'crm.objects.contacts.read crm.objects.deals.read crm.schemas.contacts.read crm.schemas.deals.read',
   })
 
   return NextResponse.redirect(

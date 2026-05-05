@@ -1,7 +1,62 @@
 import { Client } from '@hubspot/api-client'
+import { supabaseAdmin } from '@/lib/supabase'
 
 export function getHubspotClient(accessToken: string) {
   return new Client({ accessToken })
+}
+
+export async function refreshHubspotToken(refreshToken: string): Promise<{
+  access_token: string
+  refresh_token: string
+  expires_in: number
+}> {
+  const res = await fetch('https://api.hubapi.com/oauth/v1/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: process.env.HUBSPOT_CLIENT_ID!,
+      client_secret: process.env.HUBSPOT_CLIENT_SECRET!,
+      refresh_token: refreshToken,
+    }),
+  })
+
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`HubSpot token refresh failed: ${err}`)
+  }
+
+  return res.json()
+}
+
+export async function getValidHubspotToken(userId: string): Promise<string> {
+  const { data: row, error } = await supabaseAdmin
+    .from('oauth_tokens')
+    .select('access_token, refresh_token, expires_at')
+    .eq('user_id', userId)
+    .eq('provider', 'hubspot')
+    .single()
+
+  if (error || !row) throw new Error('HubSpot not connected')
+
+  const expired = row.expires_at && new Date(row.expires_at) <= new Date()
+
+  if (!expired) return row.access_token
+
+  if (!row.refresh_token) throw new Error('HubSpot token expired and no refresh token available')
+
+  const tokens = await refreshHubspotToken(row.refresh_token)
+
+  await supabaseAdmin.from('oauth_tokens').upsert({
+    user_id: userId,
+    provider: 'hubspot',
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token,
+    expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'user_id,provider' })
+
+  return tokens.access_token
 }
 
 function parseUtmTermFromUrl(url: string | null | undefined): string | null {

@@ -1,15 +1,19 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabase'
-import { fetchContacts, fetchDeals } from '@/lib/hubspot/client'
+import { fetchContacts, fetchDeals, getValidHubspotToken } from '@/lib/hubspot/client'
 import { NextResponse } from 'next/server'
 
 export async function POST() {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const token = process.env.HUBSPOT_PRIVATE_APP_TOKEN
-  if (!token) return NextResponse.json({ error: 'HubSpot token not configured' }, { status: 500 })
+  let token: string
+  try {
+    token = await getValidHubspotToken(session.user.id)
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 400 })
+  }
 
   const contacts = await fetchContacts(token)
   const contactRecords = contacts.map((c) => ({

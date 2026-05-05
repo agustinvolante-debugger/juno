@@ -21,7 +21,7 @@ export default function Dashboard() {
   const [rdMarketingConnected, setRdMarketingConnected] = useState(false)
   const [rdCrmToken, setRdCrmToken] = useState('')
   const [rdCrmSaved, setRdCrmSaved] = useState(false)
-  const hubspotConnected = true
+  const [hubspotConnected, setHubspotConnected] = useState(false)
   const [customerId, setCustomerId] = useState('')
   const [loading, setLoading] = useState('')
   const [toast, setToast] = useState('')
@@ -34,6 +34,15 @@ export default function Dashboard() {
     const saved = localStorage.getItem('juno_crm_provider') as CrmProvider | null
     if (saved) setCrmProvider(saved)
     setDateRange({ from: subDays(new Date(), 90), to: new Date() })
+
+    fetch('/api/connections/status')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.google_ads) setGoogleAdsConnected(true)
+        if (data.hubspot) setHubspotConnected(true)
+        if (data.rd_station_marketing) setRdMarketingConnected(true)
+      })
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -47,6 +56,7 @@ export default function Dashboard() {
       showToast('Google Ads connected')
     }
     if (connected === 'hubspot') {
+      setHubspotConnected(true)
       showToast('HubSpot connected')
     }
     if (connected === 'rd_station_marketing') {
@@ -244,16 +254,30 @@ export default function Dashboard() {
                   <div>
                     <div className="font-medium">HubSpot</div>
                     <div className="text-[#8a8678] text-sm mt-0.5">
-                      <span className="text-[#5ab87a]">● Connected via private app</span>
+                      {hubspotConnected ? (
+                        <span className="text-[#5ab87a]">● Connected</span>
+                      ) : (
+                        'Not connected'
+                      )}
                     </div>
                   </div>
-                  <button
-                    onClick={syncCRM}
-                    disabled={loading === 'crm'}
-                    className="bg-[#c8f04a] text-[#0c0c0b] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
-                  >
-                    {loading === 'crm' ? 'Syncing…' : 'Sync'}
-                  </button>
+                  <div className="flex gap-2">
+                    <a
+                      href="/api/hubspot/connect"
+                      className="bg-[#c8f04a] text-[#0c0c0b] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity"
+                    >
+                      {hubspotConnected ? 'Reconnect' : 'Connect'}
+                    </a>
+                    {hubspotConnected && (
+                      <button
+                        onClick={syncCRM}
+                        disabled={loading === 'crm'}
+                        className="bg-[#2a2a28] hover:bg-[#333330] text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {loading === 'crm' ? 'Syncing…' : 'Sync'}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <p className="text-[#4a4840] text-xs">Pulls all contacts with UTM data and closed-won deals</p>
               </div>
