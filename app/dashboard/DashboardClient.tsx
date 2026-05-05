@@ -17,12 +17,7 @@ export default function Dashboard() {
 
   const [keywords, setKeywords] = useState<KeywordCAC[]>([])
   const [googleAdsConnected, setGoogleAdsConnected] = useState(false)
-  const [crmProvider, setCrmProvider] = useState<CrmProvider>(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem('juno_crm_provider') as CrmProvider) ?? 'hubspot'
-    }
-    return 'hubspot'
-  })
+  const [crmProvider, setCrmProvider] = useState<CrmProvider>('hubspot')
   const [rdMarketingConnected, setRdMarketingConnected] = useState(false)
   const [rdCrmToken, setRdCrmToken] = useState('')
   const [rdCrmSaved, setRdCrmSaved] = useState(false)
@@ -31,9 +26,15 @@ export default function Dashboard() {
   const [loading, setLoading] = useState('')
   const [toast, setToast] = useState('')
   const [dateRange, setDateRange] = useState<DateRange>({
-    from: subDays(new Date(), 90),
-    to: new Date(),
+    from: undefined,
+    to: undefined,
   })
+
+  useEffect(() => {
+    const saved = localStorage.getItem('juno_crm_provider') as CrmProvider | null
+    if (saved) setCrmProvider(saved)
+    setDateRange({ from: subDays(new Date(), 90), to: new Date() })
+  }, [])
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/auth/signin')
@@ -77,7 +78,12 @@ export default function Dashboard() {
     })
     const data = await res.json()
     setLoading('')
-    if (data.error) return showToast(`Sync failed: ${data.error}`)
+    if (data.error) return showToast(`Sync failed: ${data.error}${data.detail ? ` — ${data.detail}` : ''}`)
+    const total = (data.synced || 0) + (data.dsa_search_terms || 0) + (data.pmax_search_terms || 0)
+    if (total === 0) {
+      const warning = data.warnings?.length ? ` (${data.warnings[0]})` : ''
+      return showToast(`No keyword data found for this account${warning}`)
+    }
     const parts = [`${data.synced} keywords`]
     if (data.dsa_search_terms) parts.push(`${data.dsa_search_terms} DSA search terms`)
     if (data.pmax_search_terms) parts.push(`${data.pmax_search_terms} PMAX terms`)
