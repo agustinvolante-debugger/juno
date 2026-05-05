@@ -31,9 +31,9 @@ const MOCK_KEYWORDS = [
   { keyword: 'marketing attribution software',  campaign: 'Brand - Competitors',  ad_group: 'Attribution Tools', spend_monthly: 3100, impressions: 8400, clicks: 520, source_type: 'keyword' as const },
   { keyword: 'google ads wasted spend',         campaign: 'Pain Points',          ad_group: 'Budget Waste',      spend_monthly: 1800, impressions: 5200, clicks: 380, source_type: 'keyword' as const },
   { keyword: 'paid search tracking tool',       campaign: 'Pain Points',          ad_group: 'Tracking',          spend_monthly: 920,  impressions: 2800, clicks: 195, source_type: 'keyword' as const },
-  // DSA search terms
-  { keyword: 'used excavator for sale',         campaign: 'DSA - Machinery',      ad_group: 'Dynamic Ad Group',  spend_monthly: 450,  impressions: 1800, clicks: 95,  source_type: 'dsa_search_term' as const },
-  { keyword: 'buy used tractor near me',        campaign: 'DSA - Machinery',      ad_group: 'Dynamic Ad Group',  spend_monthly: 380,  impressions: 1500, clicks: 78,  source_type: 'dsa_search_term' as const },
+  // DSA search terms (with landing pages for fallback attribution)
+  { keyword: 'used excavator for sale',         campaign: 'DSA - Machinery',      ad_group: 'Dynamic Ad Group',  spend_monthly: 450,  impressions: 1800, clicks: 95,  source_type: 'dsa_search_term' as const, landing_page: 'https://maquinalista.com/excavators' },
+  { keyword: 'buy used tractor near me',        campaign: 'DSA - Machinery',      ad_group: 'Dynamic Ad Group',  spend_monthly: 380,  impressions: 1500, clicks: 78,  source_type: 'dsa_search_term' as const, landing_page: 'https://maquinalista.com/tractors' },
 ]
 
 const MOCK_CONTACTS = [
@@ -55,6 +55,10 @@ const MOCK_CONTACTS = [
   // DSA contacts — utm_term contains target ID that maps to search terms
   { crm_id: 'test-011', email: 'pedro@maquinas.br',   utm_term: 'used excavator for sale',        daysAgoCreated: 50  },
   { crm_id: 'test-012', email: 'maria@agro.br',       utm_term: 'buy used tractor near me',       daysAgoCreated: 35  },
+  // FALLBACK TEST: utm_term is null, but first_page_seen URL has utm_term in query params
+  { crm_id: 'test-013', email: 'carlos@construcao.br', utm_term: null,                            daysAgoCreated: 40, first_page_seen: 'https://maquinalista.com/excavators?utm_source=google&utm_medium=cpc&utm_term=used+excavator+for+sale' },
+  // FALLBACK TEST: utm_term is null, first_page_seen is a plain landing page matching DSA keyword
+  { crm_id: 'test-014', email: 'lucia@fazenda.br',     utm_term: null,                            daysAgoCreated: 28, first_page_seen: 'https://maquinalista.com/tractors' },
 ]
 
 const MOCK_DEALS = [
@@ -68,6 +72,9 @@ const MOCK_DEALS = [
   // DSA deals
   { crm_deal_id: 'deal-008', contact_crm_id: 'test-011', deal_name: 'Excavator Sale — São Paulo',  amount: 85000, daysAgoClose: 25  },
   { crm_deal_id: 'deal-009', contact_crm_id: 'test-012', deal_name: 'Tractor Sale — Minas Gerais', amount: 62000, daysAgoClose: 15  },
+  // Fallback deals — these should still attribute even though contacts have no utm_term
+  { crm_deal_id: 'deal-010', contact_crm_id: 'test-013', deal_name: 'Excavator Sale — Rio (URL fallback)',     amount: 72000, daysAgoClose: 20  },
+  { crm_deal_id: 'deal-011', contact_crm_id: 'test-014', deal_name: 'Tractor Sale — Goiás (landing page fallback)', amount: 55000, daysAgoClose: 10  },
 ]
 
 export async function POST() {
@@ -106,7 +113,7 @@ export async function POST() {
     utm_medium: 'cpc',
     utm_campaign: 'Product - Core',
     utm_term: c.utm_term,
-    first_page_seen: 'https://usejuno.com',
+    first_page_seen: (c as any).first_page_seen ?? 'https://usejuno.com',
     created_at: daysAgo(c.daysAgoCreated),
     updated_at: new Date().toISOString(),
   }))

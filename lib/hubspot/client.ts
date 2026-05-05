@@ -4,6 +4,16 @@ export function getHubspotClient(accessToken: string) {
   return new Client({ accessToken })
 }
 
+function parseUtmTermFromUrl(url: string | null | undefined): string | null {
+  if (!url) return null
+  try {
+    const parsed = new URL(url.startsWith('http') ? url : `https://${url}`)
+    return parsed.searchParams.get('utm_term') ?? null
+  } catch {
+    return null
+  }
+}
+
 const MAX_CONTACTS = 10_000
 const MAX_DEALS = 5_000
 
@@ -32,8 +42,7 @@ export async function fetchContacts(accessToken: string) {
     const googleContacts = response.results.filter(
       (c) =>
         c.properties.utm_source?.toLowerCase() === 'google' &&
-        c.properties.utm_medium?.toLowerCase() === 'cpc' &&
-        c.properties.utm_term
+        c.properties.utm_medium?.toLowerCase() === 'cpc'
     )
     contacts.push(...googleContacts)
     after = response.paging?.next?.after
@@ -48,7 +57,7 @@ export async function fetchContacts(accessToken: string) {
     utm_source: c.properties.utm_source ?? null,
     utm_medium: c.properties.utm_medium ?? null,
     utm_campaign: c.properties.utm_campaign ?? null,
-    utm_term: c.properties.utm_term ?? null,
+    utm_term: c.properties.utm_term ?? parseUtmTermFromUrl(c.properties.hs_analytics_first_url) ?? null,
     first_page_seen: c.properties.hs_analytics_first_url ?? null,
     created_at: c.properties.createdate ?? null,
   }))

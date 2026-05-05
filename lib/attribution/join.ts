@@ -1,6 +1,26 @@
 import { supabaseAdmin } from '@/lib/supabase'
 import { KeywordCAC } from '@/types'
 
+function parseUtmTermFromUrl(url: string | null): string | null {
+  if (!url) return null
+  try {
+    const parsed = new URL(url.startsWith('http') ? url : `https://${url}`)
+    return parsed.searchParams.get('utm_term') ?? null
+  } catch {
+    return null
+  }
+}
+
+function normalizeLandingPage(url: string | null): string | null {
+  if (!url) return null
+  try {
+    const parsed = new URL(url.startsWith('http') ? url : `https://${url}`)
+    return parsed.pathname.toLowerCase().replace(/\/+$/, '') || '/'
+  } catch {
+    return url.toLowerCase().replace(/\/+$/, '') || null
+  }
+}
+
 export async function runAttributionJoin(userId: string, from?: string, to?: string): Promise<KeywordCAC[]> {
   const dateFrom = from ?? new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
   const dateTo = to ?? new Date().toISOString().slice(0, 10)
@@ -119,6 +139,91 @@ export async function runAttributionJoin(userId: string, from?: string, to?: str
         }
       }
     }
+  }
+
+  // 5b. URL parsing fallback — try to extract utm_term from first_page_seen URL
+  const { data: noUtmContacts } = await supabaseAdmin
+    .from('contacts')
+    .select('*')
+    .eq('user_id', userId)
+    .is('utm_term', null)
+    .not('first_page_seen', 'is', null)
+    .gte('created_at', dateFrom)
+    .lte('created_at', dateToEndOfDay)
+
+  const urlParsedContacts: any[] = []
+  const remainingLpContacts: any[] = []
+
+  if (noUtmContacts) {
+    for (const contact of noUtmContacts) {
+      const parsedTerm = parseUtmTermFromUrl(contact.first_page_seen)
+      if (parsedTerm) {
+        urlParsedContacts.push({ ...contact, utm_term: parsedTerm })
+      } else {
+        remainingLpContacts.push(contact)
+      }
+    }
+  }
+
+  let urlParsedMatches = 0
+  for (const contact of urlParsedContacts) {
+    const utmTerm = contact.utm_term.toLowerCase().trim()
+    const relatedDeals = dealsByContactId.get(contact.id) ?? []
+    if (relatedDeals.length === 0) continue
+
+    for (const [, cacRow] of kwMap.entries()) {
+      if (cacRow.keyword.toLowerCase().trim() === utmTerm) {
+        cacRow.deal_count += relatedDeals.length
+        for (const deal of relatedDeals) {
+          cacRow.total_deal_value += deal.amount ?? 0
+        }
+        urlParsedMatches++
+      }
+    }
+  }
+
+  if (urlParsedMatches > 0) {
+    console.log(`Attribution: URL parsing fallback matched ${urlParsedMatches} keyword-deal pairs from ${urlParsedContacts.length} contacts`)
+  }
+
+  // 5c. Landing page fallback — match remaining contacts to DSA keywords by landing page
+  const lpContacts = remainingLpContacts
+
+  if (lpContacts.length > 0) {
+    const lpToKeys = new Map<string, string[]>()
+    for (const kw of keywords) {
+      if (kw.source_type === 'dsa_search_term' && kw.landing_page) {
+        const normalizedLP = normalizeLandingPage(kw.landing_page)
+        if (!normalizedLP) continue
+        const key = `${kw.keyword}|||${kw.campaign}|||${kw.source_type}`
+        if (!lpToKeys.has(normalizedLP)) lpToKeys.set(normalizedLP, [])
+        if (!lpToKeys.get(normalizedLP)!.includes(key)) {
+          lpToKeys.get(normalizedLP)!.push(key)
+        }
+      }
+    }
+
+    let lpMatched = 0
+    for (const contact of lpContacts) {
+      const normalizedFirstPage = normalizeLandingPage(contact.first_page_seen)
+      if (!normalizedFirstPage) continue
+
+      const relatedDeals = dealsByContactId.get(contact.id) ?? []
+      if (relatedDeals.length === 0) continue
+
+      const matchingKeys = lpToKeys.get(normalizedFirstPage) ?? []
+      for (const key of matchingKeys) {
+        const cacRow = kwMap.get(key)
+        if (!cacRow) continue
+        cacRow.deal_count += relatedDeals.length
+        for (const deal of relatedDeals) {
+          cacRow.total_deal_value += deal.amount ?? 0
+        }
+        lpMatched++
+      }
+    }
+
+    console.log(`Attribution: landing page fallback matched ${lpMatched} keyword-deal pairs from ${lpContacts.length} contacts without utm_term`)
   }
 
   // 6. Calculate CAC and assign action for each keyword

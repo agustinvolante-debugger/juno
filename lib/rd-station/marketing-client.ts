@@ -1,5 +1,15 @@
 const RD_MARKETING_BASE = 'https://api.rd.services'
 
+function parseUtmTermFromUrl(url: string | null | undefined): string | null {
+  if (!url) return null
+  try {
+    const parsed = new URL(url.startsWith('http') ? url : `https://${url}`)
+    return parsed.searchParams.get('utm_term') ?? null
+  } catch {
+    return null
+  }
+}
+
 export async function refreshMarketingToken(refreshToken: string) {
   const res = await fetch(`${RD_MARKETING_BASE}/auth/token`, {
     method: 'POST',
@@ -65,6 +75,11 @@ export async function fetchRDContacts(accessToken: string) {
       ?? c.last_conversion?.content?.traffic_value
       ?? null
 
+    const firstPageUrl = c.first_conversion?.content?.conversion_origin?.url
+      ?? c.first_conversion?.content?.conversion_origin?.source
+      ?? c.first_page_seen_at
+      ?? null
+
     return {
       crm_id: c.uuid ?? c.id,
       crm_provider: 'rd_station' as const,
@@ -72,8 +87,8 @@ export async function fetchRDContacts(accessToken: string) {
       utm_source: c.traffic_source ?? c.last_conversion?.content?.traffic_source ?? null,
       utm_medium: c.traffic_medium ?? c.last_conversion?.content?.traffic_medium ?? null,
       utm_campaign: c.traffic_campaign ?? c.last_conversion?.content?.traffic_campaign ?? null,
-      utm_term: utmTerm,
-      first_page_seen: c.first_conversion?.content?.conversion_origin?.source ?? null,
+      utm_term: utmTerm ?? parseUtmTermFromUrl(firstPageUrl),
+      first_page_seen: firstPageUrl,
       created_at: c.created_at ?? null,
     }
   })
