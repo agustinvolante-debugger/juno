@@ -168,7 +168,7 @@ export default function ReportClient({ report }: { report: ReportData }) {
           <StatCard label="Est. Monthly Clicks" value={report.monthlyClicks.toLocaleString()} />
           <StatCard
             label="Est. Monthly Budget"
-            value={`${formatCurrency(report.monthlyBudgetLow)}–${formatCurrency(report.monthlyBudgetHigh)}`}
+            value={report.monthlyBudgetLow === report.monthlyBudgetHigh ? formatCurrency(report.monthlyBudgetHigh) : `${formatCurrency(report.monthlyBudgetLow)}–${formatCurrency(report.monthlyBudgetHigh)}`}
             sub="SpyFu estimate"
           />
           <StatCard
@@ -440,7 +440,7 @@ export default function ReportClient({ report }: { report: ReportData }) {
                 </div>
                 <div className="flex justify-between items-baseline">
                   <span className="text-[#8a8678] text-sm">Monthly cost</span>
-                  <span className="text-xl font-semibold text-[#e05a4a]">{formatCurrency(report.monthlyBudgetLow)}–{formatCurrency(report.monthlyBudgetHigh)}</span>
+                  <span className="text-xl font-semibold text-[#e05a4a]">{report.monthlyBudgetLow === report.monthlyBudgetHigh ? formatCurrency(report.monthlyBudgetHigh) : `${formatCurrency(report.monthlyBudgetLow)}–${formatCurrency(report.monthlyBudgetHigh)}`}</span>
                 </div>
                 <div className="flex justify-between items-baseline">
                   <span className="text-[#8a8678] text-sm">Cost per click</span>
