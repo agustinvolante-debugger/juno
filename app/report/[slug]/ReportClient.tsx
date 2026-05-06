@@ -203,6 +203,7 @@ export default function ReportClient({ report }: { report: ReportData }) {
         </section>
 
         {/* CPC COMPARISON CHART */}
+        {report.slug !== 'safetywing' && (
         <section className="mb-14">
           <SectionHeader title="Cost Per Click Comparison" subtitle="Estimated effective CPC vs industry benchmark and top competitor" />
           <div className="bg-[#141412] border border-[#222220] rounded-xl p-6">
@@ -234,6 +235,7 @@ export default function ReportClient({ report }: { report: ReportData }) {
             </div>
           </div>
         </section>
+        )}
 
         {/* KEYWORD CPC TABLE + CHART */}
         <section className="mb-14">
