@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import { ReportData } from './reports'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
@@ -103,6 +104,14 @@ function WrappedAxisTick({ x, y, payload }: any) {
 }
 
 export default function ReportClient({ report }: { report: ReportData }) {
+  useEffect(() => {
+    fetch('/api/report-view', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug: report.slug }),
+    }).catch(() => {})
+  }, [report.slug])
+
   const cpcComparison = [
     { name: 'Industry Avg', cpc: report.industryAvgCPC, fill: colors.tertiary },
     { name: report.company, cpc: report.effectiveCPC, fill: colors.red },
