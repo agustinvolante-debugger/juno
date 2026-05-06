@@ -115,11 +115,6 @@ export default function ReportClient({ report }: { report: ReportData }) {
   const cpcComparison = [
     { name: 'Industry Avg', cpc: report.industryAvgCPC, fill: colors.tertiary },
     { name: report.company, cpc: report.effectiveCPC, fill: colors.red },
-    {
-      name: report.competitors[1]?.domain.replace('.com', '') || 'Top Competitor',
-      cpc: +(report.competitors[1] ? (parseInt(report.competitors[1].budget.replace(/[$KM,]/g, '')) * (report.competitors[1].budget.includes('M') ? 1000000 : 1000) / parseInt(report.competitors[1].monthlyClicks.replace(/K/g, '000'))).toFixed(2) : 0),
-      fill: colors.secondary,
-    },
   ]
 
   const keywordCPCData = report.topKeywords
