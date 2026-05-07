@@ -16,6 +16,6 @@ export default async function Home() {
   const html = (styleMatch ? `<style>${styleMatch[1]}</style>` : '') + (bodyMatch ? bodyMatch[1] : raw)
 
   return (
-    <div dangerouslySetInnerHTML={{ __html: html }} />
+    <div suppressHydrationWarning dangerouslySetInnerHTML={{ __html: html }} />
   )
 }

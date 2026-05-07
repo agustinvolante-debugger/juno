@@ -368,6 +368,7 @@
     border: 1px solid var(--border);
     border-radius: 10px;
     padding: 28px;
+    text-align: center;
     transition: border-color 0.2s, transform 0.2s;
   }
 
@@ -380,7 +381,7 @@
     align-items: center;
     justify-content: center;
     font-size: 18px;
-    margin-bottom: 18px;
+    margin: 0 auto 18px;
   }
 
   .card-icon.red { background: rgba(224,90,74,0.1); }
@@ -574,18 +575,24 @@
     <li><a href="#how">How it works</a></li>
     <li><a href="#vs">vs HubSpot</a></li>
     <li><a href="#vs-hs">vs HockeyStack</a></li>
+    <li><a href="#vision">Vision</a></li>
     <li><a href="/auth/signin" class="nav-cta">Customer login</a></li>
   </ul>
 </nav>
 
 <!-- HERO -->
 <div class="hero">
-  <div class="hero-badge">Now in beta</div>
+  <div class="hero-badge">Zero-code setup</div>
   <h1>You're paying for clicks.<br><em>Not customers.</em></h1>
-  <p class="hero-sub">Juno connects your Google Ads to your CRM so you can see exactly which keywords generate pipeline — and which ones are burning budget.</p>
+  <p class="hero-sub">The first attribution tool built for the person running the ads. Connect Google Ads and your CRM in under 15 minutes. No dev tickets, no custom scripts, no RevOps required.</p>
   <div class="hero-actions">
     <a href="https://calendly.com/agustinvolantesilva/30min" class="btn-primary" style="text-decoration:none" target="_blank">Book demo</a>
     <button class="btn-secondary" onclick="document.getElementById('how').scrollIntoView({behavior:'smooth'})">See how it works</button>
+  </div>
+  <div style="display:flex; align-items:center; gap:24px; margin-top:20px; animation: fadeUp 0.6s 0.35s ease both;">
+    <span style="font-family:'DM Mono',monospace; font-size:12px; color:var(--text-tertiary); display:flex; align-items:center; gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Read-only access</span>
+    <span style="font-family:'DM Mono',monospace; font-size:12px; color:var(--text-tertiary); display:flex; align-items:center; gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> 15-minute setup</span>
+    <span style="font-family:'DM Mono',monospace; font-size:12px; color:var(--text-tertiary); display:flex; align-items:center; gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> HubSpot · RD Station · Salesforce</span>
   </div>
 
   <div class="mockup-wrap">
@@ -675,17 +682,17 @@
   </div>
   <div class="card-grid fade-in">
     <div class="card">
-      <div class="card-icon red">🔒</div>
+      <div class="card-icon red"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e05a4a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 11h1a3 3 0 0 1 0 6h-1"/><path d="M9 12v6"/><path d="M13 12v6"/><path d="M14 7.5c-1 0-1.44.5-3 .5s-2-.5-3-.5-1.72.5-2.5.5a2.5 2.5 0 0 1 0-5c.78 0 1.57.5 2.5.5S9.44 2 11 2s2 1 3 1 1.5-.5 2.5-.5a2.5 2.5 0 0 1 0 5c-1 0-1.5-.5-2.5-.5z"/></svg></div>
       <h3>Keywords are hidden</h3>
       <p>Google removed 80% of search term visibility in 2020. You're optimizing for clicks on data that's been deliberately obscured.</p>
     </div>
     <div class="card">
-      <div class="card-icon amber">🔗</div>
+      <div class="card-icon amber"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e09a30" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg></div>
       <h3>No CRM connection</h3>
-      <p>HubSpot captures the form fill but loses the keyword. Campaign level only — never deal level. The chain breaks between click and close.</p>
+      <p>Your CRM captures the form fill but loses the keyword. Campaign level only, never deal level. The chain breaks between click and close.</p>
     </div>
     <div class="card">
-      <div class="card-icon green">💸</div>
+      <div class="card-icon green"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5ab87a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg></div>
       <h3>CAC is a mystery</h3>
       <p>Without keyword-to-deal attribution, you can't calculate your true cost to acquire a customer. You're flying blind on your biggest marketing expense.</p>
     </div>
@@ -698,24 +705,24 @@
 <section id="how">
   <div class="fade-in" style="text-align:center; margin-bottom: 64px;">
     <div class="section-label" style="text-align:center">How it works</div>
-    <h2>Three systems. One connection.</h2>
-    <p class="section-sub" style="margin: 0 auto 0;">Juno sits between Google Ads and your CRM. No migrations, no new workflows — just the attribution layer that was always missing.</p>
+    <h2>You're 15 minutes away from clarity.</h2>
+    <p class="section-sub" style="margin: 0 auto 0;">If you can log into Google Ads and your CRM, you can set up Juno. No engineers, no data mapping, no API headaches.</p>
   </div>
   <div class="steps fade-in">
     <div class="step">
       <div class="step-num">01</div>
-      <h3>Connect Google Ads</h3>
-      <p>Pull keyword spend, click data, and search term reports via the Google Ads API. Tag every ad URL with UTM parameters that carry the keyword through to your landing page.</p>
+      <h3>Grant access</h3>
+      <p>Connect Google Ads via OAuth in two clicks. Juno uses read-only access. We can't touch your campaigns, we just read the data.</p>
     </div>
     <div class="step">
       <div class="step-num">02</div>
-      <h3>Link to your CRM</h3>
-      <p>Juno captures UTM parameters on form fill and stores them on the contact in your CRM. The keyword attribution travels with the contact through every pipeline stage.</p>
+      <h3>Sync your CRM</h3>
+      <p>Authenticate HubSpot, RD Station, or Salesforce. Juno maps your fields automatically. No hidden form fields, no manual data mapping. If you can log in, you can set this up.</p>
     </div>
     <div class="step">
       <div class="step-num">03</div>
-      <h3>See CAC by keyword</h3>
-      <p>Ad spend divided by closed deals per keyword. A clear table showing what to scale, what to cut, and what to test. Updated daily, no spreadsheet required.</p>
+      <h3>Own your CAC</h3>
+      <p>See which keywords actually turn into customers. A clear table showing what to scale, what to cut, and what to test. Updated daily, no spreadsheet required.</p>
     </div>
   </div>
 </section>
@@ -762,7 +769,7 @@
       </div>
       <div class="vs-item">
         <div class="vs-icon" style="color:var(--accent)">✓</div>
-        <div class="vs-item-text"><strong>Follows the deal to close</strong>Attribution doesn't stop at form fill. We track the contact all the way to closed/won in HubSpot.</div>
+        <div class="vs-item-text"><strong>Follows the deal to close</strong>Attribution doesn't stop at form fill. We track the contact all the way to closed/won in your CRM.</div>
       </div>
       <div class="vs-item">
         <div class="vs-icon" style="color:var(--accent)">✓</div>
@@ -814,11 +821,11 @@
       </div>
       <div class="vs-item">
         <div class="vs-icon" style="color:var(--accent)">✓</div>
-        <div class="vs-item-text"><strong>Minutes to connect</strong>OAuth into Google Ads and HubSpot. No scripts, no data mapping, no RevOps hire needed.</div>
+        <div class="vs-item-text"><strong>Owned by Marketing, not Engineering</strong>OAuth into Google Ads and your CRM. Read-only API access, no scripts, no data mapping. Set up in 15 minutes.</div>
       </div>
       <div class="vs-item">
         <div class="vs-icon" style="color:var(--accent)">✓</div>
-        <div class="vs-item-text"><strong>Built for growth-stage budgets</strong>A fraction of the cost. Designed for teams spending $3K–$50K/month who need answers, not infrastructure.</div>
+        <div class="vs-item-text"><strong>Built for growth-stage budgets</strong>A fraction of the cost. Designed for teams spending $3K–$50K/month on Google Ads who need answers, not infrastructure.</div>
       </div>
       <div class="vs-item">
         <div class="vs-icon" style="color:var(--accent)">✓</div>
@@ -834,6 +841,38 @@
 
 <hr class="full-divider">
 
+<!-- VISION -->
+<section id="vision">
+  <div class="fade-in" style="text-align:center; margin-bottom: 64px;">
+    <div class="section-label" style="text-align:center">The vision</div>
+    <h2>From data to decisions.</h2>
+    <p class="section-sub" style="margin: 0 auto 0;">Attribution alone is a commodity. Benchmarks alone are a commodity. The intersection is where the real value lives.</p>
+  </div>
+  <div class="steps fade-in">
+    <div class="step">
+      <div class="step-num" style="font-size:14px;">Now</div>
+      <h3>The Mirror</h3>
+      <p>Connect Google Ads to your CRM. See your true CAC per keyword. Know exactly which campaigns create revenue and which ones create noise.</p>
+    </div>
+    <div class="step">
+      <div class="step-num" style="font-size:14px;">Next</div>
+      <h3>The Advisor</h3>
+      <p>Your CRM data layered over industry benchmarks and competitor intelligence. See where you're overpaying compared to your peers and where to reallocate budget for the highest ROI.</p>
+    </div>
+    <div class="step">
+      <div class="step-num" style="font-size:14px;">Goal</div>
+      <h3>Consultant in a box</h3>
+      <p>Automated waste detection, competitor keyword gaps, and budget reallocation. The insights of a high-priced consultant at the cost of a software subscription.</p>
+    </div>
+  </div>
+  <div class="fade-in" style="text-align:center; margin-top:48px;">
+    <p style="color:var(--text-secondary); font-size:15px; font-weight:300;">Join our early access group and help shape the Advisor roadmap.</p>
+    <a href="https://calendly.com/agustinvolantesilva/30min" class="btn-secondary" style="text-decoration:none; margin-top:16px; display:inline-block;" target="_blank">Get early access</a>
+  </div>
+</section>
+
+<hr class="full-divider">
+
 <!-- CTA -->
 <div class="cta-section fade-in">
   <div class="section-label" style="text-align:center">Get started</div>
@@ -842,6 +881,11 @@
   <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
     <a href="https://calendly.com/agustinvolantesilva/30min" class="btn-primary" style="font-size:16px; padding:15px 36px; text-decoration:none" target="_blank">Request free audit</a>
     <a href="https://calendly.com/agustinvolantesilva/30min" class="btn-secondary" style="font-size:16px; padding:15px 36px; text-decoration:none" target="_blank">Book a call</a>
+  </div>
+  <div style="display:flex; align-items:center; gap:24px; margin-top:20px; justify-content:center; flex-wrap:wrap;">
+    <span style="font-family:'DM Mono',monospace; font-size:12px; color:var(--text-tertiary); display:flex; align-items:center; gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Read-only access</span>
+    <span style="font-family:'DM Mono',monospace; font-size:12px; color:var(--text-tertiary); display:flex; align-items:center; gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg> No code required</span>
+    <span style="font-family:'DM Mono',monospace; font-size:12px; color:var(--text-tertiary); display:flex; align-items:center; gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> 15-minute setup</span>
   </div>
 </div>
 
