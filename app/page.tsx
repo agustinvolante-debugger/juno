@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { readFileSync } from 'fs'
 import { join } from 'path'
+import LandingTracker from '@/app/components/LandingTracker'
 
 export default async function Home() {
   const session = await getServerSession(authOptions)
@@ -16,6 +17,9 @@ export default async function Home() {
   const html = (styleMatch ? `<style>${styleMatch[1]}</style>` : '') + (bodyMatch ? bodyMatch[1] : raw)
 
   return (
-    <div suppressHydrationWarning dangerouslySetInnerHTML={{ __html: html }} />
+    <>
+      <LandingTracker />
+      <div suppressHydrationWarning dangerouslySetInnerHTML={{ __html: html }} />
+    </>
   )
 }
