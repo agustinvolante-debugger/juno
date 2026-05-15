@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.96.0",
     "@hubspot/api-client": "^13.5.0",
     "@supabase/supabase-js": "^2.105.0",
     "date-fns": "^4.1.0",
