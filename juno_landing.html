@@ -3,855 +3,719 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Juno — See which keywords turn into deals</title>
+<title>Juno — Know which keywords drive deals, not just leads.</title>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg: #0c0c0b;
-    --surface: #141412;
-    --border: #222220;
-    --border-light: #2a2a28;
-    --text: #f0ead2;
-    --text-secondary: #8a8678;
-    --text-tertiary: #4a4840;
-    --accent: #c8f04a;
-    --accent-dim: #8aaa2e;
-    --red: #e05a4a;
-    --amber: #e09a30;
-    --green: #5ab87a;
-  }
-
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  html { scroll-behavior: smooth; }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'DM Sans', sans-serif;
-    font-size: 15px;
-    line-height: 1.6;
-    overflow-x: hidden;
-  }
-
-  /* ── NAV ── */
-  nav {
-    position: fixed;
-    top: 0; left: 0; right: 0;
-    z-index: 100;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 48px;
-    height: 60px;
-    background: rgba(12,12,11,0.85);
-    backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--border);
-  }
-
-  .nav-logo {
-    font-family: 'Instrument Serif', serif;
-    font-size: 22px;
-    color: var(--text);
-    letter-spacing: -0.02em;
-  }
-
-  .nav-logo span { color: var(--accent); }
-
-  .nav-links {
-    display: flex;
-    align-items: center;
-    gap: 32px;
-    list-style: none;
-  }
-
-  .nav-links a {
-    color: var(--text-secondary);
-    text-decoration: none;
-    font-size: 14px;
-    font-weight: 400;
-    transition: color 0.2s;
-  }
-
-  .nav-links a:hover { color: var(--text); }
-
-  .nav-cta {
-    background: var(--accent);
-    color: #0c0c0b !important;
-    padding: 8px 20px;
-    border-radius: 6px;
-    font-weight: 600 !important;
-    font-size: 13px !important;
-    transition: opacity 0.2s !important;
-  }
-
-  .nav-cta:hover { opacity: 0.88; }
-
-  /* ── HERO ── */
-  .hero {
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 120px 24px 80px;
-    position: relative;
-    overflow: hidden;
-  }
-
-  .hero::before {
-    content: '';
-    position: absolute;
-    top: -200px; left: 50%;
-    transform: translateX(-50%);
-    width: 800px; height: 800px;
-    background: radial-gradient(circle, rgba(200,240,74,0.06) 0%, transparent 70%);
-    pointer-events: none;
-  }
-
-  .hero-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    background: rgba(200,240,74,0.08);
-    border: 1px solid rgba(200,240,74,0.2);
-    border-radius: 20px;
-    padding: 5px 14px;
-    font-family: 'DM Mono', monospace;
-    font-size: 11px;
-    color: var(--accent);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin-bottom: 36px;
-    animation: fadeUp 0.6s ease both;
-  }
-
-  .hero-badge::before {
-    content: '';
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    background: var(--accent);
-    animation: pulse 2s infinite;
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
-  }
-
-  h1 {
-    font-family: 'Instrument Serif', serif;
-    font-size: clamp(48px, 7vw, 88px);
-    line-height: 1.0;
-    letter-spacing: -0.03em;
-    margin-bottom: 28px;
-    max-width: 900px;
-    animation: fadeUp 0.6s 0.1s ease both;
-  }
-
-  h1 em {
-    font-style: italic;
-    color: var(--accent);
-  }
-
-  .hero-sub {
-    font-size: 18px;
-    color: var(--text-secondary);
-    max-width: 520px;
-    line-height: 1.7;
-    margin-bottom: 44px;
-    animation: fadeUp 0.6s 0.2s ease both;
-    font-weight: 300;
-  }
-
-  .hero-actions {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    animation: fadeUp 0.6s 0.3s ease both;
-  }
-
-  .btn-primary {
-    background: var(--accent);
-    color: #0c0c0b;
-    border: none;
-    padding: 13px 28px;
-    border-radius: 7px;
-    font-size: 15px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: opacity 0.2s, transform 0.15s;
-    font-family: 'DM Sans', sans-serif;
-  }
-
-  .btn-primary:hover { opacity: 0.88; transform: translateY(-1px); }
-
-  .btn-secondary {
-    background: transparent;
-    color: var(--text-secondary);
-    border: 1px solid var(--border-light);
-    padding: 13px 28px;
-    border-radius: 7px;
-    font-size: 15px;
-    font-weight: 400;
-    cursor: pointer;
-    transition: border-color 0.2s, color 0.2s;
-    font-family: 'DM Sans', sans-serif;
-  }
-
-  .btn-secondary:hover { border-color: var(--text-secondary); color: var(--text); }
-
-  /* ── PRODUCT MOCKUP ── */
-  .mockup-wrap {
-    width: 100%;
-    max-width: 900px;
-    margin: 72px auto 0;
-    animation: fadeUp 0.8s 0.4s ease both;
-  }
-
-  .mockup {
-    background: var(--surface);
-    border: 1px solid var(--border-light);
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 40px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04);
-  }
-
-  .mockup-bar {
-    background: #1a1a18;
-    border-bottom: 1px solid var(--border);
-    padding: 12px 18px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .mockup-dot {
-    width: 10px; height: 10px;
-    border-radius: 50%;
-  }
-
-  .mockup-title {
-    font-family: 'DM Mono', monospace;
-    font-size: 11px;
-    color: var(--text-tertiary);
-    margin-left: 8px;
-  }
-
-  .mockup-body {
-    padding: 24px;
-  }
-
-  .mockup-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    margin-bottom: 20px;
-  }
-
-  .mockup-stat {
-    text-align: left;
-  }
-
-  .mockup-stat-label {
-    font-family: 'DM Mono', monospace;
-    font-size: 10px;
-    color: var(--text-tertiary);
-    text-transform: uppercase;
-    letter-spacing: 0.15em;
-    margin-bottom: 4px;
-  }
-
-  .mockup-stat-value {
-    font-size: 28px;
-    font-weight: 600;
-    color: var(--text);
-    letter-spacing: -0.02em;
-  }
-
-  .mockup-stat-value.good { color: var(--accent); }
-  .mockup-stat-value.bad { color: var(--red); }
-
-  .mockup-table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-
-  .mockup-table th {
-    font-family: 'DM Mono', monospace;
-    font-size: 10px;
-    color: var(--text-tertiary);
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    text-align: left;
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--border);
-    font-weight: 400;
-  }
-
-  .mockup-table td {
-    padding: 12px 12px;
-    font-size: 13px;
-    border-bottom: 1px solid rgba(34,34,32,0.6);
-    vertical-align: middle;
-  }
-
-  .mockup-table tr:last-child td { border-bottom: none; }
-
-  .mockup-table tr:hover td { background: rgba(255,255,255,0.02); }
-
-  .kw { color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; }
-  .spend { color: var(--text-secondary); }
-  .deals-good { color: var(--green); font-weight: 600; }
-  .deals-bad { color: var(--red); font-weight: 600; }
-  .cac-good { color: var(--green); font-weight: 500; }
-  .cac-bad { color: var(--red); font-weight: 500; }
-  .cac-warn { color: var(--amber); font-weight: 500; }
-
-  .action-tag {
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 600;
-    font-family: 'DM Mono', monospace;
-    letter-spacing: 0.05em;
-  }
-
-  .tag-scale { background: rgba(90,184,122,0.12); color: var(--green); }
-  .tag-cut { background: rgba(224,90,74,0.12); color: var(--red); }
-  .tag-watch { background: rgba(224,154,48,0.12); color: var(--amber); }
-
-  /* ── SECTIONS ── */
-  section {
-    padding: 100px 48px;
-    max-width: 1100px;
-    margin: 0 auto;
-  }
-
-  .section-label {
-    font-family: 'DM Mono', monospace;
-    font-size: 11px;
-    color: var(--accent);
-    text-transform: uppercase;
-    letter-spacing: 0.2em;
-    margin-bottom: 20px;
-  }
-
-  h2 {
-    font-family: 'Instrument Serif', serif;
-    font-size: clamp(32px, 4vw, 52px);
-    letter-spacing: -0.02em;
-    line-height: 1.1;
-    margin-bottom: 16px;
-  }
-
-  .section-sub {
-    font-size: 17px;
-    color: var(--text-secondary);
-    max-width: 560px;
-    line-height: 1.7;
-    margin-bottom: 56px;
-    font-weight: 300;
-  }
-
-  /* ── PROBLEM CARDS ── */
-  .card-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
-  }
-
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 28px;
-    text-align: center;
-    transition: border-color 0.2s, transform 0.2s;
-  }
-
-  .card:hover { border-color: var(--border-light); transform: translateY(-2px); }
-
-  .card-icon {
-    width: 40px; height: 40px;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
-    margin: 0 auto 18px;
-  }
-
-  .card-icon.red { background: rgba(224,90,74,0.1); }
-  .card-icon.amber { background: rgba(224,154,48,0.1); }
-  .card-icon.green { background: rgba(90,184,122,0.1); }
-
-  .card h3 {
-    font-size: 16px;
-    font-weight: 600;
-    margin-bottom: 10px;
-    color: var(--text);
-  }
-
-  .card p {
-    font-size: 14px;
-    color: var(--text-secondary);
-    line-height: 1.65;
-  }
-
-  /* ── HOW IT WORKS ── */
-  .steps {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0;
-    position: relative;
-  }
-
-  .steps::before {
-    content: '';
-    position: absolute;
-    top: 28px; left: calc(16.66% + 20px); right: calc(16.66% + 20px);
-    height: 1px;
-    background: linear-gradient(to right, var(--accent), var(--border-light), var(--accent));
-    opacity: 0.3;
-  }
-
-  .step {
-    padding: 0 24px;
-    text-align: center;
-  }
-
-  .step-num {
-    width: 56px; height: 56px;
-    border-radius: 50%;
-    background: rgba(200,240,74,0.08);
-    border: 1px solid rgba(200,240,74,0.2);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: 'DM Mono', monospace;
-    font-size: 18px;
-    font-weight: 500;
-    color: var(--accent);
-    margin: 0 auto 24px;
-    position: relative;
-    z-index: 1;
-  }
-
-  .step h3 {
-    font-size: 16px;
-    font-weight: 600;
-    margin-bottom: 10px;
-  }
-
-  .step p {
-    font-size: 14px;
-    color: var(--text-secondary);
-    line-height: 1.65;
-  }
-
-  /* ── DIVIDER ── */
-  .full-divider {
-    border: none;
-    border-top: 1px solid var(--border);
-    margin: 0;
-  }
-
-  /* ── VS SECTION ── */
-  .vs-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-  }
-
-  .vs-card {
-    border-radius: 10px;
-    padding: 28px;
-    border: 1px solid var(--border);
-  }
-
-  .vs-card.them { background: var(--surface); }
-  .vs-card.us { background: rgba(200,240,74,0.04); border-color: rgba(200,240,74,0.2); }
-
-  .vs-card-label {
-    font-family: 'DM Mono', monospace;
-    font-size: 11px;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    color: var(--text-tertiary);
-    margin-bottom: 20px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .vs-card.us .vs-card-label { color: var(--accent); }
-
-  .vs-item {
-    display: flex;
-    gap: 12px;
-    padding: 12px 0;
-    border-bottom: 1px solid var(--border);
-    font-size: 14px;
-    line-height: 1.5;
-  }
-
-  .vs-item:last-child { border-bottom: none; }
-
-  .vs-icon { flex-shrink: 0; margin-top: 2px; }
-  .vs-item-text { color: var(--text-secondary); }
-  .vs-item-text strong { display: block; color: var(--text); font-weight: 500; margin-bottom: 2px; font-size: 13px; }
-
-  /* ── CTA ── */
-  .cta-section {
-    text-align: center;
-    padding: 100px 48px;
-    max-width: 700px;
-    margin: 0 auto;
-  }
-
-  .cta-section h2 { margin-bottom: 16px; }
-  .cta-section p { color: var(--text-secondary); font-size: 17px; margin-bottom: 40px; font-weight: 300; }
-
-  /* ── FOOTER ── */
-  footer {
-    border-top: 1px solid var(--border);
-    padding: 32px 48px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .footer-logo {
-    font-family: 'Instrument Serif', serif;
-    font-size: 18px;
-    color: var(--text-secondary);
-  }
-
-  .footer-meta {
-    font-family: 'DM Mono', monospace;
-    font-size: 11px;
-    color: var(--text-tertiary);
-  }
-
-  /* ── ANIMATIONS ── */
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  .fade-in {
-    opacity: 0;
-    transform: translateY(24px);
-    transition: opacity 0.6s ease, transform 0.6s ease;
-  }
-
-  .fade-in.visible {
-    opacity: 1;
-    transform: translateY(0);
-  }
-
-  /* ── KW TOOLTIP ── */
-  .kw-tooltip-card {
-    position: fixed;
-    background: #1c1c1a;
-    border: 1px solid rgba(200,240,74,0.3);
-    border-radius: 10px;
-    padding: 14px 16px;
-    min-width: 260px;
-    max-width: 320px;
-    box-shadow: 0 20px 48px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04);
-    z-index: 9999;
-    pointer-events: none;
-    opacity: 0;
-    transform: translateY(4px);
-    transition: opacity 0.15s ease, transform 0.15s ease;
-  }
-  .kw-tooltip-card.visible { opacity: 1; transform: translateY(0); }
-  .kw-tooltip-header { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
-  .kw-deal-item { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid rgba(34,34,32,0.5); gap: 10px; }
-  .kw-deal-item:last-of-type { border-bottom: none; }
-  .kw-deal-company { font-size: 12px; color: var(--text); font-weight: 500; flex: 1; }
-  .kw-deal-value { font-size: 12px; color: var(--accent); font-family: 'DM Mono', monospace; white-space: nowrap; }
-  .kw-deal-stage { font-size: 10px; color: var(--green); font-family: 'DM Mono', monospace; background: rgba(90,184,122,0.1); padding: 2px 6px; border-radius: 3px; white-space: nowrap; }
-  .kw-no-deals { font-size: 12px; color: var(--red); padding: 6px 0; font-family: 'DM Mono', monospace; }
-  .kw-tooltip-hint { margin-top: 10px; font-size: 11px; color: var(--text-tertiary); font-family: 'DM Mono', monospace; padding-top: 8px; border-top: 1px solid var(--border); }
-
-  /* ── KW ROW INTERACTIVITY ── */
-  .mockup-table tr.kw-row { cursor: pointer; }
-  .mockup-table tr.kw-row:hover td { background: rgba(200,240,74,0.04) !important; }
-  .mockup-table tr.kw-row.active td { background: rgba(200,240,74,0.06) !important; border-bottom: none !important; }
-  .kw-detail-row { display: none; }
-  .kw-detail-row.open { display: table-row; }
-  .kw-detail-row td { padding: 14px 16px 16px !important; background: rgba(200,240,74,0.03) !important; border-bottom: 1px solid var(--border) !important; border-left: 2px solid rgba(200,240,74,0.2) !important; }
-
-  /* ── KW EXPANDED VISUAL ── */
-  .kw-expand-grid { display: grid; grid-template-columns: 1fr 140px 180px; gap: 20px; align-items: start; }
-  .kw-expand-section-label { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 8px; }
-  .kw-deal-cards { display: flex; flex-direction: column; gap: 5px; }
-  .kw-deal-card { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.025); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; }
-  .kw-deal-card-company { color: var(--text); font-weight: 500; flex: 1; font-size: 12px; }
-  .kw-deal-card-date { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-tertiary); }
-  .kw-deal-card-value { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--accent); }
-  .kw-no-deal-card { background: rgba(224,90,74,0.06); border: 1px solid rgba(224,90,74,0.15); border-radius: 6px; padding: 10px 14px; font-family: 'DM Mono', monospace; font-size: 12px; color: var(--red); text-align: center; }
-  .kw-stats { display: flex; flex-direction: column; gap: 10px; }
-  .kw-stat-item { display: flex; flex-direction: column; gap: 5px; }
-  .kw-stat-label { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.12em; }
-  .kw-stat-box { background: rgba(255,255,255,0.025); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; text-align: center; }
-  .kw-stat-value { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; color: var(--text); }
-  .kw-stat-value.green { color: var(--green); }
-  .kw-stat-value.amber { color: var(--amber); }
-  .kw-stat-value.red   { color: var(--red); }
-  .kw-actions { display: flex; flex-direction: column; gap: 6px; }
-  .kw-action-chip { display: flex; align-items: center; gap: 7px; border-radius: 6px; padding: 7px 12px; font-size: 12px; font-weight: 500; }
-  .kw-action-chip.scale { background: rgba(90,184,122,0.08); border: 1px solid rgba(90,184,122,0.2); color: var(--green); }
-  .kw-action-chip.watch { background: rgba(224,154,48,0.08); border: 1px solid rgba(224,154,48,0.2); color: var(--amber); }
-  .kw-action-chip.cut   { background: rgba(224,90,74,0.08);  border: 1px solid rgba(224,90,74,0.2);  color: var(--red); }
-  .kw-action-chip::before { content: '→'; font-size: 11px; opacity: 0.6; }
-
-  /* ── FOUNDER NOTE ── */
-  .founder-note { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 10px; padding: 32px 36px; max-width: 680px; margin: 0 auto; }
-  .founder-note p { font-size: 17px; line-height: 1.75; color: var(--text-secondary); font-weight: 300; font-style: italic; margin-bottom: 20px; }
-  .founder-sig { display: flex; align-items: center; gap: 12px; }
-  .founder-sig-text { font-size: 13px; color: var(--text-secondary); }
-  .founder-sig-text strong { display: block; color: var(--text); font-weight: 500; font-size: 14px; }
-
-  @media (max-width: 768px) {
-    nav { padding: 0 20px; }
-    nav .nav-links { display: none; }
-    section { padding: 64px 24px; }
-    .card-grid { grid-template-columns: 1fr; }
-    .steps { grid-template-columns: 1fr; }
-    .steps::before { display: none; }
-    .vs-grid { grid-template-columns: 1fr; }
-    footer { flex-direction: column; gap: 12px; text-align: center; }
-  }
+:root {
+  --bg: #0c0c0b;
+  --surface: #141412;
+  --border: #222220;
+  --border-light: #2a2a28;
+  --text: #f0ead2;
+  --text-secondary: #8a8678;
+  --text-tertiary: #4a4840;
+  --accent: #c8f04a;
+  --accent-dim: #8aaa2e;
+  --red: #e05a4a;
+  --amber: #e09a30;
+  --green: #5ab87a;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 15px; line-height: 1.6; overflow-x: hidden; }
+
+/* NAV */
+nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; padding: 0 56px; height: 60px; background: rgba(12,12,11,0.88); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); }
+.nav-logo { font-family: 'Instrument Serif', serif; font-size: 22px; color: var(--text); letter-spacing: -0.02em; }
+.nav-logo span { color: var(--accent); }
+.nav-links { display: flex; align-items: center; gap: 28px; list-style: none; }
+.nav-links a { color: var(--text-secondary); text-decoration: none; font-size: 14px; transition: color 0.2s; }
+.nav-links a:hover { color: var(--text); }
+.nav-cta { background: var(--accent); color: #0c0c0b !important; padding: 8px 20px; border-radius: 6px; font-weight: 600 !important; font-size: 13px !important; transition: opacity 0.2s !important; }
+.nav-cta:hover { opacity: 0.88; }
+
+/* HERO */
+.hero { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 120px 56px 80px; position: relative; overflow: hidden; }
+.hero::before { content: ''; position: absolute; top: -200px; left: 50%; transform: translateX(-50%); width: 900px; height: 900px; background: radial-gradient(circle, rgba(200,240,74,0.055) 0%, transparent 70%); pointer-events: none; }
+.hero-badge { display: inline-flex; align-items: center; gap: 8px; background: rgba(200,240,74,0.08); border: 1px solid rgba(200,240,74,0.2); border-radius: 20px; padding: 5px 14px; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 36px; animation: fadeUp 0.6s ease both; }
+.hero-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 2s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+h1 { font-family: 'Instrument Serif', serif; font-size: clamp(44px, 6.5vw, 84px); line-height: 1.05; letter-spacing: -0.03em; margin-bottom: 28px; max-width: 960px; animation: fadeUp 0.6s 0.1s ease both; }
+h1 em, h2 em { font-style: italic; color: var(--accent); }
+.hero-sub { font-size: 18px; color: var(--text-secondary); max-width: 560px; line-height: 1.7; margin-bottom: 44px; animation: fadeUp 0.6s 0.2s ease both; font-weight: 300; }
+.hero-actions { display: flex; gap: 12px; align-items: center; animation: fadeUp 0.6s 0.3s ease both; }
+.btn-primary { background: var(--accent); color: #0c0c0b; border: none; padding: 13px 28px; border-radius: 7px; font-size: 15px; font-weight: 600; cursor: pointer; transition: opacity 0.2s, transform 0.15s; font-family: 'DM Sans', sans-serif; }
+.btn-primary:hover { opacity: 0.88; transform: translateY(-1px); }
+.btn-secondary { background: transparent; color: var(--text-secondary); border: 1px solid var(--border-light); padding: 13px 28px; border-radius: 7px; font-size: 15px; cursor: pointer; transition: border-color 0.2s, color 0.2s; font-family: 'DM Sans', sans-serif; }
+.btn-secondary:hover { border-color: var(--text-secondary); color: var(--text); }
+.trust-bar { display: flex; align-items: center; gap: 24px; margin-top: 20px; animation: fadeUp 0.6s 0.35s ease both; flex-wrap: wrap; justify-content: center; }
+.trust-item { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text-tertiary); display: flex; align-items: center; gap: 6px; }
+
+/* MOCKUP SHELL */
+.mockup-wrap { width: 100%; max-width: 1280px; margin: 64px auto 0; animation: fadeUp 0.8s 0.4s ease both; }
+.mockup { background: var(--surface); border: 1px solid var(--border-light); border-radius: 12px; overflow: hidden; box-shadow: 0 40px 80px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04); }
+.mockup-bar { background: #1a1a18; border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; gap: 10px; }
+.mockup-dot { width: 10px; height: 10px; border-radius: 50%; }
+.mockup-title { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-tertiary); margin-left: 8px; transition: opacity 0.3s; }
+
+/* FLOW STEP INDICATOR */
+.flow-indicator { display: flex; align-items: center; justify-content: center; padding: 14px 24px; border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.15); gap: 0; }
+.flow-node { display: flex; flex-direction: column; align-items: center; gap: 5px; cursor: pointer; }
+.flow-node-dot { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border-light); display: flex; align-items: center; justify-content: center; font-family: 'DM Mono', monospace; font-size: 9px; color: var(--text-tertiary); transition: all 0.3s; background: var(--bg); }
+.flow-node.active .flow-node-dot { border-color: var(--accent); background: rgba(200,240,74,0.12); color: var(--accent); }
+.flow-node.done .flow-node-dot { border-color: rgba(200,240,74,0.3); color: var(--accent-dim); }
+.flow-node-label { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.1em; white-space: nowrap; transition: color 0.3s; }
+.flow-node.active .flow-node-label { color: var(--accent); }
+.flow-node.done .flow-node-label { color: var(--text-tertiary); }
+.flow-line { width: 48px; height: 1px; background: var(--border); margin-bottom: 20px; flex-shrink: 0; transition: background 0.4s; }
+.flow-line.filled { background: rgba(200,240,74,0.35); }
+
+/* FLOW PANELS — fixed height, cross-fade */
+.flow-panels-wrap { position: relative; height: 480px; overflow: hidden; }
+.flow-panel { position: absolute; top: 0; left: 0; right: 0; padding: 22px 24px; opacity: 0; transform: translateY(8px); transition: opacity 0.45s ease, transform 0.45s ease; pointer-events: none; }
+.flow-panel.active { opacity: 1; transform: translateY(0); pointer-events: auto; }
+
+/* CONNECT PANEL */
+.conn-section-label { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 16px; }
+.conn-card { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin-bottom: 12px; display: flex; align-items: center; gap: 16px; }
+.conn-card.connected { border-color: rgba(90,184,122,0.3); background: rgba(90,184,122,0.03); }
+.conn-logo { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 13px; font-weight: 700; font-family: 'DM Mono', monospace; }
+.conn-logo.google { background: rgba(66,133,244,0.15); color: #4285F4; }
+.conn-logo.hubspot { background: rgba(255,122,89,0.15); color: #FF7A59; }
+.conn-logo.rd { background: rgba(0,191,165,0.15); color: #00BFA5; }
+.conn-info { flex: 1; }
+.conn-name { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+.conn-meta { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-tertiary); }
+.conn-status { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--green); display: flex; align-items: center; gap: 5px; }
+.conn-btn { background: rgba(200,240,74,0.1); border: 1px solid rgba(200,240,74,0.25); color: var(--accent); font-family: 'DM Mono', monospace; font-size: 11px; padding: 6px 14px; border-radius: 5px; cursor: pointer; white-space: nowrap; }
+.conn-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+.conn-mini { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.conn-mini-name { font-size: 12px; font-weight: 500; }
+.conn-mini-btn { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-tertiary); border: 1px solid var(--border); border-radius: 4px; padding: 3px 10px; }
+.sync-progress { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-top: 12px; }
+.sync-row { display: flex; align-items: center; gap: 10px; font-size: 13px; padding: 6px 0; border-bottom: 1px solid rgba(34,34,32,0.5); }
+.sync-row:last-child { border-bottom: none; }
+.sync-check { color: var(--green); font-size: 14px; }
+.sync-label { flex: 1; color: var(--text-secondary); }
+.sync-count { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--accent); }
+.run-attr-btn { display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--accent); color: #0c0c0b; border: none; border-radius: 7px; padding: 10px 20px; font-size: 13px; font-weight: 600; cursor: pointer; margin-top: 14px; width: 100%; font-family: 'DM Sans', sans-serif; }
+
+/* INTEGRATION LOGO CARDS */
+.integration-logo-row { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.integration-logo-card { background: var(--bg); border: 1px solid var(--border); border-radius: 9px; padding: 10px 14px; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 90px; transition: border-color 0.2s; }
+.integration-logo-card.connected { border-color: rgba(90,184,122,0.3); background: rgba(90,184,122,0.03); }
+.integration-logo-card.coming-soon { opacity: 0.45; }
+.integration-logo-card img { width: 32px; height: 32px; object-fit: contain; }
+.integration-logo-name { font-size: 11px; font-weight: 500; color: var(--text); white-space: nowrap; }
+.integration-logo-status { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.08em; }
+.integration-logo-status.connected-label { color: var(--green); display: flex; align-items: center; gap: 4px; }
+.integration-logo-status.connected-label::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--green); display: inline-block; }
+.integration-logo-status.soon-label { color: var(--text-tertiary); }
+
+/* MIRROR PANEL — attribution table */
+.mockup-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 16px; }
+.mockup-stat-label { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 4px; }
+.mockup-stat-value { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
+.mockup-stat-value.good { color: var(--accent); }
+.mockup-stat-value.bad { color: var(--red); }
+.mockup-table { width: 100%; border-collapse: collapse; }
+.mockup-table th { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.12em; text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); font-weight: 400; }
+.mockup-table td { padding: 10px 10px; font-size: 12px; border-bottom: 1px solid rgba(34,34,32,0.6); vertical-align: middle; }
+.mockup-table tr:last-child td { border-bottom: none; }
+.kw { color: var(--text); font-family: 'DM Mono', monospace; font-size: 11px; }
+.spend { color: var(--text-secondary); }
+.deals-good { color: var(--green); font-weight: 600; }
+.deals-bad { color: var(--red); font-weight: 600; }
+.cac-good { color: var(--green); font-weight: 500; }
+.cac-bad { color: var(--red); font-weight: 500; }
+.cac-warn { color: var(--amber); font-weight: 500; }
+.action-tag { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 10px; font-weight: 600; font-family: 'DM Mono', monospace; }
+.tag-scale { background: rgba(90,184,122,0.12); color: var(--green); }
+.tag-cut { background: rgba(224,90,74,0.12); color: var(--red); }
+.tag-watch { background: rgba(224,154,48,0.12); color: var(--amber); }
+
+/* ADVISOR PANEL */
+.advisor-mode-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.advisor-mode-label { font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.15em; color: var(--text-tertiary); margin-bottom: 4px; }
+.advisor-mode-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 4px; font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; }
+.advisor-mode-badge::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.advisor-mode-badge.scale { background: rgba(90,184,122,0.12); color: var(--green); border: 1px solid rgba(90,184,122,0.2); }
+.advisor-hint { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-tertiary); }
+.advisor-reco-list { display: flex; flex-direction: column; gap: 9px; margin-bottom: 14px; }
+.advisor-reco-item { border-radius: 7px; padding: 11px 13px; border: 1px solid; }
+.advisor-reco-item.red { background: rgba(224,90,74,0.05); border-color: rgba(224,90,74,0.15); }
+.advisor-reco-item.green { background: rgba(90,184,122,0.05); border-color: rgba(90,184,122,0.15); }
+.advisor-reco-item.amber { background: rgba(224,154,48,0.05); border-color: rgba(224,154,48,0.15); }
+.advisor-reco-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
+.advisor-reco-action { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 3px; }
+.advisor-reco-item.red .advisor-reco-action { background: rgba(224,90,74,0.15); color: var(--red); }
+.advisor-reco-item.green .advisor-reco-action { background: rgba(90,184,122,0.15); color: var(--green); }
+.advisor-reco-item.amber .advisor-reco-action { background: rgba(224,154,48,0.15); color: var(--amber); }
+.advisor-reco-kw { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text); }
+.advisor-reco-impact { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-tertiary); margin-left: auto; }
+.advisor-reco-reason { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+.advisor-summary { display: flex; align-items: center; justify-content: space-between; background: rgba(200,240,74,0.04); border: 1px solid rgba(200,240,74,0.12); border-radius: 6px; padding: 9px 13px; font-size: 12px; color: var(--text-secondary); }
+.advisor-summary-value { color: var(--accent); font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; }
+
+/* LAB PANEL */
+.lab-header-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.lab-count { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.12em; }
+.lab-generate-btn { background: rgba(200,240,74,0.08); border: 1px solid rgba(200,240,74,0.2); color: var(--accent); font-family: 'DM Mono', monospace; font-size: 10px; padding: 4px 11px; border-radius: 4px; cursor: pointer; }
+.lab-cards-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.lab-exp-card { background: rgba(255,255,255,0.02); border: 1px solid var(--border-light); border-radius: 9px; padding: 12px; flex: 1; min-width: calc(50% - 5px); max-width: calc(50% - 5px); }
+.lab-exp-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; gap: 6px; }
+.lab-exp-title { font-size: 11px; font-weight: 600; color: var(--text); line-height: 1.4; margin-bottom: 6px; }
+.lab-exp-badge { font-family: 'DM Mono', monospace; font-size: 10px; padding: 2px 9px; border-radius: 3px; background: rgba(200,240,74,0.08); color: var(--accent); border: 1px solid rgba(200,240,74,0.2); white-space: nowrap; }
+.lab-exp-status { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-tertiary); white-space: nowrap; }
+.lab-ifthen { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+.lab-if, .lab-then, .lab-because { font-size: 11px; color: var(--text-secondary); line-height: 1.4; display: flex; gap: 8px; align-items: flex-start; }
+.lab-kw-label { font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 500; color: var(--accent); text-transform: uppercase; letter-spacing: 0.1em; min-width: 44px; padding-top: 1px; flex-shrink: 0; }
+.lab-progress-row { display: flex; align-items: center; gap: 8px; }
+.lab-progress-bar { flex: 1; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.lab-progress-fill { height: 100%; background: var(--accent); border-radius: 2px; }
+.lab-progress-label { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-tertiary); white-space: nowrap; }
+
+/* SECTIONS */
+section { padding: 96px 60px; max-width: 1520px; margin: 0 auto; }
+.section-label { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 20px; }
+h2 { font-family: 'Instrument Serif', serif; font-size: clamp(32px, 3.8vw, 54px); letter-spacing: -0.02em; line-height: 1.1; margin-bottom: 16px; }
+.section-sub { font-size: 17px; color: var(--text-secondary); max-width: 580px; line-height: 1.7; margin-bottom: 56px; font-weight: 300; }
+.full-divider { border: none; border-top: 1px solid var(--border); margin: 0; }
+
+/* PROBLEM CARDS */
+.card-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 28px; transition: border-color 0.2s, transform 0.2s; }
+.card:hover { border-color: var(--border-light); transform: translateY(-2px); }
+.card-icon { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 18px; }
+.card-icon.red { background: rgba(224,90,74,0.1); }
+.card-icon.amber { background: rgba(224,154,48,0.1); }
+.card-icon.green { background: rgba(90,184,122,0.1); }
+.card h3 { font-size: 16px; font-weight: 600; margin-bottom: 10px; }
+.card p { font-size: 14px; color: var(--text-secondary); line-height: 1.65; }
+
+/* TESTIMONIALS — full bleed */
+.testimonials-outer { width: 100%; padding: 96px 60px; background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.testimonials-inner { max-width: 1520px; margin: 0 auto; }
+.testimonials-inner .section-label { text-align: center; }
+.testimonials-inner h2 { text-align: center; margin-bottom: 56px; }
+.testimonial-card { max-width: 780px; margin: 0 auto; background: var(--bg); border: 1px solid var(--border-light); border-left: 3px solid var(--accent); border-radius: 12px; padding: 36px 40px; }
+.testimonial-quote { font-family: 'Instrument Serif', serif; font-size: 20px; line-height: 1.65; color: var(--text); font-style: italic; margin-bottom: 28px; }
+.testimonial-author { display: flex; align-items: center; gap: 14px; }
+.testimonial-avatar { width: 40px; height: 40px; border-radius: 50%; background: rgba(200,240,74,0.1); border: 1px solid rgba(200,240,74,0.2); display: flex; align-items: center; justify-content: center; font-family: 'DM Mono', monospace; font-size: 14px; color: var(--accent); font-weight: 500; }
+.testimonial-name { font-size: 14px; font-weight: 600; color: var(--text); }
+.testimonial-meta { font-size: 13px; color: var(--text-secondary); }
+.testimonial-chips { display: flex; gap: 8px; margin-top: 20px; }
+.testimonial-chip { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-tertiary); background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 5px; padding: 4px 12px; }
+
+/* PRODUCT PILLARS */
+.pillars-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.pillar-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; transition: border-color 0.2s, transform 0.2s; }
+.pillar-card:hover { border-color: rgba(200,240,74,0.2); transform: translateY(-2px); }
+.pillar-number { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.18em; margin-bottom: 16px; }
+.pillar-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
+.pillar-icon.mirror { background: rgba(200,240,74,0.08); }
+.pillar-icon.advisor { background: rgba(90,184,122,0.1); }
+.pillar-icon.lab { background: rgba(138,104,200,0.1); }
+.pillar-card h3 { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+.pillar-card > p { font-size: 14px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 20px; }
+.pillar-mini { background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 10px 12px; }
+.pillar-mini-row { display: flex; align-items: center; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid rgba(34,34,32,0.5); font-size: 11px; }
+.pillar-mini-row:last-child { border-bottom: none; }
+.pillar-mini-kw { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-secondary); }
+.pillar-mini-tag { font-family: 'DM Mono', monospace; font-size: 10px; padding: 2px 7px; border-radius: 3px; font-weight: 500; }
+.pillar-mini-tag.g { background: rgba(90,184,122,0.12); color: var(--green); }
+.pillar-mini-tag.r { background: rgba(224,90,74,0.12); color: var(--red); }
+.pillar-mini-tag.a { background: rgba(224,154,48,0.12); color: var(--amber); }
+.pillar-advisor-mini { display: flex; flex-direction: column; gap: 7px; }
+.pillar-reco-row { display: flex; gap: 8px; align-items: flex-start; font-size: 11px; color: var(--text-secondary); }
+.pillar-reco-tag { font-family: 'DM Mono', monospace; font-size: 9px; padding: 2px 6px; border-radius: 3px; white-space: nowrap; margin-top: 1px; }
+.pillar-reco-tag.c { background: rgba(224,90,74,0.12); color: var(--red); }
+.pillar-reco-tag.s { background: rgba(90,184,122,0.12); color: var(--green); }
+.pillar-lab-mini { display: flex; flex-direction: column; gap: 6px; font-size: 11px; color: var(--text-secondary); }
+.pillar-lab-row { display: flex; gap: 6px; }
+.pillar-lab-label { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; min-width: 36px; padding-top: 2px; }
+
+/* HOW IT WORKS */
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; position: relative; }
+.steps::before { content: ''; position: absolute; top: 28px; left: calc(16.66% + 20px); right: calc(16.66% + 20px); height: 1px; background: linear-gradient(to right, var(--accent), var(--border-light), var(--accent)); opacity: 0.3; }
+.step { padding: 0 24px; text-align: center; }
+.step-num { width: 56px; height: 56px; border-radius: 50%; background: rgba(200,240,74,0.08); border: 1px solid rgba(200,240,74,0.2); display: flex; align-items: center; justify-content: center; font-family: 'DM Mono', monospace; font-size: 18px; font-weight: 500; color: var(--accent); margin: 0 auto 24px; position: relative; z-index: 1; }
+.step h3 { font-size: 16px; font-weight: 600; margin-bottom: 10px; }
+.step p { font-size: 14px; color: var(--text-secondary); line-height: 1.65; }
+
+/* ADVISOR — two column */
+.advisor-two-col { display: grid; grid-template-columns: 1fr 1.6fr; gap: 72px; align-items: start; }
+.mode-stack { display: flex; flex-direction: column; gap: 12px; margin-bottom: 0; }
+.mode-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 22px; position: relative; transition: border-color 0.2s; }
+.mode-card.featured { border-color: rgba(200,240,74,0.22); background: rgba(200,240,74,0.015); }
+.mode-badge { display: inline-block; font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; padding: 3px 10px; border-radius: 4px; margin-bottom: 10px; }
+.mode-badge.guardrail { background: rgba(224,154,48,0.1); color: var(--amber); }
+.mode-badge.scale { background: rgba(90,184,122,0.1); color: var(--green); }
+.mode-badge.aggressive { background: rgba(224,90,74,0.1); color: var(--red); }
+.mode-default-chip { position: absolute; top: 16px; right: 16px; font-family: 'DM Mono', monospace; font-size: 9px; color: var(--text-tertiary); border: 1px solid var(--border); padding: 2px 8px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.1em; }
+.mode-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.mode-card p { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+.advisor-example-wrap { background: var(--surface); border: 1px solid var(--border-light); border-radius: 12px; overflow: hidden; box-shadow: 0 24px 48px rgba(0,0,0,0.3); }
+.advisor-example-bar { background: #1a1a18; border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; gap: 8px; }
+.advisor-example-body { padding: 20px 22px; }
+
+/* LAB — two column reversed */
+.lab-two-col { display: grid; grid-template-columns: 1.5fr 1fr; gap: 72px; align-items: start; }
+.lab-card-demo { background: var(--surface); border: 1px solid var(--border-light); border-radius: 12px; padding: 24px; box-shadow: 0 24px 48px rgba(0,0,0,0.3); }
+.lab-card-demo-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border); gap: 12px; }
+.lab-ifthen-demo { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+.lab-ifthen-block { background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 12px 14px; }
+.lab-ifthen-label { font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.15em; color: var(--accent); margin-bottom: 5px; }
+.lab-ifthen-text { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+.lab-progress-section { }
+.lab-progress-meta { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; color: var(--text-secondary); }
+.lab-progress-track { height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.lab-progress-fill-demo { height: 100%; width: 53%; background: linear-gradient(to right, var(--accent), var(--accent-dim)); border-radius: 3px; }
+.lab-demo-text h3 { font-size: 20px; font-weight: 600; margin-bottom: 14px; }
+.lab-demo-text > p { font-size: 15px; color: var(--text-secondary); line-height: 1.7; margin-bottom: 24px; font-weight: 300; }
+.lab-feature-list { display: flex; flex-direction: column; gap: 12px; }
+.lab-feature-item { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--text-secondary); }
+.lab-feature-icon { color: var(--accent); margin-top: 2px; flex-shrink: 0; }
+
+/* VS */
+.vs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.vs-card { border-radius: 10px; padding: 28px; border: 1px solid var(--border); }
+.vs-card.them { background: var(--surface); }
+.vs-card.us { background: rgba(200,240,74,0.03); border-color: rgba(200,240,74,0.2); }
+.vs-card-label { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--text-tertiary); margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
+.vs-card.us .vs-card-label { color: var(--accent); }
+.vs-item { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 14px; line-height: 1.5; }
+.vs-item:last-child { border-bottom: none; }
+.vs-icon { flex-shrink: 0; margin-top: 2px; }
+.vs-item-text { color: var(--text-secondary); }
+.vs-item-text strong { display: block; color: var(--text); font-weight: 500; margin-bottom: 2px; font-size: 13px; }
+
+/* CTA */
+.cta-section { text-align: center; padding: 100px 60px; max-width: 760px; margin: 0 auto; }
+.cta-section h2 { margin-bottom: 16px; }
+.cta-section p { color: var(--text-secondary); font-size: 17px; margin-bottom: 40px; font-weight: 300; }
+
+/* FOOTER */
+footer { border-top: 1px solid var(--border); padding: 32px 60px; display: flex; justify-content: space-between; align-items: center; }
+.footer-logo { font-family: 'Instrument Serif', serif; font-size: 18px; color: var(--text-secondary); }
+.footer-meta { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-tertiary); }
+
+/* FOUNDER NOTE */
+.founder-note { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 10px; padding: 32px 36px; max-width: 700px; margin: 0 auto; }
+.founder-note p { font-size: 17px; line-height: 1.75; color: var(--text-secondary); font-weight: 300; font-style: italic; margin-bottom: 20px; }
+
+/* ANIMATIONS */
+@keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.fade-in { opacity: 0; transform: translateY(24px); transition: opacity 0.6s ease, transform 0.6s ease; }
+.fade-in.visible { opacity: 1; transform: translateY(0); }
+
+/* KW TOOLTIP */
+.kw-tooltip-card { position: fixed; background: #1c1c1a; border: 1px solid rgba(200,240,74,0.3); border-radius: 10px; padding: 14px 16px; min-width: 260px; max-width: 320px; box-shadow: 0 20px 48px rgba(0,0,0,0.7); z-index: 9999; pointer-events: none; opacity: 0; transform: translateY(4px); transition: opacity 0.15s ease, transform 0.15s ease; }
+.kw-tooltip-card.visible { opacity: 1; transform: translateY(0); }
+.kw-tooltip-header { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.kw-deal-item { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid rgba(34,34,32,0.5); gap: 10px; }
+.kw-deal-item:last-of-type { border-bottom: none; }
+.kw-deal-company { font-size: 12px; color: var(--text); font-weight: 500; flex: 1; }
+.kw-deal-value { font-size: 12px; color: var(--accent); font-family: 'DM Mono', monospace; white-space: nowrap; }
+.kw-deal-stage { font-size: 10px; color: var(--green); font-family: 'DM Mono', monospace; background: rgba(90,184,122,0.1); padding: 2px 6px; border-radius: 3px; white-space: nowrap; }
+.kw-no-deals { font-size: 12px; color: var(--red); padding: 6px 0; font-family: 'DM Mono', monospace; }
+.kw-tooltip-hint { margin-top: 10px; font-size: 11px; color: var(--text-tertiary); font-family: 'DM Mono', monospace; padding-top: 8px; border-top: 1px solid var(--border); }
+.mockup-table tr.kw-row { cursor: pointer; }
+.mockup-table tr.kw-row:hover td { background: rgba(200,240,74,0.04) !important; }
+.mockup-table tr.kw-row.active td { background: rgba(200,240,74,0.06) !important; }
+.kw-detail-row { display: none; }
+.kw-detail-row.open { display: table-row; }
+.kw-detail-row td { padding: 12px 14px !important; background: rgba(200,240,74,0.03) !important; border-bottom: 1px solid var(--border) !important; border-left: 2px solid rgba(200,240,74,0.2) !important; font-size: 12px; }
+.kw-expand-grid { display: grid; grid-template-columns: 1fr 130px 170px; gap: 16px; align-items: start; }
+.kw-expand-section-label { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 8px; }
+.kw-deal-cards { display: flex; flex-direction: column; gap: 5px; }
+.kw-deal-card { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.025); border: 1px solid var(--border); border-radius: 5px; padding: 5px 9px; }
+.kw-deal-card-company { color: var(--text); font-weight: 500; flex: 1; font-size: 12px; }
+.kw-deal-card-date { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-tertiary); }
+.kw-deal-card-value { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--accent); }
+.kw-no-deal-card { background: rgba(224,90,74,0.06); border: 1px solid rgba(224,90,74,0.15); border-radius: 5px; padding: 9px 12px; font-family: 'DM Mono', monospace; font-size: 12px; color: var(--red); text-align: center; }
+.kw-stats { display: flex; flex-direction: column; gap: 8px; }
+.kw-stat-item { display: flex; flex-direction: column; gap: 4px; }
+.kw-stat-label { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.12em; }
+.kw-stat-box { background: rgba(255,255,255,0.025); border: 1px solid var(--border); border-radius: 5px; padding: 7px 10px; text-align: center; }
+.kw-stat-value { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; color: var(--text); }
+.kw-stat-value.green { color: var(--green); }
+.kw-stat-value.amber { color: var(--amber); }
+.kw-stat-value.red { color: var(--red); }
+.kw-actions { display: flex; flex-direction: column; gap: 5px; }
+.kw-action-chip { display: flex; align-items: center; gap: 7px; border-radius: 5px; padding: 6px 10px; font-size: 12px; font-weight: 500; }
+.kw-action-chip.scale { background: rgba(90,184,122,0.08); border: 1px solid rgba(90,184,122,0.2); color: var(--green); }
+.kw-action-chip.watch { background: rgba(224,154,48,0.08); border: 1px solid rgba(224,154,48,0.2); color: var(--amber); }
+.kw-action-chip.cut { background: rgba(224,90,74,0.08); border: 1px solid rgba(224,90,74,0.2); color: var(--red); }
+.kw-action-chip::before { content: '→'; font-size: 11px; opacity: 0.6; }
+
+/* LIGHT MODE */
+.light {
+  --bg: #f5f3ee;
+  --surface: #ffffff;
+  --border: #d8d2c8;
+  --border-light: #c5bfb5;
+  --text: #1a1a18;
+  --text-secondary: #5a5648;
+  --text-tertiary: #9a9488;
+  --accent: #3a6b18;
+  --accent-dim: #2d5412;
+  --red: #c73a2a;
+  --amber: #b36a00;
+  --green: #1e7a42;
+}
+.light nav { background: rgba(245,243,238,0.92); border-bottom-color: var(--border); }
+.light .hero::before { background: radial-gradient(circle, rgba(58,107,24,0.07) 0%, transparent 70%); }
+.light .hero-badge { background: rgba(58,107,24,0.08); border-color: rgba(58,107,24,0.2); }
+.light .mockup { box-shadow: 0 40px 80px rgba(0,0,0,0.1), 0 0 0 1px rgba(0,0,0,0.05); }
+.light .mockup-bar,
+.light .advisor-example-bar { background: #e8e4dc; }
+.light .mockup-title { color: #9a9488; }
+.light .flow-node-dot { background: var(--bg); }
+.light .flow-node.active .flow-node-dot { background: rgba(58,107,24,0.1); }
+.light .conn-card.connected { background: rgba(30,122,66,0.04); border-color: rgba(30,122,66,0.25); }
+.light .integration-logo-card.connected { background: rgba(30,122,66,0.04); border-color: rgba(30,122,66,0.25); }
+.light .lab-exp-card { background: rgba(0,0,0,0.02); }
+.light .advisor-summary { background: rgba(58,107,24,0.04); border-color: rgba(58,107,24,0.1); }
+.light .advisor-example-wrap,
+.light .lab-card-demo { box-shadow: 0 24px 48px rgba(0,0,0,0.08); }
+.light .testimonials-outer { background: #ede9dc; }
+.light .testimonial-card { background: var(--bg); border-left-color: var(--accent); }
+.light .pillar-card:hover,
+.light .card:hover { border-color: var(--border-light); }
+.light .pillar-card:hover { border-color: rgba(58,107,24,0.25); }
+.light .vs-card.us { background: rgba(58,107,24,0.04); border-color: rgba(58,107,24,0.2); }
+.light .founder-note { border-left-color: var(--accent); }
+.light .btn-primary { background: var(--accent); color: #ffffff; }
+.light .nav-cta { background: var(--accent); color: #ffffff !important; }
+.light .mode-card.featured { border-color: rgba(58,107,24,0.22); background: rgba(58,107,24,0.02); }
+.light .sync-progress,
+.light .pillar-mini,
+.light .lab-ifthen-block { background: var(--bg); border-color: var(--border); }
+.light .kw-tooltip-card { background: #fffffc; border-color: rgba(58,107,24,0.3); }
+.light .advisor-reco-item.red { background: rgba(199,58,42,0.04); border-color: rgba(199,58,42,0.15); }
+.light .advisor-reco-item.green { background: rgba(30,122,66,0.04); border-color: rgba(30,122,66,0.15); }
+.light .advisor-reco-item.amber { background: rgba(179,106,0,0.04); border-color: rgba(179,106,0,0.15); }
+
+/* Theme toggle button */
+.theme-toggle { background: none; border: 1px solid var(--border); border-radius: 7px; padding: 6px 9px; cursor: pointer; color: var(--text-secondary); display: flex; align-items: center; transition: border-color 0.2s, color 0.2s; margin-left: 8px; }
+.theme-toggle:hover { border-color: var(--text-secondary); color: var(--text); }
+.theme-toggle svg { display: block; }
+
+@media (max-width: 900px) {
+  nav { padding: 0 24px; }
+  nav .nav-links { display: none; }
+  section { padding: 64px 24px; }
+  .hero { padding: 100px 24px 60px; }
+  .testimonials-outer { padding: 64px 24px; }
+  .card-grid, .pillars-grid, .mode-grid { grid-template-columns: 1fr; }
+  .steps { grid-template-columns: 1fr; }
+  .steps::before { display: none; }
+  .vs-grid { grid-template-columns: 1fr; }
+  .advisor-two-col, .lab-two-col { grid-template-columns: 1fr; gap: 40px; }
+  footer { flex-direction: column; gap: 12px; text-align: center; padding: 24px; }
+  .flow-indicator { gap: 0; }
+  .flow-line { width: 24px; }
+}
 </style>
 </head>
 <body>
 
-<!-- NAV -->
 <nav>
   <div class="nav-logo">jun<span>o</span></div>
   <ul class="nav-links">
     <li><a href="#problem">Problem</a></li>
     <li><a href="#how">How it works</a></li>
+    <li><a href="#advisor">Advisor</a></li>
+    <li><a href="#lab">The Lab</a></li>
     <li><a href="#vs">vs HubSpot</a></li>
-    <li><a href="#founders">From the founders</a></li>
     <li><a href="/report/regieai">Sample report</a></li>
-    <li><a href="/auth/signin" class="nav-cta">Customer login</a></li>
+    <li><a href="/auth/signin" class="nav-cta">Sign in</a></li>
   </ul>
+  <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle light/dark mode">
+    <!-- moon (shown in dark mode) -->
+    <svg id="iconMoon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    <!-- sun (shown in light mode) -->
+    <svg id="iconSun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+  </button>
 </nav>
 
 <!-- HERO -->
 <div class="hero">
   <div class="hero-badge">Zero-code setup</div>
-  <h1>Stop defending your Google Ads spend.<br><em>Start proving your revenue.</em></h1>
-  <p class="hero-sub">Connect Google Ads to HubSpot in 15 minutes. See exactly which keywords generated closed deals — without a RevOps team or a 3-month implementation.</p>
+  <h1>Know which keywords<br><em>drive deals —</em><br>not just leads.</h1>
+  <p class="hero-sub">Connect Google Ads to your CRM in 15 minutes. See which keywords drive deals, get AI-powered budget recommendations, and run experiments. No engineers required.</p>
   <div class="hero-actions">
     <a href="https://calendly.com/agustinvolantesilva/30min" class="btn-primary" style="text-decoration:none" target="_blank">Get my Keyword-to-CAC report</a>
     <button class="btn-secondary" onclick="document.getElementById('how').scrollIntoView({behavior:'smooth'})">See how it works</button>
   </div>
-  <div style="display:flex; align-items:center; gap:24px; margin-top:20px; animation: fadeUp 0.6s 0.35s ease both;">
-    <span style="font-family:'DM Mono',monospace; font-size:12px; color:var(--text-tertiary); display:flex; align-items:center; gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Read-only access</span>
-    <span style="font-family:'DM Mono',monospace; font-size:12px; color:var(--text-tertiary); display:flex; align-items:center; gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> 15-minute setup</span>
-    <span style="font-family:'DM Mono',monospace; font-size:12px; color:var(--text-tertiary); display:flex; align-items:center; gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> HubSpot · RD Station · Salesforce</span>
+  <div class="trust-bar">
+    <span class="trust-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Read-only access</span>
+    <span class="trust-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>15-minute setup</span>
+    <span class="trust-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>HubSpot · RD Station · Salesforce</span>
   </div>
 
+  <!-- ANIMATED FLOW MOCKUP -->
   <div class="mockup-wrap">
     <div class="mockup">
       <div class="mockup-bar">
-        <div class="mockup-dot" style="background:#ff5f57"></div>
-        <div class="mockup-dot" style="background:#febc2e"></div>
-        <div class="mockup-dot" style="background:#28c840"></div>
-        <span class="mockup-title">juno / keyword-attribution / last-90-days</span>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <div class="mockup-dot" style="background:#ff5f57"></div>
+          <div class="mockup-dot" style="background:#febc2e"></div>
+          <div class="mockup-dot" style="background:#28c840"></div>
+        </div>
+        <span class="mockup-title" id="mockupTitle">juno / connections · setup</span>
       </div>
-      <div class="mockup-body">
-        <div class="mockup-header">
-          <div class="mockup-stat">
-            <div class="mockup-stat-label">Total ad spend</div>
-            <div class="mockup-stat-value">$14,200</div>
+
+      <!-- STEP INDICATOR -->
+      <div class="flow-indicator" id="flowIndicator">
+        <div class="flow-node active" data-step="0">
+          <div class="flow-node-dot">1</div>
+          <div class="flow-node-label">Connect</div>
+        </div>
+        <div class="flow-line" id="line01"></div>
+        <div class="flow-node" data-step="1">
+          <div class="flow-node-dot">2</div>
+          <div class="flow-node-label">Sync</div>
+        </div>
+        <div class="flow-line" id="line12"></div>
+        <div class="flow-node" data-step="2">
+          <div class="flow-node-dot">3</div>
+          <div class="flow-node-label">Mirror</div>
+        </div>
+        <div class="flow-line" id="line23"></div>
+        <div class="flow-node" data-step="3">
+          <div class="flow-node-dot">4</div>
+          <div class="flow-node-label">Advisor</div>
+        </div>
+        <div class="flow-line" id="line34"></div>
+        <div class="flow-node" data-step="4">
+          <div class="flow-node-dot">5</div>
+          <div class="flow-node-label">The Lab</div>
+        </div>
+      </div>
+
+      <!-- FIXED-HEIGHT PANELS -->
+      <div class="flow-panels-wrap">
+
+        <!-- STEP 0: Connect -->
+        <div class="flow-panel active" id="fp-0">
+          <div class="conn-section-label">Step 1 — Connect your ad account</div>
+          <div class="conn-card">
+            <div class="conn-logo" style="background:transparent;padding:0"><img src="/GoogleAdsLogo.avif" alt="Google Ads" style="width:32px;height:32px;object-fit:contain;border-radius:6px;"></div>
+            <div class="conn-info">
+              <div class="conn-name">Google Ads</div>
+              <div class="conn-meta">Pull keyword spend, clicks, and search term reports</div>
+            </div>
+            <button class="conn-btn">Connect with Google →</button>
           </div>
-          <div class="mockup-stat">
-            <div class="mockup-stat-label">Pipeline generated</div>
-            <div class="mockup-stat-value good">$186K</div>
-          </div>
-          <div class="mockup-stat">
-            <div class="mockup-stat-label">Budget to cut</div>
-            <div class="mockup-stat-value bad">$6,400</div>
+          <div class="conn-section-label" style="margin-top:18px">Step 2 — Connect your CRM</div>
+          <div class="integration-logo-row">
+            <div class="integration-logo-card connected">
+              <img src="/GoogleAdsLogo.avif" alt="Google Ads">
+              <div class="integration-logo-name">Google Ads</div>
+              <span class="integration-logo-status connected-label">Connected</span>
+            </div>
+            <div class="integration-logo-card connected">
+              <img src="/HubspotLogo.png" alt="HubSpot">
+              <div class="integration-logo-name">HubSpot</div>
+              <span class="integration-logo-status connected-label">Connected</span>
+            </div>
+            <div class="integration-logo-card coming-soon">
+              <img src="/SalesforceLogo.png" alt="Salesforce">
+              <div class="integration-logo-name">Salesforce</div>
+              <span class="integration-logo-status soon-label">Coming soon</span>
+            </div>
+            <div class="integration-logo-card coming-soon">
+              <img src="/RDStationLogo.svg" alt="RD Station">
+              <div class="integration-logo-name">RD Station</div>
+              <span class="integration-logo-status soon-label">Coming soon</span>
+            </div>
           </div>
         </div>
-        <table class="mockup-table">
-          <thead>
-            <tr>
-              <th>Keyword</th>
-              <th>Spend/mo</th>
-              <th>Deals</th>
-              <th>True CAC</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr class="kw-row" data-kw="0">
-              <td class="kw">"stripe alternative for startups"</td>
-              <td class="spend">$1,200</td>
-              <td class="deals-good">4</td>
-              <td class="cac-good">$300</td>
-              <td><span class="action-tag tag-scale">Scale 2x</span></td>
-            </tr>
-            <tr class="kw-detail-row" data-kw-detail="0">
-              <td colspan="5">
-                <div class="kw-expand-grid">
-                  <div>
-                    <div class="kw-expand-section-label">Closed deals</div>
-                    <div class="kw-deal-cards">
-                      <div class="kw-deal-card"><span class="kw-deal-card-company">Bolt Payments</span><span class="kw-deal-card-date">Jan 14</span><span class="kw-deal-card-value">$14,200</span></div>
-                      <div class="kw-deal-card"><span class="kw-deal-card-company">Meridian Labs</span><span class="kw-deal-card-date">Feb 3</span><span class="kw-deal-card-value">$9,800</span></div>
-                      <div class="kw-deal-card"><span class="kw-deal-card-company">Stackline Inc</span><span class="kw-deal-card-date">Feb 19</span><span class="kw-deal-card-value">$11,400</span></div>
-                      <div class="kw-deal-card"><span class="kw-deal-card-company">Forge Capital</span><span class="kw-deal-card-date">Mar 2</span><span class="kw-deal-card-value">$16,600</span></div>
-                    </div>
-                  </div>
-                  <div class="kw-stats">
-                    <div class="kw-stat-item"><div class="kw-stat-label">Close rate</div><div class="kw-stat-box"><div class="kw-stat-value green">67%</div></div></div>
-                    <div class="kw-stat-item"><div class="kw-stat-label">Avg deal</div><div class="kw-stat-box"><div class="kw-stat-value">$13K</div></div></div>
-                  </div>
-                  <div>
-                    <div class="kw-expand-section-label">Recommended actions</div>
-                    <div class="kw-actions">
-                      <div class="kw-action-chip scale">Double budget → $2,400/mo</div>
-                      <div class="kw-action-chip scale">Test long-tail variants</div>
-                      <div class="kw-action-chip scale">Expand to similar match types</div>
-                    </div>
-                  </div>
-                </div>
-              </td>
-            </tr>
-            <tr class="kw-row" data-kw="1">
-              <td class="kw">"payment api developer"</td>
-              <td class="spend">$800</td>
-              <td class="deals-bad" style="color:var(--amber)">1</td>
-              <td class="cac-warn">$800</td>
-              <td><span class="action-tag tag-watch">Monitor</span></td>
-            </tr>
-            <tr class="kw-detail-row" data-kw-detail="1">
-              <td colspan="5">
-                <div class="kw-expand-grid">
-                  <div>
-                    <div class="kw-expand-section-label">Closed deals</div>
-                    <div class="kw-deal-cards">
-                      <div class="kw-deal-card"><span class="kw-deal-card-company">TechFlow Systems</span><span class="kw-deal-card-date">Feb 28</span><span class="kw-deal-card-value">$8,400</span></div>
-                    </div>
-                  </div>
-                  <div class="kw-stats">
-                    <div class="kw-stat-item"><div class="kw-stat-label">Close rate</div><div class="kw-stat-box"><div class="kw-stat-value amber">33%</div></div></div>
-                    <div class="kw-stat-item"><div class="kw-stat-label">Demos</div><div class="kw-stat-box"><div class="kw-stat-value">3</div></div></div>
-                  </div>
-                  <div>
-                    <div class="kw-expand-section-label">Recommended actions</div>
-                    <div class="kw-actions">
-                      <div class="kw-action-chip watch">Hold budget for 60 days</div>
-                      <div class="kw-action-chip watch">Target 5+ demos before deciding</div>
-                    </div>
-                  </div>
-                </div>
-              </td>
-            </tr>
-            <tr class="kw-row" data-kw="2">
-              <td class="kw">"fiserv competitor"</td>
-              <td class="spend">$1,800</td>
-              <td class="deals-bad" style="color:var(--amber)">1</td>
-              <td class="cac-warn">$1,800</td>
-              <td><span class="action-tag tag-watch">Test copy</span></td>
-            </tr>
-            <tr class="kw-detail-row" data-kw-detail="2">
-              <td colspan="5">
-                <div class="kw-expand-grid">
-                  <div>
-                    <div class="kw-expand-section-label">Closed deals</div>
-                    <div class="kw-deal-cards">
-                      <div class="kw-deal-card"><span class="kw-deal-card-company">BlueRidge Fintech</span><span class="kw-deal-card-date">Mar 1</span><span class="kw-deal-card-value">$21,000</span></div>
-                    </div>
-                  </div>
-                  <div class="kw-stats">
-                    <div class="kw-stat-item"><div class="kw-stat-label">Close rate</div><div class="kw-stat-box"><div class="kw-stat-value amber">20%</div></div></div>
-                    <div class="kw-stat-item"><div class="kw-stat-label">Deal value</div><div class="kw-stat-box"><div class="kw-stat-value">$21K</div></div></div>
-                  </div>
-                  <div>
-                    <div class="kw-expand-section-label">Recommended actions</div>
-                    <div class="kw-actions">
-                      <div class="kw-action-chip watch">Test Fiserv-specific ad copy</div>
-                      <div class="kw-action-chip watch">Need 5+ demos before scaling</div>
-                    </div>
-                  </div>
-                </div>
-              </td>
-            </tr>
-            <tr class="kw-row" data-kw="3">
-              <td class="kw">"stripe pricing 2026"</td>
-              <td class="spend">$2,200</td>
-              <td class="deals-bad">0</td>
-              <td class="cac-bad">none</td>
-              <td><span class="action-tag tag-cut">Cut now</span></td>
-            </tr>
-            <tr class="kw-detail-row" data-kw-detail="3">
-              <td colspan="5">
-                <div class="kw-expand-grid">
-                  <div>
-                    <div class="kw-expand-section-label">Closed deals</div>
-                    <div class="kw-no-deal-card">0 deals in 90 days</div>
-                  </div>
-                  <div class="kw-stats">
-                    <div class="kw-stat-item"><div class="kw-stat-label">Burned</div><div class="kw-stat-box"><div class="kw-stat-value red">$6,600</div></div></div>
-                    <div class="kw-stat-item"><div class="kw-stat-label">Pipeline</div><div class="kw-stat-box"><div class="kw-stat-value red">$0</div></div></div>
-                  </div>
-                  <div>
-                    <div class="kw-expand-section-label">Recommended actions</div>
-                    <div class="kw-actions">
-                      <div class="kw-action-chip cut">Pause immediately</div>
-                      <div class="kw-action-chip cut">Add as negative keyword</div>
-                      <div class="kw-action-chip cut">Reallocate to top performer</div>
-                    </div>
-                  </div>
-                </div>
-              </td>
-            </tr>
-            <tr class="kw-row" data-kw="4">
-              <td class="kw">"payment processing startup"</td>
-              <td class="spend">$2,400</td>
-              <td class="deals-bad">0</td>
-              <td class="cac-bad">none</td>
-              <td><span class="action-tag tag-cut">Cut now</span></td>
-            </tr>
-            <tr class="kw-detail-row" data-kw-detail="4">
-              <td colspan="5">
-                <div class="kw-expand-grid">
-                  <div>
-                    <div class="kw-expand-section-label">Closed deals</div>
-                    <div class="kw-no-deal-card">0 deals in 90 days</div>
-                  </div>
-                  <div class="kw-stats">
-                    <div class="kw-stat-item"><div class="kw-stat-label">Burned</div><div class="kw-stat-box"><div class="kw-stat-value red">$7,200</div></div></div>
-                    <div class="kw-stat-item"><div class="kw-stat-label">Pipeline</div><div class="kw-stat-box"><div class="kw-stat-value red">$0</div></div></div>
-                  </div>
-                  <div>
-                    <div class="kw-expand-section-label">Recommended actions</div>
-                    <div class="kw-actions">
-                      <div class="kw-action-chip cut">Pause immediately</div>
-                      <div class="kw-action-chip cut">Add as negative keyword</div>
-                      <div class="kw-action-chip cut">Move budget → "stripe alternative"</div>
-                    </div>
-                  </div>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-</div>
+
+        <!-- STEP 1: Sync -->
+        <div class="flow-panel" id="fp-1">
+          <div class="conn-section-label">Syncing your data</div>
+          <div class="conn-card connected">
+            <div class="conn-logo" style="background:transparent;padding:0"><img src="/GoogleAdsLogo.avif" alt="Google Ads" style="width:32px;height:32px;object-fit:contain;border-radius:6px;"></div>
+            <div class="conn-info">
+              <div class="conn-name">Google Ads</div>
+              <div class="conn-meta">Manager Account · 8338-972-884</div>
+            </div>
+            <span class="conn-status">✓ Connected</span>
+          </div>
+          <div class="conn-card connected" style="margin-top:0">
+            <div class="conn-logo" style="background:transparent;padding:0"><img src="/HubspotLogo.png" alt="HubSpot" style="width:32px;height:32px;object-fit:contain;border-radius:6px;"></div>
+            <div class="conn-info">
+              <div class="conn-name">HubSpot</div>
+              <div class="conn-meta">OAuth authorized</div>
+            </div>
+            <span class="conn-status">✓ Connected</span>
+          </div>
+          <div class="sync-progress">
+            <div class="sync-row">
+              <span class="sync-check">✓</span>
+              <span class="sync-label">Keywords synced</span>
+              <span class="sync-count">847 keywords · last 90 days</span>
+            </div>
+            <div class="sync-row">
+              <span class="sync-check">✓</span>
+              <span class="sync-label">Contacts synced</span>
+              <span class="sync-count">312 contacts with UTM data</span>
+            </div>
+            <div class="sync-row">
+              <span class="sync-check">✓</span>
+              <span class="sync-label">Deals synced</span>
+              <span class="sync-count">47 closed-won deals</span>
+            </div>
+          </div>
+          <button class="run-attr-btn">Run Attribution →</button>
+        </div>
+
+        <!-- STEP 2: Mirror (Attribution table) -->
+        <div class="flow-panel" id="fp-2">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">
+            <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.12em;">Data from</span>
+            <img src="/GoogleAdsLogo.avif" alt="Google Ads" style="width:16px;height:16px;object-fit:contain;border-radius:3px;opacity:0.75;">
+            <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-tertiary);">Google Ads</span>
+            <span style="color:var(--border);font-size:10px;margin:0 2px">+</span>
+            <img src="/HubspotLogo.png" alt="HubSpot" style="width:16px;height:16px;object-fit:contain;border-radius:3px;opacity:0.75;">
+            <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-tertiary);">HubSpot</span>
+          </div>
+          <div class="mockup-header">
+            <div><div class="mockup-stat-label">Total ad spend</div><div class="mockup-stat-value">$14,200</div></div>
+            <div><div class="mockup-stat-label">Pipeline generated</div><div class="mockup-stat-value good">$186K</div></div>
+            <div><div class="mockup-stat-label">Budget to cut</div><div class="mockup-stat-value bad">$6,400</div></div>
+          </div>
+          <table class="mockup-table">
+            <thead><tr><th>Keyword</th><th>Spend/mo</th><th>Deals</th><th>True CAC</th><th>Action</th></tr></thead>
+            <tbody>
+              <tr class="kw-row" data-kw="0"><td class="kw">"stripe alternative for startups"</td><td class="spend">$1,200</td><td class="deals-good">4</td><td class="cac-good">$300</td><td><span class="action-tag tag-scale">Scale 2x</span></td></tr>
+              <tr class="kw-detail-row" data-kw-detail="0"><td colspan="5"><div class="kw-expand-grid"><div><div class="kw-expand-section-label">Closed deals</div><div class="kw-deal-cards"><div class="kw-deal-card"><span class="kw-deal-card-company">Bolt Payments</span><span class="kw-deal-card-date">Jan 14</span><span class="kw-deal-card-value">$14,200</span></div><div class="kw-deal-card"><span class="kw-deal-card-company">Meridian Labs</span><span class="kw-deal-card-date">Feb 3</span><span class="kw-deal-card-value">$9,800</span></div><div class="kw-deal-card"><span class="kw-deal-card-company">Stackline Inc</span><span class="kw-deal-card-date">Feb 19</span><span class="kw-deal-card-value">$11,400</span></div></div></div><div class="kw-stats"><div class="kw-stat-item"><div class="kw-stat-label">Close rate</div><div class="kw-stat-box"><div class="kw-stat-value green">67%</div></div></div><div class="kw-stat-item"><div class="kw-stat-label">Avg deal</div><div class="kw-stat-box"><div class="kw-stat-value">$13K</div></div></div></div><div><div class="kw-expand-section-label">Actions</div><div class="kw-actions"><div class="kw-action-chip scale">Double budget to $2,400/mo</div><div class="kw-action-chip scale">Test long-tail variants</div></div></div></div></td></tr>
+              <tr class="kw-row" data-kw="1"><td class="kw">"payment api developer"</td><td class="spend">$800</td><td class="deals-bad" style="color:var(--amber)">1</td><td class="cac-warn">$800</td><td><span class="action-tag tag-watch">Monitor</span></td></tr>
+              <tr class="kw-detail-row" data-kw-detail="1"><td colspan="5"><div class="kw-expand-grid"><div><div class="kw-expand-section-label">Closed deals</div><div class="kw-deal-cards"><div class="kw-deal-card"><span class="kw-deal-card-company">TechFlow Systems</span><span class="kw-deal-card-date">Feb 28</span><span class="kw-deal-card-value">$8,400</span></div></div></div><div class="kw-stats"><div class="kw-stat-item"><div class="kw-stat-label">Close rate</div><div class="kw-stat-box"><div class="kw-stat-value amber">33%</div></div></div></div><div><div class="kw-expand-section-label">Actions</div><div class="kw-actions"><div class="kw-action-chip watch">Hold budget 60 days</div></div></div></div></td></tr>
+              <tr class="kw-row" data-kw="3"><td class="kw">"stripe pricing 2026"</td><td class="spend">$2,200</td><td class="deals-bad">0</td><td class="cac-bad">none</td><td><span class="action-tag tag-cut">Cut now</span></td></tr>
+              <tr class="kw-detail-row" data-kw-detail="3"><td colspan="5"><div class="kw-expand-grid"><div><div class="kw-expand-section-label">Closed deals</div><div class="kw-no-deal-card">0 deals in 90 days</div></div><div class="kw-stats"><div class="kw-stat-item"><div class="kw-stat-label">Burned</div><div class="kw-stat-box"><div class="kw-stat-value red">$6,600</div></div></div></div><div><div class="kw-expand-section-label">Actions</div><div class="kw-actions"><div class="kw-action-chip cut">Pause immediately</div><div class="kw-action-chip cut">Add as negative keyword</div></div></div></div></td></tr>
+              <tr class="kw-row" data-kw="4"><td class="kw">"payment processing startup"</td><td class="spend">$2,400</td><td class="deals-bad">0</td><td class="cac-bad">none</td><td><span class="action-tag tag-cut">Cut now</span></td></tr>
+              <tr class="kw-detail-row" data-kw-detail="4"><td colspan="5"><div class="kw-expand-grid"><div><div class="kw-expand-section-label">Closed deals</div><div class="kw-no-deal-card">0 deals in 90 days</div></div><div class="kw-stats"><div class="kw-stat-item"><div class="kw-stat-label">Burned</div><div class="kw-stat-box"><div class="kw-stat-value red">$7,200</div></div></div></div><div><div class="kw-expand-section-label">Actions</div><div class="kw-actions"><div class="kw-action-chip cut">Pause immediately</div><div class="kw-action-chip cut">Move budget to "stripe alternative"</div></div></div></div></td></tr>
+              <tr class="kw-row" data-kw="5"><td class="kw">"fintech api integration"</td><td class="spend">$650</td><td class="deals-good">2</td><td class="cac-good">$325</td><td><span class="action-tag tag-scale">Scale</span></td></tr>
+              <tr class="kw-detail-row" data-kw-detail="5"><td colspan="5"><div class="kw-expand-grid"><div><div class="kw-expand-section-label">Closed deals</div><div class="kw-deal-cards"><div class="kw-deal-card"><span class="kw-deal-card-company">Nomad Financial</span><span class="kw-deal-card-date">Mar 5</span><span class="kw-deal-card-value">$11,200</span></div><div class="kw-deal-card"><span class="kw-deal-card-company">Orbit Systems</span><span class="kw-deal-card-date">Mar 22</span><span class="kw-deal-card-value">$8,900</span></div></div></div><div class="kw-stats"><div class="kw-stat-item"><div class="kw-stat-label">Close rate</div><div class="kw-stat-box"><div class="kw-stat-value green">50%</div></div></div></div><div><div class="kw-expand-section-label">Actions</div><div class="kw-actions"><div class="kw-action-chip scale">Increase to $1,300/mo</div></div></div></div></td></tr>
+              <tr class="kw-row" data-kw="6"><td class="kw">"embedded finance solution"</td><td class="spend">$1,800</td><td class="deals-bad">0</td><td class="cac-bad">none</td><td><span class="action-tag tag-cut">Cut now</span></td></tr>
+              <tr class="kw-detail-row" data-kw-detail="6"><td colspan="5"><div class="kw-expand-grid"><div><div class="kw-expand-section-label">Closed deals</div><div class="kw-no-deal-card">0 deals in 90 days</div></div><div class="kw-stats"><div class="kw-stat-item"><div class="kw-stat-label">Burned</div><div class="kw-stat-box"><div class="kw-stat-value red">$5,400</div></div></div></div><div><div class="kw-expand-section-label">Actions</div><div class="kw-actions"><div class="kw-action-chip cut">Pause immediately</div></div></div></div></td></tr>
+              <tr class="kw-row" data-kw="7"><td class="kw">"payment gateway comparison"</td><td class="spend">$420</td><td class="deals-bad" style="color:var(--amber)">1</td><td class="cac-warn">$420</td><td><span class="action-tag tag-watch">Monitor</span></td></tr>
+              <tr class="kw-detail-row" data-kw-detail="7"><td colspan="5"><div class="kw-expand-grid"><div><div class="kw-expand-section-label">Closed deals</div><div class="kw-deal-cards"><div class="kw-deal-card"><span class="kw-deal-card-company">Verge Commerce</span><span class="kw-deal-card-date">Apr 1</span><span class="kw-deal-card-value">$7,600</span></div></div></div><div class="kw-stats"><div class="kw-stat-item"><div class="kw-stat-label">Close rate</div><div class="kw-stat-box"><div class="kw-stat-value amber">25%</div></div></div></div><div><div class="kw-expand-section-label">Actions</div><div class="kw-actions"><div class="kw-action-chip watch">Hold 60 days</div></div></div></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- STEP 3: Advisor -->
+        <div class="flow-panel" id="fp-3">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+            <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.12em;">Analyzing</span>
+            <img src="/GoogleAdsLogo.avif" alt="Google Ads" style="width:14px;height:14px;object-fit:contain;border-radius:2px;opacity:0.75;">
+            <img src="/HubspotLogo.png" alt="HubSpot" style="width:14px;height:14px;object-fit:contain;border-radius:2px;opacity:0.75;">
+            <span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--accent);">847 keywords · 47 deals</span>
+          </div>
+          <div class="advisor-mode-bar">
+            <div><div class="advisor-mode-label">Active mode</div><span class="advisor-mode-badge scale">Scale</span></div>
+            <span class="advisor-hint">AI analysis complete · just now</span>
+          </div>
+          <div class="advisor-reco-list">
+            <div class="advisor-reco-item red">
+              <div class="advisor-reco-header"><span class="advisor-reco-action">Cut</span><span class="advisor-reco-kw">"stripe pricing 2026"</span><span class="advisor-reco-impact">Save $2,200/mo</span></div>
+              <p class="advisor-reco-reason">$6,600 burned in 90 days, zero closed deals. Reallocate to "stripe alternative" which closes at $300 CAC.</p>
+            </div>
+            <div class="advisor-reco-item green">
+              <div class="advisor-reco-header"><span class="advisor-reco-action">Scale 2x</span><span class="advisor-reco-kw">"stripe alternative for startups"</span><span class="advisor-reco-impact">4 deals · $300 CAC</span></div>
+              <p class="advisor-reco-reason">Best performer. 67% close rate, $13K avg deal. Double to $2,400/mo before competitors find this keyword.</p>
+            </div>
+            <div class="advisor-reco-item amber">
+              <div class="advisor-reco-header"><span class="advisor-reco-action">Monitor</span><span class="advisor-reco-kw">"payment api developer"</span><span class="advisor-reco-impact">1 deal · more data needed</span></div>
+              <p class="advisor-reco-reason">Early signal but only 3 demos. Hold 60 days, target 5 demos, then decide.</p>
+            </div>
+          </div>
+          <div class="advisor-summary"><span>Net saving if actioned this week</span><span class="advisor-summary-value">$2,200/mo freed up</span></div>
+        </div>
+
+        <!-- STEP 4: The Lab -->
+        <div class="flow-panel" id="fp-4">
+          <div class="lab-header-bar">
+            <span class="lab-count">2 active experiments</span>
+            <button class="lab-generate-btn">+ Generate ideas</button>
+          </div>
+          <div class="lab-cards-row">
+            <div class="lab-exp-card">
+              <div class="lab-exp-top">
+                <span class="lab-exp-badge">Budget Shift</span>
+                <span class="lab-exp-status">Active · 14 days left</span>
+              </div>
+              <div class="lab-exp-title">Shift budget from zero-pipeline keyword to top performer</div>
+              <div class="lab-ifthen">
+                <div class="lab-if"><span class="lab-kw-label">IF</span><span>I shift $2,200/mo from "stripe pricing 2026" to "stripe alternative for startups"...</span></div>
+                <div class="lab-then"><span class="lab-kw-label">THEN</span><span>I expect 2+ more closed deals in the next 30 days.</span></div>
+                <div class="lab-because"><span class="lab-kw-label">BECAUSE</span><span>"stripe alternative" has a $300 CAC vs $0 pipeline from the keyword I'm cutting.</span></div>
+              </div>
+              <div class="lab-progress-row">
+                <div class="lab-progress-bar"><div class="lab-progress-fill" style="width:53%"></div></div>
+                <span class="lab-progress-label">16 / 30 days</span>
+              </div>
+            </div>
+            <div class="lab-exp-card">
+              <div class="lab-exp-top">
+                <span class="lab-exp-badge">Copy Test</span>
+                <span class="lab-exp-status">Active · 11 days left</span>
+              </div>
+              <div class="lab-exp-title">What if we test ad copy mentioning ROI vs. features?</div>
+              <div class="lab-ifthen">
+                <div class="lab-if"><span class="lab-kw-label">IF</span><span>I run ROI-focused copy ("Cut $6K/mo in wasted spend") against feature-focused copy for "payment api developer"...</span></div>
+                <div class="lab-then"><span class="lab-kw-label">THEN</span><span>CTR and close rate will improve by 20%+ in 30 days.</span></div>
+                <div class="lab-because"><span class="lab-kw-label">BECAUSE</span><span>Buyers at Series A/B respond to dollar-denominated outcomes over feature lists — we've seen this in prior campaigns.</span></div>
+              </div>
+              <div class="lab-progress-row">
+                <div class="lab-progress-bar"><div class="lab-progress-fill" style="width:63%"></div></div>
+                <span class="lab-progress-label">19 / 30 days</span>
+              </div>
+            </div>
+            <div class="lab-exp-card">
+              <div class="lab-exp-top">
+                <span class="lab-exp-badge">Landing Page</span>
+                <span class="lab-exp-status">Active · 22 days left</span>
+              </div>
+              <div class="lab-exp-title">Does an ROI calculator on the landing page increase demo requests?</div>
+              <div class="lab-ifthen">
+                <div class="lab-if"><span class="lab-kw-label">IF</span><span>I add a live CAC calculator to the landing page for "fintech api integration" visitors...</span></div>
+                <div class="lab-then"><span class="lab-kw-label">THEN</span><span>Demo request rate increases by 15%+ in 30 days.</span></div>
+                <div class="lab-because"><span class="lab-kw-label">BECAUSE</span><span>Buyers who see their own numbers convert faster than those who only see generic claims.</span></div>
+              </div>
+              <div class="lab-progress-row">
+                <div class="lab-progress-bar"><div class="lab-progress-fill" style="width:27%"></div></div>
+                <span class="lab-progress-label">8 / 30 days</span>
+              </div>
+            </div>
+            <div class="lab-exp-card">
+              <div class="lab-exp-top">
+                <span class="lab-exp-badge">Audience</span>
+                <span class="lab-exp-status">Active · 5 days left</span>
+              </div>
+              <div class="lab-exp-title">Does narrowing audience to Series A–B SaaS only reduce CAC?</div>
+              <div class="lab-ifthen">
+                <div class="lab-if"><span class="lab-kw-label">IF</span><span>I add audience layering to exclude companies outside Series A–B SaaS...</span></div>
+                <div class="lab-then"><span class="lab-kw-label">THEN</span><span>CAC drops below $400 with no loss in closed-won deal volume.</span></div>
+                <div class="lab-because"><span class="lab-kw-label">BECAUSE</span><span>80% of waste comes from SMB clicks that never convert to pipeline in our deal data.</span></div>
+              </div>
+              <div class="lab-progress-row">
+                <div class="lab-progress-bar"><div class="lab-progress-fill" style="width:83%"></div></div>
+                <span class="lab-progress-label">25 / 30 days</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /flow-panels-wrap -->
+    </div><!-- /mockup -->
+  </div><!-- /mockup-wrap -->
+</div><!-- /hero -->
 
 <hr class="full-divider">
 
@@ -859,14 +723,14 @@
 <section id="problem">
   <div class="fade-in">
     <div class="section-label">The problem</div>
-    <h2>Your board will ask which keywords drove pipeline. Most teams can't answer.</h2>
+    <h2>Your board will ask which keywords drove pipeline.<br><em>Most teams can't answer.</em></h2>
     <p class="section-sub">Google Ads and your CRM each hold half the picture. Without connecting them, you're defending spend with click data — not revenue data.</p>
   </div>
   <div class="card-grid fade-in">
     <div class="card">
       <div class="card-icon red"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e05a4a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 11h1a3 3 0 0 1 0 6h-1"/><path d="M9 12v6"/><path d="M13 12v6"/><path d="M14 7.5c-1 0-1.44.5-3 .5s-2-.5-3-.5-1.72.5-2.5.5a2.5 2.5 0 0 1 0-5c.78 0 1.57.5 2.5.5S9.44 2 11 2s2 1 3 1 1.5-.5 2.5-.5a2.5 2.5 0 0 1 0 5c-1 0-1.5-.5-2.5-.5z"/></svg></div>
       <h3>Keywords are hidden</h3>
-      <p>Google removed 80% of search term visibility in 2020. You're reporting on campaign data while the keyword-level signal your leadership wants is hidden.</p>
+      <p>Google removed 80% of search term visibility in 2020. You're reporting on campaign data while the keyword-level signal your leadership wants is invisible.</p>
     </div>
     <div class="card">
       <div class="card-icon amber"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e09a30" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg></div>
@@ -875,8 +739,82 @@
     </div>
     <div class="card">
       <div class="card-icon green"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5ab87a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg></div>
-      <h3>You can't defend the budget</h3>
+      <h3>Stop defending your budget with gut feel</h3>
       <p>Without keyword-to-deal data, you can't tell your CEO which channels are working. Every budget review is a negotiation based on gut feel, not proof.</p>
+    </div>
+  </div>
+</section>
+
+<hr class="full-divider">
+
+<!-- TESTIMONIALS -->
+<div class="testimonials-outer">
+  <div class="testimonials-inner">
+    <div class="section-label fade-in">What customers found</div>
+    <h2 class="fade-in">What founders find<br>in their first report.</h2>
+    <div class="testimonial-card fade-in">
+      <p class="testimonial-quote">"We connected our Google Ads and HubSpot accounts and within 48 hours Juno showed us something we couldn't see before — three of our highest-spend keywords had generated zero pipeline in 90 days. We had no idea. We cut them the next morning and reallocated the budget to the two keywords that were actually closing deals. It paid for itself in the first week."</p>
+      <div class="testimonial-author">
+        <div class="testimonial-avatar">CV</div>
+        <div>
+          <div class="testimonial-name">Carlos</div>
+          <div class="testimonial-meta">Co-Founder · runtm.com</div>
+        </div>
+      </div>
+      <div class="testimonial-chips">
+        <span class="testimonial-chip">Early access</span>
+        <span class="testimonial-chip">Google Ads + HubSpot</span>
+        <span class="testimonial-chip">Paid in week 1</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr class="full-divider">
+
+<!-- PRODUCT PILLARS -->
+<section id="product">
+  <div class="fade-in" style="text-align:center; margin-bottom:64px;">
+    <div class="section-label" style="text-align:center">The full stack</div>
+    <h2>From data to decision. In one tool.</h2>
+    <p class="section-sub" style="margin:0 auto;">Most attribution tools stop at the table. Juno goes further — it tells you what to do, and lets you track whether it worked.</p>
+  </div>
+  <div class="pillars-grid fade-in">
+    <div class="pillar-card">
+      <div class="pillar-number">01 · Mirror</div>
+      <div class="pillar-icon mirror"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c8f04a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg></div>
+      <h3>Know what happened</h3>
+      <p>Every keyword connected to the deal it generated. Spend, deals, true CAC, and a recommended action — updated daily, no spreadsheet required.</p>
+      <div class="pillar-mini">
+        <div class="pillar-mini-row"><span class="pillar-mini-kw">"stripe alternative"</span><span class="pillar-mini-tag g">Scale 2x</span></div>
+        <div class="pillar-mini-row"><span class="pillar-mini-kw">"payment api developer"</span><span class="pillar-mini-tag a">Monitor</span></div>
+        <div class="pillar-mini-row"><span class="pillar-mini-kw">"stripe pricing 2026"</span><span class="pillar-mini-tag r">Cut now</span></div>
+      </div>
+    </div>
+    <div class="pillar-card">
+      <div class="pillar-number">02 · Advisor</div>
+      <div class="pillar-icon advisor"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5ab87a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></div>
+      <h3>Know what to do</h3>
+      <p>Claude analyzes your keyword performance weekly and writes a specific action plan. Three modes built for where you are in your growth phase.</p>
+      <div class="pillar-mini">
+        <div class="pillar-advisor-mini">
+          <div class="pillar-reco-row"><span class="pillar-reco-tag c">Cut</span><span>"stripe pricing 2026" — $0 pipeline in 90 days</span></div>
+          <div class="pillar-reco-row"><span class="pillar-reco-tag s">Scale</span><span>"stripe alternative" — $300 CAC, double it</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="pillar-card">
+      <div class="pillar-number">03 · The Lab</div>
+      <div class="pillar-icon lab"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8a68c8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2v17.5c0 1.4-1.1 2.5-2.5 2.5s-2.5-1.1-2.5-2.5V2"/><path d="M8.5 2h7"/><path d="M14.5 16h-5"/></svg></div>
+      <h3>Know if it worked</h3>
+      <p>Every budget decision is a hypothesis. Log it, define success, and track the outcome. The Lab turns gut calls into documented experiments with clear results.</p>
+      <div class="pillar-mini">
+        <div class="pillar-lab-mini">
+          <div class="pillar-lab-row"><span class="pillar-lab-label">IF</span><span>Shift $2.2K from "stripe pricing"...</span></div>
+          <div class="pillar-lab-row"><span class="pillar-lab-label">THEN</span><span>2+ more closed deals in 30 days</span></div>
+          <div class="pillar-lab-row"><span class="pillar-lab-label">STATUS</span><span style="color:var(--accent);font-family:'DM Mono',monospace;font-size:11px;">Active · 14 days left</span></div>
+        </div>
+      </div>
     </div>
   </div>
 </section>
@@ -885,26 +823,126 @@
 
 <!-- HOW IT WORKS -->
 <section id="how">
-  <div class="fade-in" style="text-align:center; margin-bottom: 64px;">
+  <div class="fade-in" style="text-align:center; margin-bottom:64px;">
     <div class="section-label" style="text-align:center">How it works</div>
-    <h2>You're 15 minutes away from clarity.</h2>
-    <p class="section-sub" style="margin: 0 auto 0;">If you can log into Google Ads and your CRM, you can set up Juno. No engineers, no data mapping, no API headaches.</p>
+    <h2>15 minutes to your first recommendation.</h2>
+    <p class="section-sub" style="margin:0 auto;">If you can log into Google Ads and your CRM, you can set up Juno. No engineers, no data mapping, no API headaches.</p>
   </div>
   <div class="steps fade-in">
-    <div class="step">
-      <div class="step-num">01</div>
-      <h3>Grant access</h3>
-      <p>Connect Google Ads via OAuth in two clicks. Juno uses read-only access. We can't touch your campaigns, we just read the data.</p>
+    <div class="step"><div class="step-num">01</div><h3>Grant access</h3><p>Connect Google Ads via OAuth in two clicks. Read-only access — we can't touch your campaigns, we just read the data.</p></div>
+    <div class="step"><div class="step-num">02</div><h3>Sync your CRM</h3><p>Authenticate HubSpot, RD Station, or Salesforce. Juno maps your fields automatically. No manual data mapping required.</p></div>
+    <div class="step"><div class="step-num">03</div><h3>Get your action plan</h3><p>See keyword-level CAC. Then Advisor tells you exactly what to scale, cut, or test — with the reasoning behind every call.</p></div>
+  </div>
+</section>
+
+<hr class="full-divider">
+
+<!-- ADVISOR -->
+<section id="advisor">
+  <div class="advisor-two-col fade-in">
+    <div>
+      <div class="section-label">The Advisor</div>
+      <h2>Not just data.<br>A decision.</h2>
+      <p class="section-sub" style="margin-bottom:32px;">Every week, Claude analyzes your keyword performance and writes a specific action plan. Three modes built for where you are in your growth phase.</p>
+      <div class="mode-stack">
+        <div class="mode-card">
+          <div class="mode-badge guardrail">Guardrail</div>
+          <h3>Protect what's working</h3>
+          <p>Only cuts keywords spending over $500/mo with zero closed deals in 90 days. Keeps pipeline leads alive.</p>
+        </div>
+        <div class="mode-card featured">
+          <div class="mode-badge scale">Scale</div>
+          <div class="mode-default-chip">Default</div>
+          <h3>Grow what's working</h3>
+          <p>Doubles down on low-CAC keywords. Cuts clear zero-deal waste. Flags early signals for testing.</p>
+        </div>
+        <div class="mode-card">
+          <div class="mode-badge aggressive">Aggressive</div>
+          <h3>Move fast</h3>
+          <p>Every dollar should generate pipeline. Cuts any keyword without a closed deal. Built for hyper-growth.</p>
+        </div>
+      </div>
     </div>
-    <div class="step">
-      <div class="step-num">02</div>
-      <h3>Sync your CRM</h3>
-      <p>Authenticate HubSpot, RD Station, or Salesforce. Juno maps your fields automatically. No hidden form fields, no manual data mapping. If you can log in, you can set this up.</p>
+    <div>
+      <div class="advisor-example-wrap">
+        <div class="advisor-example-bar">
+          <div class="mockup-dot" style="background:#ff5f57"></div>
+          <div class="mockup-dot" style="background:#febc2e"></div>
+          <div class="mockup-dot" style="background:#28c840"></div>
+          <span class="mockup-title" style="margin-left:10px;">advisor · scale-mode · weekly-report</span>
+        </div>
+        <div class="advisor-example-body">
+          <div class="advisor-mode-bar">
+            <div><div class="advisor-mode-label">This week's analysis</div><span class="advisor-mode-badge scale">Scale Mode · 12 keywords</span></div>
+            <span class="advisor-hint">May 15, 2026</span>
+          </div>
+          <div class="advisor-reco-list">
+            <div class="advisor-reco-item red">
+              <div class="advisor-reco-header"><span class="advisor-reco-action">Cut</span><span class="advisor-reco-kw">"stripe pricing 2026"</span><span class="advisor-reco-impact">Save $2,200/mo</span></div>
+              <p class="advisor-reco-reason">$6,600 burned in 90 days with zero closed deals and zero pipeline leads. Pause immediately, add as negative keyword, reallocate to your top performer.</p>
+            </div>
+            <div class="advisor-reco-item green">
+              <div class="advisor-reco-header"><span class="advisor-reco-action">Scale 2x</span><span class="advisor-reco-kw">"stripe alternative for startups"</span><span class="advisor-reco-impact">$300 CAC · 4 deals</span></div>
+              <p class="advisor-reco-reason">67% close rate, $13K average deal. At $300 CAC you have 10x headroom. Double to $2,400/mo now.</p>
+            </div>
+            <div class="advisor-reco-item amber">
+              <div class="advisor-reco-header"><span class="advisor-reco-action">Monitor 60 days</span><span class="advisor-reco-kw">"fiserv competitor"</span><span class="advisor-reco-impact">1 deal · $21K</span></div>
+              <p class="advisor-reco-reason">One $21K deal is a strong signal but too small a sample. Need 5 demos before scaling. Improve ad copy targeting Fiserv customers specifically.</p>
+            </div>
+          </div>
+          <div class="advisor-summary"><span>If you act on all three recommendations</span><span class="advisor-summary-value">$2,200 saved · best keyword doubled</span></div>
+        </div>
+      </div>
     </div>
-    <div class="step">
-      <div class="step-num">03</div>
-      <h3>Own your CAC</h3>
-      <p>See which keywords actually turn into customers. A clear table showing what to scale, what to cut, and what to test. Updated daily, no spreadsheet required.</p>
+  </div>
+</section>
+
+<hr class="full-divider">
+
+<!-- THE LAB -->
+<section id="lab">
+  <div class="lab-two-col fade-in">
+    <div>
+      <div class="advisor-example-wrap">
+        <div class="advisor-example-bar">
+          <div class="mockup-dot" style="background:#ff5f57"></div>
+          <div class="mockup-dot" style="background:#febc2e"></div>
+          <div class="mockup-dot" style="background:#28c840"></div>
+          <span class="mockup-title" style="margin-left:10px;">the-lab · experiment-#3 · active</span>
+        </div>
+        <div class="lab-card-demo" style="border-radius:0;border:none;box-shadow:none;background:transparent;">
+          <div class="lab-card-demo-header">
+            <div>
+              <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.15em;margin-bottom:4px;">Experiment #3</div>
+              <div style="font-size:13px;font-weight:600;">Budget Shift — "stripe pricing" to "stripe alternative"</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">
+              <span class="lab-exp-badge">Budget Shift</span>
+              <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-tertiary);">Active · 14 days left</span>
+            </div>
+          </div>
+          <div class="lab-ifthen-demo">
+            <div class="lab-ifthen-block"><div class="lab-ifthen-label">IF</div><div class="lab-ifthen-text">I shift $2,200/mo away from "stripe pricing 2026" and add it to "stripe alternative for startups"...</div></div>
+            <div class="lab-ifthen-block"><div class="lab-ifthen-label">THEN</div><div class="lab-ifthen-text">I expect 2 or more additional closed deals in the next 30 days.</div></div>
+            <div class="lab-ifthen-block"><div class="lab-ifthen-label">BECAUSE</div><div class="lab-ifthen-text">"stripe alternative" has a $300 CAC with 4 closed deals vs $0 pipeline from the keyword I'm cutting — both target the same buyer intent.</div></div>
+          </div>
+          <div class="lab-progress-section">
+            <div class="lab-progress-meta"><span>Experiment progress</span><span>16 / 30 days</span></div>
+            <div class="lab-progress-track"><div class="lab-progress-fill-demo"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="lab-demo-text">
+      <div class="section-label">The Lab</div>
+      <h2>Turn gut calls into tracked experiments.</h2>
+      <p>Every budget decision is a hypothesis. The Lab lets you log it, define what success looks like, and track the result. So when your CFO asks why you moved $3K from one keyword to another — or your board wants to know what's working — you have the documented answer.</p>
+      <div class="lab-feature-list">
+        <div class="lab-feature-item"><svg class="lab-feature-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>AI generates experiment ideas from your keyword data — you approve, launch, and track.</span></div>
+        <div class="lab-feature-item"><svg class="lab-feature-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>If/Then/Because framework forces clarity on what you expect and why before you move budget.</span></div>
+        <div class="lab-feature-item"><svg class="lab-feature-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>Progress countdown and status tracking. Know exactly when to check back in.</span></div>
+        <div class="lab-feature-item"><svg class="lab-feature-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>Run multiple experiments in parallel. Dismiss what didn't work, double down on what did.</span></div>
+      </div>
     </div>
   </div>
 </section>
@@ -920,47 +958,20 @@
   </div>
   <div class="vs-grid fade-in">
     <div class="vs-card them">
-      <div class="vs-card-label">
-        <span>HubSpot native</span>
-      </div>
-      <div class="vs-item">
-        <div class="vs-icon">✗</div>
-        <div class="vs-item-text"><strong>Campaign level only</strong>Can't show keyword-level attribution. You know the campaign worked — not which search term drove it.</div>
-      </div>
-      <div class="vs-item">
-        <div class="vs-icon">✗</div>
-        <div class="vs-item-text"><strong>Attribution stops at form fill</strong>Doesn't follow the contact to a closed deal. You can't connect ad spend to revenue.</div>
-      </div>
-      <div class="vs-item">
-        <div class="vs-icon">✗</div>
-        <div class="vs-item-text"><strong>GCLID breaks constantly</strong>Long B2B sales cycles, device switches, and Safari ITP all break GCLID. Defaults to direct traffic.</div>
-      </div>
-      <div class="vs-item">
-        <div class="vs-icon">✗</div>
-        <div class="vs-item-text"><strong>No CAC calculation</strong>Gives you data. Doesn't compute cost per closed deal per keyword. You do the math.</div>
-      </div>
+      <div class="vs-card-label">HubSpot native</div>
+      <div class="vs-item"><div class="vs-icon">✗</div><div class="vs-item-text"><strong>Campaign level only</strong>Can't show keyword-level attribution. You know the campaign worked — not which search term drove it.</div></div>
+      <div class="vs-item"><div class="vs-icon">✗</div><div class="vs-item-text"><strong>Attribution stops at form fill</strong>Doesn't follow the contact to a closed deal. You can't connect ad spend to revenue.</div></div>
+      <div class="vs-item"><div class="vs-icon">✗</div><div class="vs-item-text"><strong>GCLID breaks constantly</strong>Long B2B sales cycles, device switches, and Safari ITP all break GCLID. Defaults to direct traffic.</div></div>
+      <div class="vs-item"><div class="vs-icon">✗</div><div class="vs-item-text"><strong>No CAC calculation</strong>Gives you data. Doesn't compute cost per closed deal per keyword. You do the math.</div></div>
+      <div class="vs-item"><div class="vs-icon">✗</div><div class="vs-item-text"><strong>No recommendations</strong>Shows a report. Doesn't tell you what to do with it.</div></div>
     </div>
     <div class="vs-card us">
-      <div class="vs-card-label">
-        <span style="width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block"></span>
-        <span>Juno</span>
-      </div>
-      <div class="vs-item">
-        <div class="vs-icon" style="color:var(--accent)">✓</div>
-        <div class="vs-item-text"><strong>Keyword-level attribution</strong>Every keyword tracked individually — which exact search term drove which deal in your pipeline.</div>
-      </div>
-      <div class="vs-item">
-        <div class="vs-icon" style="color:var(--accent)">✓</div>
-        <div class="vs-item-text"><strong>Follows the deal to close</strong>Attribution doesn't stop at form fill. We track the contact all the way to closed/won in your CRM.</div>
-      </div>
-      <div class="vs-item">
-        <div class="vs-icon" style="color:var(--accent)">✓</div>
-        <div class="vs-item-text"><strong>UTM-based — more durable</strong>UTM parameters persist through long B2B sales cycles better than GCLID. Less breakage, more signal.</div>
-      </div>
-      <div class="vs-item">
-        <div class="vs-icon" style="color:var(--accent)">✓</div>
-        <div class="vs-item-text"><strong>CAC computed automatically</strong>Spend divided by closed deals per keyword. One number, no spreadsheet needed.</div>
-      </div>
+      <div class="vs-card-label"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block"></span> Juno</div>
+      <div class="vs-item"><div class="vs-icon" style="color:var(--accent)">✓</div><div class="vs-item-text"><strong>Keyword-level attribution</strong>Every keyword tracked individually — which exact search term drove which deal in your pipeline.</div></div>
+      <div class="vs-item"><div class="vs-icon" style="color:var(--accent)">✓</div><div class="vs-item-text"><strong>Follows the deal to close</strong>Attribution doesn't stop at form fill. We track the contact all the way to closed/won in your CRM.</div></div>
+      <div class="vs-item"><div class="vs-icon" style="color:var(--accent)">✓</div><div class="vs-item-text"><strong>Tracks through the full sales cycle</strong>UTM parameters follow the user through long B2B sales cycles — no breakage from device switches, Safari ITP, or session drops.</div></div>
+      <div class="vs-item"><div class="vs-icon" style="color:var(--accent)">✓</div><div class="vs-item-text"><strong>CAC computed automatically</strong>Spend divided by closed deals per keyword. One number, no spreadsheet needed.</div></div>
+      <div class="vs-item"><div class="vs-icon" style="color:var(--accent)">✓</div><div class="vs-item-text"><strong>Weekly AI action plan</strong>Advisor tells you exactly what to cut, scale, and test — with the reasoning behind every call.</div></div>
     </div>
   </div>
 </section>
@@ -968,17 +979,17 @@
 <hr class="full-divider">
 
 <!-- FOUNDER NOTE -->
-<section id="founders" style="padding: 80px 48px;">
+<section id="founders" style="padding: 80px 60px;">
   <div class="fade-in" style="text-align:center; margin-bottom:48px;">
     <div class="section-label" style="text-align:center">From the founders</div>
-    <h2 style="text-align:center">Ex-Google. Stanford. Ex-Wall Street.<br>All three obsessed with the same problem.</h2>
+    <h2 style="text-align:center">Built by people who've sat<br>on both sides of a budget review.</h2>
   </div>
   <div class="founder-note fade-in">
     <p>"We built Juno because a Series C fintech founder in SF told us he was spending $30K/month on Google Ads and couldn't tell his board which keywords were actually driving pipeline. He wasn't alone — it's the same story at almost every B2B SaaS company running paid search. The data exists. It's just never been connected properly."</p>
-    <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:24px;">
+    <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:20px;">
       <span style="font-family:'DM Mono',monospace; font-size:12px; color:var(--text-tertiary); background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:6px 14px;">Ex-Google Engineer</span>
-      <span style="font-family:'DM Mono',monospace; font-size:12px; color:var(--text-tertiary); background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:6px 14px;">Stanford</span>
       <span style="font-family:'DM Mono',monospace; font-size:12px; color:var(--text-tertiary); background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:6px 14px;">Ex-IB · Jefferies NY</span>
+      <span style="font-family:'DM Mono',monospace; font-size:12px; color:var(--text-tertiary); background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:6px 14px;">B2B SaaS · San Francisco</span>
     </div>
   </div>
 </section>
@@ -987,23 +998,23 @@
 
 <!-- CTA -->
 <div class="cta-section fade-in">
-  <div class="section-label" style="text-align:center">Get started</div>
-  <h2>Know which keywords are closing deals — before your next board meeting.</h2>
-  <p>Connect Google Ads and HubSpot. We'll show you which keywords generated pipeline, which ones drove closed deals, and which ones have been spending money with zero return. First report in 24 hours.</p>
+  <div class="section-label" style="text-align:center">See it for yourself</div>
+  <h2>Stop guessing which keywords work.<br>Start knowing.</h2>
+  <p>Connect Google Ads and your CRM. We'll show you which keywords generated pipeline, which ones drove closed deals, and which ones have been burning money with zero return. First report in 24 hours.</p>
+  <p style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text-tertiary);margin-top:-24px;margin-bottom:40px;">Built for teams spending $5K+/mo on Google Ads.</p>
   <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
     <a href="https://calendly.com/agustinvolantesilva/30min" class="btn-primary" style="font-size:16px; padding:15px 36px; text-decoration:none" target="_blank">Get my Keyword-to-CAC report</a>
     <a href="https://calendly.com/agustinvolantesilva/30min" class="btn-secondary" style="font-size:16px; padding:15px 36px; text-decoration:none" target="_blank">Book a call</a>
   </div>
-  <div style="display:flex; align-items:center; gap:24px; margin-top:20px; justify-content:center; flex-wrap:wrap;">
-    <span style="font-family:'DM Mono',monospace; font-size:12px; color:var(--text-tertiary); display:flex; align-items:center; gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Read-only access</span>
-    <span style="font-family:'DM Mono',monospace; font-size:12px; color:var(--text-tertiary); display:flex; align-items:center; gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg> No code required</span>
-    <span style="font-family:'DM Mono',monospace; font-size:12px; color:var(--text-tertiary); display:flex; align-items:center; gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> 15-minute setup</span>
+  <div class="trust-bar" style="margin-top:24px; justify-content:center;">
+    <span class="trust-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Read-only access</span>
+    <span class="trust-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg>No code required</span>
+    <span class="trust-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>15-minute setup</span>
   </div>
 </div>
 
 <hr class="full-divider">
 
-<!-- FOOTER -->
 <footer>
   <div class="footer-logo">juno</div>
   <div class="footer-meta">© 2026 Juno · San Francisco, CA · agustinvolantesilva@gmail.com</div>
@@ -1012,81 +1023,130 @@
 <div class="kw-tooltip-card" id="kwTooltip"></div>
 
 <script>
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(e => {
-      if (e.isIntersecting) {
-        e.target.classList.add('visible');
-      }
-    });
-  }, { threshold: 0.1 });
+/* ── Light/dark toggle ── */
+function toggleTheme() {
+  const isLight = document.body.classList.toggle('light');
+  localStorage.setItem('juno-theme', isLight ? 'light' : 'dark');
+  document.getElementById('iconMoon').style.display = isLight ? 'none' : 'block';
+  document.getElementById('iconSun').style.display = isLight ? 'block' : 'none';
+}
+if (localStorage.getItem('juno-theme') === 'light') {
+  document.body.classList.add('light');
+  document.getElementById('iconMoon').style.display = 'none';
+  document.getElementById('iconSun').style.display = 'block';
+}
 
-  document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+/* ── Scroll fade-in ── */
+const scrollObs = new IntersectionObserver(e => e.forEach(x => { if (x.isIntersecting) x.target.classList.add('visible'); }), { threshold: 0.1 });
+document.querySelectorAll('.fade-in').forEach(el => scrollObs.observe(el));
 
-  // ── Keyword tooltip + click expand ──
-  const kwTooltipData = {
-    0: { deals: [
-      { company: 'Bolt Payments',    stage: 'Closed Won', value: '$14,200' },
-      { company: 'Meridian Labs',    stage: 'Closed Won', value: '$9,800'  },
-      { company: 'Stackline Inc',    stage: 'Closed Won', value: '$11,400' },
-      { company: 'Forge Capital',    stage: 'Closed Won', value: '$16,600' },
-    ]},
-    1: { deals: [{ company: 'TechFlow Systems',  stage: 'Closed Won', value: '$8,400'  }]},
-    2: { deals: [{ company: 'BlueRidge Fintech', stage: 'Closed Won', value: '$21,000' }]},
-    3: { deals: [] },
-    4: { deals: [] },
-  };
+/* ── Flow animation ── */
+const FLOW_TITLES = [
+  'juno / connections · setup',
+  'juno / connections · syncing',
+  'juno / attribution · last-90-days',
+  'juno / advisor · scale-mode',
+  'juno / the-lab · experiments'
+];
+const FLOW_INTERVAL = 4200;
+let currentStep = 0;
+let flowTimer;
 
-  const kwTooltip = document.getElementById('kwTooltip');
-  let hideTimeout;
+function goToStep(n) {
+  const total = 5;
+  const nodes = document.querySelectorAll('.flow-node');
+  const lines = [
+    document.getElementById('line01'),
+    document.getElementById('line12'),
+    document.getElementById('line23'),
+    document.getElementById('line34')
+  ];
+  const panels = document.querySelectorAll('.flow-panel');
 
-  function positionTooltip(e) {
-    const offset = 16;
-    let x = e.clientX + offset;
-    let y = e.clientY + offset;
-    const tw = kwTooltip.offsetWidth || 280;
-    const th = kwTooltip.offsetHeight || 160;
-    if (x + tw > window.innerWidth - 12)  x = e.clientX - tw - offset;
-    if (y + th > window.innerHeight - 12) y = e.clientY - th - offset;
-    kwTooltip.style.left = x + 'px';
-    kwTooltip.style.top  = y + 'px';
-  }
-
-  document.querySelectorAll('.kw-row').forEach(row => {
-    const kwId = row.dataset.kw;
-    const data = kwTooltipData[kwId];
-
-    row.addEventListener('mouseenter', (e) => {
-      clearTimeout(hideTimeout);
-      let html = '<div class="kw-tooltip-header">Deals generated</div>';
-      if (data.deals.length === 0) {
-        html += '<div class="kw-no-deals">No pipeline in 90 days</div>';
-      } else {
-        data.deals.forEach(d => {
-          html += `<div class="kw-deal-item"><span class="kw-deal-company">${d.company}</span><span class="kw-deal-stage">${d.stage}</span><span class="kw-deal-value">${d.value}</span></div>`;
-        });
-      }
-      html += '<div class="kw-tooltip-hint">Click for full analysis →</div>';
-      kwTooltip.innerHTML = html;
-      positionTooltip(e);
-      kwTooltip.classList.add('visible');
-    });
-
-    row.addEventListener('mousemove', positionTooltip);
-    row.addEventListener('mouseleave', () => { hideTimeout = setTimeout(() => kwTooltip.classList.remove('visible'), 120); });
-
-    row.addEventListener('click', () => {
-      const detail = document.querySelector(`[data-kw-detail="${kwId}"]`);
-      const isOpen = detail.classList.contains('open');
-      document.querySelectorAll('.kw-detail-row.open').forEach(r => {
-        r.classList.remove('open');
-        document.querySelector(`[data-kw="${r.dataset.kwDetail}"]`).classList.remove('active');
-      });
-      if (!isOpen) { detail.classList.add('open'); row.classList.add('active'); }
-      kwTooltip.classList.remove('visible');
-    });
+  nodes.forEach((node, i) => {
+    node.classList.remove('active', 'done');
+    if (i === n) node.classList.add('active');
+    else if (i < n) node.classList.add('done');
   });
+
+  lines.forEach((line, i) => {
+    if (line) line.classList.toggle('filled', i < n);
+  });
+
+  panels.forEach((panel, i) => {
+    panel.classList.toggle('active', i === n);
+  });
+
+  document.getElementById('mockupTitle').textContent = FLOW_TITLES[n];
+  currentStep = n;
+}
+
+function startFlow() {
+  flowTimer = setInterval(() => {
+    goToStep((currentStep + 1) % 5);
+  }, FLOW_INTERVAL);
+}
+
+document.querySelectorAll('.flow-node').forEach((node, i) => {
+  node.addEventListener('click', () => {
+    clearInterval(flowTimer);
+    goToStep(i);
+    startFlow();
+  });
+});
+
+startFlow();
+
+/* ── KW tooltip + expand ── */
+const kwData = {
+  0: { deals: [{ company:'Bolt Payments', stage:'Closed Won', value:'$14,200' }, { company:'Meridian Labs', stage:'Closed Won', value:'$9,800' }, { company:'Stackline Inc', stage:'Closed Won', value:'$11,400' }] },
+  1: { deals: [{ company:'TechFlow Systems', stage:'Closed Won', value:'$8,400' }] },
+  3: { deals: [] },
+  4: { deals: [] }
+};
+
+const kwTooltip = document.getElementById('kwTooltip');
+let hideTO;
+
+function positionTT(e) {
+  let x = e.clientX + 16, y = e.clientY + 16;
+  const tw = kwTooltip.offsetWidth || 280, th = kwTooltip.offsetHeight || 160;
+  if (x + tw > window.innerWidth - 12) x = e.clientX - tw - 16;
+  if (y + th > window.innerHeight - 12) y = e.clientY - th - 16;
+  kwTooltip.style.left = x + 'px';
+  kwTooltip.style.top = y + 'px';
+}
+
+document.querySelectorAll('.kw-row').forEach(row => {
+  const id = row.dataset.kw;
+  const d = kwData[id];
+  if (!d) return;
+
+  row.addEventListener('mouseenter', e => {
+    clearTimeout(hideTO);
+    let h = '<div class="kw-tooltip-header">Deals generated</div>';
+    if (!d.deals.length) h += '<div class="kw-no-deals">No pipeline in 90 days</div>';
+    else d.deals.forEach(x => { h += `<div class="kw-deal-item"><span class="kw-deal-company">${x.company}</span><span class="kw-deal-stage">${x.stage}</span><span class="kw-deal-value">${x.value}</span></div>`; });
+    h += '<div class="kw-tooltip-hint">Click for full analysis →</div>';
+    kwTooltip.innerHTML = h;
+    positionTT(e);
+    kwTooltip.classList.add('visible');
+  });
+  row.addEventListener('mousemove', positionTT);
+  row.addEventListener('mouseleave', () => { hideTO = setTimeout(() => kwTooltip.classList.remove('visible'), 120); });
+  row.addEventListener('click', () => {
+    const det = document.querySelector(`[data-kw-detail="${id}"]`);
+    if (!det) return;
+    const open = det.classList.contains('open');
+    document.querySelectorAll('.kw-detail-row.open').forEach(r => {
+      r.classList.remove('open');
+      const p = document.querySelector(`[data-kw="${r.dataset.kwDetail}"]`);
+      if (p) p.classList.remove('active');
+    });
+    if (!open) { det.classList.add('open'); row.classList.add('active'); }
+    kwTooltip.classList.remove('visible');
+  });
+});
 </script>
-
-
 </body>
 </html>
