@@ -62,6 +62,23 @@ export interface KeywordCAC {
   cac: number | null
   action: 'scale' | 'monitor' | 'cut'
   source_type: 'keyword' | 'dsa_search_term' | 'pmax_search_term' | 'asset_group'
+  pipeline_leads: number  // contacts with open (non-closed) deals attributed to this keyword
+}
+
+export interface WasteAlert {
+  keyword: string
+  campaign: string
+  spend_monthly: number
+  severity: 'critical' | 'warning'
+  reason: string
+}
+
+export interface AdvisorReport {
+  narrative: string
+  waste_alerts: WasteAlert[]
+  total_waste: number
+  waste_pct: number
+  keywords_to_cut: number
 }
 
 export interface OAuthToken {

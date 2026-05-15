@@ -17,12 +17,13 @@ export async function POST(req: NextRequest) {
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await req.json()
-    const { customer_id } = body
+    const { customer_id, days = 90 } = body
     if (!customer_id) return NextResponse.json({ error: 'customer_id required' }, { status: 400 })
+    const syncDays = Math.min(Math.max(Number(days) || 90, 30), 365)
 
     const { data: tokenRow } = await supabaseAdmin
       .from('oauth_tokens')
-      .select('refresh_token')
+      .select('refresh_token, extra')
       .eq('user_id', session.user.id)
       .eq('provider', 'google_ads')
       .single()
@@ -32,12 +33,19 @@ export async function POST(req: NextRequest) {
     }
 
     const refreshToken = tokenRow.refresh_token
+
+    // Persist customer_id so UI can restore it on next visit
+    await supabaseAdmin
+      .from('oauth_tokens')
+      .update({ extra: { ...(tokenRow.extra ?? {}), customer_id } })
+      .eq('user_id', session.user.id)
+      .eq('provider', 'google_ads')
     const warnings: string[] = []
 
     // 1. Sync standard keywords
     let kwRecords: any[] = []
     try {
-      const keywords = await fetchKeywordReport(refreshToken, customer_id)
+      const keywords = await fetchKeywordReport(refreshToken, customer_id, syncDays)
 
       kwRecords = keywords.map((kw) => ({
         user_id: session.user.id,
@@ -80,7 +88,7 @@ export async function POST(req: NextRequest) {
     // 2. Sync DSA search terms (non-blocking — DSA campaigns may not exist)
     let dsaCount = 0
     try {
-      const dsaTerms = await fetchDSASearchTermReport(refreshToken, customer_id)
+      const dsaTerms = await fetchDSASearchTermReport(refreshToken, customer_id, syncDays)
 
       if (dsaTerms.length > 0) {
         const dsaRecords = dsaTerms.map((t) => ({
@@ -105,7 +113,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Store DSA target mapping for attribution resolution
-      const targetMapping = await fetchDSATargetMapping(refreshToken, customer_id)
+      const targetMapping = await fetchDSATargetMapping(refreshToken, customer_id, syncDays)
       if (Object.keys(targetMapping).length > 0) {
         await supabaseAdmin
           .from('oauth_tokens')
@@ -120,7 +128,7 @@ export async function POST(req: NextRequest) {
     // 3. Sync PMAX search terms (non-blocking)
     let pmaxCount = 0
     try {
-      const pmaxTerms = await fetchPMAXSearchTermReport(refreshToken, customer_id)
+      const pmaxTerms = await fetchPMAXSearchTermReport(refreshToken, customer_id, syncDays)
 
       if (pmaxTerms.length > 0) {
         const pmaxRecords = pmaxTerms.map((t) => ({

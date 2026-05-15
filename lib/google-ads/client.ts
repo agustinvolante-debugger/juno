@@ -17,24 +17,25 @@ function getCustomer(refreshToken: string, customerAccountId: string) {
   })
 }
 
-function dateRange90Days() {
+function dateRangeForDays(days: number) {
   const today = new Date()
-  const ninetyDaysAgo = new Date(today)
-  ninetyDaysAgo.setDate(today.getDate() - 90)
+  const start = new Date(today)
+  start.setDate(today.getDate() - days)
   const fmt = (d: Date) => d.toISOString().slice(0, 10)
-  return { from: fmt(ninetyDaysAgo), to: fmt(today) }
+  return { from: fmt(start), to: fmt(today) }
 }
 
-function microsToDailyToMonthly(costMicros: number): number {
-  return Math.round((costMicros / 1_000_000) * (30 / 90) * 100) / 100
+function microsToMonthly(costMicros: number, days: number): number {
+  return Math.round((costMicros / 1_000_000) * (30 / days) * 100) / 100
 }
 
 export async function fetchKeywordReport(
   refreshToken: string,
-  customerAccountId: string
+  customerAccountId: string,
+  days = 90
 ) {
   const customer = getCustomer(refreshToken, customerAccountId)
-  const { from, to } = dateRange90Days()
+  const { from, to } = dateRangeForDays(days)
 
   const report = await customer.query(`
     SELECT
@@ -56,7 +57,7 @@ export async function fetchKeywordReport(
     keyword: row.ad_group_criterion.keyword.text as string,
     campaign: row.campaign.name as string,
     ad_group: row.ad_group.name as string,
-    spend_monthly: microsToDailyToMonthly(row.metrics.cost_micros),
+    spend_monthly: microsToMonthly(row.metrics.cost_micros, days),
     impressions: row.metrics.impressions as number,
     clicks: row.metrics.clicks as number,
     source_type: 'keyword' as const,
@@ -65,10 +66,11 @@ export async function fetchKeywordReport(
 
 export async function fetchDSASearchTermReport(
   refreshToken: string,
-  customerAccountId: string
+  customerAccountId: string,
+  days = 90
 ) {
   const customer = getCustomer(refreshToken, customerAccountId)
-  const { from, to } = dateRange90Days()
+  const { from, to } = dateRangeForDays(days)
 
   const report = await customer.query(`
     SELECT
@@ -93,7 +95,7 @@ export async function fetchDSASearchTermReport(
     ad_group: row.ad_group.name as string,
     landing_page: row.dynamic_search_ads_search_term_view.landing_page as string ?? null,
     headline: row.dynamic_search_ads_search_term_view.headline as string ?? null,
-    spend_monthly: microsToDailyToMonthly(row.metrics.cost_micros),
+    spend_monthly: microsToMonthly(row.metrics.cost_micros, days),
     impressions: row.metrics.impressions as number,
     clicks: row.metrics.clicks as number,
     source_type: 'dsa_search_term' as const,
@@ -102,10 +104,11 @@ export async function fetchDSASearchTermReport(
 
 export async function fetchDSATargetMapping(
   refreshToken: string,
-  customerAccountId: string
+  customerAccountId: string,
+  days = 90
 ): Promise<Record<string, string[]>> {
   const customer = getCustomer(refreshToken, customerAccountId)
-  const { from, to } = dateRange90Days()
+  const { from, to } = dateRangeForDays(days)
 
   const report = await customer.query(`
     SELECT
@@ -137,10 +140,11 @@ export async function fetchDSATargetMapping(
 
 export async function fetchPMAXSearchTermReport(
   refreshToken: string,
-  customerAccountId: string
+  customerAccountId: string,
+  days = 90
 ) {
   const customer = getCustomer(refreshToken, customerAccountId)
-  const { from, to } = dateRange90Days()
+  const { from, to } = dateRangeForDays(days)
 
   const report = await customer.query(`
     SELECT
@@ -160,7 +164,7 @@ export async function fetchPMAXSearchTermReport(
     keyword: row.campaign_search_term_insight.category_label as string,
     campaign: row.campaign.name as string,
     ad_group: 'PMAX',
-    spend_monthly: microsToDailyToMonthly(row.metrics.cost_micros),
+    spend_monthly: microsToMonthly(row.metrics.cost_micros, days),
     impressions: row.metrics.impressions as number,
     clicks: row.metrics.clicks as number,
     source_type: 'pmax_search_term' as const,

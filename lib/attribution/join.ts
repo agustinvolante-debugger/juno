@@ -27,13 +27,11 @@ export async function runAttributionJoin(userId: string, from?: string, to?: str
   // Use end of day for timestamp comparisons so today's records are included
   const dateToEndOfDay = `${dateTo}T23:59:59`
 
-  // 1. Load keywords synced within date range
+  // 1. Load all keywords for this user — synced_at is not time-series, load the full current set
   const { data: keywords, error: kwError } = await supabaseAdmin
     .from('keywords')
     .select('*')
     .eq('user_id', userId)
-    .gte('synced_at', dateFrom)
-    .lte('synced_at', dateToEndOfDay)
 
   if (kwError) throw kwError
 
@@ -59,7 +57,16 @@ export async function runAttributionJoin(userId: string, from?: string, to?: str
 
   if (dError) throw dError
 
-  console.log(`Attribution: loaded ${keywords.length} keywords, ${contacts.length} contacts, ${deals.length} deals (range: ${dateFrom} to ${dateTo})`)
+  // 3b. Load open pipeline deals (not yet closed-won) within date range
+  const { data: pipelineDeals } = await supabaseAdmin
+    .from('deals')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('is_closed_won', false)
+    .gte('created_at', dateFrom)
+    .lte('created_at', dateToEndOfDay)
+
+  console.log(`Attribution: loaded ${keywords.length} keywords, ${contacts.length} contacts, ${deals.length} deals, ${pipelineDeals?.length ?? 0} pipeline deals (range: ${dateFrom} to ${dateTo})`)
 
   // 4. Load DSA target mapping (if available) for resolving dsa-<id> utm_terms
   let dsaTargetMap: Record<string, string[]> = {}
@@ -87,6 +94,16 @@ export async function runAttributionJoin(userId: string, from?: string, to?: str
     dealsByContactId.get(deal.contact_id)!.push(deal)
   }
 
+  // Build pipeline deal→contact lookup: deal.contact_id → pipeline deals[]
+  const pipelineDealsByContactId = new Map<string, any[]>()
+  for (const deal of (pipelineDeals ?? [])) {
+    if (!deal.contact_id) continue
+    if (!pipelineDealsByContactId.has(deal.contact_id)) {
+      pipelineDealsByContactId.set(deal.contact_id, [])
+    }
+    pipelineDealsByContactId.get(deal.contact_id)!.push(deal)
+  }
+
   // 5. Compute CAC per keyword/search term
   const kwMap = new Map<string, KeywordCAC>()
 
@@ -102,6 +119,7 @@ export async function runAttributionJoin(userId: string, from?: string, to?: str
         cac: null,
         action: 'cut',
         source_type: kw.source_type ?? 'keyword',
+        pipeline_leads: 0,
       })
     }
   }
@@ -112,7 +130,7 @@ export async function runAttributionJoin(userId: string, from?: string, to?: str
     if (!utmTerm) continue
 
     const relatedDeals = dealsByContactId.get(contact.id) ?? []
-    if (relatedDeals.length === 0) continue
+    const relatedPipelineDeals = pipelineDealsByContactId.get(contact.id) ?? []
 
     // Resolve DSA/AI Max target IDs to search terms
     if (utmTerm.startsWith('dsa-') || utmTerm.startsWith('kwl-')) {
@@ -121,9 +139,14 @@ export async function runAttributionJoin(userId: string, from?: string, to?: str
         const normalizedTerm = term.toLowerCase().trim()
         for (const [, cacRow] of kwMap.entries()) {
           if (cacRow.source_type === 'dsa_search_term' && cacRow.keyword.toLowerCase().trim() === normalizedTerm) {
-            cacRow.deal_count += relatedDeals.length
-            for (const deal of relatedDeals) {
-              cacRow.total_deal_value += deal.amount ?? 0
+            if (relatedDeals.length > 0) {
+              cacRow.deal_count += relatedDeals.length
+              for (const deal of relatedDeals) {
+                cacRow.total_deal_value += deal.amount ?? 0
+              }
+            }
+            if (relatedPipelineDeals.length > 0) {
+              cacRow.pipeline_leads += 1
             }
           }
         }
@@ -132,9 +155,14 @@ export async function runAttributionJoin(userId: string, from?: string, to?: str
       // Direct keyword match (standard search campaigns)
       for (const [, cacRow] of kwMap.entries()) {
         if (cacRow.keyword.toLowerCase().trim() === utmTerm) {
-          cacRow.deal_count += relatedDeals.length
-          for (const deal of relatedDeals) {
-            cacRow.total_deal_value += deal.amount ?? 0
+          if (relatedDeals.length > 0) {
+            cacRow.deal_count += relatedDeals.length
+            for (const deal of relatedDeals) {
+              cacRow.total_deal_value += deal.amount ?? 0
+            }
+          }
+          if (relatedPipelineDeals.length > 0) {
+            cacRow.pipeline_leads += 1
           }
         }
       }
@@ -169,15 +197,20 @@ export async function runAttributionJoin(userId: string, from?: string, to?: str
   for (const contact of urlParsedContacts) {
     const utmTerm = contact.utm_term.toLowerCase().trim()
     const relatedDeals = dealsByContactId.get(contact.id) ?? []
-    if (relatedDeals.length === 0) continue
+    const relatedPipelineDeals = pipelineDealsByContactId.get(contact.id) ?? []
 
     for (const [, cacRow] of kwMap.entries()) {
       if (cacRow.keyword.toLowerCase().trim() === utmTerm) {
-        cacRow.deal_count += relatedDeals.length
-        for (const deal of relatedDeals) {
-          cacRow.total_deal_value += deal.amount ?? 0
+        if (relatedDeals.length > 0) {
+          cacRow.deal_count += relatedDeals.length
+          for (const deal of relatedDeals) {
+            cacRow.total_deal_value += deal.amount ?? 0
+          }
+          urlParsedMatches++
         }
-        urlParsedMatches++
+        if (relatedPipelineDeals.length > 0) {
+          cacRow.pipeline_leads += 1
+        }
       }
     }
   }
@@ -209,17 +242,22 @@ export async function runAttributionJoin(userId: string, from?: string, to?: str
       if (!normalizedFirstPage) continue
 
       const relatedDeals = dealsByContactId.get(contact.id) ?? []
-      if (relatedDeals.length === 0) continue
+      const relatedPipelineDeals = pipelineDealsByContactId.get(contact.id) ?? []
 
       const matchingKeys = lpToKeys.get(normalizedFirstPage) ?? []
       for (const key of matchingKeys) {
         const cacRow = kwMap.get(key)
         if (!cacRow) continue
-        cacRow.deal_count += relatedDeals.length
-        for (const deal of relatedDeals) {
-          cacRow.total_deal_value += deal.amount ?? 0
+        if (relatedDeals.length > 0) {
+          cacRow.deal_count += relatedDeals.length
+          for (const deal of relatedDeals) {
+            cacRow.total_deal_value += deal.amount ?? 0
+          }
+          lpMatched++
         }
-        lpMatched++
+        if (relatedPipelineDeals.length > 0) {
+          cacRow.pipeline_leads += 1
+        }
       }
     }
 

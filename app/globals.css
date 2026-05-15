@@ -1,6 +1,66 @@
 @import "tailwindcss";
 
 :root {
+  --bg: #0c0c0b;
+  --surface: #141412;
+  --surface-raised: #1a1a18;
+  --border: #222220;
+  --border-subtle: #2a2a28;
+  --text: #f0ead2;
+  --text-muted: #8a8678;
+  --text-faint: #4a4840;
+  --sidebar-bg: #0d0d0b;
+
+  /* Accent */
+  --accent: #c8f04a;
+  --accent-5: rgba(200, 240, 74, 0.05);
+  --accent-10: rgba(200, 240, 74, 0.1);
+  --accent-20: rgba(200, 240, 74, 0.2);
+  --accent-30: rgba(200, 240, 74, 0.3);
+  --accent-text: #0c0c0b;
+  --advisor-btn-bg: #1a2a0a;
+  --advisor-btn-hover: #243810;
+
+  /* Action colors */
+  --color-scale: #5ab87a;
+  --scale-10: rgba(90, 184, 122, 0.1);
+  --color-monitor: #e09a30;
+  --monitor-10: rgba(224, 154, 48, 0.1);
+  --color-cut: #e05a4a;
+  --cut-10: rgba(224, 90, 74, 0.1);
+}
+
+.light {
+  --bg: #f5f3ee;
+  --surface: #ffffff;
+  --surface-raised: #eeece7;
+  --border: #dedad0;
+  --border-subtle: #ccc9be;
+  --text: #1a1918;
+  --text-muted: #5a5850;
+  --text-faint: #9a9890;
+  --sidebar-bg: #f0ede6;
+
+  /* Accent */
+  --accent: #3a6b18;
+  --accent-5: rgba(58, 107, 24, 0.05);
+  --accent-10: rgba(58, 107, 24, 0.1);
+  --accent-20: rgba(58, 107, 24, 0.2);
+  --accent-30: rgba(58, 107, 24, 0.3);
+  --accent-text: #ffffff;
+  --advisor-btn-bg: #e8f0e0;
+  --advisor-btn-hover: #dce8d4;
+
+  /* Action colors */
+  --color-scale: #1e7a42;
+  --scale-10: rgba(30, 122, 66, 0.1);
+  --color-monitor: #b36a00;
+  --monitor-10: rgba(179, 106, 0, 0.1);
+  --color-cut: #c73a2a;
+  --cut-10: rgba(199, 58, 42, 0.1);
+}
+
+:root {
   --background: #ffffff;
   --foreground: #171717;
 }

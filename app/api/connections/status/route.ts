@@ -9,14 +9,17 @@ export async function GET() {
 
   const { data: tokens } = await supabaseAdmin
     .from('oauth_tokens')
-    .select('provider')
+    .select('provider, extra')
     .eq('user_id', session.user.id)
 
   const providers = new Set((tokens ?? []).map((t: any) => t.provider))
+  const gadsToken = (tokens ?? []).find((t: any) => t.provider === 'google_ads')
+  const savedCustomerId = gadsToken?.extra?.customer_id ?? null
 
   return NextResponse.json({
     google_ads: providers.has('google_ads'),
     hubspot: providers.has('hubspot'),
     rd_station_marketing: providers.has('rd_station_marketing'),
+    google_ads_customer_id: savedCustomerId,
   })
 }
