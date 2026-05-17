@@ -10,6 +10,15 @@ import { DateRange } from 'react-day-picker'
 import { subDays, format } from 'date-fns'
 import ReactMarkdown from 'react-markdown'
 
+function Spinner() {
+  return (
+    <svg className="animate-spin h-3.5 w-3.5 mr-1.5 inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+    </svg>
+  )
+}
+
 type CrmProvider = 'hubspot' | 'rd_station'
 type ActiveSection = 'connections' | 'attribution' | 'advisor' | 'lab'
 type AdvisorMode = 'guardrail' | 'scale' | 'aggressive'
@@ -430,7 +439,7 @@ export default function Dashboard() {
                     disabled={loading === 'google_ads'}
                     className="bg-[var(--border-subtle)] hover:bg-[var(--border-subtle)] text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
                   >
-                    {loading === 'google_ads' ? 'Syncing…' : 'Sync'}
+                    {loading === 'google_ads' ? <><Spinner />Syncing…</> : 'Sync'}
                   </button>
                 </div>
               )}
@@ -541,7 +550,7 @@ export default function Dashboard() {
                         disabled={loading === 'crm'}
                         className="bg-[var(--border-subtle)] hover:bg-[var(--border-subtle)] text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
                       >
-                        {loading === 'crm' ? 'Syncing…' : 'Sync'}
+                        {loading === 'crm' ? <><Spinner />Syncing…</> : 'Sync'}
                       </button>
                     )}
                   </div>
@@ -592,14 +601,14 @@ export default function Dashboard() {
                     disabled={loading === 'rd_crm_save'}
                     className="bg-[var(--border-subtle)] hover:bg-[var(--border-subtle)] text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
                   >
-                    {loading === 'rd_crm_save' ? 'Saving…' : 'Save token'}
+                    {loading === 'rd_crm_save' ? <><Spinner />Saving…</> : 'Save token'}
                   </button>
                   <button
                     onClick={syncCRM}
                     disabled={loading === 'crm' || !rdCrmSaved}
                     className="bg-[#00BFA5] text-white text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
                   >
-                    {loading === 'crm' ? 'Syncing…' : 'Sync'}
+                    {loading === 'crm' ? <><Spinner />Syncing…</> : 'Sync'}
                   </button>
                 </div>
               </div>
@@ -627,9 +636,9 @@ export default function Dashboard() {
                   }
                 }}
                 disabled={loading === 'seed'}
-                className="bg-[var(--surface-raised)] hover:bg-[#222220] text-[var(--text-faint)] text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                className="bg-[var(--surface-raised)] hover:bg-[var(--border-subtle)] text-[var(--text-faint)] text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
               >
-                {loading === 'seed' ? 'Seeding…' : 'Seed test data'}
+                {loading === 'seed' ? <><Spinner />Seeding…</> : 'Seed test data'}
               </button>
             </div>
           </div>
@@ -664,7 +673,7 @@ export default function Dashboard() {
                 disabled={loading === 'seed'}
                 className="bg-[var(--border-subtle)] hover:bg-[var(--border-subtle)] text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
               >
-                {loading === 'seed' ? 'Seeding…' : 'Seed test data'}
+                {loading === 'seed' ? <><Spinner />Seeding…</> : 'Seed test data'}
               </button>
               <span className="text-[var(--text-faint)] text-xs">Inserts mock keywords + contacts + deals so you can test attribution</span>
             </div>
@@ -682,7 +691,7 @@ export default function Dashboard() {
                 disabled={loading === 'attribution'}
                 className="bg-[var(--accent)] text-[var(--accent-text)] font-semibold px-6 py-3 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
               >
-                {loading === 'attribution' ? 'Running attribution…' : 'Run attribution'}
+                {loading === 'attribution' ? <><Spinner />Running attribution…</> : 'Run attribution'}
               </button>
               <button
                 onClick={async () => {
@@ -696,7 +705,7 @@ export default function Dashboard() {
                 disabled={loading === 'digest' || keywords.length === 0}
                 className="bg-[var(--border-subtle)] hover:bg-[var(--border-subtle)] text-sm font-medium px-6 py-3 rounded-lg transition-colors disabled:opacity-40"
               >
-                {loading === 'digest' ? 'Sending…' : 'Send digest email'}
+                {loading === 'digest' ? <><Spinner />Sending…</> : 'Send digest email'}
               </button>
             </div>
 
@@ -738,7 +747,7 @@ export default function Dashboard() {
                     </thead>
                     <tbody>
                       {keywords.map((kw, i) => (
-                        <tr key={i} className="border-b border-[#1a1a18] hover:bg-white/[0.02] transition-colors">
+                        <tr key={i} className="border-b border-[var(--border)] hover:bg-[var(--surface-raised)]/50 transition-colors">
                           <td className="px-6 py-4 font-mono text-sm text-[var(--text)]">{kw.keyword}</td>
                           <td className="px-4 py-4">
                             <SourceBadge sourceType={kw.source_type} />
@@ -850,7 +859,7 @@ export default function Dashboard() {
                 disabled={loading === 'insights'}
                 className="bg-[var(--advisor-btn-bg)] hover:bg-[var(--advisor-btn-hover)] border border-[var(--accent-30)] text-[var(--accent)] font-semibold px-6 py-3 rounded-lg transition-colors disabled:opacity-50"
               >
-                {loading === 'insights' ? 'Analyzing…' : 'Generate insights'}
+                {loading === 'insights' ? <><Spinner />Analyzing…</> : 'Generate insights'}
               </button>
             </div>
 
@@ -960,7 +969,7 @@ export default function Dashboard() {
 
       {/* TOAST */}
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[#222220] text-[var(--text)] text-sm px-5 py-3 rounded-lg border border-[var(--border-subtle)] shadow-xl">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[var(--surface-raised)] text-[var(--text)] text-sm px-5 py-3 rounded-lg border border-[var(--border-subtle)] shadow-xl">
           {toast}
         </div>
       )}
@@ -1110,7 +1119,7 @@ function LabSection() {
             disabled={loading}
             className="bg-[var(--accent)] text-[var(--accent-text)] font-semibold px-6 py-3 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
           >
-            {loading ? 'Generating suggestions…' : 'Generate experiment ideas'}
+            {loading ? <><Spinner />Generating suggestions…</> : 'Generate experiment ideas'}
           </button>
         </div>
       ) : suggestions.length > 0 ? (
@@ -1150,7 +1159,7 @@ function LabSection() {
                   disabled={launching === s.id}
                   className="bg-[var(--accent)] text-[var(--accent-text)] text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
                 >
-                  {launching === s.id ? 'Launching…' : 'Launch experiment'}
+                  {launching === s.id ? <><Spinner />Launching…</> : 'Launch experiment'}
                 </button>
               </div>
             ))}
@@ -1164,7 +1173,7 @@ function LabSection() {
             disabled={loading}
             className="bg-[var(--accent)] text-[var(--accent-text)] font-semibold px-6 py-3 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
           >
-            {loading ? 'Generating…' : 'Generate more ideas'}
+            {loading ? <><Spinner />Generating…</> : 'Generate more ideas'}
           </button>
         </div>
       )}
@@ -1177,7 +1186,7 @@ function LabSection() {
       )}
 
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[#222220] text-[var(--text)] text-sm px-5 py-3 rounded-lg border border-[var(--border-subtle)] shadow-xl">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[var(--surface-raised)] text-[var(--text)] text-sm px-5 py-3 rounded-lg border border-[var(--border-subtle)] shadow-xl">
           {toast}
         </div>
       )}
