@@ -42,8 +42,8 @@ export default function Dashboard() {
   // CHANGE 1: Collapsible sidebar
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
-  // Light/dark mode toggle
-  const [lightMode, setLightMode] = useState(false)
+  // Light/dark mode toggle — light is default
+  const [lightMode, setLightMode] = useState(true)
 
   // CHANGE 3: CRM picker state
   const [selectedCrm, setSelectedCrm] = useState<SelectedCrm>(null)
@@ -53,6 +53,9 @@ export default function Dashboard() {
   const [expandedWasteKey, setExpandedWasteKey] = useState<string | null>(null)
 
   useEffect(() => {
+    const savedTheme = localStorage.getItem('juno_theme')
+    if (savedTheme !== null) setLightMode(savedTheme === 'light')
+
     const saved = localStorage.getItem('juno_crm_provider') as CrmProvider | null
     if (saved) {
       setCrmProvider(saved)
@@ -325,7 +328,7 @@ export default function Dashboard() {
             {!sidebarCollapsed && <span className="ml-2 text-xs">Collapse</span>}
           </button>
           <button
-            onClick={() => setLightMode(prev => !prev)}
+            onClick={() => setLightMode(prev => { const next = !prev; localStorage.setItem('juno_theme', next ? 'light' : 'dark'); return next })}
             title={lightMode ? 'Switch to dark mode' : 'Switch to light mode'}
             className="flex items-center justify-center w-8 h-8 rounded-lg text-[var(--text-faint)] hover:text-[var(--text-muted)] transition-colors self-center"
           >
