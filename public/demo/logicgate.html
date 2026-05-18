@@ -746,6 +746,12 @@ function animate(ts) {
 }
 
 raf = requestAnimationFrame(animate);
+
+fetch('/api/track', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ path: '/demo/logicgate' }),
+}).catch(() => {});
 </script>
 </body>
 </html>
