@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Juno — LogicGate Demo</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0c0c0b;
+    --surface: #141412;
+    --surface-raised: #1a1a18;
+    --border: #222220;
+    --border-subtle: #2a2a28;
+    --text: #f0ead2;
+    --text-muted: #8a8678;
+    --text-faint: #4a4840;
+    --sidebar-bg: #0d0d0b;
+    --accent: #c8f04a;
+    --accent-5: rgba(200,240,74,0.05);
+    --accent-10: rgba(200,240,74,0.1);
+    --accent-20: rgba(200,240,74,0.2);
+    --accent-30: rgba(200,240,74,0.3);
+    --accent-text: #0c0c0b;
+    --color-scale: #5ab87a;
+    --scale-10: rgba(90,184,122,0.1);
+    --color-monitor: #e09a30;
+    --monitor-10: rgba(224,154,48,0.1);
+    --color-cut: #e05a4a;
+    --cut-10: rgba(224,90,74,0.1);
+    --advisor-btn-bg: #1a2a0a;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    font-size: 14px;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  .mono { font-family: 'SF Mono', 'Consolas', 'Monaco', ui-monospace, monospace; }
+  .serif { font-family: 'DM Serif Display', Georgia, 'Times New Roman', serif; }
+
+  /* ── LAYOUT ── */
+  .shell { display: flex; height: 100vh; width: 100vw; }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    width: 220px; min-width: 220px;
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    position: relative; z-index: 10;
+  }
+
+  .logo {
+    padding: 24px 24px 20px;
+    font-size: 20px;
+    font-family: 'DM Serif Display', Georgia, serif;
+    color: var(--text);
+    letter-spacing: -0.3px;
+  }
+  .logo span { color: var(--accent); }
+
+  .nav { flex: 1; padding: 0 12px; display: flex; flex-direction: column; gap: 2px; }
+
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; border-radius: 8px;
+    font-size: 13px; font-weight: 500;
+    cursor: pointer; transition: all 0.15s;
+    color: var(--text-faint);
+    border: none; background: none; text-align: left; width: 100%;
+  }
+  .nav-item.active {
+    background: var(--accent-10);
+    color: var(--accent);
+  }
+  .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+  .sidebar-footer {
+    padding: 20px 16px;
+    border-top: 1px solid var(--border);
+  }
+  .sidebar-footer .email {
+    font-size: 11px; color: var(--text-faint);
+    margin-bottom: 8px; font-family: monospace;
+  }
+
+  /* ── MAIN ── */
+  .main {
+    flex: 1; padding: 32px 40px;
+    overflow: hidden; position: relative;
+  }
+
+  /* ── SCENES ── */
+  .scene {
+    position: absolute; top: 32px; left: 40px; right: 40px; bottom: 0;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.6s ease;
+  }
+  .scene.active { opacity: 1; pointer-events: auto; }
+
+  /* ── HEADINGS ── */
+  .section-title {
+    font-size: 28px; margin-bottom: 28px;
+    font-family: 'DM Serif Display', Georgia, serif;
+  }
+
+  /* ── STAT CARDS ── */
+  .stats-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin-bottom: 32px; }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px;
+  }
+  .stat-label {
+    font-size: 10px; font-family: monospace;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--text-faint); margin-bottom: 8px;
+  }
+  .stat-value { font-size: 28px; font-weight: 600; }
+  .stat-value.accent { color: var(--accent); }
+  .stat-value.cut { color: var(--color-cut); }
+
+  /* ── TABLE ── */
+  .table-wrap {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden;
+  }
+  .table-header {
+    padding: 16px 24px; border-bottom: 1px solid var(--border);
+  }
+  .table-header h2 {
+    font-size: 18px;
+    font-family: 'DM Serif Display', Georgia, serif;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    text-align: left; padding: 12px 20px;
+    font-size: 10px; font-family: monospace;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--text-faint); font-weight: 400;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 14px 20px; border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  tr:last-child td { border-bottom: none; }
+
+  .td-kw { font-family: monospace; color: var(--text); }
+  .td-spend { color: var(--text-muted); }
+  .td-deals-pos { color: var(--color-scale); font-weight: 600; }
+  .td-deals-zero { color: var(--color-cut); font-weight: 600; }
+  .td-cac-scale { color: var(--color-scale); font-weight: 500; }
+  .td-cac-monitor { color: var(--color-monitor); font-weight: 500; }
+  .td-cac-cut { color: var(--color-cut); font-weight: 500; }
+
+  .tag {
+    display: inline-block; padding: 3px 10px;
+    border-radius: 4px; font-size: 11px;
+    font-family: monospace; font-weight: 600;
+  }
+  .tag-scale { background: var(--scale-10); color: var(--color-scale); }
+  .tag-monitor { background: var(--monitor-10); color: var(--color-monitor); }
+  .tag-cut { background: var(--cut-10); color: var(--color-cut); }
+
+  /* Row animations */
+  .kw-row {
+    opacity: 0; transform: translateY(6px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+  .kw-row.visible { opacity: 1; transform: translateY(0); }
+  .kw-row.cut-pulse { animation: cutPulse 1.2s ease 2; }
+
+  @keyframes cutPulse {
+    0%   { background: transparent; }
+    40%  { background: rgba(224,90,74,0.12); }
+    100% { background: transparent; }
+  }
+
+  /* ── ADVISOR ── */
+  .advisor-panel {
+    background: var(--surface);
+    border: 1px solid var(--accent-20);
+    border-radius: 12px; padding: 24px;
+    margin-top: 24px;
+  }
+  .advisor-header {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 20px;
+  }
+  .advisor-label {
+    font-size: 10px; font-family: monospace;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--accent);
+  }
+  .advisor-divider { flex: 1; height: 1px; background: var(--border); }
+  .advisor-powered { font-size: 11px; color: var(--text-faint); }
+
+  .advisor-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin-bottom: 24px; }
+  .advisor-stat {
+    background: var(--bg); border-radius: 8px; padding: 16px;
+  }
+  .advisor-stat-label {
+    font-size: 10px; font-family: monospace;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--text-faint); margin-bottom: 4px;
+  }
+  .advisor-stat-val { font-size: 22px; font-weight: 600; color: var(--color-cut); }
+  .advisor-stat-val span { font-size: 13px; font-weight: 400; color: var(--text-faint); }
+
+  .advisor-narrative {
+    font-size: 13px; line-height: 1.7; color: var(--text);
+  }
+  .advisor-narrative strong { color: var(--accent); font-weight: 600; }
+
+  .waste-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 0; border-bottom: 1px solid var(--border);
+  }
+  .waste-item:last-child { border-bottom: none; }
+  .sev-badge {
+    font-size: 10px; font-family: monospace; font-weight: 600;
+    padding: 2px 8px; border-radius: 4px;
+    background: var(--cut-10); color: var(--color-cut);
+    flex-shrink: 0;
+  }
+  .waste-kw { font-family: monospace; font-size: 13px; color: var(--text); flex: 1; }
+  .waste-reason { font-size: 12px; color: var(--text-muted); }
+  .waste-spend { font-size: 13px; font-weight: 600; color: var(--color-cut); flex-shrink: 0; }
+
+  /* ── LAB ── */
+  .lab-intro { margin-bottom: 28px; }
+  .lab-tag {
+    font-size: 10px; font-family: monospace;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--accent); margin-bottom: 4px;
+  }
+  .lab-title { font-size: 28px; font-family: 'DM Serif Display', Georgia, serif; margin-bottom: 8px; }
+  .lab-sub { font-size: 13px; color: var(--text-muted); max-width: 480px; line-height: 1.5; }
+
+  .exp-card {
+    background: var(--surface); border: 1px solid var(--accent-20);
+    border-radius: 12px; padding: 24px;
+    opacity: 0; transform: translateY(10px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+  }
+  .exp-card.visible { opacity: 1; transform: translateY(0); }
+
+  .exp-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+  .exp-badges { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .exp-type {
+    font-size: 10px; font-family: monospace; font-weight: 600;
+    padding: 2px 8px; border-radius: 4px;
+    background: var(--cut-10); color: var(--color-cut);
+  }
+  .exp-window { font-size: 11px; font-family: monospace; color: var(--text-faint); }
+  .exp-title { font-size: 17px; font-weight: 600; color: var(--text); }
+  .exp-impact { font-size: 13px; font-weight: 600; color: var(--accent); text-align: right; }
+
+  .exp-body { display: flex; flex-direction: column; gap: 8px; font-size: 13px; margin-bottom: 16px; }
+  .exp-row { display: flex; gap: 12px; }
+  .exp-key {
+    font-size: 10px; font-family: monospace; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--text-faint); padding-top: 2px;
+    flex-shrink: 0; width: 52px;
+  }
+  .exp-val { color: var(--text); line-height: 1.5; }
+
+  .kw-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+  .kw-chip {
+    font-family: monospace; font-size: 11px;
+    background: var(--surface-raised); color: var(--text-muted);
+    padding: 2px 8px; border-radius: 4px;
+  }
+
+  .launch-btn {
+    background: var(--accent); color: var(--accent-text);
+    font-size: 13px; font-weight: 600;
+    padding: 8px 18px; border-radius: 8px;
+    border: none; cursor: pointer;
+  }
+
+  /* ── CLOSING SCENE ── */
+  .closing {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    height: 100%; text-align: center;
+    gap: 20px;
+  }
+  .closing-logo {
+    font-size: 36px;
+    font-family: 'DM Serif Display', Georgia, serif;
+    color: var(--text);
+  }
+  .closing-logo span { color: var(--accent); }
+  .closing-headline {
+    font-size: 22px; color: var(--text);
+    max-width: 520px; line-height: 1.4;
+  }
+  .closing-headline strong { color: var(--accent); }
+  .closing-sub {
+    font-size: 14px; color: var(--text-muted); max-width: 400px; line-height: 1.5;
+  }
+  .closing-url {
+    font-family: monospace; font-size: 15px;
+    color: var(--accent); letter-spacing: 0.02em;
+    border: 1px solid var(--accent-30);
+    padding: 10px 24px; border-radius: 8px;
+    background: var(--accent-5);
+    margin-top: 8px;
+  }
+  .closing-company {
+    font-size: 11px; font-family: monospace;
+    color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.1em;
+  }
+
+  /* ── SCENE INDICATOR ── */
+  .scene-dots {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 6px; z-index: 100;
+  }
+  .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--border-subtle);
+    transition: background 0.3s;
+  }
+  .dot.active { background: var(--accent); }
+
+  /* ── PROGRESS BAR ── */
+  .progress-bar {
+    position: fixed; top: 0; left: 0; height: 2px;
+    background: var(--accent); width: 0%;
+    transition: width 0.1s linear;
+    z-index: 200;
+  }
+
+  /* counter animation */
+  .count-up { display: inline-block; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<div class="shell">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="logo">jun<span>o</span></div>
+    <nav class="nav">
+      <button class="nav-item" id="nav-connections">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+          <circle cx="3" cy="8" r="2"/><circle cx="13" cy="4" r="2"/><circle cx="13" cy="12" r="2"/>
+          <path d="M5 7.2L11 4.8M5 8.8L11 11.2" stroke-linecap="round"/>
+        </svg>
+        Connections
+      </button>
+      <button class="nav-item active" id="nav-attribution">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+          <path d="M2 12L5.5 8.5L8 11L12 6L14 8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M12 4H14V6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Attribution
+      </button>
+      <button class="nav-item" id="nav-advisor">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+          <path d="M8 2C5.24 2 3 4.02 3 6.5C3 8.1 3.9 9.5 5.25 10.32V12.5L8 11.5L10.75 12.5V10.32C12.1 9.5 13 8.1 13 6.5C13 4.02 10.76 2 8 2Z" stroke-linejoin="round"/>
+          <path d="M6 6.5H10M8 5V8" stroke-linecap="round"/>
+        </svg>
+        Advisor
+      </button>
+      <button class="nav-item" id="nav-lab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 3h6M9 3v8l-4 9h14l-4-9V3M9 3H7M15 3h2"/>
+        </svg>
+        The Lab
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="email">j.totaro@logicgate.com</div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- SCENE 1: ATTRIBUTION TABLE -->
+    <div class="scene active" id="scene-attribution">
+      <h1 class="section-title">Attribution</h1>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total ad spend / mo</div>
+          <div class="stat-value">$75,400</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Deals attributed</div>
+          <div class="stat-value accent">22</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Budget to cut</div>
+          <div class="stat-value cut" id="budget-cut-val">$0</div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <div class="table-header"><h2>CAC by keyword</h2></div>
+        <table>
+          <thead>
+            <tr>
+              <th>Keyword</th>
+              <th>Spend/mo</th>
+              <th>Deals</th>
+              <th>True CAC</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="kw-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- SCENE 2: ADVISOR -->
+    <div class="scene" id="scene-advisor">
+      <h1 class="section-title">Advisor</h1>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:0;">
+        <div style="padding:14px 16px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:var(--advisor-btn-bg);border-color:var(--accent);opacity:0.4;">
+          <div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:4px;">Guardrail</div>
+          <div style="font-size:11px;color:var(--text-muted);">Protect ROI. Only cut mathematically certain waste.</div>
+        </div>
+        <div style="padding:14px 16px;border:1px solid var(--accent);border-radius:8px;cursor:pointer;background:var(--advisor-btn-bg);">
+          <div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:4px;">Scale</div>
+          <div style="font-size:11px;color:var(--text-muted);">Optimize CAC. Reallocate to proven winners.</div>
+        </div>
+        <div style="padding:14px 16px;border:1px solid var(--border);border-radius:8px;cursor:pointer;opacity:0.4;">
+          <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px;">Aggressive</div>
+          <div style="font-size:11px;color:var(--text-muted);">Scale at all costs. Cut fast, go big.</div>
+        </div>
+      </div>
+
+      <div class="advisor-panel" id="advisor-panel" style="opacity:0;transition:opacity 0.6s ease;">
+        <div class="advisor-header">
+          <div class="advisor-label">Juno Advisor</div>
+          <div class="advisor-divider"></div>
+          <div class="advisor-powered">Powered by Claude</div>
+        </div>
+
+        <div class="advisor-stats">
+          <div class="advisor-stat">
+            <div class="advisor-stat-label">Waste detected</div>
+            <div class="advisor-stat-val">$28,000<span>/mo</span></div>
+          </div>
+          <div class="advisor-stat">
+            <div class="advisor-stat-label">% of budget</div>
+            <div class="advisor-stat-val">37%</div>
+          </div>
+          <div class="advisor-stat">
+            <div class="advisor-stat-label">Keywords to cut</div>
+            <div class="advisor-stat-val">5</div>
+          </div>
+        </div>
+
+        <div class="advisor-narrative" id="advisor-text"></div>
+
+        <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--border);">
+          <div style="font-size:10px;font-family:monospace;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-faint);margin-bottom:12px;">Waste breakdown</div>
+          <div class="waste-item">
+            <span class="sev-badge">Critical</span>
+            <div style="flex:1;min-width:0;">
+              <div class="waste-kw">"audit management software"</div>
+              <div class="waste-reason">0 deals in 90 days across 847 clicks</div>
+            </div>
+            <div class="waste-spend">$9,400/mo</div>
+          </div>
+          <div class="waste-item">
+            <span class="sev-badge">Critical</span>
+            <div style="flex:1;min-width:0;">
+              <div class="waste-kw">"sox compliance software"</div>
+              <div class="waste-reason">0 pipeline entries. High volume, zero conversion</div>
+            </div>
+            <div class="waste-spend">$6,800/mo</div>
+          </div>
+          <div class="waste-item">
+            <span class="sev-badge">Critical</span>
+            <div style="flex:1;min-width:0;">
+              <div class="waste-kw">"vendor risk management"</div>
+              <div class="waste-reason">0 deals. Likely attracting non-ICP searchers</div>
+            </div>
+            <div class="waste-spend">$5,600/mo</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCENE 3: LAB -->
+    <div class="scene" id="scene-lab">
+      <div class="lab-intro">
+        <div class="lab-tag">The Lab</div>
+        <h1 class="lab-title">The Lab for Demand Gen</h1>
+        <p class="lab-sub">Stop guessing if your changes are working. Every major tactical shift becomes a Juno Hypothesis — and the CRM data proves you right or saves you money.</p>
+      </div>
+
+      <div class="exp-card" id="exp-card">
+        <div class="exp-top">
+          <div>
+            <div class="exp-badges">
+              <span class="exp-type">Cut waste</span>
+              <span class="exp-window">30 days</span>
+            </div>
+            <div class="exp-title">Pause bottom-5 zero-pipeline keywords, reallocate to "grc software" + "risk management software"</div>
+          </div>
+          <div class="exp-impact">Save $28,000/mo</div>
+        </div>
+        <div class="exp-body">
+          <div class="exp-row">
+            <span class="exp-key">If</span>
+            <span class="exp-val">We pause audit management software, sox compliance, vendor risk management, policy management, and risk control matrix</span>
+          </div>
+          <div class="exp-row">
+            <span class="exp-key">Then</span>
+            <span class="exp-val">CAC on remaining keywords drops below $1,600 and pipeline from paid increases by 20%+</span>
+          </div>
+          <div class="exp-row">
+            <span class="exp-key">Because</span>
+            <span class="exp-val" style="color:var(--text-muted);">These 5 keywords consumed $28k/mo with 0 CRM entries. Reallocating to proven converters compounds the winner.</span>
+          </div>
+        </div>
+        <div class="kw-chips">
+          <span class="kw-chip">"audit management software"</span>
+          <span class="kw-chip">"sox compliance software"</span>
+          <span class="kw-chip">"vendor risk management"</span>
+          <span class="kw-chip">"policy management"</span>
+          <span class="kw-chip">"risk control matrix"</span>
+        </div>
+        <button class="launch-btn">Launch experiment</button>
+      </div>
+    </div>
+
+    <!-- SCENE 4: CLOSING -->
+    <div class="scene" id="scene-closing">
+      <div class="closing">
+        <div class="closing-company">LogicGate · Google Ads · 2,471 keywords · $75,400/mo</div>
+        <div class="closing-logo">jun<span>o</span></div>
+        <div class="closing-headline">
+          <strong>5 keywords</strong> are driving 73% of your closed deals.<br>
+          The other 2,466? Now you know exactly what to do.
+        </div>
+        <div class="closing-sub">
+          Connects Google Ads to your CRM. Shows keyword-level CAC. Built by ex-Google SWE + Stanford Stats + ex-Jefferies IB.
+        </div>
+        <div class="closing-url">tryjunoapp.com</div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- SCENE DOTS -->
+<div class="scene-dots">
+  <div class="dot active" id="dot-0"></div>
+  <div class="dot" id="dot-1"></div>
+  <div class="dot" id="dot-2"></div>
+  <div class="dot" id="dot-3"></div>
+</div>
+
+<script>
+const KEYWORDS = [
+  { kw: 'risk management software',  spend: 8400,  deals: 6, cac: 1400,  action: 'scale' },
+  { kw: 'grc software',              spend: 6200,  deals: 4, cac: 1550,  action: 'scale' },
+  { kw: 'compliance management',     spend: 5100,  deals: 3, cac: 1700,  action: 'scale' },
+  { kw: 'logicgate alternative',     spend: 2100,  deals: 3, cac: 700,   action: 'scale' },
+  { kw: 'enterprise risk management',spend: 7200,  deals: 2, cac: 3600,  action: 'monitor' },
+  { kw: 'risk assessment tool',      spend: 4800,  deals: 1, cac: 4800,  action: 'monitor' },
+  { kw: 'it risk management',        spend: 3800,  deals: 1, cac: 3800,  action: 'monitor' },
+  { kw: 'audit management software', spend: 9400,  deals: 0, cac: null,  action: 'cut' },
+  { kw: 'sox compliance software',   spend: 6800,  deals: 0, cac: null,  action: 'cut' },
+  { kw: 'vendor risk management',    spend: 5600,  deals: 0, cac: null,  action: 'cut' },
+  { kw: 'policy management',         spend: 4200,  deals: 0, cac: null,  action: 'cut' },
+  { kw: 'risk control matrix',       spend: 2000,  deals: 0, cac: null,  action: 'cut' },
+];
+
+const BUDGET_TO_CUT = KEYWORDS.filter(k => k.action === 'cut').reduce((s,k) => s+k.spend, 0);
+
+const NARRATIVE = `LogicGate's top 4 keywords (<strong>"risk management software," "grc software," "compliance management,"</strong> and <strong>"logicgate alternative"</strong>) generated 16 of your 22 closed deals at an average CAC of <strong>$1,337</strong> — well below your likely LTV threshold.\n\nThe bottom 5 keywords consumed <strong>$28,000/mo</strong> with zero CRM entries in 90 days. Pausing these and reallocating budget to your proven converters is projected to reduce blended CAC from $3,427 to under $1,600 within 30 days.`;
+
+// Build table
+const tbody = document.getElementById('kw-tbody');
+KEYWORDS.forEach((k, i) => {
+  const tr = document.createElement('tr');
+  tr.className = 'kw-row';
+  tr.id = `row-${i}`;
+  if (k.action === 'cut') tr.classList.add('cut-row');
+
+  const cacCell = k.cac !== null
+    ? `<td class="td-cac-${k.action}">$${k.cac.toLocaleString()}</td>`
+    : `<td class="td-cac-cut">—</td>`;
+
+  tr.innerHTML = `
+    <td class="td-kw">"${k.kw}"</td>
+    <td class="td-spend">$${k.spend.toLocaleString()}</td>
+    <td class="${k.deals > 0 ? 'td-deals-pos' : 'td-deals-zero'}">${k.deals}</td>
+    ${cacCell}
+    <td><span class="tag tag-${k.action}">${k.action === 'scale' ? 'Scale' : k.action === 'monitor' ? 'Monitor' : 'Cut now'}</span></td>
+  `;
+  tbody.appendChild(tr);
+});
+
+// Nav switching
+const navMap = {
+  'nav-connections': null,
+  'nav-attribution': 'scene-attribution',
+  'nav-advisor': 'scene-advisor',
+  'nav-lab': 'scene-lab',
+};
+
+// Scene management
+let currentScene = 0;
+const scenes = ['scene-attribution', 'scene-advisor', 'scene-lab', 'scene-closing'];
+const navIds = ['nav-attribution', 'nav-advisor', 'nav-lab', null];
+
+function setScene(idx) {
+  scenes.forEach((s, i) => {
+    const el = document.getElementById(s);
+    if (el) el.classList.toggle('active', i === idx);
+  });
+  document.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('active', i === idx));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  if (navIds[idx]) document.getElementById(navIds[idx])?.classList.add('active');
+  currentScene = idx;
+}
+
+// ── TIMING SEQUENCE ──
+// Scene 0 (Attribution): 0–18s
+//   0–1s: scene appears
+//   1–9s: rows load one by one
+//   9–13s: cut rows pulse + budget counter
+//   13–18s: hold
+// Scene 1 (Advisor): 18–32s
+//   18–19s: transition
+//   19–22s: advisor panel fades in
+//   22–32s: narrative types + waste items
+// Scene 2 (Lab): 32–42s
+//   32–33s: transition
+//   33–42s: exp card appears
+// Scene 3 (Closing): 42–52s
+// Total: 52s then loop
+
+const TOTAL_MS = 52000;
+let startTime = null;
+let raf = null;
+
+function animate(ts) {
+  if (!startTime) startTime = ts;
+  const t = (ts - startTime) % TOTAL_MS;
+  const pct = (t / TOTAL_MS) * 100;
+  document.getElementById('progress').style.width = pct + '%';
+
+  // Scene 0: 0-18s
+  if (t < 18000 && currentScene !== 0) setScene(0);
+
+  // Row animation: stagger from 1000ms
+  if (t >= 1000 && t < 9000) {
+    const rowIdx = Math.floor((t - 1000) / 667);
+    for (let i = 0; i <= Math.min(rowIdx, KEYWORDS.length - 1); i++) {
+      document.getElementById(`row-${i}`)?.classList.add('visible');
+    }
+  }
+  // All rows visible
+  if (t >= 9000 && t < 18000) {
+    KEYWORDS.forEach((_, i) => document.getElementById(`row-${i}`)?.classList.add('visible'));
+  }
+
+  // Budget counter: 9000-12000
+  if (t >= 9000 && t < 12000) {
+    const progress = (t - 9000) / 3000;
+    const val = Math.floor(BUDGET_TO_CUT * progress);
+    document.getElementById('budget-cut-val').textContent = '$' + val.toLocaleString();
+  }
+  if (t >= 12000 && t < 18000) {
+    document.getElementById('budget-cut-val').textContent = '$28,000';
+  }
+
+  // Cut pulse: 9500-13000
+  if (t >= 9500 && t < 9600) {
+    document.querySelectorAll('.cut-row').forEach(r => {
+      r.classList.remove('cut-pulse');
+      void r.offsetWidth; // reflow
+      r.classList.add('cut-pulse');
+    });
+  }
+
+  // Scene 1: 18-32s
+  if (t >= 18000 && t < 32000 && currentScene !== 1) {
+    setScene(1);
+    // Reset row visibility for next loop
+    KEYWORDS.forEach((_, i) => {
+      const row = document.getElementById(`row-${i}`);
+      if (row) { row.classList.remove('visible'); row.classList.remove('cut-pulse'); }
+    });
+    document.getElementById('budget-cut-val').textContent = '$0';
+    document.getElementById('advisor-text').innerHTML = '';
+    document.getElementById('advisor-panel').style.opacity = '0';
+    document.getElementById('exp-card').classList.remove('visible');
+  }
+
+  // Advisor panel fade: 19500
+  if (t >= 19500 && t < 32000) {
+    document.getElementById('advisor-panel').style.opacity = '1';
+  }
+
+  // Narrative type: 21000-29000
+  if (t >= 21000 && t < 29000) {
+    const lines = NARRATIVE.split('\n\n');
+    const combined = lines.join('<br><br>');
+    const chars = combined.length;
+    const typed = Math.floor(((t - 21000) / 8000) * chars);
+    document.getElementById('advisor-text').innerHTML = combined.substring(0, typed);
+  }
+  if (t >= 29000 && t < 32000) {
+    document.getElementById('advisor-text').innerHTML = NARRATIVE.split('\n\n').join('<br><br>');
+  }
+
+  // Scene 2: 32-42s
+  if (t >= 32000 && t < 42000 && currentScene !== 2) {
+    setScene(2);
+  }
+  if (t >= 33000 && t < 42000) {
+    document.getElementById('exp-card').classList.add('visible');
+  }
+
+  // Scene 3: 42-52s
+  if (t >= 42000 && currentScene !== 3) {
+    setScene(3);
+  }
+
+  raf = requestAnimationFrame(animate);
+}
+
+raf = requestAnimationFrame(animate);
+</script>
+</body>
+</html>
