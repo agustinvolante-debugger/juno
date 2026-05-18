@@ -4,6 +4,7 @@ import GoogleProvider from 'next-auth/providers/google'
 const ALLOWED_EMAILS = [
   'agustinvolantesilva@gmail.com',
   'avolantesilva@gmail.com',
+  'agustin.1kh@gmail.com',
   'juanpablo.selame@gmail.com',
   'cvolantesilva@gmail.com',
   'martin.gajardo@maquinalista.com',
