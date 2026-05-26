@@ -77,13 +77,15 @@
     text-align: left; width: 100%; white-space: nowrap; overflow: hidden;
     transition: all 0.15s;
   }
-  /* FIX: collapsed icons must be clearly visible */
-  .sidebar.collapsed .nav-item { padding: 10px; justify-content: center; color: var(--text); }
   .nav-item:hover { color: var(--text-muted); background: var(--accent-5); }
   .nav-item.active { background: var(--accent-10); color: var(--accent); }
   .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; }
   .nav-label { transition: opacity 0.2s ease; }
   .sidebar.collapsed .nav-label { opacity: 0; pointer-events: none; }
+  /* FIX: collapsed icons — force full text color, larger icon */
+  .sidebar.collapsed .nav-item { color: var(--text) !important; }
+  .sidebar.collapsed .nav-item.active { color: var(--accent) !important; }
+  .sidebar.collapsed .nav-item svg { width: 20px; height: 20px; }
 
   .sidebar-footer {
     padding: 16px; border-top: 1px solid var(--border);
@@ -387,7 +389,7 @@
     </div>
 
     <!-- SCENE 2: ADVISOR -->
-    <div class="scene" id="scene-advisor">
+    <div class="scene" id="scene-advisor" style="overflow-y:auto;">
       <h1 class="section-title">Advisor</h1>
       <div class="advisor-modes">
         <button class="advisor-mode-btn" id="mode-btn-guardrail" data-mode="guardrail">
@@ -497,7 +499,7 @@
           The other 4,538? Now you know exactly what to do.
         </div>
         <div class="closing-sub">Connects Google Ads to your CRM. Shows keyword-level CAC. Built by ex-Google SWE + Stanford Stats + ex-Jefferies IB.</div>
-        <div class="closing-url">tryjunoapp.com</div>
+        <a class="closing-url" href="https://www.tryjunoapp.com/" target="_blank">tryjunoapp.com</a>
         <button class="explore-btn" id="explore-btn">Explore the dashboard →</button>
       </div>
     </div>
@@ -586,7 +588,7 @@ const CALLOUTS = [
   { id: 'cb2', start: 9800,  end: 13500, text: '$74,800/mo confirmed — 43% of budget attached to zero pipeline' },
   { id: 'cb3', start: 14000, end: 17200, text: 'Scale · Monitor · Cut — one CRM-backed action per keyword' },
   { id: 'cb4', start: 19500, end: 23000, text: 'Advisor cross-references every keyword against your actual closed CRM deals' },
-  { id: 'cb5', start: 24500, end: 29500, text: 'The only tool connecting keyword spend to closed revenue — this is the moat' },
+  { id: 'cb5', start: 24500, end: 29500, text: 'The only tool connecting keyword spend to closed revenue' },
   { id: 'cb6', start: 33500, end: 37500, text: 'Every Juno insight becomes a testable hypothesis backed by CRM deal data' },
   { id: 'cb7', start: 39000, end: 43500, text: 'Fires directly to Google Ads — pause keywords or adjust bids without leaving Juno' },
 ];
