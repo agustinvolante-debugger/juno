@@ -4,355 +4,363 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Juno — Orca Security Demo</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,300&family=DM+Serif+Display&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&display=swap');
-
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg: #0c0c0b;
-    --surface: #141412;
-    --surface-raised: #1a1a18;
-    --border: #222220;
-    --border-subtle: #2a2a28;
-    --text: #f0ead2;
-    --text-muted: #8a8678;
-    --text-faint: #4a4840;
+    --bg: #f5f3ee; --surface: #ffffff; --surface-raised: #ece9e2;
+    --border: #dedad0; --border-subtle: #e8e5dc;
+    --text: #1a1918; --text-muted: #5a5850; --text-faint: #9a9890;
+    --sidebar-bg: #ece9e2;
+    --accent: #3a6b18; --accent-5: rgba(58,107,24,0.05); --accent-10: rgba(58,107,24,0.08);
+    --accent-20: rgba(58,107,24,0.15); --accent-30: rgba(58,107,24,0.25); --accent-text: #ffffff;
+    --color-scale: #1e7a42; --scale-10: rgba(30,122,66,0.1);
+    --color-monitor: #b36a00; --monitor-10: rgba(179,106,0,0.1);
+    --color-cut: #c73a2a; --cut-10: rgba(199,58,42,0.1);
+    --advisor-btn-bg: #f0f5eb; --row-hover: rgba(58,107,24,0.04);
+    --callout-bg: rgba(26,25,24,0.90); --callout-text: #f5f3ee;
+    --progress-color: #3a6b18;
+  }
+  body.dark {
+    --bg: #0c0c0b; --surface: #141412; --surface-raised: #1a1a18;
+    --border: #222220; --border-subtle: #2a2a28;
+    --text: #f0ead2; --text-muted: #8a8678; --text-faint: #4a4840;
     --sidebar-bg: #0d0d0b;
-    --accent: #c8f04a;
-    --accent-5: rgba(200,240,74,0.05);
-    --accent-10: rgba(200,240,74,0.1);
-    --accent-20: rgba(200,240,74,0.2);
-    --accent-30: rgba(200,240,74,0.3);
-    --accent-text: #0c0c0b;
-    --color-scale: #5ab87a;
-    --scale-10: rgba(90,184,122,0.1);
-    --color-monitor: #e09a30;
-    --monitor-10: rgba(224,154,48,0.1);
-    --color-cut: #e05a4a;
-    --cut-10: rgba(224,90,74,0.1);
-    --advisor-btn-bg: #1a2a0a;
+    --accent: #c8f04a; --accent-5: rgba(200,240,74,0.05); --accent-10: rgba(200,240,74,0.1);
+    --accent-20: rgba(200,240,74,0.2); --accent-30: rgba(200,240,74,0.3); --accent-text: #0c0c0b;
+    --color-scale: #5ab87a; --scale-10: rgba(90,184,122,0.1);
+    --color-monitor: #e09a30; --monitor-10: rgba(224,154,48,0.1);
+    --color-cut: #e05a4a; --cut-10: rgba(224,90,74,0.1);
+    --advisor-btn-bg: #1a2a0a; --row-hover: rgba(200,240,74,0.04);
+    --callout-bg: rgba(200,240,74,0.93); --callout-text: #0c0c0b;
+    --progress-color: #c8f04a;
   }
 
   body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
-    font-size: 14px;
-    overflow: hidden;
-    height: 100vh;
-    width: 100vw;
+    background: var(--bg); color: var(--text);
+    font-family: 'DM Sans', -apple-system, sans-serif; font-size: 14px;
+    overflow: hidden; height: 100vh; width: 100vw;
+    transition: background 0.35s ease, color 0.35s ease;
   }
-
-  .mono { font-family: 'SF Mono', 'Consolas', 'Monaco', ui-monospace, monospace; }
-  .serif { font-family: 'DM Serif Display', Georgia, 'Times New Roman', serif; }
 
   /* LAYOUT */
   .shell { display: flex; height: 100vh; width: 100vw; }
 
   /* SIDEBAR */
   .sidebar {
-    width: 220px; min-width: 220px;
-    background: var(--sidebar-bg);
-    border-right: 1px solid var(--border);
-    display: flex; flex-direction: column;
-    position: relative; z-index: 10;
+    width: 220px; min-width: 220px; background: var(--sidebar-bg);
+    border-right: 1px solid var(--border); display: flex; flex-direction: column;
+    position: relative; z-index: 10; overflow: hidden;
+    transition: width 0.25s ease, min-width 0.25s ease, background 0.35s ease, border-color 0.35s ease;
   }
+  .sidebar.collapsed { width: 52px; min-width: 52px; }
+
   .logo {
-    padding: 24px 24px 20px;
-    font-size: 20px;
+    padding: 24px 24px 20px; font-size: 20px;
     font-family: 'DM Serif Display', Georgia, serif;
-    color: var(--text);
-    letter-spacing: -0.3px;
+    color: var(--text); letter-spacing: -0.3px; white-space: nowrap;
+    transition: padding 0.25s ease, color 0.35s ease;
   }
-  .logo span { color: var(--accent); }
-  .nav { flex: 1; padding: 0 12px; display: flex; flex-direction: column; gap: 2px; }
+  .sidebar.collapsed .logo { padding: 24px 0 20px; text-align: center; }
+  .logo span { color: var(--accent); transition: color 0.35s ease; }
+  .logo-full { transition: opacity 0.2s ease; }
+  .sidebar.collapsed .logo-full { opacity: 0; pointer-events: none; }
+
+  .nav { flex: 1; padding: 0 12px; display: flex; flex-direction: column; gap: 2px; transition: padding 0.25s ease; }
+  .sidebar.collapsed .nav { padding: 0 6px; }
+
   .nav-item {
-    display: flex; align-items: center; gap: 10px;
-    padding: 10px 12px; border-radius: 8px;
-    font-size: 13px; font-weight: 500;
-    cursor: pointer; transition: all 0.15s;
-    color: var(--text-faint);
-    border: none; background: none; text-align: left; width: 100%;
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px;
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    color: var(--text-faint); border: none; background: none;
+    text-align: left; width: 100%; white-space: nowrap; overflow: hidden;
+    transition: all 0.15s;
   }
+  /* FIX: collapsed icons must be clearly visible */
+  .sidebar.collapsed .nav-item { padding: 10px; justify-content: center; color: var(--text); }
+  .nav-item:hover { color: var(--text-muted); background: var(--accent-5); }
   .nav-item.active { background: var(--accent-10); color: var(--accent); }
   .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+  .nav-label { transition: opacity 0.2s ease; }
+  .sidebar.collapsed .nav-label { opacity: 0; pointer-events: none; }
+
   .sidebar-footer {
-    padding: 20px 16px;
-    border-top: 1px solid var(--border);
+    padding: 16px; border-top: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 10px;
+    transition: border-color 0.35s ease;
   }
   .sidebar-footer .email {
     font-size: 11px; color: var(--text-faint);
-    margin-bottom: 8px; font-family: monospace;
+    font-family: 'DM Mono', monospace; white-space: nowrap; overflow: hidden;
+    transition: opacity 0.2s ease, color 0.35s ease;
   }
+  .sidebar.collapsed .email { opacity: 0; }
+  .footer-actions { display: flex; align-items: center; justify-content: space-between; }
+  .sidebar.collapsed .footer-actions { justify-content: center; flex-direction: column; gap: 8px; }
+
+  .theme-toggle, .collapse-toggle {
+    display: flex; align-items: center; gap: 6px; background: none; border: none;
+    cursor: pointer; padding: 4px 6px; border-radius: 6px; font-size: 11px;
+    color: var(--text-faint); transition: color 0.15s, background 0.15s;
+  }
+  .theme-toggle:hover, .collapse-toggle:hover { color: var(--text-muted); background: var(--accent-5); }
+  .theme-toggle svg, .collapse-toggle svg { width: 14px; height: 14px; flex-shrink: 0; }
+  .toggle-label, .collapse-label { transition: opacity 0.2s ease; white-space: nowrap; }
+  .sidebar.collapsed .toggle-label, .sidebar.collapsed .collapse-label { opacity: 0; width: 0; overflow: hidden; }
+  .collapse-toggle svg { transition: transform 0.25s ease; }
+  .sidebar.collapsed .collapse-toggle svg { transform: rotate(180deg); }
 
   /* MAIN */
-  .main { flex: 1; padding: 32px 40px; overflow: hidden; position: relative; }
+  .main { flex: 1; padding: 32px 40px; overflow: hidden; position: relative; transition: background 0.35s ease; }
 
   /* SCENES */
-  .scene {
-    position: absolute; top: 32px; left: 40px; right: 40px; bottom: 0;
-    opacity: 0; pointer-events: none;
-    transition: opacity 0.6s ease;
-  }
+  .scene { position: absolute; top: 32px; left: 40px; right: 40px; bottom: 0; opacity: 0; pointer-events: none; transition: opacity 0.6s ease; }
   .scene.active { opacity: 1; pointer-events: auto; }
 
-  /* HEADINGS */
-  .section-title {
-    font-size: 28px; margin-bottom: 28px;
-    font-family: 'DM Serif Display', Georgia, serif;
-  }
+  .section-title { font-size: 28px; margin-bottom: 28px; font-family: 'DM Serif Display', Georgia, serif; transition: color 0.35s ease; }
 
   /* STAT CARDS */
   .stats-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin-bottom: 32px; }
-  .stat-card {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 12px; padding: 20px;
-  }
-  .stat-label {
-    font-size: 10px; font-family: monospace;
-    text-transform: uppercase; letter-spacing: 0.1em;
-    color: var(--text-faint); margin-bottom: 8px;
-  }
-  .stat-value { font-size: 28px; font-weight: 600; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; transition: background 0.35s ease, border-color 0.35s ease; }
+  .stat-label { font-size: 10px; font-family: 'DM Mono', monospace; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-faint); margin-bottom: 8px; transition: color 0.35s ease; }
+  .stat-value { font-size: 28px; font-weight: 600; transition: color 0.35s ease; }
   .stat-value.accent { color: var(--accent); }
   .stat-value.cut { color: var(--color-cut); }
 
   /* TABLE */
-  .table-wrap {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 12px; overflow: hidden;
-  }
-  .table-header { padding: 16px 24px; border-bottom: 1px solid var(--border); }
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; transition: background 0.35s ease, border-color 0.35s ease; }
+  .table-header { padding: 16px 24px; border-bottom: 1px solid var(--border); transition: border-color 0.35s ease; }
   .table-header h2 { font-size: 18px; font-family: 'DM Serif Display', Georgia, serif; }
   table { width: 100%; border-collapse: collapse; }
-  th {
-    text-align: left; padding: 12px 20px;
-    font-size: 10px; font-family: monospace;
-    text-transform: uppercase; letter-spacing: 0.1em;
-    color: var(--text-faint); font-weight: 400;
-    border-bottom: 1px solid var(--border);
-  }
-  td { padding: 14px 20px; border-bottom: 1px solid var(--border); font-size: 13px; }
-  tr:last-child td { border-bottom: none; }
+  th { text-align: left; padding: 12px 20px; font-size: 10px; font-family: 'DM Mono', monospace; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-faint); font-weight: 400; border-bottom: 1px solid var(--border); transition: color 0.35s ease, border-color 0.35s ease; }
+  td { padding: 14px 20px; border-bottom: 1px solid var(--border); font-size: 13px; transition: border-color 0.35s ease; }
 
-  .td-kw { font-family: monospace; color: var(--text); }
-  .td-spend { color: var(--text-muted); }
-  .td-deals-pos { color: var(--color-scale); font-weight: 600; }
-  .td-deals-zero { color: var(--color-cut); font-weight: 600; }
-  .td-cac-scale { color: var(--color-scale); font-weight: 500; }
-  .td-cac-monitor { color: var(--color-monitor); font-weight: 500; }
-  .td-cac-cut { color: var(--color-cut); font-weight: 500; }
+  .kw-row { opacity: 0; transform: translateY(6px); cursor: default; transition: opacity 0.3s ease, transform 0.3s ease, background 0.2s ease; }
+  .kw-row.visible { opacity: 1; transform: translateY(0); }
+  .kw-row.interactive { cursor: pointer; }
+  .kw-row.interactive:hover td { background: var(--row-hover); }
+  .kw-row.selected td { background: var(--accent-5) !important; }
+  .kw-row.cut-pulse { animation: cutPulse 1.2s ease 2; }
+  @keyframes cutPulse { 0% { background: transparent; } 40% { background: rgba(199,58,42,0.10); } 100% { background: transparent; } }
+  body.dark .kw-row.cut-pulse { animation: cutPulseDark 1.2s ease 2; }
+  @keyframes cutPulseDark { 0% { background: transparent; } 40% { background: rgba(224,90,74,0.12); } 100% { background: transparent; } }
 
-  .tag {
-    display: inline-block; padding: 3px 10px;
-    border-radius: 4px; font-size: 11px;
-    font-family: monospace; font-weight: 600;
-  }
+  .td-kw { font-family: 'DM Mono', monospace; color: var(--text); transition: color 0.35s ease; }
+  .td-spend { color: var(--text-muted); transition: color 0.35s ease; }
+  .td-deals-pos { color: var(--color-scale); font-weight: 600; transition: color 0.35s ease; }
+  .td-deals-zero { color: var(--color-cut); font-weight: 600; transition: color 0.35s ease; }
+  .td-cac-scale { color: var(--color-scale); font-weight: 500; transition: color 0.35s ease; }
+  .td-cac-monitor { color: var(--color-monitor); font-weight: 500; transition: color 0.35s ease; }
+  .td-cac-cut { color: var(--color-cut); font-weight: 500; transition: color 0.35s ease; }
+
+  .tag { display: inline-block; padding: 3px 10px; border-radius: 4px; font-size: 11px; font-family: 'DM Mono', monospace; font-weight: 600; transition: background 0.35s ease, color 0.35s ease; }
   .tag-scale { background: var(--scale-10); color: var(--color-scale); }
   .tag-monitor { background: var(--monitor-10); color: var(--color-monitor); }
   .tag-cut { background: var(--cut-10); color: var(--color-cut); }
 
-  .kw-row {
-    opacity: 0; transform: translateY(6px);
-    transition: opacity 0.3s ease, transform 0.3s ease;
-  }
-  .kw-row.visible { opacity: 1; transform: translateY(0); }
-  .kw-row.cut-pulse { animation: cutPulse 1.2s ease 2; }
-
-  @keyframes cutPulse {
-    0%   { background: transparent; }
-    40%  { background: rgba(224,90,74,0.12); }
-    100% { background: transparent; }
-  }
+  /* ACCORDION DETAIL ROW */
+  .kw-detail-row td { padding: 0; border-bottom: none; }
+  .kw-detail-row.open td { border-bottom: 1px solid var(--border); }
+  .kw-detail-inner { max-height: 0; overflow: hidden; transition: max-height 0.35s ease; background: var(--accent-5); }
+  .kw-detail-row.open .kw-detail-inner { max-height: 320px; }
+  .kw-detail-content { padding: 16px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .kw-mini-stats { grid-column: 1 / -1; display: flex; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+  .kw-mini-stat { background: var(--surface); border-radius: 8px; padding: 10px 14px; min-width: 84px; transition: background 0.35s ease; }
+  .kw-mini-label { font-size: 9px; font-family: 'DM Mono', monospace; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-faint); margin-bottom: 3px; transition: color 0.35s ease; }
+  .kw-mini-val { font-size: 14px; font-weight: 600; transition: color 0.35s ease; }
+  .kw-col { display: flex; flex-direction: column; gap: 4px; }
+  .kw-col-label { font-size: 9px; font-family: 'DM Mono', monospace; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-faint); transition: color 0.35s ease; }
+  .kw-col-text { font-size: 12px; line-height: 1.55; color: var(--text-muted); transition: color 0.35s ease; }
+  .kw-chips-row { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+  .kw-chip-neg { font-family: 'DM Mono', monospace; font-size: 11px; padding: 2px 8px; border-radius: 4px; background: var(--cut-10); color: var(--color-cut); transition: background 0.35s ease, color 0.35s ease; }
+  .kw-chip-exp { font-family: 'DM Mono', monospace; font-size: 11px; padding: 2px 8px; border-radius: 4px; background: var(--scale-10); color: var(--color-scale); transition: background 0.35s ease, color 0.35s ease; }
 
   /* ADVISOR */
-  .advisor-panel {
-    background: var(--surface);
-    border: 1px solid var(--accent-20);
-    border-radius: 12px; padding: 24px;
-    margin-top: 24px;
+  .advisor-modes { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 0; }
+  .advisor-mode-btn {
+    padding: 14px 16px; border-radius: 8px; cursor: pointer; text-align: left;
+    font-family: 'DM Sans', sans-serif; border: 1px solid var(--border);
+    background: var(--surface); transition: all 0.2s ease;
   }
-  .advisor-header {
-    display: flex; align-items: center; gap: 12px;
-    margin-bottom: 20px;
-  }
-  .advisor-label {
-    font-size: 10px; font-family: monospace;
-    text-transform: uppercase; letter-spacing: 0.1em;
-    color: var(--accent);
-  }
-  .advisor-divider { flex: 1; height: 1px; background: var(--border); }
-  .advisor-powered { font-size: 11px; color: var(--text-faint); }
+  .advisor-mode-btn:hover { border-color: var(--accent-30); background: var(--advisor-btn-bg); }
+  .advisor-mode-btn.active { border-color: var(--accent); background: var(--advisor-btn-bg); }
+  .advisor-mode-name { font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; transition: color 0.2s; }
+  .advisor-mode-btn.active .advisor-mode-name { color: var(--accent); }
+  .advisor-mode-desc { font-size: 11px; color: var(--text-faint); line-height: 1.4; transition: color 0.35s ease; }
 
+  .advisor-panel { background: var(--surface); border: 1px solid var(--accent-20); border-radius: 12px; padding: 24px; margin-top: 16px; transition: background 0.35s ease, border-color 0.35s ease; }
+  .advisor-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .advisor-label { font-size: 10px; font-family: 'DM Mono', monospace; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); transition: color 0.35s ease; }
+  .advisor-divider { flex: 1; height: 1px; background: var(--border); transition: background 0.35s ease; }
+  .advisor-powered { font-size: 11px; color: var(--text-faint); transition: color 0.35s ease; }
   .advisor-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin-bottom: 24px; }
-  .advisor-stat { background: var(--bg); border-radius: 8px; padding: 16px; }
-  .advisor-stat-label {
-    font-size: 10px; font-family: monospace;
-    text-transform: uppercase; letter-spacing: 0.1em;
-    color: var(--text-faint); margin-bottom: 4px;
-  }
-  .advisor-stat-val { font-size: 22px; font-weight: 600; color: var(--color-cut); }
+  .advisor-stat { background: var(--bg); border-radius: 8px; padding: 16px; transition: background 0.35s ease; }
+  .advisor-stat-label { font-size: 10px; font-family: 'DM Mono', monospace; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-faint); margin-bottom: 4px; transition: color 0.35s ease; }
+  .advisor-stat-val { font-size: 22px; font-weight: 600; color: var(--color-cut); transition: color 0.35s ease; }
   .advisor-stat-val span { font-size: 13px; font-weight: 400; color: var(--text-faint); }
-
-  .advisor-narrative { font-size: 13px; line-height: 1.7; color: var(--text); }
+  .advisor-narrative { font-size: 13px; line-height: 1.7; color: var(--text); transition: color 0.35s ease; }
   .advisor-narrative strong { color: var(--accent); font-weight: 600; }
-
-  .waste-item {
-    display: flex; align-items: center; gap: 12px;
-    padding: 12px 0; border-bottom: 1px solid var(--border);
-  }
+  .waste-section { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); transition: border-color 0.35s ease; }
+  .waste-section-label { font-size: 10px; font-family: 'DM Mono', monospace; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-faint); margin-bottom: 12px; transition: color 0.35s ease; }
+  .waste-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); transition: border-color 0.35s ease; }
   .waste-item:last-child { border-bottom: none; }
-  .sev-badge {
-    font-size: 10px; font-family: monospace; font-weight: 600;
-    padding: 2px 8px; border-radius: 4px;
-    background: var(--cut-10); color: var(--color-cut); flex-shrink: 0;
-  }
-  .waste-kw { font-family: monospace; font-size: 13px; color: var(--text); flex: 1; }
-  .waste-reason { font-size: 12px; color: var(--text-muted); }
-  .waste-spend { font-size: 13px; font-weight: 600; color: var(--color-cut); flex-shrink: 0; }
+  .sev-badge { font-size: 10px; font-family: 'DM Mono', monospace; font-weight: 600; padding: 2px 8px; border-radius: 4px; background: var(--cut-10); color: var(--color-cut); flex-shrink: 0; transition: background 0.35s ease, color 0.35s ease; }
+  .sev-badge.amber { background: var(--monitor-10); color: var(--color-monitor); }
+  .waste-kw { font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text); flex: 1; transition: color 0.35s ease; }
+  .waste-reason { font-size: 12px; color: var(--text-muted); transition: color 0.35s ease; }
+  .waste-spend { font-size: 13px; font-weight: 600; color: var(--color-cut); flex-shrink: 0; transition: color 0.35s ease; }
 
   /* LAB */
-  .lab-intro { margin-bottom: 28px; }
-  .lab-tag {
-    font-size: 10px; font-family: monospace;
-    text-transform: uppercase; letter-spacing: 0.1em;
-    color: var(--accent); margin-bottom: 4px;
-  }
+  .lab-intro { margin-bottom: 20px; }
+  .lab-tag { font-size: 10px; font-family: 'DM Mono', monospace; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); margin-bottom: 4px; transition: color 0.35s ease; }
   .lab-title { font-size: 28px; font-family: 'DM Serif Display', Georgia, serif; margin-bottom: 8px; }
-  .lab-sub { font-size: 13px; color: var(--text-muted); max-width: 480px; line-height: 1.5; }
-
-  .exp-card {
-    background: var(--surface); border: 1px solid var(--accent-20);
-    border-radius: 12px; padding: 24px;
-    opacity: 0; transform: translateY(10px);
-    transition: opacity 0.5s ease, transform 0.5s ease;
-  }
+  .lab-sub { font-size: 13px; color: var(--text-muted); max-width: 500px; line-height: 1.5; transition: color 0.35s ease; }
+  .exp-list { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; max-height: calc(100vh - 248px); padding-bottom: 20px; }
+  .exp-card { background: var(--surface); border: 1px solid var(--accent-20); border-radius: 12px; padding: 24px; opacity: 0; transform: translateY(10px); flex-shrink: 0; transition: opacity 0.5s ease, transform 0.5s ease, background 0.35s ease, border-color 0.35s ease; }
   .exp-card.visible { opacity: 1; transform: translateY(0); }
-
   .exp-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
   .exp-badges { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-  .exp-type {
-    font-size: 10px; font-family: monospace; font-weight: 600;
-    padding: 2px 8px; border-radius: 4px;
-    background: var(--cut-10); color: var(--color-cut);
-  }
-  .exp-window { font-size: 11px; font-family: monospace; color: var(--text-faint); }
-  .exp-title { font-size: 17px; font-weight: 600; color: var(--text); }
-  .exp-impact { font-size: 13px; font-weight: 600; color: var(--accent); text-align: right; }
-
+  .exp-type { font-size: 10px; font-family: 'DM Mono', monospace; font-weight: 600; padding: 2px 8px; border-radius: 4px; transition: background 0.35s ease, color 0.35s ease; }
+  .exp-type.cut { background: var(--cut-10); color: var(--color-cut); }
+  .exp-type.scale { background: var(--scale-10); color: var(--color-scale); }
+  .exp-type.monitor { background: var(--monitor-10); color: var(--color-monitor); }
+  .exp-window { font-size: 11px; font-family: 'DM Mono', monospace; color: var(--text-faint); transition: color 0.35s ease; }
+  .exp-title { font-size: 16px; font-weight: 600; color: var(--text); line-height: 1.35; transition: color 0.35s ease; }
+  .exp-impact { font-size: 13px; font-weight: 600; color: var(--accent); text-align: right; white-space: nowrap; flex-shrink: 0; transition: color 0.35s ease; }
   .exp-body { display: flex; flex-direction: column; gap: 8px; font-size: 13px; margin-bottom: 16px; }
   .exp-row { display: flex; gap: 12px; }
-  .exp-key {
-    font-size: 10px; font-family: monospace; text-transform: uppercase;
-    letter-spacing: 0.1em; color: var(--text-faint); padding-top: 2px;
-    flex-shrink: 0; width: 52px;
-  }
-  .exp-val { color: var(--text); line-height: 1.5; }
-
+  .exp-key { font-size: 10px; font-family: 'DM Mono', monospace; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-faint); padding-top: 2px; flex-shrink: 0; width: 52px; transition: color 0.35s ease; }
+  .exp-val { color: var(--text); line-height: 1.5; transition: color 0.35s ease; }
+  .exp-val.muted { color: var(--text-muted); }
   .kw-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
-  .kw-chip {
-    font-family: monospace; font-size: 11px;
-    background: var(--surface-raised); color: var(--text-muted);
-    padding: 2px 8px; border-radius: 4px;
-  }
+  .kw-chip { font-family: 'DM Mono', monospace; font-size: 11px; background: var(--surface-raised); color: var(--text-muted); padding: 2px 8px; border-radius: 4px; transition: background 0.35s ease, color 0.35s ease; }
+  .launch-btn { background: var(--accent); color: var(--accent-text); font-size: 13px; font-weight: 600; padding: 8px 18px; border-radius: 8px; border: none; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: background 0.35s ease, color 0.35s ease, opacity 0.15s; }
+  .launch-btn:hover { opacity: 0.88; }
 
-  .launch-btn {
-    background: var(--accent); color: var(--accent-text);
-    font-size: 13px; font-weight: 600;
-    padding: 8px 18px; border-radius: 8px;
-    border: none; cursor: pointer;
-  }
+  /* CLOSING */
+  .closing { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; gap: 20px; }
+  .closing-logo { font-size: 36px; font-family: 'DM Serif Display', Georgia, serif; color: var(--text); transition: color 0.35s ease; }
+  .closing-logo span { color: var(--accent); transition: color 0.35s ease; }
+  .closing-company { font-size: 11px; font-family: 'DM Mono', monospace; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.1em; transition: color 0.35s ease; }
+  .closing-headline { font-size: 22px; color: var(--text); max-width: 520px; line-height: 1.4; transition: color 0.35s ease; }
+  .closing-headline strong { color: var(--accent); transition: color 0.35s ease; }
+  .closing-sub { font-size: 14px; color: var(--text-muted); max-width: 400px; line-height: 1.5; transition: color 0.35s ease; }
+  .closing-url { font-family: 'DM Mono', monospace; font-size: 15px; color: var(--accent); letter-spacing: 0.02em; border: 1px solid var(--accent-30); padding: 10px 24px; border-radius: 8px; background: var(--accent-5); margin-top: 8px; transition: color 0.35s ease, border-color 0.35s ease, background 0.35s ease; }
+  .explore-btn { background: var(--accent); color: var(--accent-text); font-size: 14px; font-weight: 600; padding: 12px 28px; border-radius: 10px; border: none; cursor: pointer; font-family: 'DM Sans', sans-serif; opacity: 0; transform: translateY(8px); transition: opacity 0.5s ease, transform 0.5s ease, background 0.35s ease; margin-top: 8px; }
+  .explore-btn.visible { opacity: 1; transform: translateY(0); }
+  .explore-btn:hover { opacity: 0.88; }
 
-  /* CLOSING SCENE */
-  .closing {
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    height: 100%; text-align: center; gap: 20px;
+  /* CALLOUT BUBBLES */
+  .callout-bubble {
+    position: fixed; background: var(--callout-bg); color: var(--callout-text);
+    padding: 10px 15px; border-radius: 10px; font-size: 12px; font-weight: 500;
+    max-width: 260px; line-height: 1.45; opacity: 0; pointer-events: none; z-index: 200;
+    transition: opacity 0.4s ease, background 0.35s ease, color 0.35s ease;
+    letter-spacing: 0.01em;
   }
-  .closing-logo { font-size: 36px; font-family: 'DM Serif Display', Georgia, serif; color: var(--text); }
-  .closing-logo span { color: var(--accent); }
-  .closing-headline { font-size: 22px; color: var(--text); max-width: 520px; line-height: 1.4; }
-  .closing-headline strong { color: var(--accent); }
-  .closing-sub { font-size: 14px; color: var(--text-muted); max-width: 400px; line-height: 1.5; }
-  .closing-url {
-    font-family: monospace; font-size: 15px;
-    color: var(--accent); letter-spacing: 0.02em;
-    border: 1px solid var(--accent-30);
-    padding: 10px 24px; border-radius: 8px;
-    background: var(--accent-5); margin-top: 8px;
-  }
-  .closing-company {
-    font-size: 11px; font-family: monospace;
-    color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.1em;
-  }
+  .callout-bubble.visible { opacity: 1; }
+  .callout-bubble::after { content: ''; position: absolute; border: 7px solid transparent; }
+  .callout-bubble.arrow-down::after { top: 100%; left: 20px; border-top-color: var(--callout-bg); }
+  .callout-bubble.arrow-up::after { bottom: 100%; left: 20px; border-bottom-color: var(--callout-bg); }
+  .callout-bubble.arrow-right::after { top: 50%; left: 100%; transform: translateY(-50%); border-left-color: var(--callout-bg); }
+  .callout-bubble.arrow-left::after { top: 50%; right: 100%; transform: translateY(-50%); border-right-color: var(--callout-bg); }
 
-  /* SCENE INDICATOR */
-  .scene-dots {
-    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-    display: flex; gap: 6px; z-index: 100;
-  }
-  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border-subtle); transition: background 0.3s; }
+  /* INTERACTIVE BADGE */
+  .interactive-badge { position: fixed; top: 16px; right: 20px; display: flex; align-items: center; gap: 6px; font-size: 11px; font-family: 'DM Mono', monospace; color: var(--accent); opacity: 0; pointer-events: none; transition: opacity 0.5s ease, color 0.35s ease; z-index: 100; }
+  .interactive-badge.visible { opacity: 1; }
+  .interactive-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  /* SCENE DOTS */
+  .scene-dots { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; z-index: 100; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border-subtle); transition: background 0.3s, transform 0.2s; cursor: pointer; }
+  .dot:hover { transform: scale(1.4); }
   .dot.active { background: var(--accent); }
 
-  /* PROGRESS BAR */
-  .progress-bar {
-    position: fixed; top: 0; left: 0; height: 2px;
-    background: var(--accent); width: 0%;
-    transition: width 0.1s linear; z-index: 200;
-  }
+  /* PROGRESS */
+  .progress-bar { position: fixed; top: 0; left: 0; height: 2px; background: var(--progress-color); width: 0%; transition: width 0.1s linear, background 0.35s ease; z-index: 200; }
 </style>
 </head>
 <body>
 
 <div class="progress-bar" id="progress"></div>
 
+<!-- CALLOUT BUBBLES: 8 positioned tooltips with CSS arrow pointers -->
+<div class="callout-bubble arrow-down" id="cb0" style="top:228px;left:268px;"></div>
+<div class="callout-bubble arrow-down" id="cb1" style="top:268px;left:760px;"></div>
+<div class="callout-bubble arrow-up"   id="cb2" style="top:178px;left:830px;"></div>
+<div class="callout-bubble arrow-left" id="cb3" style="top:380px;left:848px;"></div>
+<div class="callout-bubble arrow-up"   id="cb4" style="top:318px;left:278px;"></div>
+<div class="callout-bubble arrow-up"   id="cb5" style="top:458px;left:278px;"></div>
+<div class="callout-bubble arrow-down" id="cb6" style="top:210px;left:278px;"></div>
+<div class="callout-bubble arrow-up"   id="cb7" style="top:488px;left:278px;"></div>
+
+<div class="interactive-badge" id="interactive-badge">Interactive</div>
+
 <div class="shell">
 
   <!-- SIDEBAR -->
-  <aside class="sidebar">
-    <div class="logo">jun<span>o</span></div>
+  <aside class="sidebar" id="sidebar">
+    <div class="logo">jun<span>o</span><span class="logo-full"></span></div>
     <nav class="nav">
       <button class="nav-item" id="nav-connections">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
           <circle cx="3" cy="8" r="2"/><circle cx="13" cy="4" r="2"/><circle cx="13" cy="12" r="2"/>
           <path d="M5 7.2L11 4.8M5 8.8L11 11.2" stroke-linecap="round"/>
         </svg>
-        Connections
+        <span class="nav-label">Connections</span>
       </button>
       <button class="nav-item active" id="nav-attribution">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
           <path d="M2 12L5.5 8.5L8 11L12 6L14 8" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M12 4H14V6" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        Attribution
+        <span class="nav-label">Attribution</span>
       </button>
       <button class="nav-item" id="nav-advisor">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
           <path d="M8 2C5.24 2 3 4.02 3 6.5C3 8.1 3.9 9.5 5.25 10.32V12.5L8 11.5L10.75 12.5V10.32C12.1 9.5 13 8.1 13 6.5C13 4.02 10.76 2 8 2Z" stroke-linejoin="round"/>
           <path d="M6 6.5H10M8 5V8" stroke-linecap="round"/>
         </svg>
-        Advisor
+        <span class="nav-label">Advisor</span>
       </button>
       <button class="nav-item" id="nav-lab">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M9 3h6M9 3v8l-4 9h14l-4-9V3M9 3H7M15 3h2"/>
         </svg>
-        The Lab
+        <span class="nav-label">The Lab</span>
       </button>
     </nav>
     <div class="sidebar-footer">
       <div class="email">l.chen@orca.security</div>
+      <div class="footer-actions">
+        <button class="theme-toggle" id="theme-toggle">
+          <svg id="theme-icon-sun" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="8" cy="8" r="3"/>
+            <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41" stroke-linecap="round"/>
+          </svg>
+          <svg id="theme-icon-moon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="display:none">
+            <path d="M12 10.5A6 6 0 016.5 4a6.5 6.5 0 100 9 6 6 0 005.5-2.5z" stroke-linecap="round"/>
+          </svg>
+          <span class="toggle-label" id="toggle-label">Dark</span>
+        </button>
+        <button class="collapse-toggle" id="collapse-toggle">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M10 3L6 8l4 5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="collapse-label">Collapse</span>
+        </button>
+      </div>
     </div>
   </aside>
 
   <!-- MAIN -->
-  <main class="main">
+  <main class="main" id="main">
 
-    <!-- SCENE 1: ATTRIBUTION TABLE -->
+    <!-- SCENE 1: ATTRIBUTION -->
     <div class="scene active" id="scene-attribution">
       <h1 class="section-title">Attribution</h1>
-
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-label">Total ad spend / mo</div>
@@ -367,18 +375,11 @@
           <div class="stat-value cut" id="budget-cut-val">$0</div>
         </div>
       </div>
-
       <div class="table-wrap">
         <div class="table-header"><h2>CAC by keyword</h2></div>
         <table>
           <thead>
-            <tr>
-              <th>Keyword</th>
-              <th>Spend/mo</th>
-              <th>Deals</th>
-              <th>True CAC</th>
-              <th>Action</th>
-            </tr>
+            <tr><th>Keyword</th><th>Spend/mo</th><th>Deals</th><th>True CAC</th><th>Action</th></tr>
           </thead>
           <tbody id="kw-tbody"></tbody>
         </table>
@@ -388,117 +389,101 @@
     <!-- SCENE 2: ADVISOR -->
     <div class="scene" id="scene-advisor">
       <h1 class="section-title">Advisor</h1>
-
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:0;">
-        <div style="padding:14px 16px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:var(--advisor-btn-bg);border-color:var(--accent);opacity:0.4;">
-          <div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:4px;">Guardrail</div>
-          <div style="font-size:11px;color:var(--text-muted);">Protect ROI. Only cut mathematically certain waste.</div>
-        </div>
-        <div style="padding:14px 16px;border:1px solid var(--accent);border-radius:8px;cursor:pointer;background:var(--advisor-btn-bg);">
-          <div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:4px;">Scale</div>
-          <div style="font-size:11px;color:var(--text-muted);">Optimize CAC. Reallocate to proven winners.</div>
-        </div>
-        <div style="padding:14px 16px;border:1px solid var(--border);border-radius:8px;cursor:pointer;opacity:0.4;">
-          <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px;">Aggressive</div>
-          <div style="font-size:11px;color:var(--text-muted);">Scale at all costs. Cut fast, go big.</div>
-        </div>
+      <div class="advisor-modes">
+        <button class="advisor-mode-btn" id="mode-btn-guardrail" data-mode="guardrail">
+          <div class="advisor-mode-name">Guardrail</div>
+          <div class="advisor-mode-desc">Protect ROI. Only cut mathematically certain waste.</div>
+        </button>
+        <button class="advisor-mode-btn active" id="mode-btn-scale" data-mode="scale">
+          <div class="advisor-mode-name">Scale</div>
+          <div class="advisor-mode-desc">Optimize CAC. Reallocate to proven winners.</div>
+        </button>
+        <button class="advisor-mode-btn" id="mode-btn-aggressive" data-mode="aggressive">
+          <div class="advisor-mode-name">Aggressive</div>
+          <div class="advisor-mode-desc">Scale at all costs. Cut fast, go big.</div>
+        </button>
       </div>
-
-      <div class="advisor-panel" id="advisor-panel" style="opacity:0;transition:opacity 0.6s ease;">
+      <div class="advisor-panel" id="advisor-panel" style="opacity:0;transition:opacity 0.6s ease,background 0.35s ease,border-color 0.35s ease;">
         <div class="advisor-header">
           <div class="advisor-label">Juno Advisor</div>
           <div class="advisor-divider"></div>
           <div class="advisor-powered">Powered by Claude</div>
         </div>
-
-        <div class="advisor-stats">
-          <div class="advisor-stat">
-            <div class="advisor-stat-label">Waste detected</div>
-            <div class="advisor-stat-val">$74,800<span>/mo</span></div>
-          </div>
-          <div class="advisor-stat">
-            <div class="advisor-stat-label">% of budget</div>
-            <div class="advisor-stat-val">43%</div>
-          </div>
-          <div class="advisor-stat">
-            <div class="advisor-stat-label">Keywords to cut</div>
-            <div class="advisor-stat-val">5</div>
-          </div>
-        </div>
-
+        <div class="advisor-stats" id="advisor-stats-grid"></div>
         <div class="advisor-narrative" id="advisor-text"></div>
-
-        <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--border);">
-          <div style="font-size:10px;font-family:monospace;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-faint);margin-bottom:12px;">Waste breakdown</div>
-          <div class="waste-item">
-            <span class="sev-badge">Critical</span>
-            <div style="flex:1;min-width:0;">
-              <div class="waste-kw">"cyber security"</div>
-              <div class="waste-reason">0 deals in 90 days. Generic intent — attracting consumers, not enterprise buyers</div>
-            </div>
-            <div class="waste-spend">$24,800/mo</div>
-          </div>
-          <div class="waste-item">
-            <span class="sev-badge">Critical</span>
-            <div style="flex:1;min-width:0;">
-              <div class="waste-kw">"malware protection"</div>
-              <div class="waste-reason">0 pipeline entries. SMB/consumer intent, not CNAPP buyers</div>
-            </div>
-            <div class="waste-spend">$16,200/mo</div>
-          </div>
-          <div class="waste-item">
-            <span class="sev-badge">Critical</span>
-            <div style="flex:1;min-width:0;">
-              <div class="waste-kw">"xdr platform"</div>
-              <div class="waste-reason">0 deals. Competitive category — searchers already evaluating vendors</div>
-            </div>
-            <div class="waste-spend">$14,400/mo</div>
-          </div>
+        <div class="waste-section">
+          <div class="waste-section-label">Waste breakdown</div>
+          <div id="waste-items"></div>
         </div>
       </div>
     </div>
 
-    <!-- SCENE 3: LAB -->
+    <!-- SCENE 3: THE LAB -->
     <div class="scene" id="scene-lab">
       <div class="lab-intro">
         <div class="lab-tag">The Lab</div>
         <h1 class="lab-title">The Lab for Demand Gen</h1>
         <p class="lab-sub">Stop guessing if your changes are working. Every major tactical shift becomes a Juno Hypothesis — and the CRM data proves you right or saves you money.</p>
       </div>
+      <div class="exp-list">
 
-      <div class="exp-card" id="exp-card">
-        <div class="exp-top">
-          <div>
-            <div class="exp-badges">
-              <span class="exp-type">Cut waste</span>
-              <span class="exp-window">30 days</span>
+        <div class="exp-card" id="exp-card-a">
+          <div class="exp-top">
+            <div>
+              <div class="exp-badges"><span class="exp-type cut">Cut waste</span><span class="exp-window">30 days</span></div>
+              <div class="exp-title">Pause bottom-5 zero-pipeline keywords, reallocate to "cloud security posture management" + "cnapp"</div>
             </div>
-            <div class="exp-title">Pause bottom-5 zero-pipeline keywords, reallocate to "cloud security posture management" + "cnapp"</div>
+            <div class="exp-impact">Save $74,800/mo</div>
           </div>
-          <div class="exp-impact">Save $74,800/mo</div>
+          <div class="exp-body">
+            <div class="exp-row"><span class="exp-key">If</span><span class="exp-val">We pause cyber security, malware protection, xdr platform, vulnerability scanner, and cloud security (broad)</span></div>
+            <div class="exp-row"><span class="exp-key">Then</span><span class="exp-val">Blended CAC drops below $2,200 and pipeline from paid increases 30%+ within one billing cycle</span></div>
+            <div class="exp-row"><span class="exp-key">Because</span><span class="exp-val muted">These 5 keywords consumed $74.8k/mo with 0 CRM entries. SpyFu flags 2,350 of Orca's 4,542 keywords as potential waste — the CRM data confirms it.</span></div>
+          </div>
+          <div class="kw-chips">
+            <span class="kw-chip">"cyber security"</span><span class="kw-chip">"malware protection"</span><span class="kw-chip">"xdr platform"</span><span class="kw-chip">"vulnerability scanner"</span><span class="kw-chip">"cloud security"</span>
+          </div>
+          <button class="launch-btn" id="launch-btn-a">Launch experiment</button>
         </div>
-        <div class="exp-body">
-          <div class="exp-row">
-            <span class="exp-key">If</span>
-            <span class="exp-val">We pause cyber security, malware protection, xdr platform, vulnerability scanner, and cloud security (broad)</span>
+
+        <div class="exp-card" id="exp-card-b">
+          <div class="exp-top">
+            <div>
+              <div class="exp-badges"><span class="exp-type scale">Scale winners</span><span class="exp-window">30 days</span></div>
+              <div class="exp-title">Increase bids 15% on top-4 performers, reallocate freed $30K budget to cspm + cnapp</div>
+            </div>
+            <div class="exp-impact">+12–15 projected deals/mo</div>
           </div>
-          <div class="exp-row">
-            <span class="exp-key">Then</span>
-            <span class="exp-val">Blended CAC drops below $2,200 and pipeline from paid increases 30%+ within one billing cycle</span>
+          <div class="exp-body">
+            <div class="exp-row"><span class="exp-key">If</span><span class="exp-val">We increase max CPC by 15% on "cloud security posture management," "cnapp," "cloud workload protection," and "orca security"</span></div>
+            <div class="exp-row"><span class="exp-key">Then</span><span class="exp-val">Deal volume from paid increases 30–40% with blended CAC staying under $2,800 — each keyword has headroom before auction saturation</span></div>
+            <div class="exp-row"><span class="exp-key">Because</span><span class="exp-val muted">All 4 keywords convert at or below $2,070 blended CAC. Higher bids win more auctions in the same high-intent buyer pool. Freed $30K from cuts funds the increase with zero net budget change.</span></div>
           </div>
-          <div class="exp-row">
-            <span class="exp-key">Because</span>
-            <span class="exp-val" style="color:var(--text-muted);">These 5 keywords consumed $74.8k/mo with 0 CRM entries. SpyFu flags 2,350 of Orca's 4,542 keywords as potential waste — the CRM data confirms it.</span>
+          <div class="kw-chips">
+            <span class="kw-chip">"cloud security posture management"</span><span class="kw-chip">"cnapp"</span><span class="kw-chip">"cloud workload protection"</span><span class="kw-chip">"orca security"</span>
           </div>
+          <button class="launch-btn">Launch experiment</button>
         </div>
-        <div class="kw-chips">
-          <span class="kw-chip">"cyber security"</span>
-          <span class="kw-chip">"malware protection"</span>
-          <span class="kw-chip">"xdr platform"</span>
-          <span class="kw-chip">"vulnerability scanner"</span>
-          <span class="kw-chip">"cloud security"</span>
+
+        <div class="exp-card" id="exp-card-c">
+          <div class="exp-top">
+            <div>
+              <div class="exp-badges"><span class="exp-type monitor">Monitor test</span><span class="exp-window">30 days</span></div>
+              <div class="exp-title">Hold agentless cloud security + cloud native security 30 more days before cutting</div>
+            </div>
+            <div class="exp-impact">Decision: +30 days</div>
+          </div>
+          <div class="exp-body">
+            <div class="exp-row"><span class="exp-key">If</span><span class="exp-val">We hold bids steady on "agentless cloud security" and "cloud native security" with no changes for one more billing cycle</span></div>
+            <div class="exp-row"><span class="exp-key">Then</span><span class="exp-val">Either CAC improves below $4,000 (keep + scale) or deals stay flat (move both to cut list — saves $17,600/mo)</span></div>
+            <div class="exp-row"><span class="exp-key">Because</span><span class="exp-val muted">"Agentless" is a genuine Orca differentiator — 2 deals in 90 days may reflect seasonality not waste. One more billing cycle gives definitive signal before writing off $17.6k/mo in potentially differentiating spend.</span></div>
+          </div>
+          <div class="kw-chips">
+            <span class="kw-chip">"agentless cloud security"</span><span class="kw-chip">"cloud native security"</span>
+          </div>
+          <button class="launch-btn">Launch experiment</button>
         </div>
-        <button class="launch-btn">Launch experiment</button>
+
       </div>
     </div>
 
@@ -511,17 +496,15 @@
           <strong>4 keywords</strong> are driving 82% of your closed deals.<br>
           The other 4,538? Now you know exactly what to do.
         </div>
-        <div class="closing-sub">
-          Connects Google Ads to your CRM. Shows keyword-level CAC. Built by ex-Google SWE + Stanford Stats + ex-Jefferies IB.
-        </div>
+        <div class="closing-sub">Connects Google Ads to your CRM. Shows keyword-level CAC. Built by ex-Google SWE + Stanford Stats + ex-Jefferies IB.</div>
         <div class="closing-url">tryjunoapp.com</div>
+        <button class="explore-btn" id="explore-btn">Explore the dashboard →</button>
       </div>
     </div>
 
   </main>
 </div>
 
-<!-- SCENE DOTS -->
 <div class="scene-dots">
   <div class="dot active" id="dot-0"></div>
   <div class="dot" id="dot-1"></div>
@@ -530,37 +513,95 @@
 </div>
 
 <script>
+/* DATA */
 const KEYWORDS = [
-  { kw: 'cloud security posture management', spend: 22000, deals: 9, cac: 2444,  action: 'scale' },
-  { kw: 'cnapp',                             spend: 16800, deals: 7, cac: 2400,  action: 'scale' },
-  { kw: 'cloud workload protection',         spend: 12400, deals: 5, cac: 2480,  action: 'scale' },
-  { kw: 'orca security',                     spend: 8600,  deals: 9, cac: 956,   action: 'scale' },
-  { kw: 'agentless cloud security',          spend: 10200, deals: 2, cac: 5100,  action: 'monitor' },
-  { kw: 'cloud native security',             spend: 7400,  deals: 1, cac: 7400,  action: 'monitor' },
-  { kw: 'cloud vulnerability management',    spend: 6200,  deals: 1, cac: 6200,  action: 'monitor' },
-  { kw: 'cyber security',                    spend: 24800, deals: 0, cac: null,  action: 'cut' },
-  { kw: 'malware protection',                spend: 16200, deals: 0, cac: null,  action: 'cut' },
-  { kw: 'xdr platform',                      spend: 14400, deals: 0, cac: null,  action: 'cut' },
-  { kw: 'vulnerability scanner',             spend: 10800, deals: 0, cac: null,  action: 'cut' },
-  { kw: 'cloud security',                    spend: 8600,  deals: 0, cac: null,  action: 'cut' },
+  { kw: 'cloud security posture management', spend: 22000, deals: 9,  cac: 2444, action: 'scale' },
+  { kw: 'cnapp',                             spend: 16800, deals: 7,  cac: 2400, action: 'scale' },
+  { kw: 'cloud workload protection',         spend: 12400, deals: 5,  cac: 2480, action: 'scale' },
+  { kw: 'orca security',                     spend: 8600,  deals: 9,  cac: 956,  action: 'scale' },
+  { kw: 'agentless cloud security',          spend: 10200, deals: 2,  cac: 5100, action: 'monitor' },
+  { kw: 'cloud native security',             spend: 7400,  deals: 1,  cac: 7400, action: 'monitor' },
+  { kw: 'cloud vulnerability management',    spend: 6200,  deals: 1,  cac: 6200, action: 'monitor' },
+  { kw: 'cyber security',                    spend: 24800, deals: 0,  cac: null, action: 'cut' },
+  { kw: 'malware protection',                spend: 16200, deals: 0,  cac: null, action: 'cut' },
+  { kw: 'xdr platform',                      spend: 14400, deals: 0,  cac: null, action: 'cut' },
+  { kw: 'vulnerability scanner',             spend: 10800, deals: 0,  cac: null, action: 'cut' },
+  { kw: 'cloud security',                    spend: 8600,  deals: 0,  cac: null, action: 'cut' },
 ];
-
 const BUDGET_TO_CUT = KEYWORDS.filter(k => k.action === 'cut').reduce((s,k) => s+k.spend, 0);
 
-const NARRATIVE = `Orca's top 4 keywords (<strong>"cloud security posture management," "cnapp," "cloud workload protection,"</strong> and <strong>"orca security"</strong>) generated 30 of your 34 closed deals at an average CAC of <strong>$2,070</strong> — strong performance for enterprise cloud security.\n\nThe bottom 5 keywords consumed <strong>$74,800/mo</strong> with zero CRM entries in 90 days. SpyFu independently flags <strong>2,350 of your 4,542 keywords</strong> as potential waste — the closed-deal data confirms exactly which ones. Pausing confirmed zero-pipeline spend and reallocating to proven CNAPP converters is projected to reduce blended CAC by 38% within 30 days.`;
+const KW_DETAILS = {
+  'cloud security posture management': { insight: 'Highest-volume performer. 9 closed deals in 90 days — the most of any keyword. CAC of $2,444 is 18% below your blended target of $3,000.', recommendation: 'Increase max CPC by 15%. Test phrase match variant "cspm platform" — similar intent with less competition.', action: 'scale', expand: ['"cspm platform"','"cspm solution"','"cloud security posture"'] },
+  'cnapp': { insight: 'Strong category intent — buyers searching this term are deep in evaluation. High close rate relative to spend at $2,400 CAC.', recommendation: 'Add "cnapp solution" and "cnapp vendors" as exact match. Budget cap is likely limiting reach — consider increasing by $3K/mo.', action: 'scale', expand: ['"cnapp solution"','"cnapp vendors"','"best cnapp"'] },
+  'cloud workload protection': { insight: '5 deals in 90 days. Consistent with CNAPP buyer intent — searchers evaluating platform-level security, not point solutions.', recommendation: 'Hold current bid. Test "cloud workload security" and "workload protection platform" as phrase match variants.', action: 'scale', expand: ['"cloud workload security"','"workload protection platform"'] },
+  'orca security': { insight: 'Brand keyword with the lowest CAC in the account at $956. 9 deals. Protects pipeline from competitors bidding on your name.', recommendation: 'Never pause. Increase budget cap — brand CPCs are cheap and close rate is exceptional. Add common misspellings as variants.', action: 'scale', expand: ['"orcasecurity"','"orca cloud"','"orca cnapp"'] },
+  'agentless cloud security': { insight: '2 deals in 90 days. CAC of $5,100 is above target but not disqualifying — agentless architecture is a genuine Orca differentiator.', recommendation: 'Hold for 30 more days. One additional deal drops CAC to $3,400. If none, move to cut list.', action: 'monitor', expand: ['"agentless security"','"agentless cloud"'] },
+  'cloud native security': { insight: '1 deal in 90 days at $7,400 CAC. High CPC category with broad intent — some searchers are architects, not buyers.', recommendation: 'Reduce bid by 20% and hold 60 days. If CAC does not improve below $5,000, pause.', action: 'monitor', expand: ['"cloud native security platform"'] },
+  'cloud vulnerability management': { insight: '1 deal. Potential overlap with "cloud security posture management" — may be cannibalizing the same buyer intent.', recommendation: 'Run a search term report comparison against cspm keywords. If 30%+ overlap, pause and redistribute budget.', action: 'monitor', expand: ['"vulnerability management cloud"'] },
+  'cyber security': { insight: '0 deals in 90 days on $24,800 spend. Generic consumer term — attracting individuals and SMBs evaluating antivirus, not enterprise CNAPP buyers.', recommendation: 'Pause immediately. This is the largest single waste item in the account.', action: 'cut', negative: '"cyber security"', saves: '$24,800/mo' },
+  'malware protection': { insight: '0 deals in 90 days on $16,200 spend. Consumer/endpoint protection intent. Buyers want antivirus tools, not cloud security platforms.', recommendation: 'Pause and add to negative keyword list. Add "malware" as a broad negative across all ad groups.', action: 'cut', negative: '"malware protection"', saves: '$16,200/mo' },
+  'xdr platform': { insight: '0 deals in 90 days on $14,400 spend. Competitive category — searchers are comparing XDR vendors. Orca does not lead with XDR positioning.', recommendation: 'Pause. If Orca launches an XDR product line, revisit. Add "xdr" as a broad negative match.', action: 'cut', negative: '"xdr platform"', saves: '$14,400/mo' },
+  'vulnerability scanner': { insight: '0 deals in 90 days on $10,800 spend. DevSecOps and SMB intent. Buyers searching for standalone scanners are not in the market for an enterprise cloud platform.', recommendation: 'Pause. Add "vulnerability scanner" and "vulnerability scan" as negatives — these clicks are noise.', action: 'cut', negative: '"vulnerability scanner"', saves: '$10,800/mo' },
+  'cloud security': { insight: '0 deals in 90 days on $8,600 spend. Too broad — captures student research to SMB inquiries. Quality score is likely low.', recommendation: 'Pause broad match. Keep exact match on specific variants. Add [cloud security] broad as a negative.', action: 'cut', negative: '"cloud security" (broad match)', saves: '$8,600/mo' },
+};
 
-// Build table
+const ADVISOR_MODES = {
+  guardrail: {
+    saved: '$41,000', pct: '24%', count: '2',
+    narrative: `Running Guardrail mode: cutting only keywords with <strong>zero deals across 90 days and $15,000+ spend</strong>. Two keywords meet the mathematical certainty threshold.\n\n<strong>"Cyber security"</strong> and <strong>"malware protection"</strong> account for <strong>$41,000/mo</strong> combined. Both are confirmed consumer intent terms with zero enterprise CNAPP pipeline entries in 90 days. No signal lost by pausing — these buyers are not in your ICP.`,
+    waste: [
+      { sev: 'Critical', kw: '"cyber security"', reason: '0 deals in 90 days. Consumer/antivirus intent — not enterprise CNAPP buyers', spend: '$24,800/mo' },
+      { sev: 'Critical', kw: '"malware protection"', reason: '0 pipeline entries. Endpoint protection intent, not cloud security platform', spend: '$16,200/mo' },
+    ],
+  },
+  scale: {
+    saved: '$74,800', pct: '43%', count: '5',
+    narrative: `Orca's top 4 keywords (<strong>"cloud security posture management," "cnapp," "cloud workload protection,"</strong> and <strong>"orca security"</strong>) generated 30 of your 34 closed deals at an average CAC of <strong>$2,070</strong> — strong performance for enterprise cloud security.\n\nThe bottom 5 keywords consumed <strong>$74,800/mo</strong> with zero CRM entries in 90 days. SpyFu independently flags <strong>2,350 of your 4,542 keywords</strong> as potential waste — the closed-deal data confirms exactly which ones. Pausing confirmed zero-pipeline spend and reallocating to proven CNAPP converters is projected to reduce blended CAC by 38% within 30 days.`,
+    waste: [
+      { sev: 'Critical', kw: '"cyber security"', reason: '0 deals in 90 days. Generic intent — attracting consumers, not enterprise buyers', spend: '$24,800/mo' },
+      { sev: 'Critical', kw: '"malware protection"', reason: '0 pipeline entries. SMB/consumer intent, not CNAPP buyers', spend: '$16,200/mo' },
+      { sev: 'Critical', kw: '"xdr platform"', reason: '0 deals. Competitive category — searchers already evaluating other vendors', spend: '$14,400/mo' },
+      { sev: 'High', kw: '"vulnerability scanner"', reason: '0 deals. DevSecOps/SMB intent — not in market for enterprise platform', spend: '$10,800/mo' },
+      { sev: 'High', kw: '"cloud security"', reason: '0 deals. Too broad — student/SMB traffic, low quality score', spend: '$8,600/mo' },
+    ],
+  },
+  aggressive: {
+    saved: '$92,400', pct: '54%', count: '7',
+    narrative: `Aggressive mode: cutting all confirmed waste <strong>plus</strong> marginal performers that are statistically unlikely to improve. Freeing <strong>$92,400/mo</strong> — 54% of current budget — to double down on the 4 proven winners.\n\n<strong>"Agentless cloud security"</strong> and <strong>"cloud native security"</strong> are included: combined $17,600/mo for 3 deals ($5,867 average CAC vs $2,070 target). Statistically, holding these 30 more days is unlikely to move the needle. Reallocating to proven terms accelerates CAC improvement faster than waiting for marginal signal.`,
+    waste: [
+      { sev: 'Critical', kw: '"cyber security"', reason: '0 deals in 90 days. Consumer intent', spend: '$24,800/mo' },
+      { sev: 'Critical', kw: '"malware protection"', reason: '0 deals. SMB/consumer intent', spend: '$16,200/mo' },
+      { sev: 'Critical', kw: '"xdr platform"', reason: '0 deals. Wrong category positioning', spend: '$14,400/mo' },
+      { sev: 'High', kw: '"vulnerability scanner"', reason: '0 deals. DevSecOps/SMB intent', spend: '$10,800/mo' },
+      { sev: 'High', kw: '"cloud security"', reason: '0 deals. Too broad, low quality score', spend: '$8,600/mo' },
+      { sev: 'Marginal', sevAmber: true, kw: '"agentless cloud security"', reason: 'CAC $5,100 — 2.5x target. 2 deals in 90 days', spend: '$10,200/mo' },
+      { sev: 'Marginal', sevAmber: true, kw: '"cloud native security"', reason: 'CAC $7,400 — 3.6x target. 1 deal in 90 days', spend: '$7,400/mo' },
+    ],
+  },
+};
+
+const CALLOUTS = [
+  { id: 'cb0', start: 1200,  end: 5200,  text: 'Pulling live keyword spend from Google Ads API — all 4,542 keywords' },
+  { id: 'cb1', start: 5800,  end: 9200,  text: 'Each keyword matched to closed deals in HubSpot CRM via UTM attribution' },
+  { id: 'cb2', start: 9800,  end: 13500, text: '$74,800/mo confirmed — 43% of budget attached to zero pipeline' },
+  { id: 'cb3', start: 14000, end: 17200, text: 'Scale · Monitor · Cut — one CRM-backed action per keyword' },
+  { id: 'cb4', start: 19500, end: 23000, text: 'Advisor cross-references every keyword against your actual closed CRM deals' },
+  { id: 'cb5', start: 24500, end: 29500, text: 'The only tool connecting keyword spend to closed revenue — this is the moat' },
+  { id: 'cb6', start: 33500, end: 37500, text: 'Every Juno insight becomes a testable hypothesis backed by CRM deal data' },
+  { id: 'cb7', start: 39000, end: 43500, text: 'Fires directly to Google Ads — pause keywords or adjust bids without leaving Juno' },
+];
+
+/* BUILD TABLE WITH ACCORDION ROWS */
 const tbody = document.getElementById('kw-tbody');
 KEYWORDS.forEach((k, i) => {
   const tr = document.createElement('tr');
   tr.className = 'kw-row';
   tr.id = `row-${i}`;
+  tr.dataset.kw = k.kw;
   if (k.action === 'cut') tr.classList.add('cut-row');
-
   const cacCell = k.cac !== null
     ? `<td class="td-cac-${k.action}">$${k.cac.toLocaleString()}</td>`
     : `<td class="td-cac-cut">—</td>`;
-
   tr.innerHTML = `
     <td class="td-kw">"${k.kw}"</td>
     <td class="td-spend">$${k.spend.toLocaleString()}</td>
@@ -569,31 +610,105 @@ KEYWORDS.forEach((k, i) => {
     <td><span class="tag tag-${k.action}">${k.action === 'scale' ? 'Scale' : k.action === 'monitor' ? 'Monitor' : 'Cut now'}</span></td>
   `;
   tbody.appendChild(tr);
+
+  const d = KW_DETAILS[k.kw];
+  let extraChips = '';
+  if (d.action === 'cut' && d.negative) {
+    extraChips = `<div class="kw-chips-row">
+      <span class="kw-chip-neg">negative: ${d.negative}</span>
+      <span style="font-size:11px;color:var(--text-faint);padding-top:2px;">saves ${d.saves}</span>
+    </div>`;
+  } else if (d.expand && d.expand.length) {
+    extraChips = `<div class="kw-chips-row">${d.expand.map(t => `<span class="kw-chip-exp">${t}</span>`).join('')}</div>`;
+  }
+
+  const dtr = document.createElement('tr');
+  dtr.className = 'kw-detail-row';
+  dtr.id = `detail-row-${i}`;
+  dtr.innerHTML = `<td colspan="5"><div class="kw-detail-inner"><div class="kw-detail-content">
+    <div class="kw-mini-stats">
+      <div class="kw-mini-stat"><div class="kw-mini-label">Spend/mo</div><div class="kw-mini-val">$${k.spend.toLocaleString()}</div></div>
+      <div class="kw-mini-stat"><div class="kw-mini-label">Deals</div><div class="kw-mini-val" style="color:${k.deals>0?'var(--color-scale)':'var(--color-cut)'}">${k.deals}</div></div>
+      <div class="kw-mini-stat"><div class="kw-mini-label">True CAC</div><div class="kw-mini-val">${k.cac?'$'+k.cac.toLocaleString():'—'}</div></div>
+      <div class="kw-mini-stat"><div class="kw-mini-label">Action</div><div class="kw-mini-val"><span class="tag tag-${k.action}" style="font-size:10px;padding:2px 8px;">${k.action==='scale'?'Scale':k.action==='monitor'?'Monitor':'Cut now'}</span></div></div>
+    </div>
+    <div class="kw-col"><div class="kw-col-label">Insight</div><div class="kw-col-text">${d.insight}</div></div>
+    <div class="kw-col"><div class="kw-col-label">Recommendation</div><div class="kw-col-text">${d.recommendation}</div></div>
+    ${extraChips}
+  </div></div></td>`;
+  tbody.appendChild(dtr);
 });
 
+/* SCENE MANAGEMENT */
 let currentScene = 0;
-const scenes = ['scene-attribution', 'scene-advisor', 'scene-lab', 'scene-closing'];
-const navIds = ['nav-attribution', 'nav-advisor', 'nav-lab', null];
+let isInteractive = false;
+const scenes = ['scene-attribution','scene-advisor','scene-lab','scene-closing'];
+const navIds  = ['nav-attribution','nav-advisor','nav-lab',null];
 
 function setScene(idx) {
-  scenes.forEach((s, i) => {
-    const el = document.getElementById(s);
-    if (el) el.classList.toggle('active', i === idx);
-  });
-  document.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('active', i === idx));
+  scenes.forEach((s,i) => document.getElementById(s)?.classList.toggle('active', i===idx));
+  document.querySelectorAll('.dot').forEach((d,i) => d.classList.toggle('active', i===idx));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   if (navIds[idx]) document.getElementById(navIds[idx])?.classList.add('active');
   currentScene = idx;
 }
 
-const TOTAL_MS = 52000;
+/* CALLOUT BUBBLES */
+function updateCallouts(t) {
+  CALLOUTS.forEach(c => {
+    const el = document.getElementById(c.id);
+    if (!el) return;
+    const on = t >= c.start && t < c.end;
+    if (on && el.textContent !== c.text) el.textContent = c.text;
+    el.classList.toggle('visible', on);
+  });
+}
+function hideAllCallouts() {
+  CALLOUTS.forEach(c => document.getElementById(c.id)?.classList.remove('visible'));
+}
+
+/* ADVISOR RENDER */
+let currentAdvisorMode = 'scale';
+function renderAdvisorMode(mode) {
+  const data = ADVISOR_MODES[mode];
+  if (!data) return;
+  currentAdvisorMode = mode;
+
+  document.getElementById('advisor-stats-grid').innerHTML = `
+    <div class="advisor-stat"><div class="advisor-stat-label">Waste detected</div><div class="advisor-stat-val">${data.saved}<span>/mo</span></div></div>
+    <div class="advisor-stat"><div class="advisor-stat-label">% of budget</div><div class="advisor-stat-val">${data.pct}</div></div>
+    <div class="advisor-stat"><div class="advisor-stat-label">Keywords to cut</div><div class="advisor-stat-val">${data.count}</div></div>
+  `;
+
+  document.getElementById('advisor-text').innerHTML = data.narrative.split('\n\n').join('<br><br>');
+
+  document.getElementById('waste-items').innerHTML = data.waste.map(w => `
+    <div class="waste-item">
+      <span class="sev-badge${w.sevAmber?' amber':''}">${w.sev}</span>
+      <div style="flex:1;min-width:0;"><div class="waste-kw">${w.kw}</div><div class="waste-reason">${w.reason}</div></div>
+      <div class="waste-spend">${w.spend}</div>
+    </div>
+  `).join('');
+
+  document.querySelectorAll('.advisor-mode-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === mode);
+  });
+}
+
+/* ANIMATION */
+const TOTAL_MS = 54000;
 let startTime = null;
-let raf = null;
+let advisorShown = false;
 
 function animate(ts) {
+  if (isInteractive) return;
   if (!startTime) startTime = ts;
-  const t = (ts - startTime) % TOTAL_MS;
+  const t = ts - startTime;
+
+  if (t >= TOTAL_MS) { enterInteractiveMode(); return; }
+
   document.getElementById('progress').style.width = ((t / TOTAL_MS) * 100) + '%';
+  updateCallouts(t);
 
   // Scene 0: 0-18s
   if (t < 18000 && currentScene !== 0) setScene(0);
@@ -601,76 +716,156 @@ function animate(ts) {
   // Row stagger: 1-9s
   if (t >= 1000 && t < 9000) {
     const rowIdx = Math.floor((t - 1000) / 667);
-    for (let i = 0; i <= Math.min(rowIdx, KEYWORDS.length - 1); i++) {
+    for (let i = 0; i <= Math.min(rowIdx, KEYWORDS.length-1); i++) {
       document.getElementById(`row-${i}`)?.classList.add('visible');
     }
   }
-  if (t >= 9000 && t < 18000) {
-    KEYWORDS.forEach((_, i) => document.getElementById(`row-${i}`)?.classList.add('visible'));
-  }
+  if (t >= 9000) KEYWORDS.forEach((_,i) => document.getElementById(`row-${i}`)?.classList.add('visible'));
 
   // Budget counter: 9-12s
   if (t >= 9000 && t < 12000) {
-    const val = Math.floor(BUDGET_TO_CUT * ((t - 9000) / 3000));
+    const val = Math.floor(BUDGET_TO_CUT * ((t-9000)/3000));
     document.getElementById('budget-cut-val').textContent = '$' + val.toLocaleString();
   }
-  if (t >= 12000 && t < 18000) {
-    document.getElementById('budget-cut-val').textContent = '$74,800';
-  }
+  if (t >= 12000) document.getElementById('budget-cut-val').textContent = '$74,800';
 
   // Cut pulse: 9.5s
   if (t >= 9500 && t < 9600) {
-    document.querySelectorAll('.cut-row').forEach(r => {
-      r.classList.remove('cut-pulse');
-      void r.offsetWidth;
-      r.classList.add('cut-pulse');
-    });
+    document.querySelectorAll('.cut-row').forEach(r => { r.classList.remove('cut-pulse'); void r.offsetWidth; r.classList.add('cut-pulse'); });
   }
 
-  // Scene 1: 18-32s
+  // Scene 1 enter: 18-32s
   if (t >= 18000 && t < 32000 && currentScene !== 1) {
     setScene(1);
-    KEYWORDS.forEach((_, i) => {
-      const row = document.getElementById(`row-${i}`);
-      if (row) { row.classList.remove('visible'); row.classList.remove('cut-pulse'); }
-    });
-    document.getElementById('budget-cut-val').textContent = '$0';
-    document.getElementById('advisor-text').innerHTML = '';
+    advisorShown = false;
     document.getElementById('advisor-panel').style.opacity = '0';
-    document.getElementById('exp-card').classList.remove('visible');
+    document.getElementById('advisor-text').innerHTML = '';
+    document.getElementById('advisor-stats-grid').innerHTML = '';
+    document.getElementById('waste-items').innerHTML = '';
+    KEYWORDS.forEach((_,i) => { const r=document.getElementById(`row-${i}`); if(r){r.classList.remove('visible');r.classList.remove('cut-pulse');} });
+    document.getElementById('budget-cut-val').textContent = '$0';
+    ['exp-card-a','exp-card-b','exp-card-c'].forEach(id => document.getElementById(id)?.classList.remove('visible'));
   }
 
+  // Advisor panel fade-in: 19.5s
   if (t >= 19500 && t < 32000) {
     document.getElementById('advisor-panel').style.opacity = '1';
+    if (!advisorShown) {
+      advisorShown = true;
+      // Render stats + waste upfront; narrative typed separately
+      const d = ADVISOR_MODES.scale;
+      document.getElementById('advisor-stats-grid').innerHTML = `
+        <div class="advisor-stat"><div class="advisor-stat-label">Waste detected</div><div class="advisor-stat-val">${d.saved}<span>/mo</span></div></div>
+        <div class="advisor-stat"><div class="advisor-stat-label">% of budget</div><div class="advisor-stat-val">${d.pct}</div></div>
+        <div class="advisor-stat"><div class="advisor-stat-label">Keywords to cut</div><div class="advisor-stat-val">${d.count}</div></div>
+      `;
+      document.getElementById('waste-items').innerHTML = d.waste.map(w => `
+        <div class="waste-item">
+          <span class="sev-badge">${w.sev}</span>
+          <div style="flex:1;min-width:0;"><div class="waste-kw">${w.kw}</div><div class="waste-reason">${w.reason}</div></div>
+          <div class="waste-spend">${w.spend}</div>
+        </div>
+      `).join('');
+    }
   }
 
   // Narrative type: 21-29s
   if (t >= 21000 && t < 29000) {
-    const combined = NARRATIVE.split('\n\n').join('<br><br>');
-    const typed = Math.floor(((t - 21000) / 8000) * combined.length);
-    document.getElementById('advisor-text').innerHTML = combined.substring(0, typed);
+    const src = ADVISOR_MODES.scale.narrative.split('\n\n').join('<br><br>');
+    const typed = Math.floor(((t-21000)/8000) * src.length);
+    document.getElementById('advisor-text').innerHTML = src.substring(0, typed);
   }
   if (t >= 29000 && t < 32000) {
-    document.getElementById('advisor-text').innerHTML = NARRATIVE.split('\n\n').join('<br><br>');
+    document.getElementById('advisor-text').innerHTML = ADVISOR_MODES.scale.narrative.split('\n\n').join('<br><br>');
   }
 
-  // Scene 2: 32-42s
+  // Scene 2 enter: 32-42s
   if (t >= 32000 && t < 42000 && currentScene !== 2) setScene(2);
-  if (t >= 33000 && t < 42000) document.getElementById('exp-card').classList.add('visible');
+  if (t >= 33000) document.getElementById('exp-card-a')?.classList.add('visible');
+  if (t >= 35500) document.getElementById('exp-card-b')?.classList.add('visible');
+  if (t >= 38000) document.getElementById('exp-card-c')?.classList.add('visible');
 
-  // Scene 3: 42-52s
+  // Scene 3: 42-54s
   if (t >= 42000 && currentScene !== 3) setScene(3);
 
-  raf = requestAnimationFrame(animate);
+  requestAnimationFrame(animate);
 }
 
-raf = requestAnimationFrame(animate);
+/* INTERACTIVE MODE */
+function enterInteractiveMode() {
+  if (isInteractive) return;
+  isInteractive = true;
+  hideAllCallouts();
+  document.getElementById('progress').style.width = '100%';
+  setScene(3);
+  setTimeout(() => document.getElementById('explore-btn').classList.add('visible'), 300);
+  document.getElementById('interactive-badge').classList.add('visible');
 
-fetch('/api/track', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ path: '/demo/orca' }),
-}).catch(() => {});
+  // Nav
+  document.querySelectorAll('.nav-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const map = { 'nav-connections':0, 'nav-attribution':0, 'nav-advisor':1, 'nav-lab':2 };
+      if (btn.id in map) setScene(map[btn.id]);
+    });
+  });
+
+  // Dots
+  document.querySelectorAll('.dot').forEach((d,i) => d.addEventListener('click', () => setScene(i)));
+
+  // Row accordion
+  KEYWORDS.forEach((_,i) => {
+    const row = document.getElementById(`row-${i}`);
+    if (row) { row.classList.add('visible','interactive'); row.addEventListener('click', () => toggleAccordion(i)); }
+  });
+
+  // Advisor mode buttons
+  document.querySelectorAll('.advisor-mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => renderAdvisorMode(btn.dataset.mode));
+  });
+
+  // Ensure full state
+  KEYWORDS.forEach((_,i) => document.getElementById(`row-${i}`)?.classList.add('visible'));
+  document.getElementById('budget-cut-val').textContent = '$74,800';
+  renderAdvisorMode('scale');
+  document.getElementById('advisor-panel').style.opacity = '1';
+  ['exp-card-a','exp-card-b','exp-card-c'].forEach(id => document.getElementById(id)?.classList.add('visible'));
+}
+
+/* ACCORDION */
+function toggleAccordion(i) {
+  const drow = document.getElementById(`detail-row-${i}`);
+  const row  = document.getElementById(`row-${i}`);
+  if (!drow) return;
+  const open = drow.classList.toggle('open');
+  row.classList.toggle('selected', open);
+}
+
+/* EXPLORE BTN */
+document.getElementById('explore-btn').addEventListener('click', () => {
+  setScene(0);
+  document.getElementById('explore-btn').classList.remove('visible');
+});
+
+/* THEME */
+let isDark = false;
+document.getElementById('theme-toggle').addEventListener('click', () => {
+  isDark = !isDark;
+  document.body.classList.toggle('dark', isDark);
+  document.getElementById('theme-icon-sun').style.display = isDark ? 'none' : 'block';
+  document.getElementById('theme-icon-moon').style.display = isDark ? 'block' : 'none';
+  document.getElementById('toggle-label').textContent = isDark ? 'Light' : 'Dark';
+});
+
+/* SIDEBAR COLLAPSE */
+document.getElementById('collapse-toggle').addEventListener('click', () => {
+  document.getElementById('sidebar').classList.toggle('collapsed');
+});
+
+/* TRACKING */
+fetch('/api/track', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({path:'/demo/orca'}) }).catch(()=>{});
+
+/* START */
+requestAnimationFrame(animate);
 </script>
 </body>
 </html>
