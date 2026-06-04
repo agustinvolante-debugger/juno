@@ -10,6 +10,7 @@ const ALLOWED_EMAILS = [
   'martin.gajardo@maquinalista.com',
   'artur.magalhaes@elebbre.com.br',
   'renato.nascimento@elebbre.com.br',
+  'stephanie@pearsonlabs.ai',
 ]
 
 export const authOptions: NextAuthOptions = {
