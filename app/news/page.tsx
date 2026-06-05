@@ -25,6 +25,7 @@ import DigestToggle from './DigestToggle'
 import MonitorBar from './MonitorBar'
 import MonitorControls from './MonitorControls'
 import MonitorCardView from './MonitorCardView'
+import AutoRefresh from './AutoRefresh'
 
 export const dynamic = 'force-dynamic'
 
@@ -169,6 +170,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
 
   return (
     <main className="min-h-screen bg-white text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100">
+      <AutoRefresh />
       <header className="flex flex-wrap items-baseline gap-4 border-b border-neutral-900 px-7 py-4 dark:border-neutral-100">
         <h1 className="text-2xl font-bold tracking-tight">▦ Daily Brief</h1>
         <span className="text-sm text-neutral-500">{new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
