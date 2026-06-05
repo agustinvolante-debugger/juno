@@ -87,7 +87,12 @@ export default function GlobeExplorer({ places }: { places: Place[] }) {
   const [loading, setLoading] = useState(false)
   const [tab, setTab] = useState<'all' | CategoryKey>('all')
   const [globeMaterial, setGlobeMaterial] = useState<any>(null)
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
   const reqId = useRef(0)
+  const activeRef = useRef<Place | null>(null)
+  const lastFetchRef = useRef(0)
+  useEffect(() => { activeRef.current = active }, [active])
 
   // Build the day/night shader material (async texture load). `three` is imported inside the effect
   // so it never runs during SSR.
@@ -153,25 +158,51 @@ export default function GlobeExplorer({ places }: { places: Place[] }) {
 
   const points = useMemo(() => places.map((p) => ({ ...p })), [places])
 
-  async function pick(p: Place) {
+  // Fetch a place's news. A SILENT refresh (auto-refresh / manual ↻) keeps the current feed and
+  // tab on screen and just swaps in fresh results, instead of clearing to a loading state.
+  async function pick(p: Place, opts?: { silent?: boolean }) {
+    const silent = !!opts?.silent
     setActive(p)
-    setBuckets(null)
-    setTab('all')
-    setLoading(true)
+    if (silent) {
+      setRefreshing(true)
+    } else {
+      setBuckets(null)
+      setTab('all')
+      setLoading(true)
+      try { window.history.replaceState(null, '', `/news/globe?place=${p.id}`) } catch {}
+      globeRef.current?.pointOfView?.({ lat: p.lat, lng: p.lng, altitude: 1.7 }, 800)
+    }
     const id = ++reqId.current
-    try { window.history.replaceState(null, '', `/news/globe?place=${p.id}`) } catch {}
-    globeRef.current?.pointOfView?.({ lat: p.lat, lng: p.lng, altitude: 1.7 }, 800)
     try {
       const r = await fetch(`/api/news/place?id=${encodeURIComponent(p.id)}`)
       const j = await r.json()
       if (id !== reqId.current) return // a newer click superseded this one
-      setBuckets(j.buckets || null)
+      if (j.buckets) { setBuckets(j.buckets); setUpdatedAt(Date.now()); lastFetchRef.current = Date.now() }
+      else if (!silent) setBuckets(null)
     } catch {
-      if (id === reqId.current) setBuckets(null)
+      if (id === reqId.current && !silent) setBuckets(null)
     } finally {
-      if (id === reqId.current) setLoading(false)
+      if (id === reqId.current) { setLoading(false); setRefreshing(false) }
     }
   }
+
+  // Keep the open place fresh: refresh every 20 min while the tab is visible, and whenever the tab
+  // regains focus after being away (so it's current "every time someone comes back"). Silent — the
+  // on-demand fan-out already returns the latest at fetch time; this just re-pulls it on a cadence.
+  useEffect(() => {
+    const REFRESH_MS = 20 * 60 * 1000
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible' && activeRef.current) pick(activeRef.current, { silent: true })
+    }, REFRESH_MS)
+    const onVis = () => {
+      if (document.visibilityState === 'visible' && activeRef.current && Date.now() - lastFetchRef.current > 5 * 60 * 1000) {
+        pick(activeRef.current, { silent: true })
+      }
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => { clearInterval(interval); document.removeEventListener('visibilitychange', onVis) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Flatten for the "All" tab, tagging each item with its category.
   const allTagged = useMemo(() => {
@@ -229,6 +260,19 @@ export default function GlobeExplorer({ places }: { places: Place[] }) {
                 <span>{active.flag}</span>
                 <span>{active.name}</span>
                 {loading && <span className="ml-1 text-[11px] font-normal text-cyan-400">loading…</span>}
+                <div className="ml-auto flex items-center gap-2 text-[11px] font-normal text-neutral-500">
+                  {refreshing ? (
+                    <span className="text-cyan-400">updating…</span>
+                  ) : updatedAt ? (
+                    <span>updated {new Date(updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  ) : null}
+                  <button
+                    onClick={() => !loading && !refreshing && pick(active, { silent: true })}
+                    title="Refresh now"
+                    className="rounded p-0.5 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-neutral-100 disabled:opacity-40"
+                    disabled={loading || refreshing}
+                  >↻</button>
+                </div>
               </div>
               {/* Tabs */}
               <div className="mt-3 flex flex-wrap gap-1.5">
