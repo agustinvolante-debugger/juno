@@ -3,8 +3,9 @@ import { useState } from 'react'
 
 type Msg = { role: 'user' | 'assistant'; content: string }
 
+// Always-visible input row (peer to Brief me / Add videos). Submitting starts a short
+// setup conversation that renders inline below the row.
 export default function SetupChat() {
-  const [open, setOpen] = useState(false)
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [input, setInput] = useState('')
   const [questions, setQuestions] = useState<string[]>([])
@@ -53,48 +54,59 @@ export default function SetupChat() {
     }
   }
 
-  return (
-    <details open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)} className="border-b border-neutral-200 bg-neutral-100 px-7 py-2.5 text-sm dark:border-neutral-800 dark:bg-neutral-900">
-      <summary className="cursor-pointer font-bold">✨ Set up my feed</summary>
-      <div className="mt-3 max-w-2xl">
-        <div className="mb-2 flex flex-col gap-1.5">
-          {msgs.map((m, i) => (
-            <div key={i} className={m.role === 'user' ? 'self-end rounded-lg bg-neutral-900 px-3 py-1.5 text-white dark:bg-neutral-100 dark:text-neutral-900' : 'self-start rounded-lg border border-neutral-300 bg-white px-3 py-1.5 dark:border-neutral-700 dark:bg-neutral-950'}>
-              {m.content}
-            </div>
-          ))}
-          {questions.length > 0 && <div className="self-start text-neutral-600">• {questions.join('\n• ')}</div>}
-        </div>
+  const active = msgs.length > 0 || proposals.length > 0
 
-        {proposals.length > 0 && (
-          <div className="my-2 flex flex-col gap-1.5">
-            <div className="text-neutral-600">Keep these? ✓ saves it · ✗ skips:</div>
-            {proposals.map((t) => (
-              <div key={t} className={`flex items-center gap-2 rounded-lg border border-neutral-300 bg-white px-2.5 py-1.5 dark:border-neutral-700 dark:bg-neutral-950 ${saved[t] === 'done' ? 'opacity-60' : ''}`}>
-                <span className="flex-1">{t}</span>
-                {saved[t] === 'done' ? (
-                  <span className="text-green-700">saved ✓</span>
-                ) : (
-                  <>
-                    <button onClick={() => keep(t)} disabled={!!saved[t]} className="h-7 w-8 rounded bg-green-700 font-bold text-white disabled:opacity-50">{saved[t] === 'saving' ? '…' : '✓'}</button>
-                    <button onClick={() => setProposals((p) => p.filter((x) => x !== t))} className="h-7 w-8 rounded bg-neutral-200 font-bold dark:bg-neutral-800">✗</button>
-                  </>
-                )}
+  return (
+    <div className="border-t border-neutral-200 px-7 py-2.5 dark:border-neutral-800">
+      <form
+        onSubmit={(e) => { e.preventDefault(); send() }}
+        className="flex flex-wrap items-center gap-2"
+      >
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="✨ Set up my feed — tell me what you're into (sports, a sector, a city…)"
+          className="min-w-[260px] flex-1 rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm transition-colors placeholder:text-neutral-400 focus:border-neutral-500 focus:outline-none dark:border-neutral-800 dark:bg-neutral-950"
+        />
+        <button disabled={busy} className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900">
+          {busy ? 'Thinking…' : 'Set up ▸'}
+        </button>
+      </form>
+
+      {active && (
+        <div className="mt-3 max-w-2xl text-sm">
+          <div className="mb-2 flex flex-col gap-1.5">
+            {msgs.map((m, i) => (
+              <div key={i} className={m.role === 'user' ? 'self-end rounded-lg bg-neutral-900 px-3 py-1.5 text-white dark:bg-neutral-100 dark:text-neutral-900' : 'self-start rounded-lg border border-neutral-300 bg-white px-3 py-1.5 dark:border-neutral-700 dark:bg-neutral-950'}>
+                {m.content}
               </div>
             ))}
-            {Object.values(saved).includes('done') && (
-              <button onClick={() => location.reload()} className="mt-1 self-start rounded-md bg-neutral-900 px-3.5 py-1.5 font-bold text-white dark:bg-neutral-100 dark:text-neutral-900">Show my sections ▸</button>
-            )}
+            {questions.length > 0 && <div className="self-start text-neutral-600 dark:text-neutral-400">• {questions.join('\n• ')}</div>}
           </div>
-        )}
 
-        {proposals.length === 0 && (
-          <div className="flex gap-2">
-            <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && send()} placeholder="Tell me what you're into…" className="flex-1 rounded-md border border-neutral-300 bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-950" />
-            <button onClick={send} disabled={busy} className="rounded-md bg-neutral-900 px-4 py-2 font-bold text-white disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900">{busy ? '…' : 'Send'}</button>
-          </div>
-        )}
-      </div>
-    </details>
+          {proposals.length > 0 && (
+            <div className="my-2 flex flex-col gap-1.5">
+              <div className="text-neutral-600 dark:text-neutral-400">Keep these? ✓ saves it · ✗ skips:</div>
+              {proposals.map((t) => (
+                <div key={t} className={`flex items-center gap-2 rounded-lg border border-neutral-300 bg-white px-2.5 py-1.5 dark:border-neutral-700 dark:bg-neutral-950 ${saved[t] === 'done' ? 'opacity-60' : ''}`}>
+                  <span className="flex-1">{t}</span>
+                  {saved[t] === 'done' ? (
+                    <span className="text-green-700">saved ✓</span>
+                  ) : (
+                    <>
+                      <button onClick={() => keep(t)} disabled={!!saved[t]} className="h-7 w-8 rounded bg-green-700 font-bold text-white disabled:opacity-50">{saved[t] === 'saving' ? '…' : '✓'}</button>
+                      <button onClick={() => setProposals((p) => p.filter((x) => x !== t))} className="h-7 w-8 rounded bg-neutral-200 font-bold dark:bg-neutral-800">✗</button>
+                    </>
+                  )}
+                </div>
+              ))}
+              {Object.values(saved).includes('done') && (
+                <button onClick={() => location.reload()} className="mt-1 self-start rounded-md bg-neutral-900 px-3.5 py-1.5 font-bold text-white dark:bg-neutral-100 dark:text-neutral-900">Show my sections ▸</button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   )
 }

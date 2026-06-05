@@ -22,3 +22,11 @@ export async function POST(req: Request) {
   await setProfile(email, p)
   return NextResponse.json({ ok: true })
 }
+
+// Reset the learned profile (clears For-You personalization).
+export async function DELETE() {
+  const email = await authedEmail()
+  if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  await setProfile(email, { s: {}, k: {}, w: {} })
+  return NextResponse.json({ ok: true })
+}

@@ -36,7 +36,9 @@ create table if not exists news_feed_cache (
   updated_at  timestamptz default now()
 );
 
--- Shared macro strip cache (Dow / CPI / Unemployment)
+-- Shared macro strip cache. id=1 = macro strip stats (Dow / CPI / Unemployment).
+-- id=2 reuses this table to hold the AI "what matters today" briefs map {sectionKey: text}
+-- (kept out of news_feed_cache so older deployed code never reads it as a section).
 create table if not exists news_macro_cache (
   id          int primary key default 1,
   stats       jsonb default '[]'::jsonb,

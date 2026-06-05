@@ -32,15 +32,15 @@ export default function AIBar({ authed, signInHref = '/api/auth/signin' }: { aut
           location.reload()
         }
       }}
-      className="flex flex-wrap items-center gap-2 border-b border-neutral-200 bg-neutral-100 px-7 py-3 dark:border-neutral-800 dark:bg-neutral-900"
+      className="flex flex-wrap items-center gap-2 px-7 py-2.5"
     >
       <input
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="Meeting in 15 min? Type a topic — NBA Finals, AI healthcare, a company…"
-        className="min-w-[260px] flex-1 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-950"
+        className="min-w-[260px] flex-1 rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm transition-colors placeholder:text-neutral-400 focus:border-neutral-500 focus:outline-none dark:border-neutral-800 dark:bg-neutral-950"
       />
-      <button disabled={busy} className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-bold text-white disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900">
+      <button disabled={busy} className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900">
         {busy ? 'Briefing…' : 'Brief me ▸'}
       </button>
     </form>

@@ -4,6 +4,28 @@
 
 export type Item = { t: string; l: string; s: string; d: string | null; summary?: string }
 export type Section = { key: string; label: string }
+// A "Monitor" tracks a developing situation: items carry `first` (when we first saw them) so the
+// UI can flag what's NEW since the last refresh. `card` is an optional type-specific summary the
+// AI extracts from the coverage (earnings beat/miss, sports results, etc.) for an adaptive layout.
+export type MonitorCard = {
+  type: 'earnings' | 'sports' | 'company' | 'event' | 'generic'
+  // earnings
+  company?: string
+  reportDate?: string
+  reported?: boolean
+  revenue?: string
+  revenueEst?: string
+  eps?: string
+  epsEst?: string
+  verdict?: string
+  // sports
+  competition?: string
+  results?: { label: string; detail?: string }[]
+  fixtures?: { label: string; when?: string }[]
+  // company / event / generic
+  headline?: string
+}
+export type Monitor = { query: string; items: (Item & { first?: string })[]; brief: string; card?: MonitorCard; updated_at: string }
 
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
@@ -22,6 +44,29 @@ export const SECTIONS: Section[] = [
 ]
 
 export const ES_NATIVE = new Set(['chile'])
+
+// Sections that ALSO pull from Google News search, not just the curated RSS feeds.
+// The query string IS the "instruction": broad enough to catch the story wherever it
+// breaks first (Bloomberg, Reuters, regional press), then AI curation dedupes + ranks.
+// This is how the section spans ~all publishers instead of a handful of hand-picked feeds.
+export const SECTION_QUERIES: Record<string, { query: string; when: string; maxAgeDays: number; limit: number }> = {
+  funding: {
+    query:
+      '(raises OR raised OR "Series A" OR "Series B" OR "Series C" OR "seed round" OR "funding round" OR "led the round" OR valuation OR IPO OR acquires OR acquisition) ' +
+      '(startup OR fintech OR AI OR SaaS OR venture OR billion OR million)',
+    when: '3d', maxAgeDays: 4, limit: 25,
+  },
+  ai: {
+    query:
+      '("artificial intelligence" OR LLM OR "AI model" OR OpenAI OR Anthropic OR "Google DeepMind" OR Nvidia OR "AI agent") ' +
+      '(launch OR release OR breakthrough OR raises OR lawsuit OR regulation)',
+    when: '2d', maxAgeDays: 3, limit: 25,
+  },
+  markets: {
+    query: '(stock market OR "S&P 500" OR Nasdaq OR Fed OR "interest rates" OR earnings OR inflation OR recession OR "Treasury yields")',
+    when: '2d', maxAgeDays: 2, limit: 25,
+  },
+}
 
 const SOURCES: { section: string; name: string; url: string }[] = [
   { section: 'ai', name: 'Hacker News', url: 'https://hnrss.org/frontpage?points=100' },
@@ -62,6 +107,8 @@ const SOURCES: { section: string; name: string; url: string }[] = [
   { section: 'chile', name: 'Pulso', url: 'https://www.latercera.com/arc/outboundfeeds/rss/category/pulso/?outputType=xml' },
   { section: 'chile', name: 'CIPER Chile', url: 'https://www.ciperchile.cl/feed/' },
   { section: 'chile', name: 'The Clinic', url: 'https://www.theclinic.cl/feed/' },
+  // Emol dropped its public RSS, so pull it via a Google News site-scoped feed (Chilean locale).
+  { section: 'chile', name: 'Emol', url: 'https://news.google.com/rss/search?q=site:emol.com+when:3d&hl=es-419&gl=CL&ceid=CL:es' },
   { section: 'founder', name: 'Product Hunt', url: 'https://www.producthunt.com/feed' },
   { section: 'founder', name: 'Show HN', url: 'https://hnrss.org/show' },
   { section: 'founder', name: 'r/SideProject', url: 'https://www.reddit.com/r/SideProject/top/.rss?t=week' },
@@ -197,11 +244,23 @@ export async function collectSections(): Promise<{ bySection: Record<string, Ite
     if (items.length) live++
     const arr = (bySection[f.section] ||= [])
     const watch = f.section.startsWith('watch_')
+    const fromGNews = f.url.includes('news.google.com') // these titles end with " - Publisher"
     for (const it of items) {
       if (watch && isShort(it.title, it.link)) continue
-      arr.push({ t: it.title, l: it.link, s: f.name, d: it.date, summary: it.summary })
+      let t = it.title
+      if (fromGNews && t.endsWith(` - ${f.name}`)) t = t.slice(0, -(f.name.length + 3))
+      arr.push({ t, l: it.link, s: f.name, d: it.date, summary: it.summary })
     }
   }
+
+  // Breadth pass: blend Google News search results into configured sections so a big
+  // story (e.g. a major round) gets caught wherever it breaks, not just in the 7 RSS feeds.
+  await Promise.all(
+    Object.entries(SECTION_QUERIES).map(async ([sec, cfg]) => {
+      const found = await searchTopic(cfg.query, {}, { when: cfg.when, maxAgeDays: cfg.maxAgeDays, limit: cfg.limit })
+      if (found.length) (bySection[sec] ||= []).push(...found)
+    }),
+  )
   for (const k of Object.keys(bySection)) {
     const seen = new Set<string>()
     bySection[k] = bySection[k]
@@ -293,12 +352,14 @@ export async function searchTopic(
     if (!isNaN(d) && (now - d) / 86400000 > maxAgeDays) continue
     let src = it.source
     let t = it.title
-    if (!src && t.includes(' - ')) {
-      const idx = t.lastIndexOf(' - ')
+    // Google News appends " - Publisher" to every title — strip it, and use it as the source if
+    // the <source> tag was missing.
+    const idx = t.lastIndexOf(' - ')
+    if (idx > 0) {
       const tail = t.slice(idx + 3)
       if (tail.length > 0 && tail.length < 40) {
         t = t.slice(0, idx)
-        src = tail
+        if (!src) src = tail
       }
     }
     out.push({ t, l: it.link, s: src || 'Google News', d: it.date })
@@ -308,35 +369,81 @@ export async function searchTopic(
 }
 
 export type Stat = { label: string; value: string; sub: string; good: boolean | null }
-export type StatDef = { id: string; label: string; group: string; kind: 'stooq' | 'bls' | 'fred'; key: string; mode?: 'cpi' | 'rate' | 'yoy' | 'level' }
+export type StatDef = { id: string; label: string; country: string; group: string; kind: 'stooq' | 'bls' | 'fred' | 'cnbc'; key: string; mode?: 'cpi' | 'rate' | 'yoy' | 'level' | 'num' }
 
-// Pick-from catalog for the stats strip. Indices via Stooq (reliable globally); US macro via BLS;
-// other-country macro via FRED (best-effort — may be unavailable from some networks).
+// Flag (or icon) per country/group, shown on the belt and in the markets menu.
+export const COUNTRY_FLAG: Record<string, string> = {
+  'United States': '🇺🇸', 'Euro Area': '🇪🇺', 'United Kingdom': '🇬🇧', 'Germany': '🇩🇪', 'France': '🇫🇷',
+  'Japan': '🇯🇵', 'China': '🇨🇳', 'Hong Kong': '🇭🇰', 'India': '🇮🇳', 'Canada': '🇨🇦', 'Australia': '🇦🇺',
+  'Chile': '🇨🇱', 'Brazil': '🇧🇷', 'Argentina': '🇦🇷', 'Global': '🌐', 'Stocks': '📈',
+}
+export const flagFor = (country: string): string => COUNTRY_FLAG[country] || ''
+
+// Build a StatDef for a user-added individual ticker (quoted via CNBC).
+export const tickerDef = (symbol: string, label?: string): StatDef => {
+  const sym = symbol.toUpperCase()
+  return { id: `tk_${sym.toLowerCase()}`, label: label || sym, country: 'Stocks', group: 'Stocks', kind: 'cnbc', key: sym }
+}
+
+// Catalog for the markets belt, organized by COUNTRY → category (group).
+// Markets/commodities via Stooq (reliable globally); macro via FRED (best-effort — some series
+// may be unavailable from certain networks; per-stat failures are skipped, never NaN).
+// Country order here is the display order in the menu (US first, majors, LatAm, then Global).
 export const STATS_CATALOG: StatDef[] = [
-  { id: 'dow', label: 'Dow Jones', group: 'US Markets', kind: 'stooq', key: '^dji' },
-  { id: 'sp500', label: 'S&P 500', group: 'US Markets', kind: 'stooq', key: '^spx' },
-  { id: 'nasdaq', label: 'Nasdaq 100', group: 'US Markets', kind: 'stooq', key: '^ndx' },
-  { id: 'ftse', label: 'FTSE 100 · UK', group: 'World Markets', kind: 'stooq', key: '^ukx' },
-  { id: 'dax', label: 'DAX · Germany', group: 'World Markets', kind: 'stooq', key: '^dax' },
-  { id: 'cac', label: 'CAC 40 · France', group: 'World Markets', kind: 'stooq', key: '^cac' },
-  { id: 'nikkei', label: 'Nikkei 225 · Japan', group: 'World Markets', kind: 'stooq', key: '^nkx' },
-  { id: 'hsi', label: 'Hang Seng · HK', group: 'World Markets', kind: 'stooq', key: '^hsi' },
-  { id: 'shanghai', label: 'Shanghai', group: 'World Markets', kind: 'stooq', key: '^shc' },
-  { id: 'sensex', label: 'Sensex · India', group: 'World Markets', kind: 'stooq', key: '^snx' },
-  { id: 'tsx', label: 'TSX · Canada', group: 'World Markets', kind: 'stooq', key: '^tsx' },
-  { id: 'ipsa', label: 'IPSA · Chile', group: 'World Markets', kind: 'stooq', key: '^ipsa' },
-  { id: 'bovespa', label: 'Bovespa · Brazil', group: 'World Markets', kind: 'stooq', key: '^bvp' },
-  { id: 'merval', label: 'Merval · Argentina', group: 'World Markets', kind: 'stooq', key: '^mrv' },
-  { id: 'gold', label: 'Gold', group: 'Commodities & Crypto', kind: 'stooq', key: 'xauusd' },
-  { id: 'oil', label: 'Crude Oil · WTI', group: 'Commodities & Crypto', kind: 'stooq', key: 'cl.f' },
-  { id: 'btc', label: 'Bitcoin', group: 'Commodities & Crypto', kind: 'stooq', key: 'btcusd' },
-  { id: 'eurusd', label: 'EUR / USD', group: 'Commodities & Crypto', kind: 'stooq', key: 'eurusd' },
-  { id: 'us_cpi', label: 'US CPI · YoY', group: 'Economy', kind: 'fred', key: 'CPIAUCSL', mode: 'yoy' },
-  { id: 'us_unemp', label: 'US Unemployment', group: 'Economy', kind: 'fred', key: 'UNRATE', mode: 'level' },
-  { id: 'cl_cpi', label: 'Chile CPI · YoY', group: 'Economy', kind: 'fred', key: 'CHLCPIALLMINMEI', mode: 'yoy' },
-  { id: 'au_unemp', label: 'Australia Unemployment', group: 'Economy', kind: 'fred', key: 'LRHUTTTTAUM156S', mode: 'level' },
-  { id: 'uk_unemp', label: 'UK Unemployment', group: 'Economy', kind: 'fred', key: 'LRHUTTTTGBM156S', mode: 'level' },
-  { id: 'ea_cpi', label: 'Euro Area CPI · YoY', group: 'Economy', kind: 'fred', key: 'CP0000EZ19M086NEST', mode: 'yoy' },
+  // ── United States ──
+  { id: 'dow', label: 'Dow Jones', country: 'United States', group: 'Markets', kind: 'stooq', key: '^dji' },
+  { id: 'sp500', label: 'S&P 500', country: 'United States', group: 'Markets', kind: 'stooq', key: '^spx' },
+  { id: 'nasdaq', label: 'Nasdaq 100', country: 'United States', group: 'Markets', kind: 'stooq', key: '^ndx' },
+  { id: 'us_vix', label: 'VIX · Volatility', country: 'United States', group: 'Markets', kind: 'stooq', key: '^vix' },
+  { id: 'us_cpi', label: 'CPI · YoY', country: 'United States', group: 'Economic Data', kind: 'fred', key: 'CPIAUCSL', mode: 'yoy' },
+  { id: 'us_unemp', label: 'Unemployment', country: 'United States', group: 'Economic Data', kind: 'fred', key: 'UNRATE', mode: 'level' },
+  { id: 'us_gdp', label: 'Real GDP · QoQ ann.', country: 'United States', group: 'Economic Data', kind: 'fred', key: 'A191RL1Q225SBEA', mode: 'level' },
+  { id: 'us_fed', label: 'Fed Funds Rate', country: 'United States', group: 'Economic Data', kind: 'fred', key: 'FEDFUNDS', mode: 'level' },
+  { id: 'us_10y', label: '10Y Treasury', country: 'United States', group: 'Economic Data', kind: 'fred', key: 'DGS10', mode: 'level' },
+  { id: 'us_retail', label: 'Retail Sales · YoY', country: 'United States', group: 'Economic Data', kind: 'fred', key: 'RSAFS', mode: 'yoy' },
+  { id: 'us_sentiment', label: 'Consumer Sentiment', country: 'United States', group: 'Economic Data', kind: 'fred', key: 'UMCSENT', mode: 'num' },
+  // ── Euro Area ──
+  { id: 'ea_cpi', label: 'CPI · YoY', country: 'Euro Area', group: 'Economic Data', kind: 'fred', key: 'CP0000EZ19M086NEST', mode: 'yoy' },
+  // ── United Kingdom ──
+  { id: 'ftse', label: 'FTSE 100', country: 'United Kingdom', group: 'Markets', kind: 'stooq', key: '^ukx' },
+  { id: 'uk_cpi', label: 'CPI · YoY', country: 'United Kingdom', group: 'Economic Data', kind: 'fred', key: 'GBRCPIALLMINMEI', mode: 'yoy' },
+  { id: 'uk_unemp', label: 'Unemployment', country: 'United Kingdom', group: 'Economic Data', kind: 'fred', key: 'LRHUTTTTGBM156S', mode: 'level' },
+  // ── Germany ──
+  { id: 'dax', label: 'DAX', country: 'Germany', group: 'Markets', kind: 'stooq', key: '^dax' },
+  { id: 'de_cpi', label: 'CPI · YoY', country: 'Germany', group: 'Economic Data', kind: 'fred', key: 'DEUCPIALLMINMEI', mode: 'yoy' },
+  { id: 'de_unemp', label: 'Unemployment', country: 'Germany', group: 'Economic Data', kind: 'fred', key: 'LRHUTTTTDEM156S', mode: 'level' },
+  // ── France ──
+  { id: 'cac', label: 'CAC 40', country: 'France', group: 'Markets', kind: 'stooq', key: '^cac' },
+  // ── Japan ──
+  { id: 'nikkei', label: 'Nikkei 225', country: 'Japan', group: 'Markets', kind: 'stooq', key: '^nkx' },
+  // ── China / Hong Kong ──
+  { id: 'shanghai', label: 'Shanghai Composite', country: 'China', group: 'Markets', kind: 'stooq', key: '^shc' },
+  { id: 'hsi', label: 'Hang Seng', country: 'Hong Kong', group: 'Markets', kind: 'stooq', key: '^hsi' },
+  // ── India ──
+  { id: 'sensex', label: 'Sensex', country: 'India', group: 'Markets', kind: 'stooq', key: '^snx' },
+  // ── Canada ──
+  { id: 'tsx', label: 'TSX Composite', country: 'Canada', group: 'Markets', kind: 'stooq', key: '^tsx' },
+  // ── Australia ──
+  { id: 'au_unemp', label: 'Unemployment', country: 'Australia', group: 'Economic Data', kind: 'fred', key: 'LRHUTTTTAUM156S', mode: 'level' },
+  // ── Chile ──
+  { id: 'ipsa', label: 'IPSA', country: 'Chile', group: 'Markets', kind: 'stooq', key: '^ipsa' },
+  { id: 'cl_cpi', label: 'CPI · YoY', country: 'Chile', group: 'Economic Data', kind: 'fred', key: 'CHLCPIALLMINMEI', mode: 'yoy' },
+  { id: 'cl_unemp', label: 'Unemployment', country: 'Chile', group: 'Economic Data', kind: 'fred', key: 'LRHUTTTTCLM156S', mode: 'level' },
+  // ── Brazil ──
+  { id: 'bovespa', label: 'Bovespa', country: 'Brazil', group: 'Markets', kind: 'stooq', key: '^bvp' },
+  // ── Argentina ──
+  { id: 'merval', label: 'Merval', country: 'Argentina', group: 'Markets', kind: 'stooq', key: '^mrv' },
+  // ── Global (commodities, crypto, FX) ──
+  { id: 'gold', label: 'Gold', country: 'Global', group: 'Commodities & FX', kind: 'stooq', key: 'xauusd' },
+  { id: 'oil', label: 'Crude Oil · WTI', country: 'Global', group: 'Commodities & FX', kind: 'stooq', key: 'cl.f' },
+  { id: 'btc', label: 'Bitcoin', country: 'Global', group: 'Commodities & FX', kind: 'stooq', key: 'btcusd' },
+  { id: 'eurusd', label: 'EUR / USD', country: 'Global', group: 'Commodities & FX', kind: 'stooq', key: 'eurusd' },
+]
+
+// Display order for countries in the menu.
+export const COUNTRY_ORDER = [
+  'United States', 'Euro Area', 'United Kingdom', 'Germany', 'France', 'Japan',
+  'China', 'Hong Kong', 'India', 'Canada', 'Australia', 'Chile', 'Brazil', 'Argentina', 'Global',
 ]
 
 export const DEFAULT_STATS = ['dow', 'sp500', 'nasdaq', 'us_cpi', 'us_unemp']
@@ -389,8 +496,15 @@ async function blsStats(defs: StatDef[]): Promise<Record<string, Stat>> {
 
 async function fredStat(def: StatDef): Promise<Stat | null> {
   try {
-    const rows = (await fetchText(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${def.key}`))
-      .trim().split('\n').filter((r) => r && /^\d{4}-\d{2}-\d{2},/.test(r))
+    // FRED throttles intermittently from some networks — retry a couple times before giving up.
+    // Cap the range to ~2 years so daily series (e.g. DGS10) return a small, fast CSV instead
+    // of a multi-decade download that times out. Still plenty for a 12-month YoY lookback.
+    const cosd = new Date(Date.now() - 760 * 86400000).toISOString().slice(0, 10)
+    let rows: string[] = []
+    for (let attempt = 0; attempt < 3 && rows.length < 2; attempt++) {
+      rows = (await fetchText(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${def.key}&cosd=${cosd}`))
+        .trim().split('\n').filter((r) => r && /^\d{4}-\d{2}-\d{2},/.test(r))
+    }
     if (rows.length < 2) return null
     const val = (r: string) => parseFloat(r.split(',')[1])
     const lastRow = rows[rows.length - 1]
@@ -403,22 +517,51 @@ async function fredStat(def: StatDef): Promise<Stat | null> {
       const yoy = (last / prior - 1) * 100
       return { label: def.label, value: `${yoy >= 0 ? '+' : ''}${yoy.toFixed(1)}%`, sub: mon, good: yoy <= 3 }
     }
+    if (def.mode === 'num') return { label: def.label, value: fmtNum(last), sub: mon, good: null }
     return { label: def.label, value: `${last.toFixed(1)}%`, sub: mon, good: null }
   } catch { return null }
 }
 
-// Fetches the full catalog into a map. Per-stat failures are skipped (never renders NaN).
-export async function getStats(): Promise<Record<string, Stat>> {
+// Live quotes via CNBC's JSON quote service (one call, many symbols). Reliable + gives names;
+// used for individual tickers. Could also back the indices if Stooq's bot-checks worsen.
+async function cnbcStats(defs: StatDef[]): Promise<Record<string, Stat>> {
   const out: Record<string, Stat> = {}
-  const stooqDefs = STATS_CATALOG.filter((d) => d.kind === 'stooq')
-  const fredDefs = STATS_CATALOG.filter((d) => d.kind === 'fred')
-  const [stooqRes, blsRes, fredRes] = await Promise.all([
+  if (!defs.length) return out
+  try {
+    const syms = defs.map((d) => d.key).join(',')
+    const url = `https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=${encodeURIComponent(syms)}&requestMethod=itv&fund=1&exthrs=1&output=json`
+    const r = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: AbortSignal.timeout(13000) })
+    const j = await r.json()
+    const quotes: any[] = j?.FormattedQuoteResult?.FormattedQuote || []
+    const bySym: Record<string, any> = {}
+    for (const q of quotes) bySym[String(q.symbol || '').toUpperCase()] = q
+    for (const def of defs) {
+      const q = bySym[def.key.toUpperCase()]
+      if (!q || q.last == null) continue
+      const pct = String(q.change_pct || '')
+      const good = pct ? !pct.trim().startsWith('-') : null
+      out[def.id] = { label: def.label, value: String(q.last), sub: pct, good }
+    }
+  } catch {}
+  return out
+}
+
+// Fetches the catalog (+ any extra ticker defs) into a map. Per-stat failures are skipped (never NaN).
+export async function getStats(extra: StatDef[] = []): Promise<Record<string, Stat>> {
+  const out: Record<string, Stat> = {}
+  const all = [...STATS_CATALOG, ...extra]
+  const stooqDefs = all.filter((d) => d.kind === 'stooq')
+  const fredDefs = all.filter((d) => d.kind === 'fred')
+  const cnbcDefs = all.filter((d) => d.kind === 'cnbc')
+  const [stooqRes, blsRes, fredRes, cnbcRes] = await Promise.all([
     Promise.all(stooqDefs.map((d) => stooqStat(d))),
-    blsStats(STATS_CATALOG.filter((d) => d.kind === 'bls')),
+    blsStats(all.filter((d) => d.kind === 'bls')),
     Promise.all(fredDefs.map((d) => fredStat(d))),
+    cnbcStats(cnbcDefs),
   ])
   stooqDefs.forEach((d, i) => { if (stooqRes[i]) out[d.id] = stooqRes[i]! })
   Object.assign(out, blsRes)
   fredDefs.forEach((d, i) => { if (fredRes[i]) out[d.id] = fredRes[i]! })
+  Object.assign(out, cnbcRes)
   return out
 }
