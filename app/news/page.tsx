@@ -13,6 +13,8 @@ import RemoveVideo from './RemoveVideo'
 import LangToggle from './LangToggle'
 import ClickTracker from './ClickTracker'
 import LayoutEnhancer from './LayoutEnhancer'
+import HideSection from './HideSection'
+import ShowHidden from './ShowHidden'
 
 export const dynamic = 'force-dynamic'
 
@@ -68,6 +70,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
   const prefs = email ? await getPrefs(email) : { lang: 'en', layout: {} as any }
   const lang = prefs.lang
   const prefsLayout = prefs.layout || {}
+  const hidden: string[] = prefsLayout.hidden || []
   const label = (s: { key: string; label: string }) => (lang === 'es' ? ES_LABELS[s.key] || s.label : s.label)
 
   // Spanish headline translation for non-native news sections (cached per link).
@@ -207,10 +210,11 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
           ))}
 
           {/* Standard sections */}
-          {SECTIONS.filter((s) => (cache[s.key] || []).length).map((s) => (
+          {SECTIONS.filter((s) => (cache[s.key] || []).length && !hidden.includes(s.key)).map((s) => (
             <section key={s.key} data-id={s.key} className="db-card break-inside-avoid rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-              <h2 className="flex items-center gap-2 border-b border-neutral-900 px-3.5 py-2.5 text-[12px] font-bold uppercase tracking-wide dark:border-neutral-100">
+              <h2 className="flex items-center justify-between border-b border-neutral-900 px-3.5 py-2.5 text-[12px] font-bold uppercase tracking-wide dark:border-neutral-100">
                 <span>{ICON(s.key)} {label(s)}</span>
+                {email && <HideSection k={s.key} />}
               </h2>
               {email && !WATCH(s.key) && <SectionBrief section={s.key} />}
               <Items items={cache[s.key]} tr={tr} sec={s.key} />
@@ -220,7 +224,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
       )}
 
       <footer className="px-7 pb-10 text-xs text-neutral-500">
-        {email ? `Signed in as ${email}` : (<>Free news for everyone · <a href={signInHref} className="underline">sign in</a> for AI briefings, custom topics & video sections.</>)}
+        {email ? (<>Signed in as {email}{hidden.length ? <> · <ShowHidden count={hidden.length} /></> : null}</>) : (<>Free news for everyone · <a href={signInHref} className="underline">sign in</a> for AI briefings, custom topics & video sections.</>)}
       </footer>
     </main>
   )
