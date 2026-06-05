@@ -177,6 +177,11 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
           <a href={view === 'today' ? '/news' : '/news?view=today'} className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-bold text-white dark:bg-neutral-100 dark:text-neutral-900">
             {view === 'today' ? '← back' : `📰 ${lang === 'es' ? 'Qué pasó hoy' : 'What happened today'}`}
           </a>
+          {email && (
+            <a href="/news/globe" className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-bold transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800">
+              🌍 {lang === 'es' ? 'Explorador' : 'Globe'}
+            </a>
+          )}
           {email && <LangToggle lang={lang} />}
           <RefreshButton />
           {email ? (

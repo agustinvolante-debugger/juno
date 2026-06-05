@@ -258,13 +258,15 @@ export async function buildVideoSection(desc: string): Promise<VideoSection> {
   return { key: 'vt_' + slug, label: (label || desc).slice(0, 40), channels: chans, items: items.slice(0, 30) }
 }
 
-export async function translateTitles(titles: string[]): Promise<string[]> {
+export async function translateTitles(titles: string[], target: 'en' | 'es' = 'es'): Promise<string[]> {
   if (!titles.length) return []
+  const langName = target === 'en' ? 'English' : 'Spanish'
   const prompt =
-    'Translate these news headlines to natural, concise Spanish. Return ONLY a JSON array of strings — ' +
+    `Translate these news headlines to natural, concise ${langName}. If a headline is ALREADY in ${langName}, ` +
+    `return it unchanged. Return ONLY a JSON array of strings — ` +
     `same order, exactly ${titles.length} items, no extra text:\n${JSON.stringify(titles)}`
   try {
-    const m = (await claudeText(prompt, 2000)).match(/\[[\s\S]*\]/)
+    const m = (await claudeText(prompt, 2500)).match(/\[[\s\S]*\]/)
     const arr = m ? JSON.parse(m[0]) : []
     return Array.isArray(arr) ? arr : []
   } catch {
