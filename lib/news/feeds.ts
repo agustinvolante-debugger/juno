@@ -307,58 +307,118 @@ export async function searchTopic(
   return out.slice(0, limit)
 }
 
-export type MacroStat = { label: string; value: string; sub: string; good: boolean | null }
+export type Stat = { label: string; value: string; sub: string; good: boolean | null }
+export type StatDef = { id: string; label: string; group: string; kind: 'stooq' | 'bls' | 'fred'; key: string; mode?: 'cpi' | 'rate' | 'yoy' | 'level' }
 
-export async function getMacro(): Promise<MacroStat[]> {
-  const stats: MacroStat[] = []
+// Pick-from catalog for the stats strip. Indices via Stooq (reliable globally); US macro via BLS;
+// other-country macro via FRED (best-effort — may be unavailable from some networks).
+export const STATS_CATALOG: StatDef[] = [
+  { id: 'dow', label: 'Dow Jones', group: 'US Markets', kind: 'stooq', key: '^dji' },
+  { id: 'sp500', label: 'S&P 500', group: 'US Markets', kind: 'stooq', key: '^spx' },
+  { id: 'nasdaq', label: 'Nasdaq 100', group: 'US Markets', kind: 'stooq', key: '^ndx' },
+  { id: 'ftse', label: 'FTSE 100 · UK', group: 'World Markets', kind: 'stooq', key: '^ukx' },
+  { id: 'dax', label: 'DAX · Germany', group: 'World Markets', kind: 'stooq', key: '^dax' },
+  { id: 'cac', label: 'CAC 40 · France', group: 'World Markets', kind: 'stooq', key: '^cac' },
+  { id: 'nikkei', label: 'Nikkei 225 · Japan', group: 'World Markets', kind: 'stooq', key: '^nkx' },
+  { id: 'hsi', label: 'Hang Seng · HK', group: 'World Markets', kind: 'stooq', key: '^hsi' },
+  { id: 'shanghai', label: 'Shanghai', group: 'World Markets', kind: 'stooq', key: '^shc' },
+  { id: 'sensex', label: 'Sensex · India', group: 'World Markets', kind: 'stooq', key: '^snx' },
+  { id: 'tsx', label: 'TSX · Canada', group: 'World Markets', kind: 'stooq', key: '^tsx' },
+  { id: 'ipsa', label: 'IPSA · Chile', group: 'World Markets', kind: 'stooq', key: '^ipsa' },
+  { id: 'bovespa', label: 'Bovespa · Brazil', group: 'World Markets', kind: 'stooq', key: '^bvp' },
+  { id: 'merval', label: 'Merval · Argentina', group: 'World Markets', kind: 'stooq', key: '^mrv' },
+  { id: 'gold', label: 'Gold', group: 'Commodities & Crypto', kind: 'stooq', key: 'xauusd' },
+  { id: 'oil', label: 'Crude Oil · WTI', group: 'Commodities & Crypto', kind: 'stooq', key: 'cl.f' },
+  { id: 'btc', label: 'Bitcoin', group: 'Commodities & Crypto', kind: 'stooq', key: 'btcusd' },
+  { id: 'eurusd', label: 'EUR / USD', group: 'Commodities & Crypto', kind: 'stooq', key: 'eurusd' },
+  { id: 'us_cpi', label: 'US CPI · YoY', group: 'Economy', kind: 'fred', key: 'CPIAUCSL', mode: 'yoy' },
+  { id: 'us_unemp', label: 'US Unemployment', group: 'Economy', kind: 'fred', key: 'UNRATE', mode: 'level' },
+  { id: 'cl_cpi', label: 'Chile CPI · YoY', group: 'Economy', kind: 'fred', key: 'CHLCPIALLMINMEI', mode: 'yoy' },
+  { id: 'au_unemp', label: 'Australia Unemployment', group: 'Economy', kind: 'fred', key: 'LRHUTTTTAUM156S', mode: 'level' },
+  { id: 'uk_unemp', label: 'UK Unemployment', group: 'Economy', kind: 'fred', key: 'LRHUTTTTGBM156S', mode: 'level' },
+  { id: 'ea_cpi', label: 'Euro Area CPI · YoY', group: 'Economy', kind: 'fred', key: 'CP0000EZ19M086NEST', mode: 'yoy' },
+]
+
+export const DEFAULT_STATS = ['dow', 'sp500', 'nasdaq', 'us_cpi', 'us_unemp']
+
+function fmtNum(n: number): string {
+  return n.toLocaleString('en-US', { maximumFractionDigits: n >= 100 ? 0 : n >= 10 ? 1 : 4 })
+}
+
+async function stooqStat(def: StatDef): Promise<Stat | null> {
   try {
-    const rows = (await fetchText('https://stooq.com/q/l/?s=^dji&f=sd2t2ohlcv&h&e=csv')).trim().split('\n')
-    let close = parseFloat(rows[1].split(',')[6])
-    let chg: number | null = null
-    try {
-      const hist = (await fetchText('https://stooq.com/q/d/l/?s=^dji&i=d')).trim().split('\n')
-      const c1 = parseFloat(hist[hist.length - 1].split(',')[4])
-      const c0 = parseFloat(hist[hist.length - 2].split(',')[4])
-      close = c1
-      chg = (c1 / c0 - 1) * 100
-    } catch {}
-    stats.push({
-      label: 'Dow Jones',
-      value: close.toLocaleString('en-US', { maximumFractionDigits: 0 }),
-      sub: chg === null ? '' : `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%`,
-      good: chg === null ? null : chg >= 0,
-    })
-  } catch {}
+    const rows = (await fetchText(`https://stooq.com/q/l/?s=${encodeURIComponent(def.key)}&f=sd2t2ohlcv&h&e=csv`)).trim().split('\n')
+    const cols = (rows[1] || '').split(',')
+    const open = parseFloat(cols[3]); const close = parseFloat(cols[6])
+    if (!isFinite(close)) return null
+    const chg = isFinite(open) && open ? (close / open - 1) * 100 : null
+    return { label: def.label, value: fmtNum(close), sub: chg === null ? '' : `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%`, good: chg === null ? null : chg >= 0 }
+  } catch { return null }
+}
+
+async function blsStats(defs: StatDef[]): Promise<Record<string, Stat>> {
+  const out: Record<string, Stat> = {}
+  if (!defs.length) return out
   try {
     const yr = new Date().getFullYear()
     const r = await fetch('https://api.bls.gov/publicAPI/v2/timeseries/data/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'User-Agent': UA },
-      body: JSON.stringify({ seriesid: ['CUUR0000SA0', 'LNS14000000'], startyear: String(yr - 1), endyear: String(yr) }),
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'User-Agent': UA },
+      body: JSON.stringify({ seriesid: defs.map((d) => d.key), startyear: String(yr - 1), endyear: String(yr) }),
       signal: AbortSignal.timeout(20000),
     })
     const j = await r.json()
     const series: Record<string, any[]> = {}
     for (const s of j?.Results?.series || []) series[s.seriesID] = s.data
-    const cpi = series['CUUR0000SA0'] || []
-    if (cpi.length) {
-      const latest = cpi[0]
-      let yoy: number | null = null
-      for (const d2 of cpi) {
-        if (d2.periodName === latest.periodName && +d2.year === +latest.year - 1) {
-          yoy = (parseFloat(latest.value) / parseFloat(d2.value) - 1) * 100
-          break
-        }
+    for (const def of defs) {
+      const data = series[def.key] || []
+      if (!data.length) continue
+      const latest = data[0]
+      const sub = `${latest.periodName.slice(0, 3)} ${latest.year}`
+      if (def.mode === 'cpi') {
+        let yoy: number | null = null
+        for (const d2 of data) if (d2.periodName === latest.periodName && +d2.year === +latest.year - 1) { yoy = (parseFloat(latest.value) / parseFloat(d2.value) - 1) * 100; break }
+        if (yoy === null || !isFinite(yoy)) continue
+        out[def.id] = { label: def.label, value: `${yoy >= 0 ? '+' : ''}${yoy.toFixed(1)}%`, sub, good: yoy <= 3 }
+      } else {
+        out[def.id] = { label: def.label, value: `${latest.value}%`, sub, good: null }
       }
-      stats.push({
-        label: 'CPI (YoY)',
-        value: yoy === null ? latest.value : `${yoy >= 0 ? '+' : ''}${yoy.toFixed(1)}%`,
-        sub: `${latest.periodName.slice(0, 3)} ${latest.year}`,
-        good: yoy === null ? null : yoy <= 3,
-      })
     }
-    const un = series['LNS14000000'] || []
-    if (un.length) stats.push({ label: 'Unemployment', value: `${un[0].value}%`, sub: `${un[0].periodName.slice(0, 3)} ${un[0].year}`, good: null })
   } catch {}
-  return stats
+  return out
+}
+
+async function fredStat(def: StatDef): Promise<Stat | null> {
+  try {
+    const rows = (await fetchText(`https://fred.stlouisfed.org/graph/fredgraph.csv?id=${def.key}`))
+      .trim().split('\n').filter((r) => r && /^\d{4}-\d{2}-\d{2},/.test(r))
+    if (rows.length < 2) return null
+    const val = (r: string) => parseFloat(r.split(',')[1])
+    const lastRow = rows[rows.length - 1]
+    const last = val(lastRow)
+    if (!isFinite(last)) return null
+    const mon = new Date(lastRow.split(',')[0] + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    if (def.mode === 'yoy') {
+      const prior = val(rows[rows.length - 13] || '')
+      if (!isFinite(prior) || !prior) return null
+      const yoy = (last / prior - 1) * 100
+      return { label: def.label, value: `${yoy >= 0 ? '+' : ''}${yoy.toFixed(1)}%`, sub: mon, good: yoy <= 3 }
+    }
+    return { label: def.label, value: `${last.toFixed(1)}%`, sub: mon, good: null }
+  } catch { return null }
+}
+
+// Fetches the full catalog into a map. Per-stat failures are skipped (never renders NaN).
+export async function getStats(): Promise<Record<string, Stat>> {
+  const out: Record<string, Stat> = {}
+  const stooqDefs = STATS_CATALOG.filter((d) => d.kind === 'stooq')
+  const fredDefs = STATS_CATALOG.filter((d) => d.kind === 'fred')
+  const [stooqRes, blsRes, fredRes] = await Promise.all([
+    Promise.all(stooqDefs.map((d) => stooqStat(d))),
+    blsStats(STATS_CATALOG.filter((d) => d.kind === 'bls')),
+    Promise.all(fredDefs.map((d) => fredStat(d))),
+  ])
+  stooqDefs.forEach((d, i) => { if (stooqRes[i]) out[d.id] = stooqRes[i]! })
+  Object.assign(out, blsRes)
+  fredDefs.forEach((d, i) => { if (fredRes[i]) out[d.id] = fredRes[i]! })
+  return out
 }

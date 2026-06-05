@@ -1,5 +1,6 @@
-import { getFeedCache, getMacroCache, getUserTopics, getUserVideos, getPrefs, getProfile, getTranslations, setTranslations } from '@/lib/news/store'
-import { SECTIONS, ES_NATIVE, type Item } from '@/lib/news/feeds'
+import { getFeedCache, getStatsCache, getUserTopics, getUserVideos, getPrefs, getProfile, getTranslations, setTranslations } from '@/lib/news/store'
+import { SECTIONS, ES_NATIVE, DEFAULT_STATS, STATS_CATALOG, type Item } from '@/lib/news/feeds'
+import StatsPicker from './StatsPicker'
 import { translateTitles } from '@/lib/news/ai'
 import { authedEmail } from '@/lib/news/auth'
 import { headers } from 'next/headers'
@@ -13,7 +14,6 @@ import RemoveVideo from './RemoveVideo'
 import LangToggle from './LangToggle'
 import ClickTracker from './ClickTracker'
 import LayoutEnhancer from './LayoutEnhancer'
-import HideSection from './HideSection'
 import ShowHidden from './ShowHidden'
 
 export const dynamic = 'force-dynamic'
@@ -60,9 +60,9 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
   const host = (await headers()).get('host') || 'tryjunoapp.com'
   const proto = process.env.NODE_ENV === 'production' ? 'https' : 'http'
   const signInHref = `/api/auth/signin?callbackUrl=${encodeURIComponent(`${proto}://${host}/`)}`
-  const [cache, macro, topics, videos] = await Promise.all([
+  const [cache, statsMap, topics, videos] = await Promise.all([
     getFeedCache(),
-    getMacroCache(),
+    getStatsCache(),
     email ? getUserTopics(email) : Promise.resolve([]),
     email ? getUserVideos(email) : Promise.resolve([]),
   ])
@@ -71,6 +71,8 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
   const lang = prefs.lang
   const prefsLayout = prefs.layout || {}
   const hidden: string[] = prefsLayout.hidden || []
+  const selectedStats: string[] = prefsLayout.stats || DEFAULT_STATS
+  const strip = selectedStats.filter((id) => statsMap[id]).map((id) => ({ id, ...statsMap[id] }))
   const label = (s: { key: string; label: string }) => (lang === 'es' ? ES_LABELS[s.key] || s.label : s.label)
 
   // Spanish headline translation for non-native news sections (cached per link).
@@ -148,15 +150,25 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
       {email && <SetupChat />}
       {email && <VideoBox />}
 
-      {macro.length > 0 && (
-        <div className="flex border-b border-neutral-200 px-7 dark:border-neutral-800">
-          {macro.map((m, i) => (
-            <div key={i} className="flex-1 border-r border-neutral-200 py-2.5 last:border-r-0 dark:border-neutral-800">
-              <div className="text-[10px] uppercase tracking-wide text-neutral-500">{m.label}</div>
-              <div className={`text-[17px] font-bold ${m.good === true ? 'text-green-700' : m.good === false ? 'text-red-700' : ''}`}>{m.value}</div>
-              <div className="text-[10.5px] text-neutral-500">{m.sub}</div>
+      {(strip.length > 0 || email) && (
+        <div className="flex items-center border-b border-neutral-200 dark:border-neutral-800">
+          <div className="db-ticker-wrap relative flex-1 overflow-hidden py-2.5">
+            <div className="db-ticker-track">
+              {(strip.length ? [...strip, ...strip] : []).map((m, i) => (
+                <span key={i} className="mx-6 inline-flex items-baseline gap-2 whitespace-nowrap">
+                  <span className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">{m.label}</span>
+                  <span className={`text-[15px] font-bold ${m.good === true ? 'text-green-700' : m.good === false ? 'text-red-700' : ''}`}>{m.value}</span>
+                  {m.sub && <span className="text-[11px] text-neutral-500">{m.sub}</span>}
+                </span>
+              ))}
             </div>
-          ))}
+          </div>
+          {email && (
+            <div className="border-l border-neutral-200 px-3 dark:border-neutral-800">
+              <StatsPicker selected={selectedStats} catalog={STATS_CATALOG.map((d) => ({ id: d.id, label: d.label, group: d.group }))} />
+            </div>
+          )}
+          <style>{`.db-ticker-track{display:inline-flex;width:max-content;animation:db-ticker 55s linear infinite}.db-ticker-wrap:hover .db-ticker-track{animation-play-state:paused}@keyframes db-ticker{from{transform:translateX(0)}to{transform:translateX(-50%)}}`}</style>
         </div>
       )}
 
@@ -212,9 +224,8 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
           {/* Standard sections */}
           {SECTIONS.filter((s) => (cache[s.key] || []).length && !hidden.includes(s.key)).map((s) => (
             <section key={s.key} data-id={s.key} className="db-card break-inside-avoid rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-              <h2 className="flex items-center justify-between border-b border-neutral-900 px-3.5 py-2.5 text-[12px] font-bold uppercase tracking-wide dark:border-neutral-100">
+              <h2 className="flex items-center gap-2 border-b border-neutral-900 px-3.5 py-2.5 text-[12px] font-bold uppercase tracking-wide dark:border-neutral-100">
                 <span>{ICON(s.key)} {label(s)}</span>
-                {email && <HideSection k={s.key} />}
               </h2>
               {email && !WATCH(s.key) && <SectionBrief section={s.key} />}
               <Items items={cache[s.key]} tr={tr} sec={s.key} />

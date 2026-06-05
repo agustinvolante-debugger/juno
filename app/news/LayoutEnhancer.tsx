@@ -54,9 +54,19 @@ export default function LayoutEnhancer({ initial }: { initial: Layout }) {
 
     cards().forEach((c) => {
       const h2 = c.querySelector('h2')
+      const id = c.dataset.id || ''
       if (h2 && !h2.querySelector('.db-ctl')) {
         const ctl = document.createElement('span')
         ctl.className = 'db-ctl'
+        // hide ✕ — only for built-in sections (topic/video cards have their own remove)
+        if (!id.startsWith('topic_') && !id.startsWith('vt_') && id !== 'foryou') {
+          const hide = document.createElement('button'); hide.textContent = '✕'; hide.title = 'hide section'
+          hide.onclick = (e) => {
+            e.stopPropagation(); e.preventDefault()
+            fetch('/api/news/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hide: id }) }).then(() => location.reload())
+          }
+          ctl.appendChild(hide)
+        }
         const mini = document.createElement('button'); mini.textContent = '–'; mini.title = 'minimize'
         mini.onclick = (e) => { e.stopPropagation(); e.preventDefault(); c.classList.toggle('db-mini'); persist(); relayout() }
         const wide = document.createElement('button'); wide.textContent = '↔'; wide.title = 'resize'

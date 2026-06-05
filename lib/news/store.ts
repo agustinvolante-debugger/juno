@@ -1,6 +1,6 @@
 // News reader — Supabase storage helpers (service-role; server-only).
 import { supabaseAdmin } from '@/lib/supabase'
-import type { Item, MacroStat } from './feeds'
+import type { Item, Stat } from './feeds'
 
 // ---- shared feed cache (refreshed by cron) ----
 export async function getFeedCache(): Promise<Record<string, Item[]>> {
@@ -16,12 +16,13 @@ export async function setFeedCache(bySection: Record<string, Item[]>): Promise<v
   if (rows.length) await supabaseAdmin.from('news_feed_cache').upsert(rows)
 }
 
-export async function getMacroCache(): Promise<MacroStat[]> {
+export async function getStatsCache(): Promise<Record<string, Stat>> {
   const { data } = await supabaseAdmin.from('news_macro_cache').select('stats').eq('id', 1).maybeSingle()
-  return (data?.stats as MacroStat[]) || []
+  const s = data?.stats
+  return s && !Array.isArray(s) ? (s as Record<string, Stat>) : {}
 }
 
-export async function setMacroCache(stats: MacroStat[]): Promise<void> {
+export async function setStatsCache(stats: Record<string, Stat>): Promise<void> {
   await supabaseAdmin.from('news_macro_cache').upsert({ id: 1, stats, updated_at: new Date().toISOString() })
 }
 

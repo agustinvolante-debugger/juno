@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import { collectSections, getMacro } from '@/lib/news/feeds'
-import { setFeedCache, setMacroCache, feedCacheAgeMs } from '@/lib/news/store'
+import { collectSections, getStats } from '@/lib/news/feeds'
+import { setFeedCache, setStatsCache, feedCacheAgeMs } from '@/lib/news/store'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -20,9 +20,9 @@ export async function GET(req: Request) {
   try {
     const { bySection, live, total } = await collectSections()
     await setFeedCache(bySection)
-    const macro = await getMacro()
-    await setMacroCache(macro)
-    return NextResponse.json({ ok: true, sections: Object.keys(bySection).length, feedsLive: `${live}/${total}`, macro: macro.length })
+    const stats = await getStats()
+    await setStatsCache(stats)
+    return NextResponse.json({ ok: true, sections: Object.keys(bySection).length, feedsLive: `${live}/${total}`, stats: Object.keys(stats).length })
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: String(e?.message || e).slice(0, 200) }, { status: 500 })
   }
