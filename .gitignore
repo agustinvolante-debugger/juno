@@ -44,6 +44,7 @@ next-env.d.ts
 # --- local agent tooling & misplaced files (added Jun 6 2026) ---
 .claude/
 .agents/
+.codex/
 
 # LinkedIn productized skill system — tooling, not part of the app
 /PRODUCT_SYSTEM.md
