@@ -1,5 +1,7 @@
 # Juno — Claude Code Context
 
+> ⚠️ **READ FIRST: `AGENTS.md` + `AGENTS-LOG.md` (repo root).** They are the current source of truth and the rules for working alongside Codex. **The "Google Ads → HubSpot Juno" product description below is HISTORICAL/DEAD** — this repo is now the **"Daily Brief" news app**. Ignore the old product framing.
+
 ## What is Juno
 
 Juno is a B2B SaaS tool that connects Google Ads to HubSpot CRM so founders and marketing leaders can see exactly which keywords are generating pipeline — and which ones are burning budget with zero return.
