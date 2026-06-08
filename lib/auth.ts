@@ -9,8 +9,7 @@ const ALLOWED_EMAILS = [
   'cvolantesilva@gmail.com',
   'carlosvolante@yahoo.com',
   'martin.gajardo@maquinalista.com',
-  'artur.magalhaes@elebbre.com.br',
-  'renato.nascimento@elebbre.com.br',
+  'mgajardoleca@gmail.com',
   'stephanie@pearsonlabs.ai',
 ]
 
