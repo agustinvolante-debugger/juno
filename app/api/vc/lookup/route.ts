@@ -4,7 +4,7 @@
 // and return the result ("fresh from EDGAR"). Powers the search-miss flow.
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { searchFormD, fetchFilingDoc, looksLikeSpv, matchPartners, normName } from '@/lib/vc/edgar.mjs'
+import { searchFormD, fetchFilingDoc, looksLikeSpv, matchPartners, normName, upsertUniverse, padCik } from '@/lib/vc/edgar.mjs'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -56,7 +56,12 @@ export async function POST(req: NextRequest) {
     }, { onConflict: 'person_name,company_id,firm_id' })
     if (!error) seats++
   }
+  // also write the Form D universe, unless this filing is already covered by the bulk ingest
+  if (hit.cik) {
+    const { data: uni } = await sb.from('vc_formd_issuers').select('cik,last_filing_date').eq('cik', padCik(hit.cik)).maybeSingle()
+    if (!uni || (hit.date && (!uni.last_filing_date || hit.date > uni.last_filing_date))) await upsertUniverse(sb, hit.cik, doc, hit.date)
+  }
   await sb.from('vc_sync_log').insert({ source: 'ondemand', filings_processed: 1, new_board_seats: seats, notes: `lookup: ${name} -> ${doc.issuerName}` })
 
-  return NextResponse.json({ found: true, fresh: true, company: { slug: (co as any).slug, name: (co as any).name }, boardSeats: seats, offering: doc.offeringAmount, industry: doc.industryGroup, filingUrl: doc.url }, { headers: CORS })
+  return NextResponse.json({ found: true, fresh: true, company: { slug: (co as any).slug, name: (co as any).name }, boardSeats: seats, offering: doc.offeringAmount, industry: doc.industryGroup, filingUrl: doc.url, source: 'edgar-live', filedDate: hit.date || null }, { headers: CORS })
 }

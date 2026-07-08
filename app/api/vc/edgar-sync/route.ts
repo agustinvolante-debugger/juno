@@ -4,7 +4,7 @@
 // ?date=YYYY-MM-DD overrides; ?key=<CRON_SECRET> auth for manual calls.
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { dailyFormD, fetchFilingDoc, looksLikeSpv, matchPartners, normName } from '@/lib/vc/edgar.mjs'
+import { dailyFormD, fetchFilingDoc, looksLikeSpv, matchPartners, normName, upsertUniverse } from '@/lib/vc/edgar.mjs'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -48,6 +48,8 @@ export async function GET(req: NextRequest) {
     if (!doc) continue
     // always record the filing so we don't re-fetch it
     const { data: fil } = await sb.from('vc_filings').upsert({ accession: f.accession, form_type: f.formType, cik: f.cik, issuer_name: doc.issuerName, filing_date: date, offering_amount: doc.offeringAmount, industry_group: doc.industryGroup, url: doc.url }, { onConflict: 'accession' }).select('id').single()
+    // keep the Form D universe fresh (SPVs included — the universe is the raw record)
+    await upsertUniverse(sb, f.cik, doc, date)
     if (looksLikeSpv(doc)) continue
     const matches = matchPartners(doc.relatedPersons, known).filter((m: any) => m.isDirector)
     if (!matches.length) continue
@@ -64,6 +66,7 @@ export async function GET(req: NextRequest) {
       if (!error) newSeats++
     }
   }
+  if (processed) await sb.from('vc_ingest_meta').upsert({ key: 'formd_as_of', value: date, updated_at: new Date().toISOString() }, { onConflict: 'key' })
   await sb.from('vc_sync_log').insert({ source: 'daily', filings_processed: processed, new_companies: newCos, new_board_seats: newSeats, notes: `${date}: ${todo.length} new of ${filings.length}` })
   return NextResponse.json({ date, filingsInIndex: filings.length, processed, newCompanies: newCos, newBoardSeats: newSeats })
 }
