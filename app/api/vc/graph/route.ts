@@ -58,6 +58,7 @@ export async function GET(req: NextRequest) {
       vc: f?.slug, company: c?.slug, partner, boardSeat: false,
       amount: iv.amount_text, round: iv.round, date: iv.date, lead: iv.lead,
       confidence: iv.confidence, source: iv.source_text,
+      sourceKind: null as string | null, sourceUrl: null as string | null,
     }
   }).filter((e) => e.vc && e.company)
 
@@ -70,7 +71,8 @@ export async function GET(req: NextRequest) {
   }
   for (const e of investments) {
     const k = `${e.vc}|${e.company}|${e.partner || ''}`
-    if (seatByKey.has(k)) { e.boardSeat = true; seatByKey.delete(k) }
+    const hit = seatByKey.get(k)
+    if (hit) { e.boardSeat = true; e.sourceKind = hit.s.source_kind; e.sourceUrl = hit.s.source_url; seatByKey.delete(k) }
   }
   // remaining board seats had no matching investment (e.g. Form D-sourced) → add gold edges
   for (const { s, fSlug, cSlug } of seatByKey.values()) {
@@ -79,6 +81,7 @@ export async function GET(req: NextRequest) {
       vc: fSlug, company: cSlug, partner: s.person_name, boardSeat: true, amount: null,
       round: null, date: s.as_of ? String(s.as_of).slice(0, 7) : null, lead: false,
       confidence: s.confidence, source: s.source_text,
+      sourceKind: s.source_kind, sourceUrl: s.source_url,
     })
   }
 
