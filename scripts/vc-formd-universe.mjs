@@ -9,7 +9,7 @@
 import { execSync } from 'child_process';
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { createClient } from '@supabase/supabase-js';
-import { normName } from '../lib/vc/edgar.mjs';
+import { normName, classifyIssuer } from '../lib/vc/edgar.mjs';
 
 const args = process.argv.slice(2);
 const DRY = args.includes('--dry');
@@ -110,7 +110,10 @@ const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABA
 const all = [...M.values()];
 let done = 0;
 for (let i = 0; i < all.length; i += 500) {
-  const chunk = all.slice(i, i + 500).map((e) => ({ ...e, total_offering_amount: Math.round(e.total_offering_amount) || null, updated_at: new Date(Date.now()).toISOString() }));
+  const chunk = all.slice(i, i + 500).map((e) => {
+    const cls = classifyIssuer(e.name, e.industry_group);
+    return { ...e, entity_type: cls.type, type_confidence: cls.conf, total_offering_amount: Math.round(e.total_offering_amount) || null, updated_at: new Date(Date.now()).toISOString() };
+  });
   const { error } = await sb.from('vc_formd_issuers').upsert(chunk, { onConflict: 'cik' });
   if (error) { console.error('upsert failed:', error.message); process.exit(1); }
   done += chunk.length; if (done % 5000 < 500) console.log(`  upserted ${done}/${all.length}`);

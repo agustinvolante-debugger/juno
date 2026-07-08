@@ -20,13 +20,33 @@ export async function GET(req: NextRequest) {
   const from = p.get('from')?.trim()
   const to = p.get('to')?.trim()
   const noFunds = p.get('noFunds') === '1'
+  const type = p.get('type')?.trim() || null   // operating_company | vc_firm | person
   const sort = p.get('sort') || 'last'
   const limit = Math.min(Number(p.get('limit')) || 200, 500)
   const offset = Number(p.get('offset')) || 0
 
+  // person search runs against the investor index, not the issuer universe
+  if (type === 'person') {
+    let pq = sb.from('vc_formd_persons').select('person_key,name,filing_count,issuer_count,roles,first_seen,last_seen', { count: 'estimated' })
+    if (q) pq = pq.ilike('name', `%${q}%`)
+    if (from) pq = pq.gte('last_seen', from)
+    if (to) pq = pq.lte('last_seen', to)
+    const pSort = { date: 'last_seen', name: 'name' }[sort] || 'filing_count'
+    pq = pq.order(pSort, { ascending: sort === 'name', nullsFirst: false }).range(offset, offset + limit - 1)
+    const { data: pd, count: pc, error: pe } = await pq
+    if (pe) return NextResponse.json({ error: pe.message }, { status: 500, headers: CORS })
+    const { data: pmeta } = await sb.from('vc_ingest_meta').select('value').eq('key', 'persons_as_of').maybeSingle()
+    const rows = (pd || []).map((r) => ({
+      personKey: r.person_key, name: r.name, filingCount: r.filing_count, issuerCount: r.issuer_count,
+      roles: r.roles || [], firstSeen: r.first_seen, lastSeen: r.last_seen, source: 'formd', kind: 'person',
+    }))
+    return NextResponse.json({ rows, total: pc || 0, asOf: pmeta?.value || null, kind: 'person' }, { headers: CORS })
+  }
+
   // 'estimated' count: exact counting scans ~200k rows per request and is brutally slow
   // through PostgREST; the planner estimate is instant and close enough for a result count.
-  let query = sb.from('vc_formd_issuers').select('cik,name,norm_name,industry_group,state,last_offering_amount,total_offering_amount,filing_count,last_filing_date', { count: 'estimated' })
+  let query = sb.from('vc_formd_issuers').select('cik,name,norm_name,industry_group,state,entity_type,type_confidence,last_offering_amount,total_offering_amount,filing_count,last_filing_date', { count: 'estimated' })
+  if (type) query = query.eq('entity_type', type)
   if (q) query = query.ilike('name', `%${q}%`)
   if (industry) query = query.ilike('industry_group', `%${industry}%`)
   if (state) query = query.ilike('state', state)
@@ -60,6 +80,7 @@ export async function GET(req: NextRequest) {
     const hit = curByCik.get(d.cik) || curByName.get(coName(d.name))
     return {
       cik: d.cik, name: d.name, industry: d.industry_group, state: d.state,
+      entityType: d.entity_type, typeConfidence: d.type_confidence,
       lastOffering: d.last_offering_amount, totalOffering: d.total_offering_amount,
       filingCount: d.filing_count, lastFiled: d.last_filing_date,
       source: hit ? 'curated' : 'formd',
