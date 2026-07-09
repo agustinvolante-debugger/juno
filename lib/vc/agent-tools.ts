@@ -37,7 +37,7 @@ export const TOOL_DEFS = [
   {
     name: 'run_query',
     description:
-      'Run a structured criteria query and get back a result set the UI renders as a table with CSV download. Use for questions like "AI companies that raised $50M+ since April". Two engines, picked automatically: filters on investor/boardMember/sector run against the curated graph (~172 companies, has investors + verified totals); everything else runs against the full Form D universe (199k issuers — no investor data, amounts are SEC offering amounts). Returns resultSetId, total, the interpretation used, and a 25-row preview. ALWAYS state the interpretation to the user so they can correct it. Reference the resultSetId when the user later says "those companies".',
+      'Run a structured criteria query. The user sees the FULL result table with CSV download; you only see a truncated 15-row preview for reference — so express EVERY constraint the user asked for as a filter parameter (never subset rows yourself afterward). Two engines, picked automatically: filters on investor/boardMember/sector run against the curated graph (~172 companies, has investors + verified totals); everything else runs against the full Form D universe (199k issuers — no investor data, amounts are SEC offering amounts). Returns resultSetId, total, the interpretation used, and the preview. ALWAYS state the interpretation to the user so they can correct it. To narrow a previous result, repeat its filters plus the new constraint in ONE call.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -341,8 +341,8 @@ async function runQuery(input: QueryInput, conversationId: string | null) {
     engineNote: engine === 'universe'
       ? 'Form D universe: amounts are SEC offering amounts (undercount real raises), no investor identities.'
       : engine === 'curated' ? 'Curated graph: ~172 companies with investors, board seats, and verified totals where overridden.' : 'Form D related-person investor index.',
-    preview: rows.slice(0, 25),
-    uiNote: 'The full table renders automatically in the chat with a CSV download — do NOT retype the rows; summarize and state the interpretation.',
+    preview: rows.slice(0, 15),
+    previewNote: 'Truncated preview for your reference ONLY — the user already sees the full table with CSV. Do not retype rows or subset them in prose; to narrow, call run_query again with tighter filters.',
   }
 }
 

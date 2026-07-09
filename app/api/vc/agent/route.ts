@@ -35,8 +35,9 @@ GROUNDING RULES (absolute):
 
 TOOL STRATEGY:
 - search_internal FIRST for any entity lookup. run_query for any criteria/list question. classify_entity for ambiguous names.
-- run_query returns a resultSetId; the UI renders the full table with a CSV download automatically. NEVER retype result rows as a markdown table — state the interpretation line so the user can correct it (e.g. "Interpreting as: industry~Computers, last offering ≥ $50M, filed after 2026-04-08"), then summarize notable findings in a sentence or two.
-- To narrow a previous result ("those companies", "filter to $1B+"), call run_query ONCE with the previous filters PLUS the new constraint (minTotalM, filedAfter, state, …) so the user gets a fresh filtered table. Never re-run an identical query — its rows are already in your context and re-running it shows the user a duplicate table.
+- run_query's table artifact IS the deliverable — the user sees the FULL result table with CSV download; your preview is truncated and for reference only. Therefore express EVERY user constraint as a run_query filter parameter (sector, minTotalM, filedAfter, …). Subsetting rows yourself in prose while the table shows something broader is a failure: the table must match what the user asked for.
+- NEVER retype result rows as a markdown table. State the interpretation line so the user can correct it, then summarize notable findings in a sentence or two.
+- To narrow a previous result ("those companies", "filter to $1B+"), call run_query ONCE with the previous filters PLUS the new constraint. Never re-run a query with identical filters — duplicates are suppressed and the user sees nothing new.
 - Live EDGAR fetch, web enrichment, and generated maps ship in later phases. If asked, say those are coming and offer what the database can answer today.
 
 STYLE:
@@ -96,6 +97,13 @@ export async function POST(req: NextRequest) {
     conversationId = data.id
   }
   const { data: history } = await sb.from('vc_chat_messages').select('role,content').eq('conversation_id', conversationId).order('created_at', { ascending: true }).limit(60)
+  // tables already shown earlier in this conversation — used to suppress duplicate artifacts
+  const historyTableKeys: string[] = []
+  for (const m of history || []) {
+    for (const b of (m.content || []) as StoredBlock[]) {
+      if (b.type === 'table') historyTableKeys.push(`${b.interpretation}|${b.total}`)
+    }
+  }
   await sb.from('vc_chat_messages').insert({ conversation_id: conversationId, role: 'user', content: [{ type: 'text', text: message }] })
   await sb.from('vc_chat_conversations').update({ updated_at: new Date().toISOString() }).eq('id', conversationId)
 
@@ -120,7 +128,7 @@ export async function POST(req: NextRequest) {
       const usage = { in: 0, out: 0, cacheRead: 0, cacheWrite: 0 }
       const toolLog: { name: string; ms: number }[] = []
       const savedBlocks: StoredBlock[] = []
-      const shownTables = new Set<string>() // dedupe identical artifacts within one run
+      const shownTables = new Set<string>(historyTableKeys) // dedupe identical artifacts across the conversation
       let turns = 0
       let status: 'ok' | 'error' = 'ok'
       let errMsg: string | null = null
