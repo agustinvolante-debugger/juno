@@ -8,6 +8,9 @@ function SignInContent() {
   const searchParams = useSearchParams()
   const error = searchParams.get('error')
   const denied = error === 'AccessDenied'
+  // honor ?callbackUrl= so subdomain surfaces (vc., news.) return the user where
+  // they came from; the authOptions redirect callback restricts it to *.tryjunoapp.com
+  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard'
 
   if (denied) {
     return (
@@ -26,7 +29,7 @@ function SignInContent() {
             Request access
           </a>
           <button
-            onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
+            onClick={() => signIn('google', { callbackUrl })}
             className="w-full bg-transparent text-[#8a8678] border border-[#2a2a28] py-3 px-6 rounded-lg hover:border-[#8a8678] hover:text-[#f0ead2] transition-all"
           >
             Try another account
@@ -42,7 +45,7 @@ function SignInContent() {
         <div className="font-serif text-3xl text-[#f0ead2] mb-2">juno</div>
         <p className="text-[#8a8678] text-sm mb-8">Keyword-level CAC for B2B teams</p>
         <button
-          onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
+          onClick={() => signIn('google', { callbackUrl })}
           className="w-full bg-[#c8f04a] text-[#0c0c0b] font-semibold py-3 px-6 rounded-lg hover:opacity-90 transition-opacity"
         >
           Continue with Google

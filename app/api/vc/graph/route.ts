@@ -1,22 +1,23 @@
 // GET /api/vc/graph — returns the VC Constellation dataset reshaped into the exact
 // window.VCBRAIN / window.VCBIOS structures the static frontend render engine expects.
-// Public read (data is public reference info). Optional filters narrow the subset.
+// Gated: requires a signed-in allowed Google account (shared .tryjunoapp.com session
+// cookie; the frontend fetches with credentials:'include'). Optional filters narrow
+// the subset.
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
+import { vcCors, vcSessionEmail } from '@/lib/vc/vc-auth'
 
 export const dynamic = 'force-dynamic'
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET,OPTIONS',
-  'Access-Control-Allow-Headers': 'content-type',
-}
-
-export async function OPTIONS() {
-  return new NextResponse(null, { headers: CORS })
+export async function OPTIONS(req: NextRequest) {
+  return new NextResponse(null, { headers: vcCors(req) })
 }
 
 export async function GET(req: NextRequest) {
+  const CORS = vcCors(req)
+  if (!(await vcSessionEmail())) {
+    return NextResponse.json({ error: 'sign in required' }, { status: 401, headers: CORS })
+  }
   const sb = supabaseAdmin
   const p = req.nextUrl.searchParams
   const sector = p.get('sector')
