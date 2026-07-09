@@ -38,7 +38,14 @@ TOOL STRATEGY:
 - run_query's table artifact IS the deliverable — the user sees the FULL result table with CSV download; your preview is truncated and for reference only. Therefore express EVERY user constraint as a run_query filter parameter (sector, minTotalM, filedAfter, …). Subsetting rows yourself in prose while the table shows something broader is a failure: the table must match what the user asked for.
 - NEVER retype result rows as a markdown table. State the interpretation line so the user can correct it, then summarize notable findings in a sentence or two.
 - To narrow a previous result ("those companies", "filter to $1B+"), call run_query ONCE with the previous filters PLUS the new constraint. Never re-run a query with identical filters — duplicates are suppressed and the user sees nothing new.
-- Live EDGAR fetch, web enrichment, and generated maps ship in later phases. If asked, say those are coming and offer what the database can answer today.
+
+NEW-COMPANY FLOW (when search_internal misses a company):
+1. search_edgar — finds its Form D, adds it to the graph with a sector, and records ALL filed directors as board seats (filed fact).
+2. web_search its funding history — rounds, investors, verified total raised. Prefer primary sources (company/investor announcements, reputable outlets).
+3. save_investments with every investor you can source (source URL + honest confidence per entry) and save_funding_override for the verified total.
+4. Tell the user what was added, what is filed fact (Form D directors) vs web-sourced (investors, cited), and that the bubble appears on next load.
+WEB GROUNDING: web_search results are quotable ONLY with their source attached. Never blend web claims with your general knowledge — if the web results are thin, say so. Never call save_investments/save_funding_override with facts that did not come from THIS conversation's web results or filings.
+- Generated maps ship in a later phase. If asked, say so.
 
 STYLE:
 - Concise and direct; lead with the answer. Short paragraphs and simple lists. No markdown tables (tables are rendered artifacts). Use **bold** for entity names and key numbers.
@@ -46,13 +53,18 @@ STYLE:
 
 Today's date: ${new Date().toISOString().slice(0, 10)}`
 
-type StoredBlock = { type: 'text'; text: string } | { type: 'table'; resultSetId: string; interpretation: string; total: number }
+type StoredBlock =
+  | { type: 'text'; text: string }
+  | { type: 'table'; resultSetId: string; interpretation: string; total: number }
+  | { type: 'entity'; slug: string; name: string; kind: string }
 
 // rebuild model-facing text from stored display blocks
 function blocksToModelText(blocks: StoredBlock[]): string {
-  return blocks.map((b) =>
-    b.type === 'text' ? b.text : `[rendered result table ${b.resultSetId} — ${b.interpretation} — ${b.total} rows]`,
-  ).join('\n\n')
+  return blocks.map((b) => {
+    if (b.type === 'text') return b.text
+    if (b.type === 'table') return `[rendered result table ${b.resultSetId} — ${b.interpretation} — ${b.total} rows]`
+    return `[view-in-network link shown: ${b.name}]`
+  }).join('\n\n')
 }
 
 // keep exactly one message-side cache breakpoint, on the last content block —
@@ -127,6 +139,7 @@ export async function POST(req: NextRequest) {
       send('conv', { conversationId })
 
       const usage = { in: 0, out: 0, cacheRead: 0, cacheWrite: 0 }
+      let webSearches = 0
       const toolLog: { name: string; ms: number }[] = []
       const savedBlocks: StoredBlock[] = []
       const shownTables = new Set<string>(historyTableKeys) // dedupe identical artifacts across the conversation
@@ -143,7 +156,11 @@ export async function POST(req: NextRequest) {
             model: MODEL,
             max_tokens: 16000,
             system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
-            tools: TOOL_DEFS as any,
+            tools: [
+              ...(TOOL_DEFS as any),
+              // server-side web search (Anthropic-executed) — powers web enrichment
+              { type: 'web_search_20260209', name: 'web_search', max_uses: 5 },
+            ] as any,
             messages,
           })
           let turnText = ''
@@ -151,6 +168,8 @@ export async function POST(req: NextRequest) {
             if (ev.type === 'content_block_delta' && ev.delta.type === 'text_delta') {
               turnText += ev.delta.text
               send('text', { delta: ev.delta.text })
+            } else if (ev.type === 'content_block_start' && (ev.content_block as any).type === 'server_tool_use') {
+              send('status', { text: 'Searching the web…' })
             }
           }
           const final = await msgStream.finalMessage()
@@ -158,8 +177,15 @@ export async function POST(req: NextRequest) {
           usage.out += final.usage.output_tokens || 0
           usage.cacheRead += (final.usage as any).cache_read_input_tokens || 0
           usage.cacheWrite += (final.usage as any).cache_creation_input_tokens || 0
+          webSearches += (final.usage as any).server_tool_use?.web_search_requests || 0
           if (turnText.trim()) savedBlocks.push({ type: 'text', text: turnText })
 
+          // server-tool turn hit the iteration limit — re-send to let it resume
+          if (final.stop_reason === 'pause_turn') {
+            messages.push({ role: 'assistant', content: final.content })
+            if (turns >= MAX_TURNS) { loop = false; break }
+            continue
+          }
           if (final.stop_reason !== 'tool_use') { loop = false; break }
 
           const toolUses = final.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use')
@@ -185,6 +211,24 @@ export async function POST(req: NextRequest) {
             const t0 = Date.now()
             const result = await executeTool(tu.name, tu.input, conversationId)
             toolLog.push({ name: tu.name, ms: Date.now() - t0 })
+            // curated entities in results → "view in network" affordances (deterministic, slug-based)
+            if (tu.name === 'search_internal' && Array.isArray(result?.hits)) {
+              for (const h of result.hits.filter((x: any) => x.slug && /curated/.test(x.source || '')).slice(0, 3)) {
+                const ek = `e:${h.slug}`
+                if (shownTables.has(ek)) continue
+                shownTables.add(ek)
+                savedBlocks.push({ type: 'entity', slug: h.slug, name: h.name, kind: h.kind })
+                send('entity', { slug: h.slug, name: h.name, kind: h.kind })
+              }
+            }
+            if ((tu.name === 'search_edgar') && result?.company?.slug) {
+              const ek = `e:${result.company.slug}`
+              if (!shownTables.has(ek)) {
+                shownTables.add(ek)
+                savedBlocks.push({ type: 'entity', slug: result.company.slug, name: result.company.name, kind: 'company' })
+                send('entity', { slug: result.company.slug, name: result.company.name, kind: 'company' })
+              }
+            }
             if (tu.name === 'run_query' && result?.resultSetId) {
               const artKey = `${result.interpretation}|${result.total}`
               if (shownTables.has(artKey)) {
@@ -217,7 +261,8 @@ export async function POST(req: NextRequest) {
 
       // ---- persist + log ----
       const costUsd =
-        (usage.in * PRICE.in + usage.out * PRICE.out + usage.cacheRead * PRICE.cacheRead + usage.cacheWrite * PRICE.cacheWrite) / 1e6
+        (usage.in * PRICE.in + usage.out * PRICE.out + usage.cacheRead * PRICE.cacheRead + usage.cacheWrite * PRICE.cacheWrite) / 1e6 +
+        webSearches * 0.01 // web search billed per request
       try {
         if (savedBlocks.length) {
           await sb.from('vc_chat_messages').insert({ conversation_id: conversationId, role: 'assistant', content: savedBlocks })

@@ -8,9 +8,11 @@
 // this call, tagged with which table it came from. run_query returns a
 // resultSetId + a small preview; the UI renders the snapshot directly.
 import { supabaseAdmin } from '@/lib/supabase'
-import { classifyIssuer, normName } from '@/lib/vc/edgar.mjs'
+import { classifyIssuer, normName, searchFormD, fetchFilingDoc, looksLikeSpv, matchPartners, upsertUniverse, padCik } from '@/lib/vc/edgar.mjs'
 
 const sb = supabaseAdmin
+
+export const SECTORS = ['AI', 'Dev Tools', 'Fintech', 'Healthcare', 'Productivity', 'Consumer', 'Defense'] as const
 
 // ---------- tool schemas (stable order — cached with the system prompt) ----------
 
@@ -60,6 +62,68 @@ export const TOOL_DEFS = [
     },
   },
   {
+    name: 'search_edgar',
+    description:
+      'Live SEC EDGAR lookup when search_internal misses. Company mode: finds the company\'s Form D, ADDS it to the graph (a new bubble on the map), records ALL filed directors as board seats (linking VC firms where a director matches a known partner), and ingests the filing. Person mode (personName): finds a person across Form D filings and adds them to the investor index. After a successful company add, ALWAYS enrich: use web_search for its funding rounds/investors and verified total, then call save_investments and save_funding_override with source URLs. Pass sector when you know the company\'s space — it places the bubble in the right cluster.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        name: { type: 'string', description: 'Company name to look up on EDGAR' },
+        personName: { type: 'string', description: 'OR: person name to look up across Form D filings' },
+        sector: { type: 'string', enum: [...SECTORS], description: 'The company\'s sector for map clustering — pass it when known' },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'save_investments',
+    description:
+      'Write web-researched investors/funding rounds into the curated graph so they appear on the map as edges. Use ONLY for facts you just found via web_search — every entry needs the source URL you got it from. Firms are created/linked by name. Sets confidence honestly: "high" for company/investor press releases, "medium" for reputable coverage, "low" for secondhand mentions.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        companySlug: { type: 'string', description: 'Graph slug of the company (from search_internal or search_edgar)' },
+        investments: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              firmName: { type: 'string', description: 'Investor firm name, e.g. "Sequoia Capital"' },
+              round: { type: 'string', description: 'e.g. "Series B"' },
+              amountText: { type: 'string', description: 'Round size as text, e.g. "$6B" (the full round, not per-investor)' },
+              date: { type: 'string', description: 'YYYY-MM' },
+              lead: { type: 'boolean', description: 'true if this firm led the round' },
+              sourceUrl: { type: 'string', description: 'REQUIRED — where this fact came from' },
+              confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+            },
+            required: ['firmName', 'sourceUrl', 'confidence'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['companySlug', 'investments'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'save_funding_override',
+    description:
+      'Write a verified total-raised figure into the funding truth layer (shown with a ✓ verified badge; the Form D figure stays visible as "per SEC filings"). Use for web-verified totals that Form D undercounts. Requires the source URL.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        companySlug: { type: 'string' },
+        verifiedTotalRaisedUsd: { type: 'number', description: 'Total raised in DOLLARS, e.g. 161000000000 for $161B' },
+        lastRound: { type: 'string', description: 'e.g. "Series H"' },
+        sourceUrl: { type: 'string', description: 'REQUIRED' },
+        note: { type: 'string', description: 'Short provenance note' },
+      },
+      required: ['companySlug', 'verifiedTotalRaisedUsd', 'sourceUrl'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'classify_entity',
     description:
       'Classify an ambiguous name as operating_company, vc_firm, or person, with a confidence level and the basis for the call. Uses curated tables, the Form D investor index, and fund-name-pattern classification. Classify anything ambiguous before presenting it; if confidence is "low", say so explicitly instead of presenting the classification as fact.',
@@ -80,6 +144,9 @@ export const TOOL_LABELS: Record<string, string> = {
   search_internal: 'Searching the database…',
   run_query: 'Running query…',
   classify_entity: 'Classifying entity…',
+  search_edgar: 'Fetching from SEC EDGAR…',
+  save_investments: 'Saving investors to the graph…',
+  save_funding_override: 'Recording verified total…',
 }
 
 // ---------- shared helpers ----------
@@ -180,7 +247,7 @@ async function searchInternal(input: { query: string; kind?: string }) {
       firstSeen: r.first_seen, lastSeen: r.last_seen,
     })
   }
-  if (!out.hits.length) out.note = 'No internal hits. Say so honestly; EDGAR live lookup and web enrichment arrive in a later phase — offer the existing Query page live-lookup as a workaround.'
+  if (!out.hits.length) out.note = 'No internal hits. For a company or person, try search_edgar next (live SEC lookup + ingest). Only report "not found" after EDGAR also misses.'
   return out
 }
 
@@ -343,6 +410,199 @@ async function runQuery(input: QueryInput, conversationId: string | null) {
   }
 }
 
+// ---------- search_edgar (live ingest — Flow A) ----------
+
+function mapSector(industryGroup: string | null): string {
+  const ig = industryGroup || ''
+  if (/biotech|health|pharma|medical/i.test(ig)) return 'Healthcare'
+  if (/bank|insur|invest|financ|lending/i.test(ig)) return 'Fintech'
+  if (/aerospace|defense/i.test(ig)) return 'Defense'
+  if (/retail|restaurant|travel|lodging|consumer/i.test(ig)) return 'Consumer'
+  if (/comput|telecom|technology|electronic/i.test(ig)) return 'Dev Tools'
+  return 'Productivity'
+}
+
+async function searchEdgarPerson(personName: string) {
+  const nq = normName(personName)
+  const hits = await searchFormD(personName, { limit: 8 })
+  const issuers: any[] = []
+  const roles = new Set<string>()
+  let filings = 0, first: string | null = null, last: string | null = null, display = personName
+  for (const h of hits) {
+    if (!h.cik) continue
+    const doc: any = await fetchFilingDoc(h.accession, h.primaryDoc, h.cik)
+    if (!doc) continue
+    const match = (doc.relatedPersons || []).find((p: any) => {
+      const pk = normName(p.name)
+      return pk === nq || pk.includes(nq) || nq.includes(pk)
+    })
+    if (!match) continue
+    filings++
+    display = match.name
+    ;(match.relationships || []).forEach((r: string) => roles.add(r))
+    if (h.date) { if (!first || h.date < first) first = h.date; if (!last || h.date > last) last = h.date }
+    issuers.push({ cik: padCik(h.cik), name: doc.issuerName, date: h.date || null, roles: match.relationships || [] })
+  }
+  if (!filings) return { found: false, note: 'No Form D related-person record on EDGAR for this name.' }
+  const key = normName(display)
+  const { data: ex } = await sb.from('vc_formd_persons').select('*').eq('person_key', key).maybeSingle()
+  await sb.from('vc_formd_persons').upsert({
+    person_key: key, name: display,
+    filing_count: Math.max(ex?.filing_count || 0, filings),
+    issuer_count: Math.max(ex?.issuer_count || 0, new Set(issuers.map((i) => i.cik)).size),
+    roles: [...new Set([...(ex?.roles || []), ...roles])].slice(0, 8),
+    first_seen: ex?.first_seen && (!first || ex.first_seen < first) ? ex.first_seen : first,
+    last_seen: ex?.last_seen && (!last || ex.last_seen > last) ? ex.last_seen : last,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'person_key' })
+  return { found: true, person: { name: display, roles: [...roles], filingCount: filings, issuers }, source: 'SEC EDGAR live', note: 'Added to the investor index.' }
+}
+
+async function searchEdgar(input: { name?: string; personName?: string; sector?: string }) {
+  if (input.personName) return searchEdgarPerson(input.personName)
+  const name = (input.name || '').trim()
+  if (!name) return { error: 'name or personName required' }
+
+  const hits = await searchFormD(name, { limit: 8 })
+  const nq = normName(name)
+  let doc: any = null, hit: any = null
+  for (const h of hits) {
+    const d: any = await fetchFilingDoc(h.accession, h.primaryDoc, h.cik)
+    if (!d) continue
+    const ni = normName(d.issuerName || '')
+    const aligned = ni && (ni === nq || ni.startsWith(nq) || nq.startsWith(ni))
+    if (aligned && !looksLikeSpv(d)) { doc = d; hit = h; break }
+  }
+  if (!doc) return { found: false, note: 'No aligned Form D on EDGAR (SPV-only mentions excluded). The company may not have filed, or files under a different legal name.' }
+
+  // company node — never clobber existing curated data, only fill gaps
+  const slug = hit.cik ? `cik-${hit.cik}` : name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60)
+  const sector = (SECTORS as readonly string[]).includes(input.sector || '') ? input.sector! : mapSector(doc.industryGroup)
+  let { data: co } = await sb.from('vc_companies').select('id,slug,name,sector,cik').eq('slug', slug).maybeSingle()
+  if (!co) {
+    const byName = await sb.from('vc_companies').select('id,slug,name,sector,cik').eq('cik', hit.cik ? String(hit.cik) : '__none__').maybeSingle()
+    co = byName.data || null
+  }
+  if (co) {
+    await sb.from('vc_companies').update({
+      cik: co.cik || hit.cik || null,
+      sector: co.sector || sector,
+    }).eq('id', co.id)
+  } else {
+    const ins = await sb.from('vc_companies').insert({ slug, name: doc.issuerName || name, cik: hit.cik || null, sector }).select('id,slug,name,sector,cik').single()
+    if (ins.error) return { error: `company insert failed: ${ins.error.message}` }
+    co = ins.data
+  }
+
+  const { data: fil } = await sb.from('vc_filings').upsert({
+    accession: hit.accession, form_type: 'D', cik: hit.cik, issuer_name: doc.issuerName,
+    filing_date: hit.date, offering_amount: doc.offeringAmount, industry_group: doc.industryGroup, url: doc.url,
+  }, { onConflict: 'accession' }).select('id').single()
+
+  // known partners → linked VC board seats; everyone else kept as an unlinked director
+  const { data: firms } = await sb.from('vc_firms').select('id,slug,name')
+  const firmById = new Map((firms || []).map((f: any) => [f.id, f]))
+  const { data: ppl } = await sb.from('vc_people').select('id,full_name,firm_id').eq('kind', 'partner')
+  const known = new Map<string, any[]>()
+  for (const p of ppl || []) {
+    if (!p.firm_id) continue
+    const k = normName(p.full_name)
+    if (!known.has(k)) known.set(k, [])
+    known.get(k)!.push({ person_id: p.id, firm_id: p.firm_id, name: p.full_name })
+  }
+  const matches = matchPartners(doc.relatedPersons, known).filter((m: any) => m.isDirector)
+  const matchedNames = new Set(matches.map((m: any) => normName(m.name)))
+  const boardMembers: any[] = []
+  for (const m of matches) {
+    await sb.from('vc_board_seats').upsert({
+      person_id: m.person_id, company_id: co!.id, firm_id: m.firm_id, person_name: m.name,
+      role: 'Director', as_of: hit.date, confidence: 'medium', source_kind: 'formd',
+      source_text: `SEC Form D ${hit.accession}`, source_url: doc.url, filing_id: (fil as any)?.id || null, is_published: true,
+    }, { onConflict: 'person_name,company_id,firm_id' })
+    boardMembers.push({ name: m.name, role: 'Director', linkedFirm: (firmById.get(m.firm_id) as any)?.name || null })
+  }
+  for (const rp of doc.relatedPersons || []) {
+    const isDir = (rp.relationships || []).some((r: string) => /director/i.test(r))
+    if (!isDir || matchedNames.has(normName(rp.name))) continue
+    const { data: dup } = await sb.from('vc_board_seats').select('id').eq('company_id', co!.id).eq('person_name', rp.name).is('firm_id', null).maybeSingle()
+    if (!dup) {
+      await sb.from('vc_board_seats').insert({
+        company_id: co!.id, firm_id: null, person_name: rp.name,
+        role: (rp.relationships || []).join(', ') || 'Director', as_of: hit.date, confidence: 'high', source_kind: 'formd',
+        source_text: `SEC Form D ${hit.accession}`, source_url: doc.url, filing_id: (fil as any)?.id || null, is_published: true,
+      })
+    }
+    boardMembers.push({ name: rp.name, role: (rp.relationships || []).join(', '), linkedFirm: null })
+  }
+
+  if (hit.cik) {
+    const { data: uni } = await sb.from('vc_formd_issuers').select('cik,last_filing_date').eq('cik', padCik(hit.cik)).maybeSingle()
+    if (!uni || (hit.date && (!uni.last_filing_date || hit.date > uni.last_filing_date))) await upsertUniverse(sb, hit.cik, doc, hit.date)
+  }
+  await sb.from('vc_sync_log').insert({ source: 'chat', filings_processed: 1, new_board_seats: boardMembers.length, notes: `chat ingest: ${name} -> ${doc.issuerName}` })
+
+  return {
+    found: true, addedToGraph: true,
+    company: { slug: co!.slug, name: co!.name, sector: co!.sector || sector, cik: hit.cik || null },
+    filing: { date: hit.date, offeringAmount: doc.offeringAmount, industry: doc.industryGroup, url: doc.url },
+    boardMembers,
+    note: 'Company added to the graph (its bubble appears on next load). Board members above are FILED FACT from Form D. Form D does NOT name investors — now web_search its funding rounds and investors, then call save_investments (and save_funding_override for a verified total), citing source URLs.',
+  }
+}
+
+// ---------- save_investments / save_funding_override (web-enrichment write path) ----------
+
+async function saveInvestments(input: { companySlug: string; investments: any[] }) {
+  const { data: co } = await sb.from('vc_companies').select('id,slug,name').eq('slug', input.companySlug).maybeSingle()
+  if (!co) return { error: `no company with slug "${input.companySlug}" — use the slug from search_internal/search_edgar` }
+  const items = (input.investments || []).slice(0, 20)
+  let created = 0, skipped = 0
+  const results: any[] = []
+  for (const iv of items) {
+    if (!iv.firmName || !iv.sourceUrl) { skipped++; results.push({ firm: iv.firmName, status: 'skipped: firmName and sourceUrl required' }); continue }
+    const fslug = iv.firmName.toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 40)
+    let { data: firm } = await sb.from('vc_firms').select('id,slug,name').eq('slug', fslug).maybeSingle()
+    if (!firm) {
+      const byName = await sb.from('vc_firms').select('id,slug,name').ilike('name', iv.firmName).limit(1).maybeSingle()
+      firm = byName.data || null
+    }
+    if (!firm) {
+      const ins = await sb.from('vc_firms').insert({ slug: fslug, name: iv.firmName, kind: 'vc' }).select('id,slug,name').single()
+      if (ins.error) { skipped++; results.push({ firm: iv.firmName, status: `firm insert failed: ${ins.error.message}` }); continue }
+      firm = ins.data
+    }
+    const { data: dup } = await sb.from('vc_investments').select('id').eq('firm_id', firm.id).eq('company_id', co.id).eq('round', iv.round || null).maybeSingle()
+    if (dup) { skipped++; results.push({ firm: firm.name, status: 'already recorded' }); continue }
+    const m = ('' + (iv.amountText || '')).replace(/[, ]/g, '').match(/([\d.]+)\s*([BMK]?)/i)
+    const amountNum = m ? (+m[1] || 0) * ({ B: 1e9, M: 1e6, K: 1e3 }[(m[2] || '').toUpperCase()] || 1) : null
+    const { error } = await sb.from('vc_investments').insert({
+      firm_id: firm.id, company_id: co.id, round: iv.round || null, amount_text: iv.amountText || null,
+      amount_num: amountNum, date: iv.date || null, lead: !!iv.lead,
+      confidence: ['high', 'medium', 'low'].includes(iv.confidence) ? iv.confidence : 'low',
+      source_text: 'added via chat (web-sourced)', source_url: iv.sourceUrl,
+    })
+    if (error) { skipped++; results.push({ firm: firm.name, status: `failed: ${error.message}` }) }
+    else { created++; results.push({ firm: firm.name, status: 'saved' }) }
+  }
+  await sb.from('vc_sync_log').insert({ source: 'chat', filings_processed: 0, notes: `chat enrichment: ${created} investments for ${co.name}` })
+  return { company: co.name, created, skipped, results, note: 'Edges appear on the map on next load. Low/medium-confidence entries are flagged in the UI as usual.' }
+}
+
+async function saveFundingOverride(input: { companySlug: string; verifiedTotalRaisedUsd: number; lastRound?: string; sourceUrl: string; note?: string }) {
+  if (!input.sourceUrl) return { error: 'sourceUrl required — never write an unsourced verified total' }
+  const amt = Number(input.verifiedTotalRaisedUsd)
+  if (!isFinite(amt) || amt <= 0) return { error: 'verifiedTotalRaisedUsd must be a positive dollar amount' }
+  const { data: co } = await sb.from('vc_companies').select('slug,name,cik').eq('slug', input.companySlug).maybeSingle()
+  if (!co) return { error: `no company with slug "${input.companySlug}"` }
+  const { error } = await sb.from('vc_funding_overrides').upsert({
+    company_slug: co.slug, cik: co.cik || null, verified_total_raised: amt,
+    last_round: input.lastRound || null, source_url: input.sourceUrl,
+    note: input.note || 'added via chat (web-verified)', updated_at: new Date().toISOString(),
+  }, { onConflict: 'company_slug' })
+  if (error) return { error: error.message }
+  return { saved: true, company: co.name, verifiedTotal: fmtAmt(amt), source: input.sourceUrl }
+}
+
 // ---------- classify_entity ----------
 
 async function classifyEntity(input: { name: string; context?: string }) {
@@ -372,6 +632,9 @@ export async function executeTool(name: string, input: any, conversationId: stri
     case 'search_internal': return searchInternal(input)
     case 'run_query': return runQuery(input, conversationId)
     case 'classify_entity': return classifyEntity(input)
+    case 'search_edgar': return searchEdgar(input)
+    case 'save_investments': return saveInvestments(input)
+    case 'save_funding_override': return saveFundingOverride(input)
     default: return { error: `unknown tool: ${name}` }
   }
 }
