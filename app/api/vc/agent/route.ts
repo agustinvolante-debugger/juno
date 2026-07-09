@@ -171,6 +171,15 @@ export async function POST(req: NextRequest) {
               results.push({ type: 'tool_result', tool_use_id: tu.id, content: 'Turn/token budget for this message is exhausted. Do not call more tools — summarize what you have and tell the user to send a follow-up to continue.', is_error: true })
               continue
             }
+            // guard: occasionally the model's tool-call serialization leaks XML tag
+            // fragments into string values — bounce it back instead of querying garbage
+            const garbled = Object.values(tu.input as Record<string, unknown>).some(
+              (v) => typeof v === 'string' && (/antml|<\/?parameter/i.test(v)),
+            )
+            if (garbled) {
+              results.push({ type: 'tool_result', tool_use_id: tu.id, content: 'Malformed tool call: a parameter value contains serialization fragments. Re-issue this call with clean parameter values.', is_error: true })
+              continue
+            }
             send('status', { text: TOOL_LABELS[tu.name] || `Running ${tu.name}…` })
             const t0 = Date.now()
             const result = await executeTool(tu.name, tu.input, conversationId)

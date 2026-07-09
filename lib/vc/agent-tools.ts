@@ -32,7 +32,6 @@ export const TOOL_DEFS = [
       required: ['query'],
       additionalProperties: false,
     },
-    strict: true,
   },
   {
     name: 'run_query',
@@ -59,7 +58,6 @@ export const TOOL_DEFS = [
       required: [],
       additionalProperties: false,
     },
-    strict: true,
   },
   {
     name: 'classify_entity',
@@ -74,7 +72,6 @@ export const TOOL_DEFS = [
       required: ['name'],
       additionalProperties: false,
     },
-    strict: true,
   },
 ]
 
