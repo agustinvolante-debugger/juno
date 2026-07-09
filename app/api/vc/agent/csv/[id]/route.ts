@@ -3,10 +3,10 @@
 // navigations that can't set headers).
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { chatGate, CHAT_CORS as CORS } from '@/lib/vc/chat-auth'
+import { chatGate, chatCors } from '@/lib/vc/chat-auth'
 
 export const dynamic = 'force-dynamic'
-export async function OPTIONS() { return new NextResponse(null, { headers: CORS }) }
+export async function OPTIONS(req: NextRequest) { return new NextResponse(null, { headers: chatCors(req) }) }
 
 const esc = (v: any) => {
   const s = v == null ? '' : String(v)
@@ -14,7 +14,8 @@ const esc = (v: any) => {
 }
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const denied = chatGate(req)
+  const CORS = chatCors(req)
+  const denied = await chatGate(req)
   if (denied) return denied
   const { id } = await ctx.params
   const { data, error } = await supabaseAdmin

@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { supabaseAdmin } from '@/lib/supabase'
 import { TOOL_DEFS, TOOL_LABELS, executeTool } from '@/lib/vc/agent-tools'
-import { chatGate, CHAT_CORS as CORS } from '@/lib/vc/chat-auth'
+import { chatGate, chatCors } from '@/lib/vc/chat-auth'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -24,7 +24,7 @@ const MAX_OUTPUT_BUDGET = 40_000 // cumulative output tokens per message
 // $/MTok — sonnet-tier list price (cache read 0.1x input, cache write 1.25x)
 const PRICE = { in: 3, out: 15, cacheRead: 0.3, cacheWrite: 3.75 }
 
-export async function OPTIONS() { return new NextResponse(null, { headers: CORS }) }
+export async function OPTIONS(req: NextRequest) { return new NextResponse(null, { headers: chatCors(req) }) }
 
 const SYSTEM = `You are the research analyst inside VC Constellation — a board-seat-first VC/startup intelligence product built on SEC Form D filings, a curated investment graph, and a verified-funding overrides layer. You answer questions about companies, VC firms, investors, board seats, and funding by CALLING TOOLS, never from memory.
 
@@ -68,7 +68,8 @@ function moveCacheBreakpoint(messages: Anthropic.MessageParam[]) {
 }
 
 export async function POST(req: NextRequest) {
-  const denied = chatGate(req)
+  const CORS = chatCors(req)
+  const denied = await chatGate(req)
   if (denied) return denied
   const sb = supabaseAdmin
   const body = await req.json().catch(() => ({}))

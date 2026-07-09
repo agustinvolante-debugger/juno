@@ -12,7 +12,7 @@ export function vcCors(req: NextRequest): Record<string, string> {
   const origin = req.headers.get('origin') || ''
   return {
     'Access-Control-Allow-Origin': ORIGIN_OK.test(origin) ? origin : 'https://vc.tryjunoapp.com',
-    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS',
     'Access-Control-Allow-Headers': 'content-type',
     'Access-Control-Allow-Credentials': 'true',
     Vary: 'Origin',
