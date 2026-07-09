@@ -36,7 +36,7 @@ GROUNDING RULES (absolute):
 TOOL STRATEGY:
 - search_internal FIRST for any entity lookup. run_query for any criteria/list question. classify_entity for ambiguous names.
 - run_query returns a resultSetId; the UI renders the full table with a CSV download automatically. NEVER retype result rows as a markdown table — state the interpretation line so the user can correct it (e.g. "Interpreting as: industry~Computers, last offering ≥ $50M, filed after 2026-04-08"), then summarize notable findings in a sentence or two.
-- When the user refers to a previous result ("those companies"), reuse the filters from that result set or narrow them — the conversation shows each result set's id and interpretation.
+- To narrow a previous result ("those companies", "filter to $1B+"), call run_query ONCE with the previous filters PLUS the new constraint (minTotalM, filedAfter, state, …) so the user gets a fresh filtered table. Never re-run an identical query — its rows are already in your context and re-running it shows the user a duplicate table.
 - Live EDGAR fetch, web enrichment, and generated maps ship in later phases. If asked, say those are coming and offer what the database can answer today.
 
 STYLE:
@@ -120,6 +120,7 @@ export async function POST(req: NextRequest) {
       const usage = { in: 0, out: 0, cacheRead: 0, cacheWrite: 0 }
       const toolLog: { name: string; ms: number }[] = []
       const savedBlocks: StoredBlock[] = []
+      const shownTables = new Set<string>() // dedupe identical artifacts within one run
       let turns = 0
       let status: 'ok' | 'error' = 'ok'
       let errMsg: string | null = null
@@ -167,8 +168,15 @@ export async function POST(req: NextRequest) {
             const result = await executeTool(tu.name, tu.input, conversationId)
             toolLog.push({ name: tu.name, ms: Date.now() - t0 })
             if (tu.name === 'run_query' && result?.resultSetId) {
-              savedBlocks.push({ type: 'table', resultSetId: result.resultSetId, interpretation: result.interpretation, total: result.total })
-              send('table', { resultSetId: result.resultSetId, interpretation: result.interpretation, total: result.total })
+              const artKey = `${result.interpretation}|${result.total}`
+              if (shownTables.has(artKey)) {
+                result.duplicate = true
+                result.uiNote = 'DUPLICATE of a table already displayed in this message — its rows are in your context; do not re-run this query, narrow the filters instead.'
+              } else {
+                shownTables.add(artKey)
+                savedBlocks.push({ type: 'table', resultSetId: result.resultSetId, interpretation: result.interpretation, total: result.total })
+                send('table', { resultSetId: result.resultSetId, interpretation: result.interpretation, total: result.total })
+              }
             }
             results.push({
               type: 'tool_result', tool_use_id: tu.id,
