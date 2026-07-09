@@ -638,3 +638,43 @@ export async function executeTool(name: string, input: any, conversationId: stri
     default: return { error: `unknown tool: ${name}` }
   }
 }
+
+// Staged variant for the unattended enrichment loop: web-sourced writes land in
+// vc_enrich_queue (pending review) instead of the live graph. Filed-fact tools
+// (search_edgar → company node + Form D directors) still run live, same as chat.
+export async function executeToolStaged(name: string, input: any, runNote: string): Promise<any> {
+  const displayName = async (slug: string) => {
+    const { data } = await sb.from('vc_companies').select('name').eq('slug', slug).maybeSingle()
+    return data?.name || slug
+  }
+  if (name === 'save_investments') {
+    const items = (input.investments || []).filter((iv: any) => iv.firmName && iv.sourceUrl).slice(0, 20)
+    if (!items.length) return { error: 'no valid investments (firmName + sourceUrl required)' }
+    const coName = await displayName(input.companySlug)
+    const rows = items.map((iv: any) => ({
+      company_slug: input.companySlug, company_name: coName, kind: 'investment',
+      payload: { companySlug: input.companySlug, investments: [iv] },
+      confidence: iv.confidence || 'low', source_url: iv.sourceUrl, run_note: runNote,
+    }))
+    const { error } = await sb.from('vc_enrich_queue').insert(rows)
+    if (error) return { error: error.message }
+    return { queued: rows.length, note: 'Staged for review — these will appear on the map once approved.' }
+  }
+  if (name === 'save_funding_override') {
+    if (!input.sourceUrl) return { error: 'sourceUrl required' }
+    const { error } = await sb.from('vc_enrich_queue').insert({
+      company_slug: input.companySlug, company_name: await displayName(input.companySlug), kind: 'override',
+      payload: input, confidence: 'high', source_url: input.sourceUrl, run_note: runNote,
+    })
+    if (error) return { error: error.message }
+    return { queued: 1, note: 'Verified total staged for review.' }
+  }
+  return executeTool(name, input, null)
+}
+
+// apply an approved queue row to the live graph (used by the review endpoint)
+export async function applyQueued(row: { kind: string; payload: any }): Promise<any> {
+  if (row.kind === 'investment') return saveInvestments(row.payload)
+  if (row.kind === 'override') return saveFundingOverride(row.payload)
+  return { error: `unknown kind ${row.kind}` }
+}

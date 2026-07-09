@@ -1,16 +1,8 @@
 {
   "crons": [
-    {
-      "path": "/api/news/cron",
-      "schedule": "0 13 * * *"
-    },
-    {
-      "path": "/api/news/digest",
-      "schedule": "0 14 * * *"
-    },
-    {
-      "path": "/api/vc/edgar-sync",
-      "schedule": "0 12 * * *"
-    }
+    { "path": "/api/news/cron", "schedule": "0 13 * * *" },
+    { "path": "/api/news/digest", "schedule": "0 14 * * *" },
+    { "path": "/api/vc/edgar-sync", "schedule": "10 6 * * *" },
+    { "path": "/api/vc/enrich-cron", "schedule": "0 7 * * *" }
   ]
 }

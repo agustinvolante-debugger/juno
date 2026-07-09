@@ -16,22 +16,49 @@ export async function GET(req: NextRequest) {
   if (!authed) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   const sb = supabaseAdmin
 
-  const date = req.nextUrl.searchParams.get('date') || new Date().toISOString().slice(0, 10)
+  // date selection: explicit ?date=… processes that one day; otherwise walk a
+  // cursor (formd_synced_through) from where we left off up to yesterday, max 4
+  // days per run — so missed cron runs self-heal instead of leaving gaps.
+  const explicit = req.nextUrl.searchParams.get('date')
+  let dates: string[] = []
+  if (explicit) dates = [explicit]
+  else {
+    const yesterday = new Date(Date.now() - 86400_000).toISOString().slice(0, 10)
+    const { data: meta } = await sb.from('vc_ingest_meta').select('value').eq('key', 'formd_synced_through').maybeSingle()
+    let cur = meta?.value || new Date(Date.now() - 3 * 86400_000).toISOString().slice(0, 10)
+    while (dates.length < 4) {
+      const next = new Date(new Date(cur + 'T00:00:00Z').getTime() + 86400_000).toISOString().slice(0, 10)
+      if (next > yesterday) break
+      dates.push(next)
+      cur = next
+    }
+    if (!dates.length) return NextResponse.json({ note: 'already synced through yesterday' })
+  }
+
+  const dayResults: any[] = []
+  for (const date of dates) {
+    dayResults.push(await syncDay(sb, date))
+    if (!explicit) await sb.from('vc_ingest_meta').upsert({ key: 'formd_synced_through', value: date, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+  }
+  return NextResponse.json({ days: dayResults })
+}
+
+async function syncDay(sb: any, date: string) {
   const filings = await dailyFormD(date)
   if (!filings.length) {
     await sb.from('vc_sync_log').insert({ source: 'daily', filings_processed: 0, notes: `${date}: no filings` })
-    return NextResponse.json({ date, filings: 0, note: 'no Form D filings in daily index (weekend/holiday?)' })
+    return { date, filings: 0, note: 'no Form D filings in daily index (weekend/holiday?)' }
   }
 
   // dedupe against already-ingested accessions
-  const accs = filings.map((f) => f.accession)
+  const accs = filings.map((f: any) => f.accession)
   const { data: existing } = await sb.from('vc_filings').select('accession').in('accession', accs)
-  const seen = new Set((existing || []).map((r) => r.accession))
-  const todo = filings.filter((f) => !seen.has(f.accession)).slice(0, CAP)
+  const seen = new Set((existing || []).map((r: any) => r.accession))
+  const todo = filings.filter((f: any) => !seen.has(f.accession)).slice(0, CAP)
 
   // known partners
   const { data: firms } = await sb.from('vc_firms').select('id,slug')
-  const firmById = new Map((firms || []).map((f) => [f.id, f]))
+  const firmById = new Map((firms || []).map((f: any) => [f.id, f]))
   const { data: ppl } = await sb.from('vc_people').select('id,full_name,firm_id').eq('kind', 'partner')
   const known = new Map<string, any[]>()
   for (const p of ppl || []) {
@@ -68,5 +95,5 @@ export async function GET(req: NextRequest) {
   }
   if (processed) await sb.from('vc_ingest_meta').upsert({ key: 'formd_as_of', value: date, updated_at: new Date().toISOString() }, { onConflict: 'key' })
   await sb.from('vc_sync_log').insert({ source: 'daily', filings_processed: processed, new_companies: newCos, new_board_seats: newSeats, notes: `${date}: ${todo.length} new of ${filings.length}` })
-  return NextResponse.json({ date, filingsInIndex: filings.length, processed, newCompanies: newCos, newBoardSeats: newSeats })
+  return { date, filingsInIndex: filings.length, processed, newCompanies: newCos, newBoardSeats: newSeats }
 }
