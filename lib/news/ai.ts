@@ -25,6 +25,22 @@ function jsonFrom(txt: string): any {
   }
 }
 
+// News → VC Constellation bridge: pull {company, round} out of funding-section headlines.
+// Used by the ◆ map button (single headline) and the nightly enrich-cron feed (b) (batch).
+export async function extractFundingCompanies(headlines: string[]): Promise<{ company: string; round?: string }[]> {
+  if (!headlines.length) return []
+  const prompt =
+    'From these startup-funding headlines, extract the companies that RAISED money (ignore investors, funds, acquirers). ' +
+    'Respond with ONLY JSON: {"companies":[{"company":"<official company name>","round":"<round + amount if stated, e.g. \'Series B $55M\'>"}]}. ' +
+    'Skip headlines that are not about one specific company raising a round.\n\n' +
+    headlines.map((h, i) => `${i + 1}. ${h}`).join('\n')
+  const j = jsonFrom(await claudeText(prompt, 900))
+  const arr = Array.isArray(j?.companies) ? j.companies : []
+  return arr
+    .filter((c: any) => c?.company && typeof c.company === 'string')
+    .map((c: any) => ({ company: c.company.trim().slice(0, 80), round: typeof c.round === 'string' ? c.round.trim().slice(0, 60) : undefined }))
+}
+
 export async function classifyTopic(query: string): Promise<Route & { kind?: string; enrich?: string }> {
   const prompt =
     `A user wants a news briefing on: "${query}".\n` +

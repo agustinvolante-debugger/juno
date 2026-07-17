@@ -7,6 +7,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { enrichCompany } from '@/lib/vc/enrich'
+import { getFeedCache, getVcEnrichRequests, setVcEnrichRequests } from '@/lib/news/store'
+import { extractFundingCompanies } from '@/lib/news/ai'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -44,22 +46,69 @@ export async function GET(req: NextRequest) {
   const { data: queued } = await sb.from('vc_enrich_queue').select('company_slug').gte('created_at', new Date(Date.now() - 14 * 86400_000).toISOString())
   const recentSlugs = new Set((queued || []).map((q: any) => q.company_slug))
 
-  const candidates = (fresh || [])
-    .filter((f: any) => !curatedCiks.has(f.cik) && !recentSlugs.has(`cik-${f.cik}`))
-    .slice(0, nightlyCap)
+  const formd = (fresh || []).filter((f: any) => !curatedCiks.has(f.cik) && !recentSlugs.has(`cik-${f.cik}`))
 
+  // Name-level dedupe across all feeds (curated graph + anything queued recently).
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '')
+  const { data: curatedNames } = await sb.from('vc_companies').select('name')
+  const { data: queuedNames } = await sb.from('vc_enrich_queue').select('company_name').gte('created_at', new Date(Date.now() - 14 * 86400_000).toISOString()).limit(1000)
+  const seen = new Set<string>([
+    ...(curatedNames || []).map((c: any) => norm(c.name || '')),
+    ...(queuedNames || []).map((q: any) => norm(q.company_name || '')).filter(Boolean),
+  ])
+
+  type Cand = { name: string; hint: string; via: 'request' | 'formd' | 'news' }
+  const candidates: Cand[] = []
+
+  // feed (r): explicit ◆-map requests from the Daily Brief — first in line
+  const requests = await getVcEnrichRequests()
+  for (const r of requests) {
+    if (seen.has(norm(r.company))) continue
+    seen.add(norm(r.company))
+    candidates.push({ name: r.company, hint: [r.round, 'requested via Daily Brief ◆ map'].filter(Boolean).join(' · '), via: 'request' })
+  }
+
+  // feed (a): fresh Form D filers
+  for (const c of formd) {
+    if (seen.has(norm(c.name))) continue
+    seen.add(norm(c.name))
+    candidates.push({
+      name: c.name,
+      hint: [c.industry_group, c.state, c.last_offering_amount ? `last offering ~$${Math.round(c.last_offering_amount / 1e6)}M` : null, `CIK ${c.cik}`].filter(Boolean).join(' · '),
+      via: 'formd',
+    })
+  }
+
+  // feed (b): companies extracted from the cached Daily Brief funding headlines (one Haiku call)
+  try {
+    const funding = (await getFeedCache())['funding'] || []
+    const newsCands = await extractFundingCompanies(funding.slice(0, 25).map((it) => it.t))
+    for (const c of newsCands) {
+      if (seen.has(norm(c.company))) continue
+      seen.add(norm(c.company))
+      candidates.push({ name: c.company, hint: [c.round, 'from Daily Brief funding headlines'].filter(Boolean).join(' · '), via: 'news' })
+    }
+  } catch { /* funding feed extraction is best-effort */ }
+
+  const batch = candidates.slice(0, nightlyCap)
   const runNote = `nightly ${new Date().toISOString().slice(0, 10)}`
   const results: any[] = []
   let totalCost = spent
-  for (const c of candidates) {
-    if (totalCost >= dailyBudget) { results.push({ name: c.name, skipped: 'budget' }); continue }
-    const hint = [c.industry_group, c.state, c.last_offering_amount ? `last offering ~$${Math.round(c.last_offering_amount / 1e6)}M` : null, `CIK ${c.cik}`].filter(Boolean).join(' · ')
-    const r = await enrichCompany(c.name, hint, runNote)
+  const done = new Set<string>() // requests either enriched or deduped-out get cleared below
+  for (const c of batch) {
+    if (totalCost >= dailyBudget) { results.push({ name: c.name, via: c.via, skipped: 'budget' }); continue }
+    const r = await enrichCompany(c.name, c.hint, runNote)
     totalCost += r.costUsd
-    results.push({ name: c.name, ok: r.ok, costUsd: +r.costUsd.toFixed(3), summary: r.summary.slice(0, 140) })
+    done.add(norm(c.name))
+    results.push({ name: c.name, via: c.via, ok: r.ok, costUsd: +r.costUsd.toFixed(3), summary: r.summary.slice(0, 140) })
+  }
+  if (requests.length) {
+    // keep only requests that are still waiting (skipped for cap/budget); drop enriched + already-known
+    await setVcEnrichRequests(requests.filter((r) => !done.has(norm(r.company)) && candidates.some((c) => c.via === 'request' && norm(c.name) === norm(r.company))))
   }
 
   const { count: pending } = await sb.from('vc_enrich_queue').select('id', { count: 'exact', head: true }).eq('status', 'pending')
-  await sb.from('vc_sync_log').insert({ source: 'enrich', filings_processed: candidates.length, notes: `${runNote}: ${results.filter((r) => r.ok).length}/${candidates.length} enriched, $${(totalCost - spent).toFixed(2)}, ${pending || 0} pending review` })
-  return NextResponse.json({ candidates: candidates.length, results, spentTonight: +(totalCost - spent).toFixed(3), pendingReview: pending || 0 })
+  const viaCounts = batch.reduce((m: Record<string, number>, c) => ((m[c.via] = (m[c.via] || 0) + 1), m), {})
+  await sb.from('vc_sync_log').insert({ source: 'enrich', filings_processed: batch.length, notes: `${runNote}: ${results.filter((r) => r.ok).length}/${batch.length} enriched (${Object.entries(viaCounts).map(([k, v]) => `${v} ${k}`).join(', ')}), $${(totalCost - spent).toFixed(2)}, ${pending || 0} pending review` })
+  return NextResponse.json({ candidates: batch.length, via: viaCounts, results, spentTonight: +(totalCost - spent).toFixed(3), pendingReview: pending || 0 })
 }

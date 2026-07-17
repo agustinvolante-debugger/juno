@@ -13,6 +13,7 @@ import RemoveTopic from './RemoveTopic'
 import RemoveVideo from './RemoveVideo'
 import LangToggle from './LangToggle'
 import ClickTracker from './ClickTracker'
+import VcMapDelegate from './VcMapDelegate'
 import LayoutEnhancer from './LayoutEnhancer'
 import ShowHidden from './ShowHidden'
 import LastUpdated from './LastUpdated'
@@ -47,13 +48,16 @@ function rel(d: string | null): string {
   return `${Math.floor(s / 86400)}d`
 }
 
-function Items({ items, cap = 12, tr, sec }: { items: Item[]; cap?: number; tr?: Record<string, string>; sec?: string }) {
+function Items({ items, cap = 12, tr, sec, vcMap }: { items: Item[]; cap?: number; tr?: Record<string, string>; sec?: string; vcMap?: boolean }) {
   return (
     <ul>
       {items.slice(0, cap).map((it, i) => (
         <li key={i} className="border-t border-neutral-100 px-3.5 py-2 first:border-t-0 dark:border-neutral-800">
           <a href={it.l} target="_blank" rel="noopener noreferrer" data-s={it.s} data-k={sec} className="text-[14.5px] font-semibold hover:underline">{(tr && tr[it.l]) || it.t}</a>
-          <span className="db-meta mt-0.5 block text-[11.5px] text-neutral-500"><span className="font-bold">{it.s}</span>{rel(it.d) ? ` · ${rel(it.d)}` : ''}</span>
+          <span className="db-meta mt-0.5 block text-[11.5px] text-neutral-500">
+            <span className="font-bold">{it.s}</span>{rel(it.d) ? ` · ${rel(it.d)}` : ''}
+            {vcMap && <> · <button className="db-vcmap cursor-pointer hover:text-neutral-900 dark:hover:text-neutral-100" data-t={it.t} title="Map this company on VC Constellation (queued for tonight's enrichment)">◆ map</button></>}
+          </span>
         </li>
       ))}
     </ul>
@@ -246,6 +250,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
       ) : (
         <div id="db-grid" className="px-7 py-5" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(330px,1fr))', gap: '18px', gridAutoRows: '8px', alignItems: 'start' }}>
           {email && <ClickTracker />}
+          {email && <VcMapDelegate />}
           <LayoutEnhancer initial={(prefsLayout?.grid as any) || {}} authed={!!email} />
 
           {/* First-run onboarding — only until the user adds a topic/video or dismisses it */}
@@ -332,7 +337,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
                 </div>
               )}
               {email && !WATCH(s.key) && !sectionBriefs[s.key] && <SectionBrief section={s.key} />}
-              <Items items={tiered(cache[s.key])} tr={tr} sec={s.key} />
+              <Items items={tiered(cache[s.key])} tr={tr} sec={s.key} vcMap={!!email && s.key === 'funding'} />
             </section>
           ))}
         </div>

@@ -167,6 +167,18 @@ export async function setSourceTiers(t: { top: string[]; muted: string[] }): Pro
   await supabaseAdmin.from('news_macro_cache').upsert({ id: TIERS_ID, stats: t, updated_at: new Date().toISOString() })
 }
 
+// News → VC Constellation: enrichment requests from the ◆ map button (macro row id=8).
+// The nightly /api/vc/enrich-cron consumes these first, ahead of its automatic feeds.
+const VC_REQUESTS_ID = 8
+export type VcEnrichRequest = { company: string; round?: string; headline?: string; by: string; at: string }
+export async function getVcEnrichRequests(): Promise<VcEnrichRequest[]> {
+  const { data } = await supabaseAdmin.from('news_macro_cache').select('stats').eq('id', VC_REQUESTS_ID).maybeSingle()
+  return Array.isArray(data?.stats) ? (data!.stats as VcEnrichRequest[]) : []
+}
+export async function setVcEnrichRequests(reqs: VcEnrichRequest[]): Promise<void> {
+  await supabaseAdmin.from('news_macro_cache').upsert({ id: VC_REQUESTS_ID, stats: reqs.slice(0, 30), updated_at: new Date().toISOString() })
+}
+
 // Users with at least one push-subscribed device AND an alert-enabled monitor (for the cron).
 export async function getPushAlertUsers(): Promise<{ email: string; lang: string; layout: any }[]> {
   const { data } = await supabaseAdmin.from('news_prefs').select('user_email, lang, layout')
