@@ -15,6 +15,8 @@ import LangToggle from './LangToggle'
 import ClickTracker from './ClickTracker'
 import VcMapDelegate from './VcMapDelegate'
 import ListenButton from './ListenButton'
+import SwRegister from './SwRegister'
+import OfflineRibbon from './OfflineRibbon'
 import LayoutEnhancer from './LayoutEnhancer'
 import ShowHidden from './ShowHidden'
 import LastUpdated from './LastUpdated'
@@ -198,6 +200,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
   return (
     <main className="min-h-screen bg-white text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100">
       <AutoRefresh />
+      <SwRegister />
       <header className="db-masthead flex flex-wrap items-baseline gap-4 border-b border-neutral-900 px-7 py-4 dark:border-neutral-100">
         <h1 className="text-2xl font-bold tracking-tight"><span className="db-the">The</span> Daily Brief</h1>
         <span className="db-dateline text-sm text-neutral-500">{new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
@@ -220,6 +223,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
           )}
         </div>
       </header>
+      <OfflineRibbon iso={updatedAt} lang={lang} />
 
       <div className="border-b border-neutral-200 bg-neutral-50/70 dark:border-neutral-800 dark:bg-neutral-900/40">
         <AIBar authed={!!email} signInHref={signInHref} />
