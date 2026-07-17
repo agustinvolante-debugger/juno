@@ -7,6 +7,9 @@
 
 const CACHE = 'db-offline-v1'
 const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com']
+// Dev chunks aren't content-hashed — stale-while-revalidate would keep serving outdated code
+// after every edit. No caching on localhost (push handlers still work); prod chunks are hashed.
+const DEV = self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1'
 
 self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', (e) =>
@@ -47,6 +50,7 @@ async function staleWhileRevalidate(req) {
 }
 
 self.addEventListener('fetch', (e) => {
+  if (DEV) return
   const req = e.request
   if (req.method !== 'GET') return
   const url = new URL(req.url)
