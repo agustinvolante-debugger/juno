@@ -9,20 +9,13 @@ function b64ToUint8(base64: string): Uint8Array {
   return out
 }
 
-// Per-monitor controls: 🔔 push alerts on new developments, ↻ re-checks, ✕ stops monitoring.
+// Per-monitor controls: ⚑ push alerts on new developments, ✕ stops monitoring.
+// (No per-section refresh — the general ↻ in the header re-checks every monitor.)
 export default function MonitorControls({ query, lang = 'en', alerts = false }: { query: string; lang?: string; alerts?: boolean }) {
-  const [busy, setBusy] = useState(false)
   const [on, setOn] = useState(alerts)
   const [bellBusy, setBellBusy] = useState(false)
   const es = lang === 'es'
 
-  async function refresh() {
-    setBusy(true)
-    try {
-      await fetch('/api/news/monitor', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query, refresh: true }) })
-      location.reload()
-    } finally { setBusy(false) }
-  }
   async function remove() {
     await fetch('/api/news/monitor?query=' + encodeURIComponent(query), { method: 'DELETE' })
     location.reload()
@@ -74,15 +67,15 @@ export default function MonitorControls({ query, lang = 'en', alerts = false }: 
   }
 
   return (
-    <span className="inline-flex items-center gap-2 font-normal normal-case">
+    <span className="inline-flex items-center gap-1 font-normal normal-case">
       <button
         onClick={toggleBell}
         disabled={bellBusy}
         title={on ? (es ? 'Alertas activadas — tocar para desactivar' : 'Alerts on — tap to turn off') : (es ? 'Avisarme de novedades (notificación push)' : 'Alert me on new developments (push notification)')}
-        className={`text-[12px] disabled:opacity-50 ${on ? 'text-amber-500 hover:text-amber-600' : 'text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'}`}
+        className="db-pill disabled:opacity-50"
+        style={on ? { color: 'var(--red, #b91c1c)' } : undefined}
       >{bellBusy ? '…' : on ? '⚑' : '⚐'}</button>
-      <button onClick={refresh} disabled={busy} title={es ? 'Buscar novedades' : 'Check for new developments'} className="text-[12px] text-neutral-400 hover:text-neutral-900 disabled:opacity-50 dark:hover:text-neutral-100">{busy ? '…' : '↻'}</button>
-      <button onClick={remove} title={es ? 'Dejar de monitorear' : 'Stop monitoring'} className="text-[12px] text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100">✕</button>
+      <button onClick={remove} title={es ? 'Dejar de monitorear' : 'Stop monitoring'} className="db-pill">✕</button>
     </span>
   )
 }

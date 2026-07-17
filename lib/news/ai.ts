@@ -148,6 +148,22 @@ export async function buildTopic(query: string, lang = 'en'): Promise<BuiltTopic
   return { query, route, brief: b, items: items.slice(0, 14), brief_at: new Date().toISOString(), lang }
 }
 
+// Refresh a pinned topic in place: re-pull items with the stored route (no classify call),
+// and only re-write the AI brief when it's gone stale — so the general ↻ can refresh every
+// topic without paying an AI call per section per click.
+const TOPIC_BRIEF_TTL = 6 * 3600 * 1000
+export async function refreshTopic(t: { query: string; route?: any; brief?: string }, lang = 'en'): Promise<BuiltTopic> {
+  const route: Route & { brief_at?: string } = t.route || {}
+  const q = route.query || t.query
+  let items = await searchTopic(q, route, { when: '4d', maxAgeDays: 5 })
+  if (items.length < 3) items = await searchTopic(q, { hl: route.hl, gl: route.gl, ceid: route.ceid }, { when: '7d', maxAgeDays: 9 })
+  if (items.length < 3) items = await searchTopic(t.query, {}, { when: '14d', maxAgeDays: 16 })
+  const briefAt = route.brief_at ? Date.parse(route.brief_at) : 0
+  const stale = !t.brief || !briefAt || Date.now() - briefAt > TOPIC_BRIEF_TTL
+  const b = stale && items.length ? await brief(t.query, items, lang) : t.brief || ''
+  return { query: t.query, route, brief: b, items: items.slice(0, 14), brief_at: stale ? new Date().toISOString() : route.brief_at || new Date().toISOString(), lang }
+}
+
 // "Monitor the situation": fetch the latest on a developing story, preserving when each item
 // was first seen (so the UI can mark what's NEW), plus a short "what's developing / watch next" line.
 async function monitorBrief(query: string, items: Item[], lang: string): Promise<string> {
