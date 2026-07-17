@@ -14,6 +14,7 @@ import RemoveVideo from './RemoveVideo'
 import LangToggle from './LangToggle'
 import ClickTracker from './ClickTracker'
 import VcMapDelegate from './VcMapDelegate'
+import ListenButton from './ListenButton'
 import LayoutEnhancer from './LayoutEnhancer'
 import ShowHidden from './ShowHidden'
 import LastUpdated from './LastUpdated'
@@ -147,6 +148,28 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
     todayItems = todayItems.slice(0, 40)
   }
 
+  // Audio morning brief: a spoken script from the section briefs + top headlines,
+  // read client-side by speechSynthesis (free, offline-capable). Built only for the Today view.
+  let listenScript = ''
+  if (view === 'today' && !empty) {
+    const dateSpoken = new Date().toLocaleDateString(lang === 'es' ? 'es' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long' })
+    const parts: string[] = [
+      lang === 'es' ? `Buenos días. Hoy es ${dateSpoken}. Este es tu Daily Brief.` : `Good morning. It's ${dateSpoken}. This is your Daily Brief.`,
+    ]
+    for (const s of SECTIONS) {
+      if (WATCH(s.key) || hidden.includes(s.key)) continue
+      const brief = sectionBriefs[s.key]
+      const tops = tiered(cache[s.key] || []).slice(0, brief ? 1 : 2).map((it) => (tr[it.l] || it.t))
+      if (!brief && !tops.length) continue
+      parts.push(
+        `${label(s)}. ` + (brief ? `${brief} ` : '') +
+        (tops.length ? (lang === 'es' ? 'Titular: ' : 'Top story: ') + tops.join('. ') : ''),
+      )
+    }
+    parts.push(lang === 'es' ? 'Eso es todo. Buen día.' : "That's your brief. Have a good one.")
+    listenScript = parts.join('\n')
+  }
+
   // For You — rank cached items by the user's learned click profile.
   let foryou: Item[] = []
   let learned = ''       // human-readable "here's what it picked up" line
@@ -238,7 +261,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
         <div className="mx-auto max-w-3xl px-7 py-5">
           {email && <ClickTracker />}
           <section className="rounded-lg border border-neutral-900 bg-white dark:border-neutral-100 dark:bg-neutral-900">
-            <h2 className="border-b border-neutral-200 bg-neutral-900 px-3.5 py-2.5 text-[12px] font-bold uppercase tracking-wide text-white dark:bg-neutral-100 dark:text-neutral-900"><span>{lang === 'es' ? 'Qué pasó hoy' : 'What happened today'}</span></h2>
+            <h2 className="flex items-center justify-between border-b border-neutral-200 bg-neutral-900 px-3.5 py-2.5 text-[12px] font-bold uppercase tracking-wide text-white dark:bg-neutral-100 dark:text-neutral-900"><span>{lang === 'es' ? 'Qué pasó hoy' : 'What happened today'}</span><ListenButton text={listenScript} lang={lang} small /></h2>
             <Items items={todayItems} cap={40} tr={tr} sec="today" />
           </section>
         </div>
@@ -334,6 +357,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
                 <div className="border-b border-neutral-100 bg-neutral-50 px-3.5 py-2.5 text-[12.5px] leading-relaxed dark:border-neutral-800 dark:bg-neutral-900/60">
                   <span className="mr-1.5 font-bold uppercase tracking-wide text-[10px] text-neutral-400">{lang === 'es' ? 'Lo importante' : "What matters"}</span>
                   {sectionBriefs[s.key]}
+                  <span className="ml-1.5"><ListenButton text={`${label(s)}. ${sectionBriefs[s.key]}`} lang={lang} small /></span>
                 </div>
               )}
               {email && !WATCH(s.key) && !sectionBriefs[s.key] && <SectionBrief section={s.key} />}
