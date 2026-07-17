@@ -150,6 +150,12 @@
 .db-root .db-share:hover { color: var(--ink) !important; }
 .db-root .db-save.text-amber-500, .db-root .db-save[data-saved="1"] { color: var(--red) !important; }
 
+/* collapsible topic brief — headlines lead; ▸ expands the AI brief */
+details.db-brief > summary { list-style: none; cursor: pointer; user-select: none; font-family: var(--mono, ui-monospace); letter-spacing: 0.14em; }
+details.db-brief > summary::-webkit-details-marker { display: none; }
+details.db-brief > summary::before { content: "▸ "; }
+details.db-brief[open] > summary::before { content: "▾ "; }
+
 /* ---------- market ticker ---------- */
 .db-root .db-ticker-wrap span { font-family: var(--mono) !important; }
 .db-root .db-ticker-wrap .text-\[15px\] { font-size: 13.5px !important; }

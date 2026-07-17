@@ -336,7 +336,13 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
                 <span>{t.query}</span>
                 <RemoveTopic query={t.query} />
               </h2>
-              {t.brief && <div className="whitespace-pre-line border-b border-neutral-100 bg-neutral-50 px-3.5 py-2.5 text-[12.5px] leading-relaxed dark:border-neutral-800 dark:bg-neutral-900/60">{t.brief}</div>}
+              {/* Brief is collapsed by default so headlines lead; the ▸ row expands it. */}
+              {t.brief && (
+                <details className="db-brief border-b border-neutral-100 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900/60">
+                  <summary className="px-3.5 py-2 text-[10px] font-bold uppercase tracking-wide text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300">{lang === 'es' ? 'Resumen' : 'Brief'}</summary>
+                  <div className="whitespace-pre-line px-3.5 pb-2.5 text-[12.5px] leading-relaxed">{t.brief}</div>
+                </details>
+              )}
               <Items items={t.items || []} cap={10} sec="topic" />
             </section>
           ))}

@@ -92,7 +92,8 @@ export default function LayoutEnhancer({ initial, authed = true }: { initial: La
 
     grid.addEventListener('click', (e) => {
       const t = e.target as HTMLElement
-      if (t?.tagName === 'BUTTON' || t?.tagName === 'A') setTimeout(relayout, 0)
+      // SUMMARY: the collapsible topic brief changes card height when toggled
+      if (t?.tagName === 'BUTTON' || t?.tagName === 'A' || t?.closest?.('summary')) setTimeout(relayout, 0)
     })
 
     // "collapse all" (header button dispatches db:collapse-all): if anything is open,
