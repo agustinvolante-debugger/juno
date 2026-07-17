@@ -246,7 +246,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
       ) : (
         <div id="db-grid" className="px-7 py-5" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(330px,1fr))', gap: '18px', gridAutoRows: '8px', alignItems: 'start' }}>
           {email && <ClickTracker />}
-          {email && <LayoutEnhancer initial={(prefsLayout?.grid as any) || {}} />}
+          <LayoutEnhancer initial={(prefsLayout?.grid as any) || {}} authed={!!email} />
 
           {/* First-run onboarding — only until the user adds a topic/video or dismisses it */}
           {email && topics.length === 0 && videos.length === 0 && monitors.length === 0 && !prefsLayout.onboarded && <Onboarding lang={lang} />}

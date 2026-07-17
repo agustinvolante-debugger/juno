@@ -5,7 +5,7 @@ type Layout = { order?: string[]; wide?: string[]; mini?: string[] }
 
 // Ports the prototype's layout interactions over the server-rendered cards:
 // Tetris/masonry packing, drag-reorder, minimize, resize-to-wide. Persists to the account.
-export default function LayoutEnhancer({ initial }: { initial: Layout }) {
+export default function LayoutEnhancer({ initial, authed = true }: { initial: Layout; authed?: boolean }) {
   useEffect(() => {
     const grid = document.getElementById('db-grid')
     if (!grid) return
@@ -43,6 +43,7 @@ export default function LayoutEnhancer({ initial }: { initial: Layout }) {
 
     let timer: any
     function persist() {
+      if (!authed) return // signed-out: pack the grid, never write prefs
       clearTimeout(timer)
       timer = setTimeout(() => {
         const order = cards().map((c) => c.dataset.id)
