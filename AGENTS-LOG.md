@@ -61,3 +61,11 @@ This is how we stay in sync. **Read the latest entries before you start work. Ap
 - Why the reset relabel: Agustin's For You section vanished — his click profile was wiped at 17:57 UTC via the ↺ (DELETE /api/news/profile), almost certainly mistaken for a refresh. No history kept; it re-learns from clicks. Root cause = icon ambiguity, now fixed.
 - Checks: tsc ✅ build ✅; refresh flow verified E2E on localhost (monitor rebuilt by general ↻, 3-min throttle confirmed, collapse-all 11→0→11).
 - ⚠ Don't-touch: MonitorControls deliberately has NO refresh — don't re-add per-section refresh buttons anywhere; the general ↻ is the only refresh surface.
+
+### 2026-07-17 (cont. 2) — Claude Code — branch: main via /tmp worktree (topic quality + brief toggle + SW dev fix)
+- Did (localhost-approved before push):
+  - **Topic search quality** (d5fe63b): his "energy drink regulation" topic was full of oil-and-gas noise — Google News matches loosely and topic results were NEVER relevance-checked (only sections had curation). NEW `filterRelevant()` (strict Haiku gate, fail-open) runs on every search pass; `classifyTopic` now emits anchored queries for niche topics (quoted entity + OR-synonyms, no site pins for regulatory niches); NEW `gatherTopicItems()` escalates 4d → 14d → 30d when passes come back thin (shared by buildTopic + refreshTopic); setup-chat prompt no longer says "broad" — keeps the user's niche wording. Verified: 14/14 on-topic items for energy drink regulation.
+  - **Collapsible topic brief** (1cf2432): details/summary "▸ Brief" row, collapsed by default so headlines lead; LayoutEnhancer re-packs masonry on summary toggle; CSS in news-theme.css.
+  - **SW dev-staleness fix** (f71efee): the offline SW's stale-while-revalidate was serving OUTDATED dev chunks on localhost (dev chunks aren't content-hashed) — bit us mid-session (tests ran old LayoutEnhancer code). SW now no-ops its fetch handler on localhost; prod unchanged.
+- Checks: tsc ✅ build ✅ per commit; toggle + masonry re-pack verified E2E (span 37→59→37).
+- ⚠ Gotcha for future dev sessions: if localhost behaves stale, check for a registered service worker + db-offline cache from BEFORE f71efee — unregister + clear caches once.
