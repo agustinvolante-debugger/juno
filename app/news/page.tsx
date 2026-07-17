@@ -15,6 +15,7 @@ import LangToggle from './LangToggle'
 import ClickTracker from './ClickTracker'
 import VcMapDelegate from './VcMapDelegate'
 import ListenButton from './ListenButton'
+import CollapseAll from './CollapseAll'
 import SwRegister from './SwRegister'
 import OfflineRibbon from './OfflineRibbon'
 import LayoutEnhancer from './LayoutEnhancer'
@@ -215,6 +216,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
             </a>
           )}
           {email && <LangToggle lang={lang} />}
+          {view !== 'today' && !empty && <CollapseAll />}
           <RefreshButton />
           {email ? (
             <a href="/api/auth/signout" className="text-sm text-neutral-500 hover:underline">Sign out ({email.split('@')[0]})</a>

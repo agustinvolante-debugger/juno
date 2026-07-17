@@ -8,7 +8,7 @@ export default function RemoveTopic({ query }: { query: string }) {
         await fetch('/api/news/topic?query=' + encodeURIComponent(query), { method: 'DELETE' })
         location.reload()
       }}
-      className="font-bold opacity-50 hover:opacity-100"
+      className="db-pill font-normal"
     >
       ✕
     </button>

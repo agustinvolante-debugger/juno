@@ -19,7 +19,10 @@ export default function LayoutEnhancer({ initial, authed = true }: { initial: La
         '.db-card.db-mini li:nth-child(n+4),.db-card.db-mini .db-meta{display:none}' +
         '.db-card.db-wide{grid-column:span 2}.db-card.db-drag{opacity:.35}' +
         '.db-ctl{display:inline-flex;gap:4px;margin-left:auto}' +
-        '.db-ctl button{background:rgba(125,125,125,.18);border:none;border-radius:5px;cursor:pointer;font-size:12px;line-height:1;padding:2px 7px;color:inherit}' +
+        // .db-pill = the SAME pill look for controls that components render themselves
+        // (monitor ⚑/✕, topic/video ✕, For You reset) so every header control matches.
+        '.db-ctl button,button.db-pill{background:rgba(125,125,125,.18);border:none;border-radius:5px;cursor:pointer;font-size:12px;line-height:1;padding:2px 7px;color:inherit}' +
+        '.db-ctl button:hover,button.db-pill:hover{background:rgba(125,125,125,.32)}' +
         '.db-card h2{cursor:grab}'
       document.head.appendChild(st)
     }
@@ -92,11 +95,22 @@ export default function LayoutEnhancer({ initial, authed = true }: { initial: La
       if (t?.tagName === 'BUTTON' || t?.tagName === 'A') setTimeout(relayout, 0)
     })
 
+    // "collapse all" (header button dispatches db:collapse-all): if anything is open,
+    // minimize every card; if everything is already minimized, expand them all back.
+    const onCollapseAll = () => {
+      const cs = cards()
+      const anyOpen = cs.some((c) => !c.classList.contains('db-mini'))
+      cs.forEach((c) => c.classList.toggle('db-mini', anyOpen))
+      persist()
+      relayout()
+    }
+    window.addEventListener('db:collapse-all', onCollapseAll)
+
     relayout()
     const onResize = () => relayout()
     window.addEventListener('resize', onResize)
     const t2 = setTimeout(relayout, 300)
-    return () => { window.removeEventListener('resize', onResize); clearTimeout(t2) }
+    return () => { window.removeEventListener('resize', onResize); window.removeEventListener('db:collapse-all', onCollapseAll); clearTimeout(t2) }
   }, [])
 
   return null
