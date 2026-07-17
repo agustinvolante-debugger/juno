@@ -25,7 +25,7 @@ export type MonitorCard = {
   // company / event / generic
   headline?: string
 }
-export type Monitor = { query: string; items: (Item & { first?: string })[]; brief: string; card?: MonitorCard; updated_at: string }
+export type Monitor = { query: string; items: (Item & { first?: string })[]; brief: string; card?: MonitorCard; updated_at: string; alerts?: boolean }
 
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'

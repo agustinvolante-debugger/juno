@@ -274,7 +274,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
               <section key={m.query} data-id={'monitor_' + m.query.toLowerCase().replace(/[^a-z0-9]+/g, '_')} className="db-card break-inside-avoid rounded-lg border border-neutral-900 bg-white dark:border-neutral-100 dark:bg-neutral-900">
                 <h2 className="flex items-center justify-between gap-2 border-b border-neutral-200 px-3.5 py-2.5 text-[12px] font-bold uppercase tracking-wide dark:border-neutral-800">
                   <span>{m.query}</span>
-                  <MonitorControls query={m.query} lang={lang} />
+                  <MonitorControls query={m.query} lang={lang} alerts={!!m.alerts} />
                 </h2>
                 <MonitorCardView card={m.card} lang={lang} />
                 {m.brief && (

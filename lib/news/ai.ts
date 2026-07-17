@@ -201,7 +201,7 @@ export async function buildMonitor(query: string, lang = 'en', prev?: Monitor): 
   // by reaction coverage; the brief + timeline use the recency-sorted merge.
   const cardInput = [...enrich, ...merged].filter((it, i, a) => a.findIndex((x) => x.l === it.l) === i)
   const [brief, card] = await Promise.all([monitorBrief(query, merged, lang), monitorCard(query, cardInput)])
-  return { query, items: merged.slice(0, 20), brief, card, updated_at: now }
+  return { query, items: merged.slice(0, 20), brief, card, updated_at: now, ...(prev?.alerts ? { alerts: true } : {}) }
 }
 
 export type SetupResult = { type: 'questions' | 'done' | 'error'; reply?: string; questions?: string[]; topics?: string[] }

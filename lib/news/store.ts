@@ -167,6 +167,17 @@ export async function setSourceTiers(t: { top: string[]; muted: string[] }): Pro
   await supabaseAdmin.from('news_macro_cache').upsert({ id: TIERS_ID, stats: t, updated_at: new Date().toISOString() })
 }
 
+// Users with at least one push-subscribed device AND an alert-enabled monitor (for the cron).
+export async function getPushAlertUsers(): Promise<{ email: string; lang: string; layout: any }[]> {
+  const { data } = await supabaseAdmin.from('news_prefs').select('user_email, lang, layout')
+  return (data || [])
+    .filter((r) => {
+      const l: any = r.layout || {}
+      return Array.isArray(l.push) && l.push.length && Array.isArray(l.monitors) && l.monitors.some((m: any) => m.alerts)
+    })
+    .map((r) => ({ email: r.user_email as string, lang: (r.lang as string) || 'en', layout: r.layout }))
+}
+
 // Emails of users who opted into the daily digest (prefs.layout.digest === true).
 export async function getDigestRecipients(): Promise<string[]> {
   const { data } = await supabaseAdmin.from('news_prefs').select('user_email, layout')

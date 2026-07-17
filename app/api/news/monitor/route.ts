@@ -28,6 +28,19 @@ export async function POST(req: Request) {
   return NextResponse.json({ ok: true })
 }
 
+// PATCH { query, alerts }: toggle push alerts for one monitor (device subscription is separate,
+// stored via /api/news/push-sub).
+export async function PATCH(req: Request) {
+  const email = await authedEmail()
+  if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  const { query, alerts } = await req.json().catch(() => ({}))
+  const q = (query || '').toString().trim().toLowerCase()
+  if (!q) return NextResponse.json({ error: 'empty' }, { status: 400 })
+  const monitors = await getUserMonitors(email)
+  await setUserMonitors(email, monitors.map((m) => (m.query.toLowerCase() === q ? { ...m, alerts: !!alerts } : m)))
+  return NextResponse.json({ ok: true })
+}
+
 // DELETE ?query=…
 export async function DELETE(req: Request) {
   const email = await authedEmail()

@@ -24,7 +24,8 @@
     "recharts": "^3.8.1",
     "remark-gfm": "^4.0.1",
     "resend": "^6.12.2",
-    "three": "^0.184.0"
+    "three": "^0.184.0",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -32,6 +33,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/three": "^0.184.1",
+    "@types/web-push": "^3.6.4",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

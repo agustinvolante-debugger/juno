@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server'
 import { collectSections, getStats, tickerDef, SECTION_QUERIES, SECTIONS } from '@/lib/news/feeds'
 import { curateSection } from '@/lib/news/ai'
 import { setFeedCache, setStatsCache, getStatsCache, getSectionInstructions, getCustomTickers, feedCacheAgeMs } from '@/lib/news/store'
+import { checkMonitorsAndPush } from '@/lib/news/push'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+export const maxDuration = 120 // feed refresh + scheduled monitor re-check for push alerts
 
 // The broadened sections always get the AI curation pass (dedupe + rank + brief). Any other
 // section the user has written an instruction for is curated too (so tuning works everywhere).
@@ -46,7 +47,13 @@ export async function GET(req: Request) {
     const [prevStats, freshStats] = await Promise.all([getStatsCache(), getStats(extraDefs)])
     const stats = { ...prevStats, ...freshStats }
     await setStatsCache(stats)
-    return NextResponse.json({ ok: true, sections: Object.keys(bySection).length, feedsLive: `${live}/${total}`, curated: Object.keys(briefs).length, stats: Object.keys(stats).length, fresh: Object.keys(freshStats).length })
+    // Scheduled runs only: re-check alert-enabled monitors and push new developments to
+    // subscribed devices (the public refresh button never triggers AI or notifications).
+    let alerts: { checked: number; pushed: number; users: number } | { error: string } | null = null
+    if (scheduled) {
+      try { alerts = await checkMonitorsAndPush() } catch (e: any) { alerts = { error: String(e?.message || e).slice(0, 120) } }
+    }
+    return NextResponse.json({ ok: true, sections: Object.keys(bySection).length, feedsLive: `${live}/${total}`, curated: Object.keys(briefs).length, stats: Object.keys(stats).length, fresh: Object.keys(freshStats).length, alerts })
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: String(e?.message || e).slice(0, 200) }, { status: 500 })
   }
