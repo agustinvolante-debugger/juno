@@ -1,0 +1,183 @@
+/* Daily Brief — "modern broadsheet" theme.
+   Layered over the existing Tailwind markup: variables + scoped overrides on the
+   .db-root wrapper restyle the shared primitives (cards, headlines, kickers,
+   meta, ticker) without touching every component. Light = warm paper, dark =
+   warm near-black; one accent (signal red). */
+
+.db-root {
+  --paper: #FAF7F0;
+  --paper-2: #F3EFE5;
+  --card: #FDFBF6;
+  --ink: #1A1712;
+  --ink-soft: #57503F;
+  --ink-dim: #8A8271;
+  --rule: rgba(26, 23, 18, 0.14);
+  --rule-strong: rgba(26, 23, 18, 0.55);
+  --red: #C0361C;
+  --red-soft: rgba(192, 54, 28, 0.09);
+  --green: #2E6B3E;
+  --serif: "Newsreader", Georgia, "Times New Roman", serif;
+  --mono: "Spline Sans Mono", ui-monospace, "SF Mono", monospace;
+  background: var(--paper);
+  color: var(--ink);
+  font-feature-settings: "kern";
+}
+@media (prefers-color-scheme: dark) {
+  .db-root {
+    --paper: #14110C;
+    --paper-2: #1A1610;
+    --card: #191510;
+    --ink: #EFE9DC;
+    --ink-soft: #B5AC99;
+    --ink-dim: #7D7563;
+    --rule: rgba(239, 233, 220, 0.13);
+    --rule-strong: rgba(239, 233, 220, 0.5);
+    --red: #E05237;
+    --red-soft: rgba(224, 82, 55, 0.12);
+    --green: #6FAF7E;
+  }
+}
+
+/* kill the old neutral palette wherever it was hardcoded */
+.db-root, .db-root main { background: var(--paper) !important; color: var(--ink) !important; }
+
+/* ---------- masthead ---------- */
+.db-root header.db-masthead {
+  background: color-mix(in srgb, var(--paper) 88%, transparent) !important;
+  border-bottom: 1px solid var(--rule-strong) !important;
+  box-shadow: 0 1px 0 var(--paper), 0 4px 0 -3px var(--rule-strong);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  padding-top: max(0.65rem, env(safe-area-inset-top)) !important;
+  padding-left: max(1rem, env(safe-area-inset-left)) !important;
+  padding-right: max(1rem, env(safe-area-inset-right)) !important;
+}
+.db-root .db-masthead h1 {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 24px;
+  letter-spacing: -0.015em;
+  font-variation-settings: "opsz" 32;
+}
+.db-root .db-masthead h1 .db-the { font-style: italic; font-weight: 500; color: var(--red); margin-right: 2px; }
+.db-root .db-dateline {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+/* buttons in the header pick up the ink scheme */
+.db-root .db-masthead a[class*="bg-neutral-9"], .db-root .db-masthead button[class*="bg-neutral-9"] {
+  background: var(--ink) !important;
+  color: var(--paper) !important;
+  border-radius: 7px !important;
+  font-family: var(--mono);
+  font-size: 11.5px !important;
+  letter-spacing: 0.03em;
+}
+
+/* ---------- section cards ---------- */
+.db-root section[data-id], .db-root main section {
+  background: var(--card) !important;
+  border: 1px solid var(--rule) !important;
+  border-top: 2px solid var(--rule-strong) !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+/* section header → kicker */
+.db-root section h2 {
+  font-family: var(--mono) !important;
+  font-size: 10.5px !important;
+  letter-spacing: 0.16em !important;
+  text-transform: uppercase !important;
+  color: var(--ink-soft) !important;
+  border-bottom: 1px solid var(--rule) !important;
+  background: transparent !important;
+  padding-top: 9px !important;
+  padding-bottom: 8px !important;
+}
+.db-root section h2 > span:first-child::before {
+  content: "";
+  display: inline-block;
+  width: 7px; height: 7px;
+  background: var(--red);
+  margin-right: 8px;
+  vertical-align: 0;
+}
+
+/* ---------- headlines ---------- */
+.db-root section li > a, .db-root section li a[data-s] {
+  font-family: var(--serif) !important;
+  font-weight: 500 !important;
+  font-size: 16.5px !important;
+  line-height: 1.32 !important;
+  letter-spacing: -0.004em;
+  color: var(--ink) !important;
+  text-decoration: none !important;
+}
+.db-root section li a[data-s]:hover {
+  text-decoration: underline !important;
+  text-decoration-color: var(--red) !important;
+  text-decoration-thickness: 1.5px !important;
+  text-underline-offset: 3px;
+}
+/* lead story: first headline of each section reads bigger */
+.db-root section ul > li:first-child a[data-s] {
+  font-size: 19px !important;
+  font-weight: 600 !important;
+  line-height: 1.24 !important;
+}
+/* hairline between stories */
+.db-root section ul > li + li { border-top: 1px solid var(--rule); }
+.db-root section ul > li { border-radius: 0 !important; padding-top: 9px !important; padding-bottom: 9px !important; }
+.db-root section ul > li:hover { background: var(--paper-2) !important; }
+
+/* meta line */
+.db-root .db-meta {
+  font-family: var(--mono) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-dim) !important;
+  margin-top: 3px !important;
+}
+
+/* NEW badge, save/share affordances */
+.db-root [class*="bg-red-6"] { background: var(--red) !important; border-radius: 3px !important; }
+.db-root .db-save, .db-root .db-share { color: var(--ink-dim); }
+.db-root .db-save:hover { color: var(--red) !important; }
+.db-root .db-share:hover { color: var(--ink) !important; }
+.db-root .db-save.text-amber-500, .db-root .db-save[data-saved="1"] { color: var(--red) !important; }
+
+/* ---------- market ticker ---------- */
+.db-root .db-ticker-wrap span { font-family: var(--mono) !important; }
+.db-root .db-ticker-wrap .text-\[15px\] { font-size: 13.5px !important; }
+.db-root .db-ticker-wrap [class*="text-green-7"] { color: var(--green) !important; }
+.db-root .db-ticker-wrap [class*="text-red-7"] { color: var(--red) !important; }
+
+/* AI bar + tool strips inherit paper */
+.db-root [class*="bg-neutral-50"], .db-root [class*="bg-neutral-900/40"], .db-root [class*="bg-neutral-900/60"] {
+  background: var(--paper-2) !important;
+}
+.db-root [class*="border-neutral-2"], .db-root [class*="border-neutral-8"], .db-root [class*="border-neutral-1"] {
+  border-color: var(--rule) !important;
+}
+.db-root input, .db-root textarea, .db-root select {
+  font-size: 16px !important; /* prevents iOS focus zoom */
+  background: var(--card);
+  color: var(--ink);
+}
+
+/* ---------- iOS ergonomics ---------- */
+.db-root { -webkit-tap-highlight-color: transparent; }
+@media (max-width: 640px) {
+  .db-root section ul > li { padding-top: 12px !important; padding-bottom: 12px !important; } /* ≥44px targets */
+  .db-root .db-save, .db-root .db-share { font-size: 17px !important; padding: 4px; }
+  .db-root .db-masthead h1 { font-size: 21px; }
+  .db-root #db-grid { padding-left: max(0.9rem, env(safe-area-inset-left)) !important; padding-right: max(0.9rem, env(safe-area-inset-right)) !important; }
+  body { padding-bottom: env(safe-area-inset-bottom); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .db-root .db-ticker-track { animation: none !important; }
+}

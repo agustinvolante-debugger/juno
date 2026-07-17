@@ -171,13 +171,13 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
   return (
     <main className="min-h-screen bg-white text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100">
       <AutoRefresh />
-      <header className="flex flex-wrap items-baseline gap-4 border-b border-neutral-900 px-7 py-4 dark:border-neutral-100">
-        <h1 className="text-2xl font-bold tracking-tight">▦ Daily Brief</h1>
-        <span className="text-sm text-neutral-500">{new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+      <header className="db-masthead flex flex-wrap items-baseline gap-4 border-b border-neutral-900 px-7 py-4 dark:border-neutral-100">
+        <h1 className="text-2xl font-bold tracking-tight"><span className="db-the">The</span> Daily Brief</h1>
+        <span className="db-dateline text-sm text-neutral-500">{new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
         <LastUpdated iso={updatedAt} lang={lang} />
         <div className="ml-auto flex items-center gap-3">
           <a href={view === 'today' ? '/news' : '/news?view=today'} className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-bold text-white dark:bg-neutral-100 dark:text-neutral-900">
-            {view === 'today' ? '← back' : `📰 ${lang === 'es' ? 'Qué pasó hoy' : 'What happened today'}`}
+            {view === 'today' ? '← back' : (lang === 'es' ? 'Qué pasó hoy' : 'What happened today')}
           </a>
           {email && (
             <a href="/news/globe" className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-bold transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800">
@@ -234,7 +234,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
         <div className="mx-auto max-w-3xl px-7 py-5">
           {email && <ClickTracker />}
           <section className="rounded-lg border border-neutral-900 bg-white dark:border-neutral-100 dark:bg-neutral-900">
-            <h2 className="border-b border-neutral-200 bg-neutral-900 px-3.5 py-2.5 text-[12px] font-bold uppercase tracking-wide text-white dark:bg-neutral-100 dark:text-neutral-900">📰 {lang === 'es' ? 'Qué pasó hoy' : 'What happened today'}</h2>
+            <h2 className="border-b border-neutral-200 bg-neutral-900 px-3.5 py-2.5 text-[12px] font-bold uppercase tracking-wide text-white dark:bg-neutral-100 dark:text-neutral-900"><span>{lang === 'es' ? 'Qué pasó hoy' : 'What happened today'}</span></h2>
             <Items items={todayItems} cap={40} tr={tr} sec="today" />
           </section>
         </div>
@@ -255,7 +255,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
           {foryou.length > 0 && (
             <section data-id="foryou" className="db-card break-inside-avoid rounded-lg border border-neutral-900 bg-white dark:border-neutral-100 dark:bg-neutral-900">
               <h2 className="flex items-center justify-between border-b border-neutral-200 bg-neutral-900 px-3.5 py-2.5 text-[12px] font-bold uppercase tracking-wide text-white dark:bg-neutral-100 dark:text-neutral-900">
-                <span>★ {lang === 'es' ? 'Para ti' : 'For You'}</span>
+                <span>{lang === 'es' ? 'Para ti' : 'For You'}</span>
                 <ResetForYou />
               </h2>
               {learned && (
@@ -273,7 +273,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
             return (
               <section key={m.query} data-id={'monitor_' + m.query.toLowerCase().replace(/[^a-z0-9]+/g, '_')} className="db-card break-inside-avoid rounded-lg border border-neutral-900 bg-white dark:border-neutral-100 dark:bg-neutral-900">
                 <h2 className="flex items-center justify-between gap-2 border-b border-neutral-200 px-3.5 py-2.5 text-[12px] font-bold uppercase tracking-wide dark:border-neutral-800">
-                  <span>👁 {m.query}</span>
+                  <span>{m.query}</span>
                   <MonitorControls query={m.query} lang={lang} />
                 </h2>
                 <MonitorCardView card={m.card} lang={lang} />
@@ -299,7 +299,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
           {topics.map((t) => (
             <section key={t.query} data-id={'topic_' + t.query.toLowerCase().replace(/[^a-z0-9]+/g, '_')} className="db-card break-inside-avoid rounded-lg border border-neutral-900 bg-white dark:border-neutral-100 dark:bg-neutral-900">
               <h2 className="flex items-center justify-between border-b border-neutral-200 px-3.5 py-2.5 text-[12px] font-bold uppercase tracking-wide dark:border-neutral-800">
-                <span>📰 {t.query}</span>
+                <span>{t.query}</span>
                 <RemoveTopic query={t.query} />
               </h2>
               {t.brief && <div className="whitespace-pre-line border-b border-neutral-100 bg-neutral-50 px-3.5 py-2.5 text-[12.5px] leading-relaxed dark:border-neutral-800 dark:bg-neutral-900/60">{t.brief}</div>}
@@ -311,7 +311,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
           {videos.map((v) => (
             <section key={v.key} data-id={v.key} className="db-card break-inside-avoid rounded-lg border border-neutral-900 bg-white dark:border-neutral-100 dark:bg-neutral-900">
               <h2 className="flex items-center justify-between border-b border-neutral-200 px-3.5 py-2.5 text-[12px] font-bold uppercase tracking-wide dark:border-neutral-800">
-                <span>🎬 {v.label}</span>
+                <span>{v.label}</span>
                 <RemoveVideo k={v.key} />
               </h2>
               <Items items={v.items || []} cap={14} sec={v.key} />
@@ -322,7 +322,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
           {SECTIONS.filter((s) => (cache[s.key] || []).length && !hidden.includes(s.key)).map((s) => (
             <section key={s.key} data-id={s.key} className="db-card break-inside-avoid rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
               <h2 className="flex items-center justify-between gap-2 border-b border-neutral-900 px-3.5 py-2.5 text-[12px] font-bold uppercase tracking-wide dark:border-neutral-100">
-                <span>{ICON(s.key)} {label(s)}</span>
+                <span>{label(s)}</span>
                 {email && <SectionTune section={s.key} instruction={sectionInstructions[s.key] || ''} lang={lang} />}
               </h2>
               {sectionBriefs[s.key] && (
