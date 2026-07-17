@@ -46,19 +46,46 @@ export async function classifyTopic(query: string): Promise<Route & { kind?: str
     `A user wants a news briefing on: "${query}".\n` +
     'Return ONLY a JSON object picking Google News settings that surface the most AUTHORITATIVE, ' +
     'detailed, current sources for THIS specific topic:\n' +
-    '{"query":"<concise search query>","hl":"<e.g. en-US or es-419>","gl":"<country e.g. US, CL, AR, GB>",' +
+    '{"query":"<search query — see rules>","hl":"<e.g. en-US or es-419>","gl":"<country e.g. US, CL, AR, GB>",' +
     '"ceid":"<e.g. US:en or CL:es>","sites":["up to 4 source domains; [] if none clearly dominate"],' +
     '"kind":"earnings|sports|company|event|generic",' +
     '"enrich":"<a focused query (NO site filter) that surfaces the HARD FACTS: for earnings add words like ' +
     'revenue EPS estimate beat miss billion; for sports add score result final fixtures; else \\"\\">"}\n' +
-    'Guidance: NBA/NFL/MLB -> espn.com,theathletic.com,nba.com (US:en). Chilean topics/politics -> ' +
+    'QUERY RULES — Google News matches words loosely, so ambiguous words MUST be anchored:\n' +
+    '- Multi-word entities go in quotes, and the angle becomes an OR-group of synonyms. ' +
+    'Example: topic "energy drink regulation" -> query "\\"energy drink\\" (regulation OR ban OR FDA OR caffeine OR \\"age limit\\")" ' +
+    '— NEVER leave words like energy/regulation/security unquoted alone (they match oil-and-gas, finance, etc.).\n' +
+    '- Broad well-covered topics (a league, a big company, a country) can stay as plain concise queries.\n' +
+    'Source guidance: NBA/NFL/MLB -> espn.com,theathletic.com,nba.com (US:en). Chilean topics/politics -> ' +
     'emol.com,latercera.com,biobiochile.cl (CL, es-419). World Cup/soccer -> ole.com.ar,marca.com,' +
     'globoesporte.globo.com,bbc.com (AR or ES locale). Tech/startups/funding -> techcrunch.com,theinformation.com. ' +
-    'Markets/econ -> bloomberg.com,wsj.com,cnbc.com. JSON only, no prose.'
+    'Markets/econ -> bloomberg.com,wsj.com,cnbc.com. Niche/regulatory topics -> [] sites (specialist press covers them, not the majors). ' +
+    'JSON only, no prose.'
   try {
-    return jsonFrom(await claudeText(prompt, 350)) || {}
+    return jsonFrom(await claudeText(prompt, 400)) || {}
   } catch {
     return {}
+  }
+}
+
+// Relevance gate: Google News matches loosely (e.g. "energy drink regulation" returns oil-and-gas
+// stories because they contain "energy"). One cheap call keeps only headlines genuinely on-topic.
+// Fail-open: if the call errors, the unfiltered list comes back rather than an empty section.
+export async function filterRelevant(topic: string, items: Item[]): Promise<Item[]> {
+  if (items.length <= 2) return items
+  const list = items.map((it, i) => `${i}. ${it.t} (${it.s})`).join('\n')
+  const prompt =
+    `A user follows this news topic: "${topic}".\nCandidate headlines:\n${list}\n\n` +
+    'Which are GENUINELY about that topic — not merely sharing a word with it? ' +
+    '(e.g. for "energy drink regulation": Red Bull/Monster/caffeine rules qualify; oil, gas, power-grid or unrelated regulation stories do NOT.) ' +
+    'Respond ONLY with JSON: {"keep":[indexes]}. Be strict — when in doubt, drop it.'
+  try {
+    const j = jsonFrom(await claudeText(prompt, 300))
+    if (!Array.isArray(j?.keep)) return items
+    const keep = new Set(j.keep.map(Number))
+    return items.filter((_, i) => keep.has(i))
+  } catch {
+    return items
   }
 }
 
@@ -138,12 +165,31 @@ export async function curateSection(
 
 export type BuiltTopic = { query: string; route: Route; brief: string; items: Item[]; brief_at: string; lang: string }
 
+// Escalating topic search: every pass is relevance-filtered, and when a pass comes back thin
+// the NEXT pass widens (drop site pins → widen window → raw user query, 30d). Niche topics
+// (regulation, a small company) aren't daily news — a few on-topic items beat 14 loose matches.
+async function gatherTopicItems(query: string, route: Route): Promise<Item[]> {
+  const seen = new Set<string>()
+  const merge = (into: Item[], add: Item[]) => {
+    for (const it of add) if (!seen.has(it.l)) { seen.add(it.l); into.push(it) }
+    return into
+  }
+  const items = merge([], await filterRelevant(query, await searchTopic(route.query!, route, { when: '4d', maxAgeDays: 5, limit: 20 })))
+  if (items.length < 5) {
+    const broad = await searchTopic(route.query!, { hl: route.hl, gl: route.gl, ceid: route.ceid }, { when: '14d', maxAgeDays: 15, limit: 20 })
+    merge(items, await filterRelevant(query, broad.filter((it) => !seen.has(it.l))))
+  }
+  if (items.length < 3) {
+    const wide = await searchTopic(query, {}, { when: '30d', maxAgeDays: 31, limit: 20 })
+    merge(items, await filterRelevant(query, wide.filter((it) => !seen.has(it.l))))
+  }
+  return items.sort((a, b) => (Date.parse(b.d || '') || 0) - (Date.parse(a.d || '') || 0))
+}
+
 export async function buildTopic(query: string, lang = 'en'): Promise<BuiltTopic> {
   const r = await classifyTopic(query)
   const route: Route = { sites: r.sites || null, hl: r.hl || 'en-US', gl: r.gl || 'US', ceid: r.ceid, query: r.query || query }
-  let items = await searchTopic(route.query!, route, { when: '4d', maxAgeDays: 5 })
-  if (items.length < 3) items = await searchTopic(route.query!, { hl: route.hl, gl: route.gl, ceid: route.ceid }, { when: '7d', maxAgeDays: 9 })
-  if (items.length < 3) items = await searchTopic(query, {}, { when: '14d', maxAgeDays: 16 })
+  const items = await gatherTopicItems(query, route)
   const b = await brief(query, items, lang)
   return { query, route, brief: b, items: items.slice(0, 14), brief_at: new Date().toISOString(), lang }
 }
@@ -154,10 +200,8 @@ export async function buildTopic(query: string, lang = 'en'): Promise<BuiltTopic
 const TOPIC_BRIEF_TTL = 6 * 3600 * 1000
 export async function refreshTopic(t: { query: string; route?: any; brief?: string }, lang = 'en'): Promise<BuiltTopic> {
   const route: Route & { brief_at?: string } = t.route || {}
-  const q = route.query || t.query
-  let items = await searchTopic(q, route, { when: '4d', maxAgeDays: 5 })
-  if (items.length < 3) items = await searchTopic(q, { hl: route.hl, gl: route.gl, ceid: route.ceid }, { when: '7d', maxAgeDays: 9 })
-  if (items.length < 3) items = await searchTopic(t.query, {}, { when: '14d', maxAgeDays: 16 })
+  if (!route.query) route.query = t.query
+  const items = await gatherTopicItems(t.query, route)
   const briefAt = route.brief_at ? Date.parse(route.brief_at) : 0
   const stale = !t.brief || !briefAt || Date.now() - briefAt > TOPIC_BRIEF_TTL
   const b = stale && items.length ? await brief(t.query, items, lang) : t.brief || ''
@@ -244,8 +288,9 @@ const SETUP_SYS =
   '(no prose outside it), in one of two shapes:\n' +
   '{"type":"questions","reply":"<one friendly sentence>","questions":["q1","q2"]}\n' +
   '{"type":"done","reply":"<one friendly sentence>","topics":["topic 1","topic 2"]}\n' +
-  'Pick AT MOST 3 broad, searchable topic queries that together cover the interests. Prefer "done" as soon ' +
-  'as you reasonably can. Match the user\'s language.'
+  'Pick AT MOST 3 searchable topic queries that together cover the interests. KEEP THE USER\'S SPECIFIC WORDING — ' +
+  'a niche interest like "energy drink regulation" stays exactly that; never broaden it to "energy" or "the beverage industry". ' +
+  'Prefer "done" as soon as you reasonably can. Match the user\'s language.'
 
 export async function setupChat(messages: { role: 'user' | 'assistant'; content: string }[]): Promise<SetupResult> {
   try {
