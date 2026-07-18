@@ -96,6 +96,26 @@ export const TOOL_DEFS = [
     },
   },
   {
+    name: 'save_company_profile',
+    description:
+      'Save firmographics onto a company profile: website, one-line description, founders/CEO, founded year, headcount estimate, HQ. Use during the same web pass that finds investors — facts must come from THIS conversation\'s web results (source URL required). Only pass fields you actually verified; omissions are fine.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        companySlug: { type: 'string', description: 'Graph slug (from search_internal / search_edgar / create_company)' },
+        website: { type: 'string', description: 'Primary domain, e.g. slash.com' },
+        description: { type: 'string', description: 'One line, ≤160 chars, what the company does' },
+        founders: { type: 'string', description: 'Founders/CEO as display text, e.g. "Victor Cardenas (CEO), Kevin Bai"' },
+        foundedYear: { type: 'number', description: 'Year founded, e.g. 2021' },
+        headcountText: { type: 'string', description: 'Estimate as text, e.g. "~50-100 (LinkedIn est.)"' },
+        hq: { type: 'string', description: 'HQ city/state, e.g. "San Francisco, CA"' },
+        sourceUrl: { type: 'string', description: 'REQUIRED — where these facts came from' },
+      },
+      required: ['companySlug', 'sourceUrl'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'save_investments',
     description:
       'Write web-researched investors/funding rounds into the curated graph so they appear on the map as edges. Use ONLY for facts you just found via web_search — every entry needs the source URL you got it from. Firms are created/linked by name. Sets confidence honestly: "high" for company/investor press releases, "medium" for reputable coverage, "low" for secondhand mentions.',
@@ -165,6 +185,7 @@ export const TOOL_LABELS: Record<string, string> = {
   classify_entity: 'Classifying entity…',
   search_edgar: 'Fetching from SEC EDGAR…',
   create_company: 'Adding to the map…',
+  save_company_profile: 'Saving company profile…',
   save_investments: 'Saving investors to the graph…',
   save_funding_override: 'Recording verified total…',
 }
@@ -601,6 +622,27 @@ async function createCompany(input: { name: string; legalName?: string; website?
   }
 }
 
+// Firmographics onto vc_companies (migration 012 columns). Fails with a clear message
+// until the migration is applied.
+async function saveCompanyProfile(input: { companySlug: string; website?: string; description?: string; founders?: string; foundedYear?: number; headcountText?: string; hq?: string; sourceUrl: string }) {
+  if (!input.sourceUrl || !/^https?:\/\//.test(input.sourceUrl)) return { error: 'sourceUrl (http/https) required' }
+  const { data: co } = await sb.from('vc_companies').select('id,slug,name').eq('slug', input.companySlug).maybeSingle()
+  if (!co) return { error: `no company with slug "${input.companySlug}"` }
+  const patch: Record<string, any> = { profile_source_url: input.sourceUrl.slice(0, 300), profile_updated_at: new Date().toISOString() }
+  if (input.website) patch.website = input.website.replace(/^https?:\/\//, '').replace(/\/$/, '').slice(0, 120)
+  if (input.description) patch.description = input.description.slice(0, 200)
+  if (input.founders) patch.founders = input.founders.slice(0, 200)
+  if (input.foundedYear && input.foundedYear > 1900 && input.foundedYear < 2100) patch.founded_year = Math.round(input.foundedYear)
+  if (input.headcountText) patch.headcount = input.headcountText.slice(0, 60)
+  if (input.hq) patch.location = input.hq.slice(0, 80)
+  const { error } = await sb.from('vc_companies').update(patch).eq('id', co.id)
+  if (error) {
+    if (/column/.test(error.message)) return { error: 'profile columns missing — apply supabase/migrations/012_vc_company_profile.sql first' }
+    return { error: error.message }
+  }
+  return { ok: true, company: co.name, saved: Object.keys(patch).filter((k) => !k.startsWith('profile_')) }
+}
+
 async function saveInvestments(input: { companySlug: string; investments: any[] }) {
   const { data: co } = await sb.from('vc_companies').select('id,slug,name').eq('slug', input.companySlug).maybeSingle()
   if (!co) return { error: `no company with slug "${input.companySlug}" — use the slug from search_internal/search_edgar` }
@@ -683,6 +725,7 @@ export async function executeTool(name: string, input: any, conversationId: stri
     case 'classify_entity': return classifyEntity(input)
     case 'search_edgar': return searchEdgar(input)
     case 'create_company': return createCompany(input)
+    case 'save_company_profile': return saveCompanyProfile(input)
     case 'save_investments': return saveInvestments(input)
     case 'save_funding_override': return saveFundingOverride(input)
     default: return { error: `unknown tool: ${name}` }
@@ -719,6 +762,15 @@ export async function executeToolStaged(name: string, input: any, runNote: strin
     if (error) return { error: error.message }
     return { queued: 1, note: 'Verified total staged for review.' }
   }
+  if (name === 'save_company_profile') {
+    if (!input.sourceUrl) return { error: 'sourceUrl required' }
+    const { error } = await sb.from('vc_enrich_queue').insert({
+      company_slug: input.companySlug, company_name: await displayName(input.companySlug), kind: 'profile',
+      payload: input, confidence: 'high', source_url: input.sourceUrl, run_note: runNote,
+    })
+    if (error) return { error: error.message }
+    return { queued: 1, note: 'Profile facts staged for review.' }
+  }
   return executeTool(name, input, null)
 }
 
@@ -726,5 +778,6 @@ export async function executeToolStaged(name: string, input: any, runNote: strin
 export async function applyQueued(row: { kind: string; payload: any }): Promise<any> {
   if (row.kind === 'investment') return saveInvestments(row.payload)
   if (row.kind === 'override') return saveFundingOverride(row.payload)
+  if (row.kind === 'profile') return saveCompanyProfile(row.payload)
   return { error: `unknown kind ${row.kind}` }
 }

@@ -44,6 +44,7 @@ NEW-COMPANY FLOW (when search_internal misses a company):
 1b. If search_edgar finds NO aligned Form D, DO NOT give up — many real companies never file one. Confirm the legal entity name via web_search (site footer/terms/privacy, press, Crunchbase), then create_company with the legal name, sector, website, and the source URL that confirms it. The bubble is web-sourced (no filed board seats); say so.
 2. web_search its funding history — rounds, investors, verified total raised. Prefer primary sources (company/investor announcements, reputable outlets).
 3. save_investments with every investor you can source (source URL + honest confidence per entry) and save_funding_override for the verified total.
+3b. save_company_profile with firmographics the same web results establish: website, one-line description, founders/CEO, founded year, headcount estimate, HQ — only verified fields.
 4. Tell the user what was added, what is filed fact (Form D directors) vs web-sourced (investors, cited), and that the bubble appears on next load.
 EDGAR is the PREFERRED source, never a gate: filed facts when they exist, reliable web sources when they don't.
 WEB GROUNDING: web_search results are quotable ONLY with their source attached. Never blend web claims with your general knowledge — if the web results are thin, say so. Never call save_investments/save_funding_override with facts that did not come from THIS conversation's web results or filings.

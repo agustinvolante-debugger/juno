@@ -14,11 +14,12 @@ const SYSTEM = `You are the overnight enrichment worker for VC Constellation. Yo
 1. search_edgar with its name (and pass sector if you can infer it) — this adds the company + its filed directors to the graph.
 2. web_search its funding history: rounds, investors, lead investors, verified total raised. Prefer primary sources.
 3. save_investments for every investor you can source (source URL + honest confidence per entry) and save_funding_override if a verified total is well-sourced.
-4. If the web has nothing solid, save nothing — a thin result is fine; never guess.
+4. save_company_profile with whatever firmographics the SAME web results establish: website, one-line description, founders/CEO, founded year, headcount estimate, HQ. Only verified fields; omissions are fine.
+5. If the web has nothing solid, save nothing — a thin result is fine; never guess.
 Rules: only save facts from THIS run's web results or filings. Be efficient: at most 3-4 web searches. End with one short line summarizing what you saved.`
 
 // tool subset for enrichment (no run_query / classify noise)
-const ENRICH_TOOLS = TOOL_DEFS.filter((t: any) => ['search_internal', 'search_edgar', 'save_investments', 'save_funding_override'].includes(t.name))
+const ENRICH_TOOLS = TOOL_DEFS.filter((t: any) => ['search_internal', 'search_edgar', 'save_investments', 'save_funding_override', 'save_company_profile'].includes(t.name))
 
 export async function enrichCompany(name: string, hint: string, runNote: string): Promise<{ ok: boolean; summary: string; costUsd: number }> {
   const anthropic = new Anthropic()

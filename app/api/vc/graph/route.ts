@@ -27,10 +27,13 @@ export async function GET(req: NextRequest) {
   const boardMember = p.get('boardMember') // person name (normalized-ish)
   const boardSeatsOnly = p.get('boardSeatsOnly') === '1'
 
+  // profile columns arrive with migration 012 — fall back to the original list until it's applied
+  let coQ: any = await sb.from('vc_companies').select('id,slug,name,sector,location,total_raised,last_round,last_round_amount,last_round_date,website,description,founded_year,headcount,founders').limit(10000)
+  if (coQ.error) coQ = await sb.from('vc_companies').select('id,slug,name,sector,location,total_raised,last_round,last_round_amount,last_round_date').limit(10000)
   const [firmsR, peopleR, coR, invR, seatsR] = await Promise.all([
     sb.from('vc_firms').select('id,slug,name').limit(10000),
     sb.from('vc_people').select('id,full_name,firm_id,title,bio,profile_url,linkedin,x_url').limit(10000),
-    sb.from('vc_companies').select('id,slug,name,sector,total_raised,last_round,last_round_amount,last_round_date').limit(10000),
+    Promise.resolve(coQ as any),
     sb.from('vc_investments').select('firm_id,company_id,partner_id,round,amount_text,amount_num,date,lead,confidence,source_text').limit(50000),
     sb.from('vc_board_seats').select('person_id,company_id,firm_id,person_name,as_of,confidence,source_text,source_url,source_kind,is_published').eq('is_published', true).limit(50000),
   ])
@@ -39,16 +42,18 @@ export async function GET(req: NextRequest) {
   }
 
   const firmById = new Map(firmsR.data!.map((f) => [f.id, f]))
-  const coById = new Map(coR.data!.map((c) => [c.id, c]))
+  const coById = new Map<string, any>(coR.data!.map((c: any) => [c.id, c]))
   const personById = new Map(peopleR.data!.map((p2) => [p2.id, p2]))
 
   // vcs (with partner name lists) + companies, in the frontend's slug-keyed shape
   const partnersByFirm: Record<string, string[]> = {}
   for (const p2 of peopleR.data!) if (p2.firm_id) (partnersByFirm[p2.firm_id] ||= []).push(p2.full_name)
   const vcs = firmsR.data!.map((f) => ({ id: f.slug, name: f.name, partners: partnersByFirm[f.id] || [] }))
-  const companies = coR.data!.map((c) => ({
+  const companies = coR.data!.map((c: any) => ({
     id: c.slug, name: c.name, sector: c.sector, totalRaised: c.total_raised,
     lastRound: c.last_round, lastRoundAmount: c.last_round_amount, lastRoundDate: c.last_round_date,
+    location: c.location ?? null, website: c.website ?? null, description: c.description ?? null, foundedYear: c.founded_year ?? null,
+    headcount: c.headcount ?? null, founders: c.founders ?? null,
   }))
 
   // investments — merge board-seat flag; synthesize edges for board seats without an investment row
@@ -100,21 +105,21 @@ export async function GET(req: NextRequest) {
 
   // ---- optional filters (server-side subset) ----
   let cos = companies
-  if (sector) cos = cos.filter((c) => (c.sector || '').toLowerCase().includes(sector.toLowerCase()))
-  if (minLast != null) cos = cos.filter((c) => (c.lastRoundAmount || 0) >= minLast)
-  if (minTotal != null) cos = cos.filter((c) => parseTotal(c.totalRaised) >= minTotal)
+  if (sector) cos = cos.filter((c: any) => (c.sector || '').toLowerCase().includes(sector.toLowerCase()))
+  if (minLast != null) cos = cos.filter((c: any) => (c.lastRoundAmount || 0) >= minLast)
+  if (minTotal != null) cos = cos.filter((c: any) => parseTotal(c.totalRaised) >= minTotal)
   if (investor) {
     const backed = new Set(investments.filter((e) => e.vc === investor).map((e) => e.company))
-    cos = cos.filter((c) => backed.has(c.id))
+    cos = cos.filter((c: any) => backed.has(c.id))
   }
   if (boardMember) {
     const bm = boardMember.toLowerCase()
     const boards = new Set(investments.filter((e) => e.boardSeat && (e.partner || '').toLowerCase().includes(bm)).map((e) => e.company))
-    cos = cos.filter((c) => boards.has(c.id))
+    cos = cos.filter((c: any) => boards.has(c.id))
   }
   const filtered = sector || minLast != null || minTotal != null || investor || boardMember
   if (filtered) {
-    const keep = new Set(cos.map((c) => c.id))
+    const keep = new Set(cos.map((c: any) => c.id))
     let inv = investments.filter((e) => keep.has(e.company))
     if (boardSeatsOnly) inv = inv.filter((e) => e.boardSeat)
     const firmsUsed = new Set(inv.map((e) => e.vc))
