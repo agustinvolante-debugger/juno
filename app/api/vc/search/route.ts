@@ -45,9 +45,25 @@ export async function GET(req: NextRequest) {
 
   // 'estimated' count: exact counting scans ~200k rows per request and is brutally slow
   // through PostgREST; the planner estimate is instant and close enough for a result count.
+  // Brand aliases (written by /api/vc/resolve): searching "pocket" should hit the legal
+  // name "Open Vision Engineering Inc" once the brand has been resolved once. The legal
+  // suffix is stripped so punctuation differences vs EDGAR's spelling can't miss.
+  let effectiveQ = q
+  let resolvedFrom: string | null = null
+  if (q) {
+    try {
+      const { data: al } = await sb.from('vc_ingest_meta').select('value').eq('key', 'brand_aliases').maybeSingle()
+      const hit = al?.value ? JSON.parse(al.value)[normName(q)] : null
+      if (hit?.legalName) {
+        effectiveQ = hit.legalName.replace(/,?\s+(incorporated|corporation|inc|corp|llc|ltd|co)\.?$/i, '')
+        resolvedFrom = hit.legalName
+      }
+    } catch { /* alias map is best-effort */ }
+  }
+
   let query = sb.from('vc_formd_issuers').select('cik,name,norm_name,industry_group,state,entity_type,type_confidence,last_offering_amount,total_offering_amount,filing_count,last_filing_date', { count: 'estimated' })
   if (type) query = query.eq('entity_type', type)
-  if (q) query = query.ilike('name', `%${q}%`)
+  if (effectiveQ) query = query.ilike('name', `%${effectiveQ}%`)
   if (industry) query = query.ilike('industry_group', `%${industry}%`)
   if (state) query = query.ilike('state', state)
   if (minLast != null) query = query.gte('last_offering_amount', minLast)
@@ -89,5 +105,5 @@ export async function GET(req: NextRequest) {
   })
 
   const { data: meta } = await sb.from('vc_ingest_meta').select('value').eq('key', 'formd_as_of').maybeSingle()
-  return NextResponse.json({ rows, total: count || 0, asOf: meta?.value || null }, { headers: CORS })
+  return NextResponse.json({ rows, total: count || 0, asOf: meta?.value || null, resolvedFrom }, { headers: CORS })
 }

@@ -77,6 +77,25 @@ export const TOOL_DEFS = [
     },
   },
   {
+    name: 'create_company',
+    description:
+      'Create a company on the map WITHOUT a Form D filing — the web-sourced fallback when search_edgar finds no aligned filing (many real startups never file, or file late). Use ONLY after search_edgar missed, and only with the legal entity name confirmed by web sources (site footer / terms of service / press / Crunchbase). Requires the source URL that confirms the legal name. The bubble carries no filed facts (no Form D directors); if a Form D appears later, search_edgar can still attach filings. After creating, ALWAYS enrich: web_search rounds/investors → save_investments + save_funding_override with sources.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        name: { type: 'string', description: 'Consumer/brand name, e.g. "Slash"' },
+        legalName: { type: 'string', description: 'Legal entity name, e.g. "Slash Financial, Inc." — used as the graph name when given' },
+        website: { type: 'string', description: 'Primary domain, e.g. slash.com' },
+        sector: { type: 'string', enum: [...SECTORS], description: 'Sector for map clustering' },
+        location: { type: 'string', description: 'HQ city/state if known' },
+        sourceUrl: { type: 'string', description: 'REQUIRED — URL confirming the legal entity name' },
+        note: { type: 'string', description: 'Short provenance note' },
+      },
+      required: ['name', 'sourceUrl'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'save_investments',
     description:
       'Write web-researched investors/funding rounds into the curated graph so they appear on the map as edges. Use ONLY for facts you just found via web_search — every entry needs the source URL you got it from. Firms are created/linked by name. Sets confidence honestly: "high" for company/investor press releases, "medium" for reputable coverage, "low" for secondhand mentions.',
@@ -145,6 +164,7 @@ export const TOOL_LABELS: Record<string, string> = {
   run_query: 'Running query…',
   classify_entity: 'Classifying entity…',
   search_edgar: 'Fetching from SEC EDGAR…',
+  create_company: 'Adding to the map…',
   save_investments: 'Saving investors to the graph…',
   save_funding_override: 'Recording verified total…',
 }
@@ -552,6 +572,35 @@ async function searchEdgar(input: { name?: string; personName?: string; sector?:
 
 // ---------- save_investments / save_funding_override (web-enrichment write path) ----------
 
+// Web-sourced company creation: the fallback when a real company simply has no Form D.
+// slug is 'web-…' so provenance is visible in the data; a later search_edgar hit for the
+// same company will match by normalized name and attach filings as usual.
+async function createCompany(input: { name: string; legalName?: string; website?: string; sector?: string; location?: string; sourceUrl: string; note?: string }) {
+  const display = (input.legalName || input.name || '').trim().slice(0, 120)
+  if (!display) return { error: 'name required' }
+  if (!input.sourceUrl || !/^https?:\/\//.test(input.sourceUrl)) return { error: 'sourceUrl (http/https) required — it must confirm the legal entity name' }
+  const { data: existing } = await sb.from('vc_companies').select('slug,name')
+  const hit = (existing || []).find((c: any) => {
+    const n = normName(c.name)
+    return n === normName(display) || (input.name && n === normName(input.name))
+  })
+  if (hit) return { exists: true, company: { slug: hit.slug, name: hit.name }, note: 'Already on the map — enrich it instead of re-creating.' }
+  const slug = 'web-' + display.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 56)
+  const sector = input.sector && (SECTORS as readonly string[]).includes(input.sector) ? input.sector : null
+  const { data: co, error } = await sb.from('vc_companies')
+    .upsert({ slug, name: display, cik: null, sector, location: input.location?.slice(0, 80) || null }, { onConflict: 'slug' })
+    .select('slug,name').single()
+  if (error) return { error: error.message }
+  await sb.from('vc_sync_log').insert({
+    source: 'chat', filings_processed: 0,
+    notes: `create_company (web-sourced, no Form D): ${display}${input.website ? ` · ${input.website}` : ''} · ${input.sourceUrl}${input.note ? ` · ${input.note}` : ''}`,
+  })
+  return {
+    created: true, company: { slug: co.slug, name: co.name },
+    note: 'Web-sourced bubble created (no filed facts). Now enrich: save_investments + save_funding_override with source URLs.',
+  }
+}
+
 async function saveInvestments(input: { companySlug: string; investments: any[] }) {
   const { data: co } = await sb.from('vc_companies').select('id,slug,name').eq('slug', input.companySlug).maybeSingle()
   if (!co) return { error: `no company with slug "${input.companySlug}" — use the slug from search_internal/search_edgar` }
@@ -633,6 +682,7 @@ export async function executeTool(name: string, input: any, conversationId: stri
     case 'run_query': return runQuery(input, conversationId)
     case 'classify_entity': return classifyEntity(input)
     case 'search_edgar': return searchEdgar(input)
+    case 'create_company': return createCompany(input)
     case 'save_investments': return saveInvestments(input)
     case 'save_funding_override': return saveFundingOverride(input)
     default: return { error: `unknown tool: ${name}` }
