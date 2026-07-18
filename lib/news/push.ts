@@ -22,6 +22,13 @@ function vapid() {
   return webpush
 }
 
+// Generic sender for other surfaces (e.g. VC watchlist alerts ride the same device
+// subscriptions). Throws on failure; 404/410 statusCode means the device unsubscribed.
+export async function sendWebPush(sub: any, payload: string): Promise<void> {
+  if (!pushConfigured()) throw new Error('push not configured')
+  await vapid().sendNotification(sub, payload)
+}
+
 export async function checkMonitorsAndPush(): Promise<{ checked: number; pushed: number; users: number }> {
   if (!pushConfigured()) return { checked: 0, pushed: 0, users: 0 }
   const users = await getPushAlertUsers()

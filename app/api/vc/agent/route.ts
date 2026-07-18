@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { supabaseAdmin } from '@/lib/supabase'
 import { TOOL_DEFS, TOOL_LABELS, executeTool } from '@/lib/vc/agent-tools'
-import { chatGate, chatCors } from '@/lib/vc/chat-auth'
+import { chatGate, chatCors, chatIdentity } from '@/lib/vc/chat-auth'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -102,15 +102,18 @@ export async function POST(req: NextRequest) {
   }
 
   // ---- conversation ----
+  const who = await chatIdentity(req)
   let conversationId: string = body.conversationId || ''
   if (conversationId) {
-    const { data } = await sb.from('vc_chat_conversations').select('id').eq('id', conversationId).maybeSingle()
-    if (!data) conversationId = ''
+    // per-user ownership (migration 013): continuing someone else's conversation starts a fresh one
+    const { data } = await sb.from('vc_chat_conversations').select('id,user_email').eq('id', conversationId).maybeSingle()
+    if (!data || ((data as any).user_email && (data as any).user_email !== who)) conversationId = ''
   }
   if (!conversationId) {
-    const { data, error } = await sb.from('vc_chat_conversations').insert({ title: message.slice(0, 80) }).select('id').single()
-    if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: CORS })
-    conversationId = data.id
+    let ins: any = await sb.from('vc_chat_conversations').insert({ title: message.slice(0, 80), user_email: who }).select('id').single()
+    if (ins.error && /column/.test(ins.error.message)) ins = await sb.from('vc_chat_conversations').insert({ title: message.slice(0, 80) }).select('id').single()
+    if (ins.error) return NextResponse.json({ error: ins.error.message }, { status: 500, headers: CORS })
+    conversationId = ins.data.id
   }
   const { data: history } = await sb.from('vc_chat_messages').select('role,content').eq('conversation_id', conversationId).order('created_at', { ascending: true }).limit(60)
   // tables already shown earlier in this conversation — used to suppress duplicate artifacts

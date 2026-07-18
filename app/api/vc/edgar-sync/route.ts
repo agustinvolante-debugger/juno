@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { dailyFormD, fetchFilingDoc, looksLikeSpv, matchPartners, normName, upsertUniverse } from '@/lib/vc/edgar.mjs'
+import { sendWebPush } from '@/lib/news/push'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -36,14 +37,17 @@ export async function GET(req: NextRequest) {
   }
 
   const dayResults: any[] = []
+  const freshFilings: any[] = [] // for watchlist alerts, across all days this run
   for (const date of dates) {
-    dayResults.push(await syncDay(sb, date))
+    dayResults.push(await syncDay(sb, date, freshFilings))
     if (!explicit) await sb.from('vc_ingest_meta').upsert({ key: 'formd_synced_through', value: date, updated_at: new Date().toISOString() }, { onConflict: 'key' })
   }
-  return NextResponse.json({ days: dayResults })
+  let alerts: any = null
+  try { alerts = await alertWatchers(sb, freshFilings) } catch (e: any) { alerts = { error: String(e?.message || e).slice(0, 120) } }
+  return NextResponse.json({ days: dayResults, alerts })
 }
 
-async function syncDay(sb: any, date: string) {
+async function syncDay(sb: any, date: string, freshFilings: any[] = []) {
   const filings = await dailyFormD(date)
   if (!filings.length) {
     await sb.from('vc_sync_log').insert({ source: 'daily', filings_processed: 0, notes: `${date}: no filings` })
@@ -77,6 +81,7 @@ async function syncDay(sb: any, date: string) {
     const { data: fil } = await sb.from('vc_filings').upsert({ accession: f.accession, form_type: f.formType, cik: f.cik, issuer_name: doc.issuerName, filing_date: date, offering_amount: doc.offeringAmount, industry_group: doc.industryGroup, url: doc.url }, { onConflict: 'accession' }).select('id').single()
     // keep the Form D universe fresh (SPVs included — the universe is the raw record)
     await upsertUniverse(sb, f.cik, doc, date)
+    freshFilings.push({ cik: f.cik, name: doc.issuerName, amount: doc.offeringAmount, url: doc.url, formType: f.formType, date })
     if (looksLikeSpv(doc)) continue
     const matches = matchPartners(doc.relatedPersons, known).filter((m: any) => m.isDirector)
     if (!matches.length) continue
@@ -96,4 +101,49 @@ async function syncDay(sb: any, date: string) {
   if (processed) await sb.from('vc_ingest_meta').upsert({ key: 'formd_as_of', value: date, updated_at: new Date().toISOString() }, { onConflict: 'key' })
   await sb.from('vc_sync_log').insert({ source: 'daily', filings_processed: processed, new_companies: newCos, new_board_seats: newSeats, notes: `${date}: ${todo.length} new of ${filings.length}` })
   return { date, filingsInIndex: filings.length, processed, newCompanies: newCos, newBoardSeats: newSeats }
+}
+
+// Watchlist alerts (pitchbook Phase 3): diff this run's fresh filings against every
+// user's watchlist (vc_user_state, migration 013) and push through the news app's
+// device subscriptions for the same account — one notification per watched company
+// per run, deep-linked to the VC page.
+async function alertWatchers(sb: any, filings: any[]): Promise<any> {
+  if (!filings.length) return { pushed: 0 }
+  const states: any = await sb.from('vc_user_state').select('user_email,watchlist')
+  if (states.error) return { skipped: 'vc_user_state missing (migration 013)' }
+  const users = (states.data || []).filter((u: any) => Array.isArray(u.watchlist) && u.watchlist.length)
+  if (!users.length) return { pushed: 0 }
+
+  const allSlugs = [...new Set(users.flatMap((u: any) => u.watchlist.map((w: any) => w.slug)))]
+  const { data: cos } = await sb.from('vc_companies').select('slug,name,cik').in('slug', allSlugs)
+  const bySlug = new Map((cos || []).map((c: any) => [c.slug, c]))
+  const fByCik = new Map(filings.filter((f) => f.cik).map((f) => [String(f.cik), f]))
+  const fByName = new Map(filings.filter((f) => f.name).map((f) => [normName(f.name), f]))
+
+  let pushed = 0, matched = 0
+  for (const u of users) {
+    const hits: any[] = []
+    for (const w of u.watchlist) {
+      const c: any = bySlug.get(w.slug)
+      const f = (c?.cik && fByCik.get(String(c.cik))) || fByName.get(normName(c?.name || w.name || ''))
+      if (f) hits.push({ w, f })
+    }
+    if (!hits.length) continue
+    matched += hits.length
+    const { data: prefs } = await sb.from('news_prefs').select('layout').eq('user_email', u.user_email).maybeSingle()
+    const subs: any[] = (prefs?.layout as any)?.push || []
+    if (!subs.length) continue
+    for (const { w, f } of hits.slice(0, 5)) {
+      const payload = JSON.stringify({
+        title: `Form ${f.formType || 'D'} filed · ${w.name || f.name}`,
+        body: f.amount ? `New SEC filing — offering ~$${Math.round(Number(f.amount) / 1e6)}M (${f.date})` : `New SEC Form D filing (${f.date})`,
+        url: 'https://vc.tryjunoapp.com',
+        tag: `formd-${w.slug}`,
+      })
+      for (const s of subs) {
+        try { await sendWebPush(s, payload); pushed++ } catch { /* dead device — news cron prunes these */ }
+      }
+    }
+  }
+  return { matched, pushed, users: users.length }
 }

@@ -11,6 +11,18 @@ export function chatCors(req: NextRequest): Record<string, string> {
   return { ...h, 'Access-Control-Allow-Headers': 'content-type,x-chat-key' }
 }
 
+// Who is asking — for per-user conversation/watchlist ownership. The shared chat key
+// belongs to Agustin (it predates multi-user); Google sessions map to their own email.
+const CHATKEY_OWNER = 'agustinvolantesilva@gmail.com'
+export async function chatIdentity(req: NextRequest): Promise<string | null> {
+  const email = await vcSessionEmail()
+  if (email) return email
+  const key = process.env.VC_CHAT_KEY
+  const got = req.headers.get('x-chat-key') || req.nextUrl.searchParams.get('key')
+  if (key && got === key) return CHATKEY_OWNER
+  return null
+}
+
 export async function chatGate(req: NextRequest): Promise<NextResponse | null> {
   const CORS = chatCors(req)
   const key = process.env.VC_CHAT_KEY

@@ -90,9 +90,12 @@ self.addEventListener('push', (e) => {
 self.addEventListener('notificationclick', (e) => {
   e.notification.close()
   const url = (e.notification.data && e.notification.data.url) || '/news'
+  // focus an existing window only if it's on the target host (VC alerts deep-link to
+  // vc.tryjunoapp.com — those must open a new window, not focus a news tab)
+  const host = new URL(url, self.location.origin).host
   e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
-      for (const c of list) if (c.url.includes('/news') && 'focus' in c) return c.focus()
+      for (const c of list) if (c.url.includes(host) && 'focus' in c) return c.focus()
       return self.clients.openWindow(url)
     }),
   )
