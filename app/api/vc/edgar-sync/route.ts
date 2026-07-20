@@ -44,7 +44,9 @@ export async function GET(req: NextRequest) {
   }
   let alerts: any = null
   try { alerts = await alertWatchers(sb, freshFilings) } catch (e: any) { alerts = { error: String(e?.message || e).slice(0, 120) } }
-  return NextResponse.json({ days: dayResults, alerts })
+  let q2: any = null
+  try { q2 = await watchQ2Bulk(sb) } catch { /* best-effort */ }
+  return NextResponse.json({ days: dayResults, alerts, q2 })
 }
 
 async function syncDay(sb: any, date: string, freshFilings: any[] = []) {
@@ -146,4 +148,24 @@ async function alertWatchers(sb: any, filings: any[]): Promise<any> {
     }
   }
   return { matched, pushed, users: users.length }
+}
+
+// Phase 4 watcher: the SEC's 2026q2 Form D bulk file closes the Apr–Jun universe gap.
+// Ping daily until it exists, then push Agustin a heads-up once (flag in vc_ingest_meta)
+// — closing the gap is then one manual script run (scripts/vc-formd-universe.mjs).
+async function watchQ2Bulk(sb: any): Promise<any> {
+  const KEY = 'q2_2026_bulk_live'
+  const { data: flag } = await sb.from('vc_ingest_meta').select('value').eq('key', KEY).maybeSingle()
+  if (flag?.value) return { live: true, since: flag.value }
+  const head = await fetch('https://www.sec.gov/files/structureddata/data/form-d-data-sets/2026q2_d.zip', {
+    method: 'HEAD', headers: { 'User-Agent': process.env.EDGAR_UA || 'juno-vc research chaska@caerusai.com' },
+  }).catch(() => null)
+  if (!head || !head.ok) return { live: false }
+  await sb.from('vc_ingest_meta').upsert({ key: KEY, value: new Date().toISOString(), updated_at: new Date().toISOString() }, { onConflict: 'key' })
+  await sb.from('vc_sync_log').insert({ source: 'daily', filings_processed: 0, notes: 'SEC posted the 2026q2 Form D bulk — run scripts/vc-formd-universe.mjs --from 2026q2 --to 2026q2 to close the Apr–Jun gap' })
+  const { data: prefs } = await sb.from('news_prefs').select('layout').eq('user_email', 'agustinvolantesilva@gmail.com').maybeSingle()
+  for (const sub of ((prefs?.layout as any)?.push || [])) {
+    try { await sendWebPush(sub, JSON.stringify({ title: 'SEC posted the 2026q2 Form D bulk', body: 'The Apr–Jun universe gap can be closed now — one script run.', url: 'https://vc.tryjunoapp.com', tag: 'q2-bulk' })) } catch { /* dead device */ }
+  }
+  return { live: true, notified: true }
 }
