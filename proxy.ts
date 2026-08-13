@@ -24,7 +24,20 @@ export async function proxy(req: NextRequest) {
   // which Next serves without any auth of its own, so the gate has to live here.
   // /api/ask is the one server route the Stack needs and is handled by the app.
   if (host.startsWith('ai.')) {
-    if (pathname.startsWith('/api/')) return NextResponse.next()
+    // Never gate these, or the gate fights itself:
+    //  · /api/*      NextAuth's endpoints and /api/ask
+    //  · /auth/*     the app's own sign-in PAGE. Gating it sent /auth/signin back to
+    //                /api/auth/signin, which renders /auth/signin, which was gated —
+    //                an infinite redirect that only appears once the domain is live.
+    //  · /ai/_next/* the exported bundle's CSS, JS and fonts. These already point at
+    //                their real public path, and gating them served the site unstyled.
+    if (
+      pathname.startsWith('/api/') ||
+      pathname.startsWith('/auth/') ||
+      pathname.startsWith('/ai/_next/')
+    ) {
+      return NextResponse.next()
+    }
 
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
     if (!token) {
