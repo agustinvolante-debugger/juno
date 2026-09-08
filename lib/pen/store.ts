@@ -7,15 +7,33 @@ export type PenStatus = 'uploaded' | 'transcribing' | 'transcribed' | 'noted' | 
 export type Utterance = { speaker: string; text: string; start: number; end: number }
 export type Transcript = { text?: string; utterances?: Utterance[] }
 
+export type MeetingType = 'showing' | 'clinical' | 'generic'
+
+export type Person = { name: string; role: string; speaker: string; note: string }
+export type Decision = { decision: string; who: string }
+export type Action = { action: string; owner: string; due: string; priority: 'high' | 'normal' | 'low' }
+export type Missed = { item: string; why: string }
+
+/** Universal fields apply to every meeting; `showing` only appears for property viewings. */
 export type PenNotes = {
+  meeting_type?: MeetingType
+  headline?: string
   summary?: string
-  reactions?: { feature: string; who: string; sentiment: 'loved' | 'liked' | 'neutral' | 'disliked'; quote?: string }[]
-  objections?: { objection: string; who: string; quote?: string }[]
-  signals?: { signal: string; strength: 'strong' | 'medium' | 'weak'; quote?: string }[]
-  revealed_criteria?: string[]
-  followups?: { action: string; due?: string }[]
+  people?: Person[]
+  decisions?: Decision[]
+  actions?: Action[]
+  open_questions?: string[]
+  missed?: Missed[]
+  showing?: {
+    reactions?: { feature: string; who: string; sentiment: 'loved' | 'liked' | 'neutral' | 'disliked'; quote?: string }[]
+    objections?: { objection: string; who: string; quote?: string }[]
+    signals?: { signal: string; strength: 'strong' | 'medium' | 'weak'; quote?: string }[]
+    revealed_criteria?: string[]
+  }
   client_name?: string
 }
+
+export type ChatTurn = { role: 'user' | 'assistant'; content: string; ts: number }
 
 export type PenSession = {
   id: string
@@ -31,6 +49,9 @@ export type PenSession = {
   aai_id: string | null
   transcript: Transcript
   notes: PenNotes
+  meeting_type: MeetingType | null
+  chat: ChatTurn[]
+  action_done: number[]
   user_notes: string | null
   client_name: string | null
   error_text: string | null

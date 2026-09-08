@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { PenSession } from '@/lib/pen/store'
+import type { PenSession, MeetingType, ChatTurn, PenNotes } from '@/lib/pen/store'
 import { prepareAudio, fmtMB, fmtDur } from '@/lib/pen/encode'
 
 // The File System Access API isn't in the default TS lib.
@@ -14,6 +14,12 @@ declare global {
 }
 
 const AUDIO_RE = /\.(wav|mp3|m4a|aac|ogg|opus|webm|amr|3gp|wma|flac)$/i
+
+const TYPE_LABEL: Record<MeetingType, string> = {
+  showing: 'Property showing',
+  clinical: 'Clinical / admin',
+  generic: 'General meeting',
+}
 
 type Pending = { file: File; picked: boolean }
 type Progress = { name: string; phase: string; pct: number }
@@ -28,14 +34,13 @@ export default function PenApp({ initial, loadError }: { initial: PenSession[]; 
   const [progress, setProgress] = useState<Progress | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
-  const [tab, setTab] = useState<'notes' | 'transcript'>('notes')
+  const [tab, setTab] = useState<'note' | 'transcript'>('note')
+  const [chatOpen, setChatOpen] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
 
   const active = useMemo(() => sessions.find((s) => s.id === activeId) ?? null, [sessions, activeId])
 
-  // Feature-detect after mount. Reading window during render makes the server and client
-  // disagree (server: no picker, client: picker), which is a hydration mismatch and makes
-  // the fallback banner flash on every load.
+  // Feature-detect after mount, or the server and client disagree and the fallback banner flashes.
   const [mounted, setMounted] = useState(false)
   const [supportsPicker, setSupportsPicker] = useState(false)
   useEffect(() => {
@@ -46,12 +51,31 @@ export default function PenApp({ initial, loadError }: { initial: PenSession[]; 
   const refresh = useCallback(async () => {
     const r = await fetch('/api/pen/sessions', { cache: 'no-store' })
     if (!r.ok) return
-    const j = (await r.json()) as { sessions: PenSession[] }
-    setSessions(j.sessions)
+    setSessions(((await r.json()) as { sessions: PenSession[] }).sessions)
   }, [])
 
-  // Anything mid-transcription gets polled. This also covers the case where the webhook
-  // isn't configured (local dev) or never fires.
+  const patchLocal = useCallback((s: PenSession) => {
+    setSessions((prev) => prev.map((x) => (x.id === s.id ? s : x)))
+  }, [])
+
+  const makeNotes = useCallback(
+    async (id: string, type?: MeetingType) => {
+      const r = await fetch('/api/pen/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...(type ? { type } : {}) }),
+      })
+      if (!r.ok) {
+        setErr((await r.json()).error ?? 'could not write the notes')
+        return
+      }
+      patchLocal(((await r.json()) as { session: PenSession }).session)
+    },
+    [patchLocal],
+  )
+
+  // Poll anything mid-transcription. Also covers a webhook that never arrives.
+  const busyKey = sessions.map((s) => `${s.id}:${s.status}`).join(',')
   useEffect(() => {
     const busy = sessions.filter((s) => s.status === 'transcribing')
     if (!busy.length) return
@@ -61,14 +85,14 @@ export default function PenApp({ initial, loadError }: { initial: PenSession[]; 
         if (!r.ok) continue
         const j = (await r.json()) as { session?: PenSession }
         if (j.session && j.session.status !== 'transcribing') {
-          setSessions((prev) => prev.map((x) => (x.id === j.session!.id ? j.session! : x)))
+          patchLocal(j.session)
           if (j.session.status === 'transcribed') void makeNotes(j.session.id)
         }
       }
     }, 6000)
     return () => clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessions.map((s) => `${s.id}:${s.status}`).join(',')])
+  }, [busyKey])
 
   /* ---------------------------------------------------------------- connect */
 
@@ -78,12 +102,10 @@ export default function PenApp({ initial, loadError }: { initial: PenSession[]; 
       const dir = await window.showDirectoryPicker!({ id: 'pen-recorder', mode: 'read' })
       const found: File[] = []
       for await (const entry of dir.values()) {
-        if (entry.kind === 'file' && AUDIO_RE.test(entry.name) && entry.getFile) {
-          found.push(await entry.getFile())
-        }
+        if (entry.kind === 'file' && AUDIO_RE.test(entry.name) && entry.getFile) found.push(await entry.getFile())
       }
       if (!found.length) {
-        setErr(`No audio files in "${dir.name}". Cheap recorders often keep them in a subfolder — try picking that folder directly.`)
+        setErr(`No audio in “${dir.name}”. Recorders often keep files in a subfolder — try picking that one.`)
         return
       }
       found.sort((a, b) => b.lastModified - a.lastModified)
@@ -96,10 +118,7 @@ export default function PenApp({ initial, loadError }: { initial: PenSession[]; 
 
   function addFiles(files: FileList | File[]) {
     const list = Array.from(files).filter((f) => AUDIO_RE.test(f.name))
-    if (!list.length) {
-      setErr('Those files don’t look like audio.')
-      return
-    }
+    if (!list.length) return setErr('Those files don’t look like audio.')
     setPenName(null)
     setPending((prev) => [...prev, ...list.map((f) => ({ file: f, picked: true }))])
   }
@@ -111,8 +130,7 @@ export default function PenApp({ initial, loadError }: { initial: PenSession[]; 
     const picked = pending.filter((p) => p.picked)
     if (!picked.length) return
     if (!consent) {
-      setErr('Confirm consent first. Florida is an all-party-consent state and you are a licensed agent.')
-      return
+      return setErr('Confirm consent first. Florida requires every party to agree to being recorded.')
     }
 
     for (const { file } of picked) {
@@ -120,17 +138,17 @@ export default function PenApp({ initial, loadError }: { initial: PenSession[]; 
         setProgress({ name: file.name, phase: 'Preparing audio', pct: 5 })
         const prep = await prepareAudio(file)
 
-        setProgress({ name: file.name, phase: 'Getting upload slot', pct: 15 })
+        setProgress({ name: file.name, phase: 'Getting an upload slot', pct: 15 })
         const urlRes = await fetch('/api/pen/upload-url', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: file.name.replace(/\.[^.]+$/, prep.mime === 'audio/wav' ? '.wav' : '') }),
         })
-        if (!urlRes.ok) throw new Error((await urlRes.json()).error ?? 'could not get upload URL')
+        if (!urlRes.ok) throw new Error((await urlRes.json()).error ?? 'could not get an upload URL')
         const { path, signedUrl } = (await urlRes.json()) as { path: string; signedUrl: string }
 
         await putWithProgress(signedUrl, prep.blob, prep.mime, (pct) =>
-          setProgress({ name: file.name, phase: `Uploading (${prep.note})`, pct: 15 + pct * 0.6 }),
+          setProgress({ name: file.name, phase: `Uploading · ${prep.note}`, pct: 15 + pct * 0.6 }),
         )
 
         setProgress({ name: file.name, phase: 'Saving', pct: 80 })
@@ -148,7 +166,7 @@ export default function PenApp({ initial, loadError }: { initial: PenSession[]; 
             client_name: clientName.trim() || undefined,
           }),
         })
-        if (!sRes.ok) throw new Error((await sRes.json()).error ?? 'could not save session')
+        if (!sRes.ok) throw new Error((await sRes.json()).error ?? 'could not save the recording')
         const { session, duplicate } = (await sRes.json()) as { session: PenSession; duplicate: boolean }
 
         setSessions((prev) => [session, ...prev.filter((x) => x.id !== session.id)])
@@ -161,14 +179,8 @@ export default function PenApp({ initial, loadError }: { initial: PenSession[]; 
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: session.id, speakers: 3 }),
           })
-          if (!tRes.ok) {
-            const msg = (await tRes.json()).error ?? 'transcription failed to start'
-            setErr(msg)
-          } else {
-            setSessions((prev) =>
-              prev.map((x) => (x.id === session.id ? { ...x, status: 'transcribing' as const } : x)),
-            )
-          }
+          if (!tRes.ok) setErr((await tRes.json()).error ?? 'transcription failed to start')
+          else setSessions((prev) => prev.map((x) => (x.id === session.id ? { ...x, status: 'transcribing' as const } : x)))
         }
       } catch (e) {
         setErr(`${file.name}: ${(e as Error).message}`)
@@ -179,32 +191,16 @@ export default function PenApp({ initial, loadError }: { initial: PenSession[]; 
     void refresh()
   }
 
-  async function makeNotes(id: string) {
-    const r = await fetch('/api/pen/notes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id }),
-    })
-    if (!r.ok) {
-      setErr((await r.json()).error ?? 'could not write notes')
-      return
-    }
-    const j = (await r.json()) as { session: PenSession }
-    setSessions((prev) => prev.map((x) => (x.id === j.session.id ? j.session : x)))
-  }
-
   /* ------------------------------------------------------------------- view */
 
   const grouped = useMemo(() => groupByDay(sessions), [sessions])
 
   return (
-    <main className="mx-auto max-w-[1320px] px-5 pb-20 pt-7 sm:px-7">
-      <header className="flex flex-wrap items-end justify-between gap-4 border-b pb-4" style={{ borderColor: 'var(--pen-line)' }}>
+    <main className="mx-auto max-w-[1460px] px-5 pb-24 pt-8 sm:px-8">
+      <header className="flex flex-wrap items-end justify-between gap-4 border-b pb-5" style={{ borderColor: 'var(--line)' }}>
         <div>
-          <h1 className="text-[26px] font-semibold tracking-tight">Pen</h1>
-          <p className="mt-1 text-[13.5px]" style={{ color: 'var(--pen-dim)' }}>
-            Plug in the pen, get the showing written up.
-          </p>
+          <div className="pen-label mb-1.5">Recorder → notes</div>
+          <h1 className="pen-display text-[34px] leading-none">Pen</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {supportsPicker && (
@@ -215,175 +211,70 @@ export default function PenApp({ initial, loadError }: { initial: PenSession[]; 
           <button className="pen-btn" onClick={() => fileInput.current?.click()}>
             Add files
           </button>
-          <input
-            ref={fileInput}
-            type="file"
-            multiple
-            accept="audio/*"
-            className="hidden"
-            onChange={(e) => e.target.files && addFiles(e.target.files)}
-          />
+          <input ref={fileInput} type="file" multiple accept="audio/*" className="hidden"
+                 onChange={(e) => e.target.files && addFiles(e.target.files)} />
         </div>
       </header>
 
       {loadError && (
         <Banner tone="bad">
-          Couldn&apos;t load recordings: {loadError}
-          <div className="mt-1 text-[12.5px]" style={{ color: 'var(--pen-soft)' }}>
-            If this says a relation doesn&apos;t exist, run <span className="pen-mono">lib/pen/schema.sql</span> in the
-            Supabase SQL editor and create a private bucket called <span className="pen-mono">pen-audio</span>.
+          Couldn’t load recordings: {loadError}
+          <div className="mt-1 text-[12.5px]" style={{ color: 'var(--soft)' }}>
+            If a column is missing, run the ALTER at the bottom of <span className="pen-mono">lib/pen/schema.sql</span>.
           </div>
         </Banner>
       )}
       {err && <Banner tone="bad" onClose={() => setErr(null)}>{err}</Banner>}
       {mounted && !supportsPicker && (
         <Banner tone="warn">
-          This browser can&apos;t read a folder directly. Use Chrome or Edge for the one-click
-          &ldquo;Connect pen&rdquo; flow, or drag the files in below.
+          This browser can’t read a folder directly. Use Chrome or Edge for one-click “Connect pen”, or drag files in below.
         </Banner>
       )}
 
-      {/* ------------------------------------------------------- import tray */}
       {(pending.length > 0 || progress) && (
-        <section className="pen-panel mt-5 rounded-xl p-5">
-          <div className="flex items-baseline justify-between gap-3">
-            <h2 className="text-[15px] font-semibold">
-              {penName ? `${pending.length} recording${pending.length === 1 ? '' : 's'} on “${penName}”` : 'Ready to import'}
-            </h2>
-            {pending.length > 0 && (
-              <button
-                className="text-[12.5px] underline"
-                style={{ color: 'var(--pen-dim)' }}
-                onClick={() => setPending([])}
-              >
-                clear
-              </button>
-            )}
-          </div>
-
-          <ul className="mt-3 divide-y" style={{ borderColor: 'var(--pen-line-soft)' }}>
-            {pending.map((p, i) => (
-              <li key={`${p.file.name}-${i}`} className="flex items-center gap-3 py-2">
-                <input
-                  type="checkbox"
-                  checked={p.picked}
-                  onChange={(e) =>
-                    setPending((prev) => prev.map((x, j) => (j === i ? { ...x, picked: e.target.checked } : x)))
-                  }
-                />
-                <span className="min-w-0 flex-1 truncate text-[13.5px]">{p.file.name}</span>
-                <span className="pen-mono text-[12px]" style={{ color: 'var(--pen-dim)' }}>
-                  {fmtMB(p.file.size)}
-                </span>
-                <span className="pen-mono text-[12px]" style={{ color: 'var(--pen-faint)' }}>
-                  {new Date(p.file.lastModified).toLocaleDateString()}
-                </span>
-              </li>
-            ))}
-          </ul>
-
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <label className="block">
-              <span className="text-[12px] uppercase tracking-wide" style={{ color: 'var(--pen-dim)' }}>
-                Buyer name (optional, but it&apos;s what makes showings compound)
-              </span>
-              <input
-                value={clientName}
-                onChange={(e) => setClientName(e.target.value)}
-                placeholder="e.g. the Hendersons"
-                className="mt-1 w-full rounded-lg border px-3 py-2 text-[14px] outline-none"
-                style={{ borderColor: 'var(--pen-line)', background: '#fff' }}
-              />
-            </label>
-            <label className="flex items-start gap-2.5 rounded-lg p-3" style={{ background: 'var(--pen-warn-soft)' }}>
-              <input type="checkbox" className="mt-0.5" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-              <span className="text-[12.5px] leading-snug" style={{ color: 'var(--pen-warn)' }}>
-                Everyone recorded gave permission. Florida requires all-party consent and you hold a
-                licence, so nothing is processed without this.
-              </span>
-            </label>
-          </div>
-
-          {progress ? (
-            <div className="mt-4">
-              <div className="flex justify-between text-[12.5px]" style={{ color: 'var(--pen-soft)' }}>
-                <span className="truncate">{progress.name}</span>
-                <span className="pen-mono">{progress.phase}</span>
-              </div>
-              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full" style={{ background: 'var(--pen-line)' }}>
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{ width: `${progress.pct}%`, background: 'var(--pen-accent)' }}
-                />
-              </div>
-            </div>
-          ) : (
-            <button className="pen-btn pen-btn-primary mt-4" onClick={importPicked} disabled={!pending.some((p) => p.picked)}>
-              Import {pending.filter((p) => p.picked).length || ''} and transcribe
-            </button>
-          )}
-        </section>
+        <ImportTray
+          pending={pending} setPending={setPending} penName={penName}
+          consent={consent} setConsent={setConsent}
+          clientName={clientName} setClientName={setClientName}
+          progress={progress} onImport={importPicked}
+        />
       )}
 
-      {/* ------------------------------------------------------------ body */}
-      <div className="mt-6 grid gap-6 lg:grid-cols-[320px_1fr]">
-        {/* sidebar */}
+      <div className="mt-7 grid gap-8 lg:grid-cols-[286px_minmax(0,1fr)]">
+        {/* ---------------------------------------------------------- rail */}
         <aside>
           <div
-            className="pen-drop p-5 text-center"
+            className="pen-drop px-5 py-6 text-center"
             data-over={dragOver}
-            onDragOver={(e) => {
-              e.preventDefault()
-              setDragOver(true)
-            }}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
             onDragLeave={() => setDragOver(false)}
-            onDrop={(e) => {
-              e.preventDefault()
-              setDragOver(false)
-              if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files)
-            }}
+            onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files) }}
           >
-            <p className="text-[13px]" style={{ color: 'var(--pen-dim)' }}>
-              Drop recordings here
-            </p>
+            <div className="pen-label">Drop recordings</div>
           </div>
 
           {sessions.length === 0 ? (
-            <p className="mt-5 text-[13.5px] leading-relaxed" style={{ color: 'var(--pen-dim)' }}>
-              Nothing yet. Plug the pen into USB, hit <strong>Connect pen</strong>, and pick the drive
-              that appears.
+            <p className="mt-6 text-[14px] leading-relaxed" style={{ color: 'var(--dim)' }}>
+              Nothing yet. Plug the pen into USB, press <strong style={{ color: 'var(--soft)' }}>Connect pen</strong>,
+              and choose the drive that appears.
             </p>
           ) : (
-            <div className="mt-5">
+            <div className="mt-6">
               {grouped.map(([day, rows]) => (
-                <div key={day} className="mb-4">
-                  <div
-                    className="pen-mono mb-1 text-[10.5px] uppercase tracking-widest"
-                    style={{ color: 'var(--pen-faint)' }}
-                  >
-                    {day}
-                  </div>
+                <div key={day} className="mb-5">
+                  <div className="pen-label mb-1.5">{day}</div>
                   {rows.map((s) => (
-                    <div
-                      key={s.id}
-                      className="pen-row px-1 py-2.5"
-                      data-active={s.id === activeId}
-                      onClick={() => {
-                        setActiveId(s.id)
-                        setTab('notes')
-                      }}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="pen-row-title min-w-0 flex-1 truncate text-[14px] font-medium">
-                          {s.title || s.client_name || s.source_name || 'Untitled showing'}
+                    <div key={s.id} className="pen-row px-2.5 py-3" data-active={s.id === activeId}
+                         onClick={() => { setActiveId(s.id); setTab('note'); setChatOpen(false) }}>
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="pen-row-title min-w-0 flex-1 text-[14.5px] font-medium leading-snug">
+                          {s.title || s.client_name || s.source_name || 'Untitled'}
                         </span>
-                        <span className="pen-pill" data-s={s.status}>
-                          {s.status}
-                        </span>
+                        <span className="pen-pill" data-s={s.status}>{s.status}</span>
                       </div>
-                      <div className="pen-mono mt-1 text-[11.5px]" style={{ color: 'var(--pen-faint)' }}>
+                      <div className="pen-mono mt-1.5 text-[10.5px]" style={{ color: 'var(--faint)' }}>
                         {fmtDur(s.duration_sec ?? 0)}
-                        {s.client_name ? ` · ${s.client_name}` : ''}
+                        {s.meeting_type ? ` · ${TYPE_LABEL[s.meeting_type].toLowerCase()}` : ''}
                       </div>
                     </div>
                   ))}
@@ -393,29 +284,29 @@ export default function PenApp({ initial, loadError }: { initial: PenSession[]; 
           )}
         </aside>
 
-        {/* detail */}
-        <section>
+        {/* -------------------------------------------------------- detail */}
+        <section className="min-w-0">
           {!active ? (
-            <div className="pen-panel rounded-xl p-10 text-center">
-              <p className="text-[14px]" style={{ color: 'var(--pen-dim)' }}>
-                Pick a showing on the left.
-              </p>
+            <div className="pen-panel px-8 py-16 text-center">
+              <p className="text-[15px]" style={{ color: 'var(--dim)' }}>Choose a recording on the left.</p>
             </div>
           ) : (
-            <Detail
-              session={active}
-              tab={tab}
-              setTab={setTab}
-              onNotes={() => makeNotes(active.id)}
-              onPatch={async (patch) => {
-                await fetch(`/api/pen/sessions/${active.id}`, {
-                  method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(patch),
-                })
-                setSessions((prev) => prev.map((x) => (x.id === active.id ? { ...x, ...patch } : x)))
-              }}
-            />
+            <div className={chatOpen ? 'grid gap-7 xl:grid-cols-[minmax(0,1fr)_352px]' : ''}>
+              <Detail
+                session={active} tab={tab} setTab={setTab}
+                chatOpen={chatOpen} onToggleChat={() => setChatOpen((v) => !v)}
+                onNotes={(type) => makeNotes(active.id, type)}
+                onPatch={async (patch) => {
+                  await fetch(`/api/pen/sessions/${active.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(patch),
+                  })
+                  setSessions((prev) => prev.map((x) => (x.id === active.id ? { ...x, ...patch } : x)))
+                }}
+              />
+              {chatOpen && <ChatPanel session={active} onChat={patchLocal} onClose={() => setChatOpen(false)} />}
+            </div>
           )}
         </section>
       </div>
@@ -423,68 +314,153 @@ export default function PenApp({ initial, loadError }: { initial: PenSession[]; 
   )
 }
 
-/* ==================================================================== detail */
+/* ============================================================== import tray */
+
+function ImportTray({
+  pending, setPending, penName, consent, setConsent, clientName, setClientName, progress, onImport,
+}: {
+  pending: Pending[]
+  setPending: React.Dispatch<React.SetStateAction<Pending[]>>
+  penName: string | null
+  consent: boolean
+  setConsent: (v: boolean) => void
+  clientName: string
+  setClientName: (v: string) => void
+  progress: Progress | null
+  onImport: () => void
+}) {
+  return (
+    <section className="pen-panel mt-6 p-6">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="pen-display text-[20px]">
+          {penName ? `${pending.length} on “${penName}”` : 'Ready to import'}
+        </h2>
+        {pending.length > 0 && (
+          <button className="pen-mono text-[11px] underline" style={{ color: 'var(--dim)' }} onClick={() => setPending([])}>
+            clear
+          </button>
+        )}
+      </div>
+
+      <ul className="mt-4">
+        {pending.map((p, i) => (
+          <li key={`${p.file.name}-${i}`} className="flex items-center gap-3 border-t py-2.5" style={{ borderColor: 'var(--hair)' }}>
+            <input type="checkbox" className="pen-act-box" checked={p.picked}
+                   onChange={(e) => setPending((prev) => prev.map((x, j) => (j === i ? { ...x, picked: e.target.checked } : x)))} />
+            <span className="min-w-0 flex-1 truncate text-[14px]">{p.file.name}</span>
+            <span className="pen-mono text-[11px]" style={{ color: 'var(--dim)' }}>{fmtMB(p.file.size)}</span>
+            <span className="pen-mono text-[11px]" style={{ color: 'var(--faint)' }}>
+              {new Date(p.file.lastModified).toLocaleDateString()}
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        <label className="block">
+          <span className="pen-label">Who was this with (optional)</span>
+          <input value={clientName} onChange={(e) => setClientName(e.target.value)}
+                 placeholder="e.g. the Hendersons"
+                 className="mt-1.5 w-full rounded-lg border px-3 py-2 text-[14px] outline-none"
+                 style={{ borderColor: 'var(--line)', background: 'var(--panel)' }} />
+          <span className="mt-1 block text-[11.5px]" style={{ color: 'var(--faint)' }}>
+            Naming them is what lets meetings build on each other.
+          </span>
+        </label>
+        <label className="flex cursor-pointer items-start gap-3 rounded-lg p-3.5" style={{ background: 'var(--warn-wash)', border: '1px solid #EFE2C4' }}>
+          <input type="checkbox" className="pen-act-box mt-0" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+          <span className="text-[12.5px] leading-snug" style={{ color: 'var(--warn)' }}>
+            Everyone recorded agreed to it, and this recording contains no patient or medical information.
+          </span>
+        </label>
+      </div>
+
+      {progress ? (
+        <div className="mt-5">
+          <div className="pen-mono flex justify-between text-[11px]" style={{ color: 'var(--soft)' }}>
+            <span className="truncate">{progress.name}</span>
+            <span>{progress.phase}</span>
+          </div>
+          <div className="mt-2 h-1 overflow-hidden rounded-full" style={{ background: 'var(--line)' }}>
+            <div className="h-full rounded-full transition-all duration-300" style={{ width: `${progress.pct}%`, background: 'var(--accent)' }} />
+          </div>
+        </div>
+      ) : (
+        <button className="pen-btn pen-btn-accent mt-5" onClick={onImport} disabled={!pending.some((p) => p.picked)}>
+          Import {pending.filter((p) => p.picked).length || ''} and transcribe
+        </button>
+      )}
+    </section>
+  )
+}
+
+/* =================================================================== detail */
 
 function Detail({
-  session,
-  tab,
-  setTab,
-  onNotes,
-  onPatch,
+  session, tab, setTab, chatOpen, onToggleChat, onNotes, onPatch,
 }: {
   session: PenSession
-  tab: 'notes' | 'transcript'
-  setTab: (t: 'notes' | 'transcript') => void
-  onNotes: () => void
-  onPatch: (patch: Partial<Pick<PenSession, 'user_notes' | 'title' | 'client_name'>>) => Promise<void>
+  tab: 'note' | 'transcript'
+  setTab: (t: 'note' | 'transcript') => void
+  chatOpen: boolean
+  onToggleChat: () => void
+  onNotes: (type?: MeetingType) => void
+  onPatch: (p: Partial<Pick<PenSession, 'user_notes' | 'title' | 'client_name' | 'action_done'>>) => Promise<void>
 }) {
   const [draft, setDraft] = useState(session.user_notes ?? '')
   const [saved, setSaved] = useState(true)
-  useEffect(() => {
-    setDraft(session.user_notes ?? '')
-    setSaved(true)
-  }, [session.id, session.user_notes])
+  const [busy, setBusy] = useState(false)
 
-  // Debounced autosave so his own notes never need a save button.
+  useEffect(() => { setDraft(session.user_notes ?? ''); setSaved(true) }, [session.id, session.user_notes])
   useEffect(() => {
     if (draft === (session.user_notes ?? '')) return
     setSaved(false)
-    const t = setTimeout(async () => {
-      await onPatch({ user_notes: draft })
-      setSaved(true)
-    }, 900)
+    const t = setTimeout(async () => { await onPatch({ user_notes: draft }); setSaved(true) }, 900)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft])
 
-  const n = session.notes ?? {}
+  const n: PenNotes = session.notes ?? {}
   const utts = session.transcript?.utterances ?? []
+  const done = new Set(Array.isArray(session.action_done) ? session.action_done : [])
+
+  async function toggleAction(i: number) {
+    const next = new Set(done)
+    next.has(i) ? next.delete(i) : next.add(i)
+    await onPatch({ action_done: Array.from(next) })
+  }
+
+  async function regenerate(type?: MeetingType) {
+    setBusy(true)
+    await onNotes(type)
+    setBusy(false)
+  }
 
   return (
-    <div>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-[21px] font-semibold leading-snug tracking-tight">
-            {session.title || session.source_name || 'Untitled showing'}
+    <div className="min-w-0">
+      {/* --------------------------------------------------------- header */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <h2 className="pen-display text-[29px] leading-[1.12]">
+            {session.title || n.headline || session.source_name || 'Untitled'}
           </h2>
-          <div className="pen-mono mt-1 text-[12px]" style={{ color: 'var(--pen-dim)' }}>
-            {session.recorded_at ? new Date(session.recorded_at).toLocaleString() : '—'} ·{' '}
-            {fmtDur(session.duration_sec ?? 0)}
-            {session.client_name ? ` · ${session.client_name}` : ''}
+          <div className="pen-mono mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px]" style={{ color: 'var(--dim)' }}>
+            <span>{session.recorded_at ? new Date(session.recorded_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—'}</span>
+            <span style={{ color: 'var(--faint)' }}>·</span>
+            <span>{fmtDur(session.duration_sec ?? 0)}</span>
+            {session.client_name && (<><span style={{ color: 'var(--faint)' }}>·</span><span>{session.client_name}</span></>)}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="pen-pill" data-s={session.status}>
-            {session.status}
-          </span>
-          {session.status === 'transcribed' && (
-            <button className="pen-btn" onClick={onNotes}>
-              Write the notes
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <span className="pen-pill" data-s={session.status}>{session.status}</span>
+          {(session.status === 'transcribed' || session.status === 'noted') && (
+            <button className="pen-btn" onClick={() => regenerate()} disabled={busy}>
+              {busy ? 'Working…' : session.status === 'noted' ? 'Redo notes' : 'Write the notes'}
             </button>
           )}
-          {session.status === 'noted' && (
-            <button className="pen-btn" onClick={onNotes}>
-              Redo notes
+          {utts.length > 0 && (
+            <button className={`pen-btn ${chatOpen ? 'pen-btn-accent' : ''}`} onClick={onToggleChat}>
+              {chatOpen ? 'Hide chat' : 'Ask this meeting'}
             </button>
           )}
         </div>
@@ -492,220 +468,370 @@ function Detail({
 
       {session.error_text && <Banner tone="bad">{session.error_text}</Banner>}
 
-      <div className="mt-4 flex gap-1 border-b" style={{ borderColor: 'var(--pen-line)' }}>
-        {(['notes', 'transcript'] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className="px-3 py-2 text-[13.5px] font-medium capitalize"
-            style={{
-              color: tab === t ? 'var(--pen-ink)' : 'var(--pen-dim)',
-              borderBottom: tab === t ? '2px solid var(--pen-ink)' : '2px solid transparent',
-              marginBottom: -1,
-            }}
-          >
-            {t}
-            {t === 'transcript' && utts.length ? ` (${utts.length})` : ''}
-          </button>
-        ))}
+      {/* ----------------------------------------------------------- tabs */}
+      <div className="mt-5 flex items-center justify-between gap-4 border-b" style={{ borderColor: 'var(--line)' }}>
+        <div className="flex gap-1">
+          {(['note', 'transcript'] as const).map((t) => (
+            <button key={t} onClick={() => setTab(t)} className="pen-mono px-3 py-2.5 text-[11.5px] uppercase tracking-wider"
+                    style={{
+                      color: tab === t ? 'var(--ink)' : 'var(--dim)',
+                      borderBottom: tab === t ? '2px solid var(--ink)' : '2px solid transparent',
+                      marginBottom: -1,
+                    }}>
+              {t}{t === 'transcript' && utts.length ? ` ${utts.length}` : ''}
+            </button>
+          ))}
+        </div>
+        {n.meeting_type && (
+          <label className="flex items-center gap-2 pb-1.5">
+            <span className="pen-label">Type</span>
+            <select value={session.meeting_type ?? n.meeting_type} disabled={busy}
+                    onChange={(e) => regenerate(e.target.value as MeetingType)}
+                    className="pen-mono rounded-md border px-2 py-1 text-[11px] outline-none"
+                    style={{ borderColor: 'var(--line)', background: 'var(--panel)', color: 'var(--soft)' }}>
+              {(Object.keys(TYPE_LABEL) as MeetingType[]).map((t) => (
+                <option key={t} value={t}>{TYPE_LABEL[t]}</option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
-      {tab === 'notes' ? (
-        <div className="mt-5 space-y-5">
-          {/* His own notes first, deliberately. What he wrote is the spine of the note. */}
-          <div className="pen-panel rounded-xl p-5">
-            <div className="mb-2 flex items-baseline justify-between">
-              <span className="text-[12px] uppercase tracking-wide" style={{ color: 'var(--pen-dim)' }}>
-                Your notes
-              </span>
-              <span className="pen-mono text-[11px]" style={{ color: 'var(--pen-faint)' }}>
-                {saved ? 'saved' : 'saving…'}
-              </span>
-            </div>
-            <textarea
-              className="pen-notes"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder="Anything you want to remember. Type during the showing or right after — this stays yours and the extraction below is separate."
-            />
-          </div>
-
-          {session.status === 'transcribing' && <Muted>Transcribing. This runs on its own, you can close the tab.</Muted>}
-          {session.status === 'uploaded' && <Muted>Uploaded, waiting to be sent for transcription.</Muted>}
-          {session.status === 'transcribed' && !n.summary && (
-            <Muted>Transcript is ready. Hit &ldquo;Write the notes&rdquo; to run the extraction.</Muted>
-          )}
-
-          {n.summary && (
-            <div className="pen-panel rounded-xl p-5">
-              <Label>Summary</Label>
-              <p className="mt-1.5 text-[15px] leading-relaxed">{n.summary}</p>
-            </div>
-          )}
-
-          {!!n.reactions?.length && (
-            <div className="pen-panel rounded-xl p-5">
-              <Label>Room by room</Label>
-              <ul className="mt-2 space-y-2.5">
-                {n.reactions.map((r, i) => (
-                  <li key={i} className="text-[14px]">
-                    <span className="font-medium capitalize">{r.feature}</span>
-                    <span style={{ color: 'var(--pen-dim)' }}> · {r.who} · </span>
-                    <span style={{ color: sentimentColor(r.sentiment) }}>{r.sentiment}</span>
-                    {r.quote && (
-                      <div className="mt-0.5 text-[13.5px] italic" style={{ color: 'var(--pen-soft)' }}>
-                        “{r.quote}”
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {!!n.objections?.length && (
-            <div className="pen-panel rounded-xl p-5">
-              <Label>Objections</Label>
-              <ul className="mt-2 space-y-2.5">
-                {n.objections.map((o, i) => (
-                  <li key={i} className="text-[14px]">
-                    {o.objection}
-                    <span style={{ color: 'var(--pen-dim)' }}> · {o.who}</span>
-                    {o.quote && (
-                      <div className="mt-0.5 text-[13.5px] italic" style={{ color: 'var(--pen-soft)' }}>
-                        “{o.quote}”
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {!!n.signals?.length && (
-            <div className="pen-panel rounded-xl p-5">
-              <Label>Buying signals</Label>
-              <ul className="mt-2 space-y-2">
-                {n.signals.map((s, i) => (
-                  <li key={i} className="text-[14px]">
-                    <span className="pen-pill" data-s={s.strength === 'strong' ? 'noted' : 'uploaded'}>
-                      {s.strength}
-                    </span>{' '}
-                    {s.signal}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {!!n.revealed_criteria?.length && (
-            <div className="pen-panel rounded-xl p-5" style={{ borderColor: '#d5e6dc', background: 'var(--pen-accent-soft)' }}>
-              <Label>What they actually want</Label>
-              <p className="mb-2 mt-0.5 text-[12.5px]" style={{ color: 'var(--pen-soft)' }}>
-                Inferred from what they reacted to, not from what they said.
-              </p>
-              <ul className="list-disc space-y-1 pl-5 text-[14px]">
-                {n.revealed_criteria.map((c, i) => (
-                  <li key={i}>{c}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {!!n.followups?.length && (
-            <div className="pen-panel rounded-xl p-5">
-              <Label>Follow-ups</Label>
-              <ul className="mt-2 space-y-1.5 text-[14px]">
-                {n.followups.map((f, i) => (
-                  <li key={i}>
-                    {f.action}
-                    {f.due && <span style={{ color: 'var(--pen-dim)' }}> · {f.due}</span>}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="pen-panel mt-5 rounded-xl p-5">
+      {tab === 'transcript' ? (
+        <div className="pen-panel mt-6 p-6">
           {utts.length ? (
-            <div>
-              {utts.map((u, i) => (
-                <div key={i} className="pen-utt">
-                  <div className="pen-spk">Speaker {u.speaker}</div>
-                  <div className="text-[14.5px] leading-relaxed">{u.text}</div>
-                </div>
-              ))}
-            </div>
+            utts.map((u, i) => (
+              <div key={i} className="pen-utt">
+                <div className="pen-label pt-0.5">Speaker {u.speaker}</div>
+                <div className="text-[15px] leading-relaxed">{u.text}</div>
+              </div>
+            ))
           ) : session.transcript?.text ? (
-            <p className="whitespace-pre-wrap text-[14.5px] leading-relaxed">{session.transcript.text}</p>
+            <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{session.transcript.text}</p>
           ) : (
             <Muted>No transcript yet.</Muted>
           )}
         </div>
+      ) : (
+        <div className="pen-doc pen-reveal mt-7">
+          {/* His own notes come first on purpose: what he wrote is the spine. */}
+          <div className="pen-sec">
+            <div className="mb-2 flex items-baseline justify-between">
+              <span className="pen-label">Your notes</span>
+              <span className="pen-mono text-[10px]" style={{ color: 'var(--faint)' }}>{saved ? 'saved' : 'saving…'}</span>
+            </div>
+            <textarea className="pen-notes-input" value={draft} onChange={(e) => setDraft(e.target.value)}
+                      placeholder="Anything you want to remember, in your own words. This stays yours — everything below is generated separately." />
+          </div>
+
+          {session.status === 'transcribing' && <div className="pen-sec"><Muted>Transcribing. This runs on its own — you can close the tab.</Muted></div>}
+          {session.status === 'uploaded' && <div className="pen-sec"><Muted>Uploaded, waiting to be sent for transcription.</Muted></div>}
+          {session.status === 'transcribed' && !n.summary && (
+            <div className="pen-sec"><Muted>Transcript is ready. Press “Write the notes”.</Muted></div>
+          )}
+
+          {n.summary && (
+            <div className="pen-sec">
+              <span className="pen-label">Summary</span>
+              <p className="mt-2 text-[16.5px]">{n.summary}</p>
+            </div>
+          )}
+
+          {!!n.people?.length && (
+            <div className="pen-sec">
+              <span className="pen-label">In the room</span>
+              <div className="mt-2.5 flex flex-wrap gap-2">
+                {n.people.map((p, i) => (
+                  <span key={i} className="pen-who" title={p.note}>
+                    <span className="pen-avatar">{initials(p.name || p.role)}</span>
+                    <span className="text-[13.5px]">
+                      {p.name || <em style={{ color: 'var(--dim)' }}>{p.role || 'unknown'}</em>}
+                      {p.name && p.role && <span style={{ color: 'var(--dim)' }}> · {p.role}</span>}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!!n.actions?.length && (
+            <div className="pen-sec">
+              <div className="mb-1 flex items-baseline justify-between">
+                <span className="pen-label">Next actions</span>
+                <span className="pen-mono text-[10px]" style={{ color: 'var(--faint)' }}>
+                  {done.size}/{n.actions.length} done
+                </span>
+              </div>
+              <div className="mt-1.5">
+                {n.actions.map((a, i) => (
+                  <div key={i} className="pen-act" data-done={done.has(i)}>
+                    <input type="checkbox" className="pen-act-box" checked={done.has(i)} onChange={() => toggleAction(i)} />
+                    <div className="min-w-0 flex-1">
+                      <div className="pen-act-text text-[15px] leading-snug">{a.action}</div>
+                      {(a.owner || a.due || a.priority === 'high') && (
+                        <div className="pen-mono mt-1 flex flex-wrap items-center gap-x-2 text-[10.5px]" style={{ color: 'var(--dim)' }}>
+                          {a.priority === 'high' && <span style={{ color: 'var(--bad)' }}>PRIORITY</span>}
+                          {a.owner && <span>{a.owner}</span>}
+                          {a.due && <span style={{ color: 'var(--accent-ink)' }}>{a.due}</span>}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!!n.missed?.length && (
+            <div className="pen-sec">
+              <div className="pen-missed p-5">
+                <span className="pen-label" style={{ color: 'var(--warn)' }}>You might have missed</span>
+                <ul className="mt-2.5 space-y-3">
+                  {n.missed.map((m, i) => (
+                    <li key={i} className="text-[15px] leading-snug">
+                      {m.item}
+                      {m.why && <div className="mt-0.5 text-[13px]" style={{ color: 'var(--warn)' }}>{m.why}</div>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {!!n.decisions?.length && (
+            <div className="pen-sec">
+              <span className="pen-label">Decided</span>
+              <ul className="mt-2 space-y-2">
+                {n.decisions.map((d, i) => (
+                  <li key={i} className="text-[15px]">
+                    {d.decision}
+                    {d.who && <span className="pen-mono ml-2 text-[10.5px]" style={{ color: 'var(--dim)' }}>{d.who}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {!!n.open_questions?.length && (
+            <div className="pen-sec">
+              <span className="pen-label">Still open</span>
+              <ul className="mt-2 list-disc space-y-1.5 pl-5 text-[15px]">
+                {n.open_questions.map((q, i) => <li key={i}>{q}</li>)}
+              </ul>
+            </div>
+          )}
+
+          {n.meeting_type === 'showing' && n.showing && <ShowingBlock showing={n.showing} />}
+        </div>
       )}
     </div>
   )
 }
 
-/* ================================================================== helpers */
-
-function Label({ children }: { children: React.ReactNode }) {
+function ShowingBlock({ showing }: { showing: NonNullable<PenNotes['showing']> }) {
   return (
-    <span className="text-[12px] uppercase tracking-wide" style={{ color: 'var(--pen-dim)' }}>
-      {children}
-    </span>
+    <>
+      {!!showing.reactions?.length && (
+        <div className="pen-sec">
+          <span className="pen-label">Room by room</span>
+          <ul className="mt-2 space-y-2.5">
+            {showing.reactions.map((r, i) => (
+              <li key={i} className="text-[15px]">
+                <span className="font-medium capitalize">{r.feature}</span>
+                <span style={{ color: 'var(--dim)' }}> · {r.who} · </span>
+                <span style={{ color: sentimentColor(r.sentiment) }}>{r.sentiment}</span>
+                {r.quote && <div className="mt-0.5 text-[14px] italic" style={{ color: 'var(--soft)' }}>“{r.quote}”</div>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {!!showing.objections?.length && (
+        <div className="pen-sec">
+          <span className="pen-label">Objections</span>
+          <ul className="mt-2 space-y-2.5">
+            {showing.objections.map((o, i) => (
+              <li key={i} className="text-[15px]">
+                {o.objection}<span style={{ color: 'var(--dim)' }}> · {o.who}</span>
+                {o.quote && <div className="mt-0.5 text-[14px] italic" style={{ color: 'var(--soft)' }}>“{o.quote}”</div>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {!!showing.signals?.length && (
+        <div className="pen-sec">
+          <span className="pen-label">Buying signals</span>
+          <ul className="mt-2 space-y-2">
+            {showing.signals.map((s, i) => (
+              <li key={i} className="flex items-baseline gap-2 text-[15px]">
+                <span className="pen-pill" data-s={s.strength === 'strong' ? 'noted' : 'uploaded'}>{s.strength}</span>
+                <span>{s.signal}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {!!showing.revealed_criteria?.length && (
+        <div className="pen-sec">
+          <div className="rounded-[10px] p-5" style={{ background: 'var(--accent-wash)', border: '1px solid var(--accent-line)' }}>
+            <span className="pen-label" style={{ color: 'var(--accent-ink)' }}>What they actually want</span>
+            <p className="mb-2 mt-1 text-[12.5px]" style={{ color: 'var(--soft)' }}>
+              Inferred from what they reacted to, not from what they said.
+            </p>
+            <ul className="list-disc space-y-1 pl-5 text-[15px]">
+              {showing.revealed_criteria.map((c, i) => <li key={i}>{c}</li>)}
+            </ul>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
+
+/* ==================================================================== chat */
+
+function ChatPanel({ session, onChat, onClose }: { session: PenSession; onChat: (s: PenSession) => void; onClose: () => void }) {
+  const [q, setQ] = useState('')
+  const [thinking, setThinking] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [suggestions, setSuggestions] = useState<string[]>([])
+  const endRef = useRef<HTMLDivElement>(null)
+  const chat: ChatTurn[] = Array.isArray(session.chat) ? session.chat : []
+
+  useEffect(() => {
+    // Kept client-side so the panel needs no extra round trip to render its starters.
+    const t = session.meeting_type ?? session.notes?.meeting_type
+    if (t === 'showing') setSuggestions(['What did they actually like?', 'What were the objections?', 'Did they say they’d come back?'])
+    else if (t === 'clinical') setSuggestions(['What needs doing today?', 'Who owes me something?', 'What did I agree to follow up on?'])
+    else setSuggestions(['What did I commit to?', 'What did I miss?', 'Was anything left unresolved?'])
+  }, [session.id, session.meeting_type, session.notes?.meeting_type])
+
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }, [chat.length, thinking])
+
+  async function ask(question: string) {
+    if (!question.trim() || thinking) return
+    setError(null)
+    setThinking(true)
+    setQ('')
+    try {
+      const r = await fetch('/api/pen/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: session.id, question }),
+      })
+      if (!r.ok) throw new Error((await r.json()).error ?? 'could not get an answer')
+      onChat({ ...session, chat: ((await r.json()) as { chat: ChatTurn[] }).chat })
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setThinking(false)
+    }
+  }
+
+  async function reset() {
+    await fetch('/api/pen/chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: session.id, reset: true }),
+    })
+    onChat({ ...session, chat: [] })
+  }
+
+  return (
+    <aside className="pen-panel flex max-h-[76vh] flex-col overflow-hidden xl:sticky xl:top-6">
+      <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: 'var(--line)' }}>
+        <span className="pen-label">Ask this meeting</span>
+        <div className="flex items-center gap-3">
+          {chat.length > 0 && (
+            <button className="pen-mono text-[10px] underline" style={{ color: 'var(--dim)' }} onClick={reset}>clear</button>
+          )}
+          <button className="pen-mono text-[14px] leading-none xl:hidden" style={{ color: 'var(--dim)' }} onClick={onClose}>×</button>
+        </div>
+      </div>
+
+      <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+        {chat.length === 0 && (
+          <p className="text-[13.5px] leading-relaxed" style={{ color: 'var(--dim)' }}>
+            Answers come only from this recording. If it isn’t in there, it’ll say so rather than guess.
+          </p>
+        )}
+        {chat.map((t, i) => (
+          <div key={i} className="pen-chat-msg px-3.5 py-2.5 text-[14px] leading-relaxed" data-role={t.role}>
+            {t.content}
+          </div>
+        ))}
+        {thinking && (
+          <div className="pen-chat-msg px-3.5 py-3" data-role="assistant">
+            <span className="pen-dots"><span /><span /><span /></span>
+          </div>
+        )}
+        {error && <p className="text-[12.5px]" style={{ color: 'var(--bad)' }}>{error}</p>}
+        <div ref={endRef} />
+      </div>
+
+      {chat.length === 0 && (
+        <div className="flex flex-wrap gap-1.5 px-4 pb-3">
+          {suggestions.map((s) => (
+            <button key={s} className="pen-chip" onClick={() => ask(s)}>{s}</button>
+          ))}
+        </div>
+      )}
+
+      <form className="flex items-end gap-2 border-t px-3 py-3" style={{ borderColor: 'var(--line)' }}
+            onSubmit={(e) => { e.preventDefault(); ask(q) }}>
+        <textarea
+          value={q} onChange={(e) => setQ(e.target.value)} rows={1}
+          placeholder="Ask about this meeting…"
+          className="max-h-28 min-h-[38px] flex-1 resize-none rounded-lg border px-3 py-2 text-[14px] outline-none"
+          style={{ borderColor: 'var(--line)', background: 'var(--panel)', fontFamily: 'var(--serif)' }}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(q) } }}
+        />
+        <button type="submit" className="pen-btn pen-btn-accent" disabled={thinking || !q.trim()}>Ask</button>
+      </form>
+    </aside>
+  )
+}
+
+/* ================================================================= helpers */
 
 function Muted({ children }: { children: React.ReactNode }) {
+  return <p className="text-[14px]" style={{ color: 'var(--dim)' }}>{children}</p>
+}
+
+function Banner({ children, tone, onClose }: { children: React.ReactNode; tone: 'bad' | 'warn'; onClose?: () => void }) {
+  const bad = tone === 'bad'
   return (
-    <p className="text-[13.5px]" style={{ color: 'var(--pen-dim)' }}>
-      {children}
-    </p>
+    <div className="mt-4 flex items-start justify-between gap-3 rounded-lg px-4 py-3 text-[13px]"
+         style={{
+           background: bad ? 'var(--bad-wash)' : 'var(--warn-wash)',
+           color: bad ? 'var(--bad)' : 'var(--warn)',
+           border: `1px solid ${bad ? '#EFD6D2' : '#EFE2C4'}`,
+         }}>
+      <div>{children}</div>
+      {onClose && <button onClick={onClose} className="pen-mono shrink-0 text-[15px] leading-none">×</button>}
+    </div>
   )
 }
 
-function Banner({
-  children,
-  tone,
-  onClose,
-}: {
-  children: React.ReactNode
-  tone: 'bad' | 'warn'
-  onClose?: () => void
-}) {
-  return (
-    <div
-      className="mt-4 flex items-start justify-between gap-3 rounded-lg px-4 py-3 text-[13px]"
-      style={{
-        background: tone === 'bad' ? 'var(--pen-bad-soft)' : 'var(--pen-warn-soft)',
-        color: tone === 'bad' ? 'var(--pen-bad)' : 'var(--pen-warn)',
-        border: `1px solid ${tone === 'bad' ? '#efd6d2' : '#f0e2c2'}`,
-      }}
-    >
-      <div>{children}</div>
-      {onClose && (
-        <button onClick={onClose} className="pen-mono shrink-0 text-[15px] leading-none">
-          ×
-        </button>
-      )}
-    </div>
-  )
+function initials(s: string) {
+  const parts = s.trim().split(/\s+/).filter(Boolean)
+  if (!parts.length) return '?'
+  return (parts[0][0] + (parts[1]?.[0] ?? '')).toUpperCase()
 }
 
 function sentimentColor(s: string) {
-  if (s === 'loved') return 'var(--pen-accent)'
-  if (s === 'liked') return '#3f7a58'
-  if (s === 'disliked') return 'var(--pen-bad)'
-  return 'var(--pen-soft)'
+  if (s === 'loved') return 'var(--good)'
+  if (s === 'liked') return '#4E7A5C'
+  if (s === 'disliked') return 'var(--bad)'
+  return 'var(--soft)'
 }
 
 function groupByDay(sessions: PenSession[]): [string, PenSession[]][] {
   const map = new Map<string, PenSession[]>()
   for (const s of sessions) {
-    const d = new Date(s.recorded_at ?? s.created_at)
-    const key = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+    const key = new Date(s.recorded_at ?? s.created_at).toLocaleDateString(undefined, {
+      weekday: 'short', month: 'short', day: 'numeric',
+    })
     if (!map.has(key)) map.set(key, [])
     map.get(key)!.push(s)
   }
@@ -718,9 +844,7 @@ function putWithProgress(url: string, blob: Blob, mime: string, onPct: (pct: num
     const xhr = new XMLHttpRequest()
     xhr.open('PUT', url)
     xhr.setRequestHeader('Content-Type', mime)
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) onPct((e.loaded / e.total) * 100)
-    }
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) onPct((e.loaded / e.total) * 100) }
     xhr.onload = () =>
       xhr.status >= 200 && xhr.status < 300
         ? resolve()

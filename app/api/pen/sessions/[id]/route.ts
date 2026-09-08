@@ -27,6 +27,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (typeof b.user_notes === 'string') patch.user_notes = b.user_notes
   if (typeof b.title === 'string') patch.title = b.title
   if (typeof b.client_name === 'string') patch.client_name = b.client_name
+  if (Array.isArray(b.action_done)) patch.action_done = b.action_done.filter((n) => typeof n === 'number')
   if (!Object.keys(patch).length) return NextResponse.json({ error: 'nothing to update' }, { status: 400 })
 
   await updateSession(id, patch)

@@ -1,21 +1,24 @@
 import { NextResponse } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
 import { getSession, updateSession, getClientProfile, upsertClientProfile } from '@/lib/pen/store'
-import { extractShowing, updateClientProfile } from '@/lib/pen/extract'
+import type { MeetingType } from '@/lib/pen/store'
+import { extractNotes, updateClientProfile } from '@/lib/pen/extract'
 import { toDialogue } from '@/lib/pen/aai'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-// Runs the realtor extraction over a stored transcript, then folds the result into the
-// running picture of that buyer. Separate from transcription so each stays inside the
-// function time limit and so notes can be regenerated without paying for audio again.
+const TYPES: MeetingType[] = ['showing', 'clinical', 'generic']
+
+// Runs the extraction over a stored transcript. Separate from transcription so notes can be
+// regenerated (e.g. after overriding the meeting type) without paying for the audio again.
 export async function POST(req: Request) {
   const email = await authedEmail()
   if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-  const b = (await req.json().catch(() => ({}))) as { id?: string }
+  const b = (await req.json().catch(() => ({}))) as { id?: string; type?: string }
   if (!b.id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+  const forceType = TYPES.includes(b.type as MeetingType) ? (b.type as MeetingType) : undefined
 
   const session = await getSession(email, b.id)
   if (!session) return NextResponse.json({ error: 'not found' }, { status: 404 })
@@ -27,19 +30,22 @@ export async function POST(req: Request) {
     const name = session.client_name || undefined
     const prior = name ? (await getClientProfile(email, name))?.profile : undefined
 
-    const notes = await extractShowing(dialogue, prior)
+    const notes = await extractNotes(dialogue, { forceType, priorProfile: prior })
     const clientName = session.client_name || notes.client_name || ''
 
     await updateSession(session.id, {
       notes,
+      meeting_type: notes.meeting_type ?? 'generic',
       status: 'noted',
       error_text: null,
+      // Regenerating invalidates tick marks, since the action list itself changed.
+      action_done: [],
       ...(session.client_name ? {} : clientName ? { client_name: clientName } : {}),
-      ...(session.title ? {} : notes.summary ? { title: notes.summary.split(/[.!?]/)[0].slice(0, 80) } : {}),
+      ...(session.title ? {} : notes.headline ? { title: notes.headline.slice(0, 90) } : {}),
     })
 
-    // The compounding piece. Only meaningful once we know who the buyer is.
-    if (clientName) {
+    // Only meaningful once we know who the people are, and only for repeat relationships.
+    if (clientName && notes.meeting_type === 'showing') {
       const merged = await updateClientProfile(prior, notes)
       await upsertClientProfile(email, clientName, merged)
     }

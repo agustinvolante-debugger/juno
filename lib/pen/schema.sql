@@ -57,3 +57,11 @@ create table if not exists pen_clients (
   unique (user_email, name)
 );
 create index if not exists pen_clients_user on pen_clients(user_email);
+
+-- ---------------------------------------------------------------------------
+-- 2026-09-08 — AI layer. Run this ALTER as ONE line in the Supabase SQL editor.
+-- meeting_type   what kind of meeting the extraction decided this is (overridable)
+-- chat           grounded Q&A history over this transcript, [{role,content,ts}]
+-- action_done    indices of actions the user has ticked off
+-- ---------------------------------------------------------------------------
+-- alter table public.pen_sessions add column if not exists meeting_type text, add column if not exists chat jsonb default '[]'::jsonb, add column if not exists action_done jsonb default '[]'::jsonb;
