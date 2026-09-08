@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Don't scan public/ for utility classes. The AI Stack static export lives in
+   public/ai/**, and Next.js hydration payloads inside those HTML files contain
+   fragments that Tailwind v4 mistakes for arbitrary-value utilities, generating
+   invalid CSS and breaking the dev server. */
+@source not "../public";
+
 :root {
   --bg: #0c0c0b;
   --surface: #141412;

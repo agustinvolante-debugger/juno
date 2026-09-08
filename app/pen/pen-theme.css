@@ -1,0 +1,77 @@
+/* Scoped so the root dark theme in globals.css doesn't bleed in. Light, quiet, generous
+   whitespace — the Granola register: the note is the object, the chrome gets out of the way. */
+.pen-root {
+  --pen-bg: #fbfaf8;
+  --pen-panel: #ffffff;
+  --pen-line: #ebe8e2;
+  --pen-line-soft: #f3f1ec;
+  --pen-ink: #1c1b18;
+  --pen-soft: #55534c;
+  --pen-dim: #8a8780;
+  --pen-faint: #b4b1a9;
+  --pen-accent: #2f6f4e;
+  --pen-accent-soft: #eef5f0;
+  --pen-warn: #9a6b12;
+  --pen-warn-soft: #fdf6e7;
+  --pen-bad: #a3322a;
+  --pen-bad-soft: #fbf1ef;
+
+  background: var(--pen-bg);
+  color: var(--pen-ink);
+  font-family: ui-sans-serif, -apple-system, "SF Pro Text", "Segoe UI", Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh;
+}
+.pen-root ::selection { background: #dce9e1; }
+
+.pen-panel { background: var(--pen-panel); border: 1px solid var(--pen-line); }
+.pen-mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-variant-numeric: tabular-nums; }
+
+/* Sidebar rows */
+.pen-row { border-bottom: 1px solid var(--pen-line-soft); cursor: pointer; }
+.pen-row:hover { background: #f7f5f1; }
+.pen-row[data-active='true'] { background: var(--pen-accent-soft); }
+.pen-row[data-active='true'] .pen-row-title { color: var(--pen-accent); }
+
+/* Status pills */
+.pen-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 999px; border: 1px solid transparent; white-space: nowrap;
+}
+.pen-pill[data-s='uploaded']    { background: #f2f1ed; color: var(--pen-soft); border-color: var(--pen-line); }
+.pen-pill[data-s='transcribing']{ background: var(--pen-warn-soft); color: var(--pen-warn); border-color: #f0e2c2; }
+.pen-pill[data-s='transcribed'] { background: #eef2f8; color: #2f5480; border-color: #dbe5f0; }
+.pen-pill[data-s='noted']       { background: var(--pen-accent-soft); color: var(--pen-accent); border-color: #d5e6dc; }
+.pen-pill[data-s='error']       { background: var(--pen-bad-soft); color: var(--pen-bad); border-color: #efd6d2; }
+
+/* Buttons */
+.pen-btn {
+  border: 1px solid var(--pen-line); background: var(--pen-panel); color: var(--pen-ink);
+  border-radius: 8px; padding: 7px 13px; font-size: 13.5px; font-weight: 500;
+  transition: background .12s, border-color .12s;
+}
+.pen-btn:hover:not(:disabled) { background: #f6f4f0; border-color: #ddd9d1; }
+.pen-btn:disabled { opacity: .45; cursor: not-allowed; }
+.pen-btn-primary { background: var(--pen-ink); border-color: var(--pen-ink); color: #fbfaf8; }
+.pen-btn-primary:hover:not(:disabled) { background: #34322c; border-color: #34322c; }
+
+/* Dropzone */
+.pen-drop { border: 1.5px dashed #dbd7cf; border-radius: 12px; transition: border-color .12s, background .12s; }
+.pen-drop[data-over='true'] { border-color: var(--pen-accent); background: var(--pen-accent-soft); }
+
+/* Transcript */
+.pen-utt { display: grid; grid-template-columns: 82px 1fr; gap: 14px; padding: 7px 0; }
+.pen-utt + .pen-utt { border-top: 1px solid var(--pen-line-soft); }
+.pen-spk { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--pen-dim); padding-top: 2px; }
+
+/* His own notes textarea — should read like paper, not like a form field */
+.pen-notes {
+  width: 100%; border: none; outline: none; resize: none; background: transparent;
+  font-size: 15.5px; line-height: 1.65; color: var(--pen-ink); min-height: 120px;
+}
+.pen-notes::placeholder { color: var(--pen-faint); }
+
+@media (max-width: 900px) {
+  .pen-utt { grid-template-columns: 1fr; gap: 2px; }
+}
