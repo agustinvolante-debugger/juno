@@ -3,7 +3,7 @@ import './pen-theme.css'
 
 export const metadata: Metadata = {
   title: 'Pen',
-  description: 'Plug in the pen, get the showing written up.',
+  description: 'Plug in the recorder, get the meeting written up.',
   applicationName: 'Pen',
   appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Pen' },
 }

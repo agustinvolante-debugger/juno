@@ -13,7 +13,7 @@ export default async function PenPage() {
       <main className="mx-auto max-w-md px-6 py-24">
         <h1 className="text-2xl font-semibold tracking-tight">Pen</h1>
         <p className="mt-3 text-[15px] leading-relaxed" style={{ color: 'var(--pen-soft)' }}>
-          Plug in the pen, get the showing written up. Sign in to continue.
+          Plug in the recorder, get the meeting written up. Sign in to continue.
         </p>
         <Link href="/auth/signin?callbackUrl=/pen" className="pen-btn pen-btn-primary mt-6 inline-block">
           Sign in with Google
