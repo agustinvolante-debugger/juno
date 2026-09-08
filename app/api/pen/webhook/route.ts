@@ -26,13 +26,13 @@ export async function POST(req: Request) {
         status: 'transcribed',
         transcript: { text: t.text ?? '', utterances: t.utterances ?? [] },
         duration_sec: t.audio_duration ?? session.duration_sec,
-        error: null,
+        error_text: null,
       })
     } else {
-      await updateSession(session.id, { status: 'error', error: t.error ?? `assemblyai status ${t.status}` })
+      await updateSession(session.id, { status: 'error', error_text: t.error ?? `assemblyai status ${t.status}` })
     }
   } catch (e) {
-    await updateSession(session.id, { status: 'error', error: (e as Error).message })
+    await updateSession(session.id, { status: 'error', error_text: (e as Error).message })
   }
   return NextResponse.json({ ok: true })
 }

@@ -33,7 +33,7 @@ export async function POST(req: Request) {
     await updateSession(session.id, {
       notes,
       status: 'noted',
-      error: null,
+      error_text: null,
       ...(session.client_name ? {} : clientName ? { client_name: clientName } : {}),
       ...(session.title ? {} : notes.summary ? { title: notes.summary.split(/[.!?]/)[0].slice(0, 80) } : {}),
     })
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ session: await getSession(email, session.id) })
   } catch (e) {
-    await updateSession(session.id, { status: 'error', error: (e as Error).message })
+    await updateSession(session.id, { status: 'error', error_text: (e as Error).message })
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }
 }

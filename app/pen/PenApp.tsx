@@ -490,7 +490,7 @@ function Detail({
         </div>
       </div>
 
-      {session.error && <Banner tone="bad">{session.error}</Banner>}
+      {session.error_text && <Banner tone="bad">{session.error_text}</Banner>}
 
       <div className="mt-4 flex gap-1 border-b" style={{ borderColor: 'var(--pen-line)' }}>
         {(['notes', 'transcript'] as const).map((t) => (

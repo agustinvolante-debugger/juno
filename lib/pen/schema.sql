@@ -28,7 +28,7 @@ create table if not exists pen_sessions (
   notes         jsonb  default '{}'::jsonb,  -- Claude extraction, see lib/pen/extract.ts
   user_notes    text,                        -- what he typed himself (the Granola move)
   client_name   text,
-  error         text,
+  error_text    text,
   recorded_at   timestamptz,                 -- file mtime off the pen, not upload time
   created_at    timestamptz default now(),
   updated_at    timestamptz default now()

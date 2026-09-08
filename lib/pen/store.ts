@@ -33,7 +33,7 @@ export type PenSession = {
   notes: PenNotes
   user_notes: string | null
   client_name: string | null
-  error: string | null
+  error_text: string | null
   recorded_at: string | null
   created_at: string
   updated_at: string

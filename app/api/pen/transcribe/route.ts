@@ -33,10 +33,10 @@ export async function POST(req: Request) {
     const webhookUrl = secret && base ? `${base.replace(/\/$/, '')}/api/pen/webhook?k=${secret}` : undefined
 
     const t = await submit({ audioUrl, webhookUrl, speakersExpected: b.speakers })
-    await updateSession(session.id, { aai_id: t.id, status: 'transcribing', error: null })
+    await updateSession(session.id, { aai_id: t.id, status: 'transcribing', error_text: null })
     return NextResponse.json({ ok: true, aai_id: t.id, webhook: Boolean(webhookUrl) })
   } catch (e) {
-    await updateSession(session.id, { status: 'error', error: (e as Error).message })
+    await updateSession(session.id, { status: 'error', error_text: (e as Error).message })
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }
 }
@@ -63,7 +63,7 @@ export async function GET(req: Request) {
         duration_sec: t.audio_duration ?? session.duration_sec,
       })
     } else if (t.status === 'error') {
-      await updateSession(session.id, { status: 'error', error: t.error ?? 'assemblyai error' })
+      await updateSession(session.id, { status: 'error', error_text: t.error ?? 'assemblyai error' })
     }
     return NextResponse.json({ session: await getSession(email, id) })
   } catch (e) {
