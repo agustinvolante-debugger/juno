@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 
-// Subdomain roots: news.* → /news (the reader), gym.* → /gym.html (static plan).
+// Subdomain roots: news.* → /news (the reader), pen.* → /pen (recorder notes),
+// gym.* → /gym.html (static plan).
 // Only rewrites the root path; auth (/api/auth/*) and everything else pass through untouched,
 // and the main domain (tryjunoapp.com) is unaffected.
 export async function proxy(req: NextRequest) {
@@ -12,6 +13,15 @@ export async function proxy(req: NextRequest) {
     url.pathname = '/news'
     return NextResponse.rewrite(url)
   }
+  // pen.tryjunoapp.com → the recorder → AI notes app. /pen is a real route that gates
+  // itself via authedEmail(), and /api/pen/* passes straight through, so only the root
+  // needs rewriting.
+  if (host.startsWith('pen.') && req.nextUrl.pathname === '/') {
+    const url = req.nextUrl.clone()
+    url.pathname = '/pen'
+    return NextResponse.rewrite(url)
+  }
+
   // gym.tryjunoapp.com → the static training/nutrition plan in public/.
   if (host.startsWith('gym.') && req.nextUrl.pathname === '/') {
     const url = req.nextUrl.clone()

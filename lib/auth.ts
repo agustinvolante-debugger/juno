@@ -13,6 +13,7 @@ export const ALLOWED_EMAILS = [
   'v.miranda.ga@gmail.com',
   'stephanie@pearsonlabs.ai',
   'lukebpadden31@gmail.com',
+  'chrisdyas9@gmail.com', // realtor friend — Pen (/pen)
 ]
 
 export const authOptions: NextAuthOptions = {
