@@ -453,7 +453,10 @@ function Detail({
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <span className="pen-pill" data-s={session.status}>{session.status}</span>
-          {(session.status === 'transcribed' || session.status === 'noted') && (
+          {/* Keyed off the transcript, not the status. A session can land in `error` with a
+              perfectly good transcript (a failed save, a transient API error), and gating the
+              retry on status left it with no way out of the UI. */}
+          {utts.length > 0 && (
             <button className="pen-btn" onClick={() => regenerate()} disabled={busy}>
               {busy ? 'Working…' : session.status === 'noted' ? 'Redo notes' : 'Write the notes'}
             </button>
@@ -526,8 +529,14 @@ function Detail({
 
           {session.status === 'transcribing' && <div className="pen-sec"><Muted>Transcribing. This runs on its own — you can close the tab.</Muted></div>}
           {session.status === 'uploaded' && <div className="pen-sec"><Muted>Uploaded, waiting to be sent for transcription.</Muted></div>}
-          {session.status === 'transcribed' && !n.summary && (
-            <div className="pen-sec"><Muted>Transcript is ready. Press “Write the notes”.</Muted></div>
+          {utts.length > 0 && !n.summary && session.status !== 'transcribing' && (
+            <div className="pen-sec">
+              <Muted>
+                {session.status === 'error'
+                  ? 'The transcript came through but the notes failed. Press “Write the notes” to try again.'
+                  : 'Transcript is ready. Press “Write the notes”.'}
+              </Muted>
+            </div>
           )}
 
           {n.summary && (
