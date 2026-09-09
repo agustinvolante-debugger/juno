@@ -393,3 +393,35 @@
 }
 .pen-do-btn:hover { background: var(--accent-wash); border-color: var(--accent-line); color: var(--accent-ink); }
 @media (hover: none) { .pen-do { opacity: 1; } }
+
+/* ================================================== send briefing (feat 4) */
+.pen-brief {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: var(--mono); font-size: 12px; letter-spacing: .02em; white-space: nowrap;
+  padding: 7px 12px; border-radius: 7px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  transition: background .2s ease, border-color .2s ease, color .2s ease;
+}
+.pen-brief:hover:not(:disabled) { background: var(--sunk); border-color: #DAD5C9; }
+.pen-brief:disabled { opacity: .42; cursor: not-allowed; }
+.pen-brief[data-state='sending'] { color: var(--dim); }
+.pen-brief[data-state='sent'] { background: var(--good); border-color: var(--good); color: #fff; }
+.pen-brief[data-state='failed'] { background: var(--bad-wash); border-color: #EFD6D2; color: var(--bad); }
+.pen-brief-icon { display: grid; place-items: center; width: 14px; height: 14px; flex: 0 0 14px; }
+.pen-brief-icon svg { width: 14px; height: 14px; display: block; }
+
+.pen-spin {
+  display: block; width: 12px; height: 12px; border-radius: 50%;
+  border: 1.7px solid var(--line); border-top-color: var(--accent);
+  animation: penSpin .62s linear infinite;
+}
+@keyframes penSpin { to { transform: rotate(360deg) } }
+@media (prefers-reduced-motion: reduce) { .pen-spin { animation-duration: 1.6s } }
+
+.pen-brief-err {
+  position: absolute; top: calc(100% + 7px); right: 0; z-index: 20;
+  max-width: 290px; padding: 8px 11px; border-radius: 8px;
+  background: var(--bad-wash); border: 1px solid #EFD6D2; color: var(--bad);
+  font-size: 12px; line-height: 1.45;
+  box-shadow: 0 6px 18px -8px rgba(22,21,15,.2);
+}

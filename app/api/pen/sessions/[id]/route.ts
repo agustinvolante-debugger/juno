@@ -41,6 +41,11 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     // Mirror to plain text so the briefing email and anything else downstream keeps working.
     patch.user_notes = (patch.note_blocks as { text: string }[]).map((x) => x.text).filter(Boolean).join('\n\n')
   }
+  // The send route already persists this; the PATCH exists so the UI can reflect it without
+  // a full refetch. Validated as a real timestamp so it can't be used to store arbitrary text.
+  if (typeof b.briefing_sent_at === 'string' && !Number.isNaN(Date.parse(b.briefing_sent_at))) {
+    patch.briefing_sent_at = new Date(b.briefing_sent_at).toISOString()
+  }
   if (b.transcript_edits && typeof b.transcript_edits === 'object' && !Array.isArray(b.transcript_edits)) {
     const src = b.transcript_edits as Record<string, unknown>
     const out: Record<string, string> = {}

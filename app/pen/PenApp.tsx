@@ -6,6 +6,7 @@ import NoteEditor, { blocksFrom } from './NoteEditor'
 import TranscriptEditor from './TranscriptEditor'
 import ArchivePalette from './ArchivePalette'
 import DeliverableSheet, { DeliverableActions, type SheetRequest } from './DeliverableSheet'
+import SendBriefing from './SendBriefing'
 import { prepareAudio, fmtMB, fmtDur } from '@/lib/pen/encode'
 
 // The File System Access API isn't in the default TS lib.
@@ -432,7 +433,7 @@ function Detail({
   chatOpen: boolean
   onToggleChat: () => void
   onNotes: (type?: MeetingType) => void
-  onPatch: (p: Partial<Pick<PenSession, 'user_notes' | 'title' | 'client_name' | 'action_done' | 'note_blocks' | 'transcript_edits'>>) => Promise<void>
+  onPatch: (p: Partial<Pick<PenSession, 'user_notes' | 'title' | 'client_name' | 'action_done' | 'note_blocks' | 'transcript_edits' | 'briefing_sent_at'>>) => Promise<void>
 }) {
   const [busy, setBusy] = useState(false)
   const [sheet, setSheet] = useState<SheetRequest | null>(null)
@@ -526,6 +527,12 @@ function Detail({
               {chatOpen ? 'Hide chat' : 'Ask this meeting'}
             </button>
           )}
+          <SendBriefing
+            sessionId={session.id}
+            sentAt={session.briefing_sent_at}
+            disabled={!n.summary && !n.actions?.length && !n.missed?.length && !n.open_questions?.length}
+            onSent={(iso) => void onPatch({ briefing_sent_at: iso })}
+          />
         </div>
       </div>
 
