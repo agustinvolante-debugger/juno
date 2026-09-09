@@ -314,3 +314,82 @@
 .pen-cmdk:hover { border-color: #DAD5C9; color: var(--soft); }
 
 @media (max-width: 640px) { .pen-palette-wrap { padding-top: 6vh; } .pen-palette { max-height: 84vh; } }
+
+/* ================================================ deliverables sheet (feat 3)
+   Rises from the bottom like an iOS sheet. Anchored low, not centred, because it answers
+   something you clicked further up — the note should stay visible behind it. */
+.pen-sheet-wrap {
+  position: fixed; inset: 0; z-index: 71; display: flex;
+  align-items: flex-end; justify-content: center; padding: 0 16px; pointer-events: none;
+}
+.pen-sheet {
+  pointer-events: auto; width: min(640px, 100%); max-height: 84vh;
+  display: flex; flex-direction: column;
+  background: rgba(255,255,255,.94);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  border: 1px solid rgba(231,227,217,.9); border-bottom: none;
+  border-radius: 17px 17px 0 0;
+  box-shadow: 0 -1px 2px rgba(22,21,15,.04), 0 -14px 34px -10px rgba(22,21,15,.17), 0 -44px 90px -30px rgba(22,21,15,.2);
+}
+.pen-sheet-grip {
+  width: 38px; height: 4px; border-radius: 999px; background: #D8D3C7;
+  margin: 9px auto 2px; flex: 0 0 auto;
+}
+.pen-sheet-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 8px 18px 13px; border-bottom: 1px solid var(--hair); flex: 0 0 auto;
+}
+.pen-sheet-title { font-family: var(--display); font-size: 20px; line-height: 1.2; margin-top: 3px; }
+.pen-sheet-x {
+  font-family: var(--mono); font-size: 19px; line-height: 1; color: var(--dim);
+  width: 28px; height: 28px; border-radius: 8px; flex: 0 0 auto;
+  transition: background .14s ease, color .14s ease;
+}
+.pen-sheet-x:hover { background: var(--sunk); color: var(--ink); }
+.pen-sheet-body { flex: 1 1 auto; overflow-y: auto; padding: 14px 18px 4px; }
+.pen-sheet-ref {
+  font-family: var(--mono); font-size: 10.5px; color: var(--faint);
+  margin-bottom: 12px; line-height: 1.5;
+}
+.pen-sheet-text {
+  width: 100%; min-height: 240px; resize: vertical;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+  padding: 13px 15px; outline: none;
+  font-family: var(--serif); font-size: 14.5px; line-height: 1.62; color: var(--ink);
+  white-space: pre-wrap;
+}
+.pen-sheet-text:focus { border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-wash); }
+.pen-sheet-skeleton { display: flex; flex-direction: column; gap: 9px; padding: 6px 0 14px; }
+.pen-sheet-skeleton span { display: block; height: 11px; border-radius: 5px; background: var(--line); }
+.pen-sheet-foot {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 18px 16px; border-top: 1px solid var(--hair); background: rgba(251,250,246,.55);
+}
+
+/* Copy, with a checkmark that draws itself */
+.pen-copy {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: var(--mono); font-size: 12px;
+  padding: 8px 14px; border-radius: 9px;
+  background: var(--ink); border: 1px solid var(--ink); color: var(--paper);
+  transition: background .2s ease, border-color .2s ease;
+}
+.pen-copy:hover:not(:disabled) { background: #302D24; }
+.pen-copy:disabled { opacity: .4; cursor: not-allowed; }
+.pen-copy[data-done='true'] { background: var(--good); border-color: var(--good); }
+.pen-copy-icon { display: grid; place-items: center; width: 15px; height: 15px; }
+.pen-copy-icon svg { width: 15px; height: 15px; display: block; }
+
+/* Hover affordances beside an action / takeaway. Hidden until the row is hovered so the
+   note reads as a document at rest, and always visible on touch where hover is a lie. */
+.pen-do { display: flex; gap: 4px; opacity: 0; transition: opacity .16s ease; flex-wrap: wrap; }
+.pen-doable:hover .pen-do, .pen-doable:focus-within .pen-do { opacity: 1; }
+.pen-do-btn {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .04em; white-space: nowrap;
+  padding: 3px 8px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--dim);
+  transition: background .14s ease, color .14s ease, border-color .14s ease;
+}
+.pen-do-btn:hover { background: var(--accent-wash); border-color: var(--accent-line); color: var(--accent-ink); }
+@media (hover: none) { .pen-do { opacity: 1; } }

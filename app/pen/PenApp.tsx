@@ -5,6 +5,7 @@ import type { PenSession, MeetingType, ChatTurn, PenNotes, NoteBlock } from '@/l
 import NoteEditor, { blocksFrom } from './NoteEditor'
 import TranscriptEditor from './TranscriptEditor'
 import ArchivePalette from './ArchivePalette'
+import DeliverableSheet, { DeliverableActions, type SheetRequest } from './DeliverableSheet'
 import { prepareAudio, fmtMB, fmtDur } from '@/lib/pen/encode'
 
 // The File System Access API isn't in the default TS lib.
@@ -434,6 +435,7 @@ function Detail({
   onPatch: (p: Partial<Pick<PenSession, 'user_notes' | 'title' | 'client_name' | 'action_done' | 'note_blocks' | 'transcript_edits'>>) => Promise<void>
 }) {
   const [busy, setBusy] = useState(false)
+  const [sheet, setSheet] = useState<SheetRequest | null>(null)
 
   // Note blocks. Keyed off session.id ONLY — including the server copy in the deps would
   // reset the editor mid-typing every time an autosave round-tripped.
@@ -632,17 +634,20 @@ function Detail({
               </div>
               <div className="mt-1.5">
                 {n.actions.map((a, i) => (
-                  <div key={i} className="pen-act" data-done={done.has(i)}>
+                  <div key={i} className="pen-act pen-doable" data-done={done.has(i)}>
                     <input type="checkbox" className="pen-act-box" checked={done.has(i)} onChange={() => toggleAction(i)} />
                     <div className="min-w-0 flex-1">
                       <div className="pen-act-text text-[15px] leading-snug">{a.action}</div>
-                      {(a.owner || a.due || a.priority === 'high') && (
-                        <div className="pen-mono mt-1 flex flex-wrap items-center gap-x-2 text-[10.5px]" style={{ color: 'var(--dim)' }}>
-                          {a.priority === 'high' && <span style={{ color: 'var(--bad)' }}>PRIORITY</span>}
-                          {a.owner && <span>{a.owner}</span>}
-                          {a.due && <span style={{ color: 'var(--accent-ink)' }}>{a.due}</span>}
-                        </div>
-                      )}
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                        {(a.owner || a.due || a.priority === 'high') && (
+                          <div className="pen-mono flex flex-wrap items-center gap-x-2 text-[10.5px]" style={{ color: 'var(--dim)' }}>
+                            {a.priority === 'high' && <span style={{ color: 'var(--bad)' }}>PRIORITY</span>}
+                            {a.owner && <span>{a.owner}</span>}
+                            {a.due && <span style={{ color: 'var(--accent-ink)' }}>{a.due}</span>}
+                          </div>
+                        )}
+                        <DeliverableActions onPick={(kind) => setSheet({ kind, item: a.action })} />
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -656,9 +661,12 @@ function Detail({
                 <span className="pen-label" style={{ color: 'var(--warn)' }}>You might have missed</span>
                 <ul className="mt-2.5 space-y-3">
                   {n.missed.map((m, i) => (
-                    <li key={i} className="text-[15px] leading-snug">
+                    <li key={i} className="pen-doable text-[15px] leading-snug">
                       {m.item}
                       {m.why && <div className="mt-0.5 text-[13px]" style={{ color: 'var(--warn)' }}>{m.why}</div>}
+                      <div className="mt-1.5">
+                        <DeliverableActions onPick={(kind) => setSheet({ kind, item: m.item })} />
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -683,8 +691,15 @@ function Detail({
           {!!n.open_questions?.length && (
             <div className="pen-sec">
               <span className="pen-label">Still open</span>
-              <ul className="mt-2 list-disc space-y-1.5 pl-5 text-[15px]">
-                {n.open_questions.map((q, i) => <li key={i}>{q}</li>)}
+              <ul className="mt-2 list-disc space-y-2.5 pl-5 text-[15px]">
+                {n.open_questions.map((q, i) => (
+                  <li key={i} className="pen-doable">
+                    {q}
+                    <div className="mt-1.5">
+                      <DeliverableActions onPick={(kind) => setSheet({ kind, item: q })} />
+                    </div>
+                  </li>
+                ))}
               </ul>
             </div>
           )}
@@ -692,6 +707,8 @@ function Detail({
           {n.meeting_type === 'showing' && n.showing && <ShowingBlock showing={n.showing} />}
         </div>
       )}
+
+      <DeliverableSheet request={sheet} sessionId={session.id} onClose={() => setSheet(null)} />
     </div>
   )
 }
