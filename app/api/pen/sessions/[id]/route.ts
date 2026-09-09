@@ -28,6 +28,27 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (typeof b.title === 'string') patch.title = b.title
   if (typeof b.client_name === 'string') patch.client_name = b.client_name
   if (Array.isArray(b.action_done)) patch.action_done = b.action_done.filter((n) => typeof n === 'number')
+  // Blocks carry provenance, so validate the shape rather than trusting the client.
+  if (Array.isArray(b.note_blocks)) {
+    patch.note_blocks = b.note_blocks
+      .filter((x): x is { id: string; text: string; source: string } => !!x && typeof x === 'object')
+      .slice(0, 400)
+      .map((x) => ({
+        id: String(x.id).slice(0, 40),
+        text: String(x.text ?? '').slice(0, 8000),
+        source: x.source === 'ai' ? 'ai' : 'user',
+      }))
+    // Mirror to plain text so the briefing email and anything else downstream keeps working.
+    patch.user_notes = (patch.note_blocks as { text: string }[]).map((x) => x.text).filter(Boolean).join('\n\n')
+  }
+  if (b.transcript_edits && typeof b.transcript_edits === 'object' && !Array.isArray(b.transcript_edits)) {
+    const src = b.transcript_edits as Record<string, unknown>
+    const out: Record<string, string> = {}
+    for (const k of Object.keys(src).slice(0, 2000)) {
+      if (/^\d+$/.test(k) && typeof src[k] === 'string') out[k] = (src[k] as string).slice(0, 4000)
+    }
+    patch.transcript_edits = out
+  }
   if (!Object.keys(patch).length) return NextResponse.json({ error: 'nothing to update' }, { status: 400 })
 
   await updateSession(id, patch)

@@ -65,3 +65,20 @@ create index if not exists pen_clients_user on pen_clients(user_email);
 -- action_done    indices of actions the user has ticked off
 -- ---------------------------------------------------------------------------
 -- alter table public.pen_sessions add column if not exists meeting_type text, add column if not exists chat jsonb default '[]'::jsonb, add column if not exists action_done jsonb default '[]'::jsonb;
+
+-- ---------------------------------------------------------------------------
+-- 2026-09-09 — agentic workspace. Covers ALL FOUR features so this runs once.
+-- Each statement is ONE line: the Supabase SQL editor splits multi-line DDL.
+--
+-- note_blocks       [{id,text,source:'user'|'ai'}] — the Jot & Enhance editor. Provenance is
+--                   per block, which is what makes black-vs-grey meaningful and editable.
+-- transcript_edits  {utteranceIndex: correctedText} — manual transcript corrections, kept as
+--                   an overlay so the original AssemblyAI output is never destroyed.
+-- deliverables      [{id,kind,title,body,ref,ts}] — drafted emails / memos / tracker rows.
+-- briefing_sent_at  when the post-meeting briefing email last went out.
+-- ---------------------------------------------------------------------------
+-- alter table public.pen_sessions add column if not exists note_blocks jsonb default '[]'::jsonb, add column if not exists transcript_edits jsonb default '{}'::jsonb, add column if not exists deliverables jsonb default '[]'::jsonb, add column if not exists briefing_sent_at timestamptz;
+
+-- Archive-wide chat (feature 2). One running conversation per user; citations reference
+-- pen_sessions.id so the UI can link an answer back to the recordings it came from.
+-- create table if not exists public.pen_archive_chat (user_email text primary key, messages jsonb default '[]'::jsonb, updated_at timestamptz default now());

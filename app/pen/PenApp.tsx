@@ -1,7 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { PenSession, MeetingType, ChatTurn, PenNotes } from '@/lib/pen/store'
+import type { PenSession, MeetingType, ChatTurn, PenNotes, NoteBlock } from '@/lib/pen/store'
+import NoteEditor, { blocksFrom } from './NoteEditor'
+import TranscriptEditor from './TranscriptEditor'
 import { prepareAudio, fmtMB, fmtDur } from '@/lib/pen/encode'
 
 // The File System Access API isn't in the default TS lib.
@@ -297,11 +299,17 @@ export default function PenApp({ initial, loadError }: { initial: PenSession[]; 
                 chatOpen={chatOpen} onToggleChat={() => setChatOpen((v) => !v)}
                 onNotes={(type) => makeNotes(active.id, type)}
                 onPatch={async (patch) => {
-                  await fetch(`/api/pen/sessions/${active.id}`, {
+                  const r = await fetch(`/api/pen/sessions/${active.id}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(patch),
                   })
+                  if (!r.ok) {
+                    const msg = (await r.json().catch(() => ({}))).error ?? `save failed (${r.status})`
+                    setErr(msg)
+                    // Rethrow so the editor can show "not saved" rather than a false "saved".
+                    throw new Error(msg)
+                  }
                   setSessions((prev) => prev.map((x) => (x.id === active.id ? { ...x, ...patch } : x)))
                 }}
               />
@@ -405,20 +413,52 @@ function Detail({
   chatOpen: boolean
   onToggleChat: () => void
   onNotes: (type?: MeetingType) => void
-  onPatch: (p: Partial<Pick<PenSession, 'user_notes' | 'title' | 'client_name' | 'action_done'>>) => Promise<void>
+  onPatch: (p: Partial<Pick<PenSession, 'user_notes' | 'title' | 'client_name' | 'action_done' | 'note_blocks' | 'transcript_edits'>>) => Promise<void>
 }) {
-  const [draft, setDraft] = useState(session.user_notes ?? '')
-  const [saved, setSaved] = useState(true)
   const [busy, setBusy] = useState(false)
 
-  useEffect(() => { setDraft(session.user_notes ?? ''); setSaved(true) }, [session.id, session.user_notes])
+  // Note blocks. Keyed off session.id ONLY — including the server copy in the deps would
+  // reset the editor mid-typing every time an autosave round-tripped.
+  const [blocks, setBlocks] = useState<NoteBlock[]>(() => blocksFrom(session.note_blocks, session.user_notes))
+  const [notesState, setNotesState] = useState<'saved' | 'saving' | 'failed'>('saved')
+  const dirtyNotes = useRef(false)
   useEffect(() => {
-    if (draft === (session.user_notes ?? '')) return
-    setSaved(false)
-    const t = setTimeout(async () => { await onPatch({ user_notes: draft }); setSaved(true) }, 900)
+    setBlocks(blocksFrom(session.note_blocks, session.user_notes))
+    setNotesState('saved')
+    dirtyNotes.current = false
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.id])
+  useEffect(() => {
+    if (!dirtyNotes.current) return
+    setNotesState('saving')
+    const t = setTimeout(async () => {
+      try { await onPatch({ note_blocks: blocks }); setNotesState('saved') }
+      catch { setNotesState('failed') }
+    }, 800)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft])
+  }, [blocks])
+
+  // Transcript corrections, same pattern.
+  const [tEdits, setTEdits] = useState<Record<string, string>>(session.transcript_edits ?? {})
+  const [tState, setTState] = useState<'saved' | 'saving' | 'failed'>('saved')
+  const dirtyT = useRef(false)
+  useEffect(() => {
+    setTEdits(session.transcript_edits ?? {})
+    setTState('saved')
+    dirtyT.current = false
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.id])
+  useEffect(() => {
+    if (!dirtyT.current) return
+    setTState('saving')
+    const t = setTimeout(async () => {
+      try { await onPatch({ transcript_edits: tEdits }); setTState('saved') }
+      catch { setTState('failed') }
+    }, 800)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tEdits])
 
   const n: PenNotes = session.notes ?? {}
   const utts = session.transcript?.utterances ?? []
@@ -503,12 +543,12 @@ function Detail({
       {tab === 'transcript' ? (
         <div className="pen-panel mt-6 p-6">
           {utts.length ? (
-            utts.map((u, i) => (
-              <div key={i} className="pen-utt">
-                <div className="pen-label pt-0.5">Speaker {u.speaker}</div>
-                <div className="text-[15px] leading-relaxed">{u.text}</div>
-              </div>
-            ))
+            <TranscriptEditor
+              utterances={utts}
+              edits={tEdits}
+              saveState={tState}
+              onEdit={(i, text) => { dirtyT.current = true; setTEdits((prev) => ({ ...prev, [String(i)]: text })) }}
+            />
           ) : session.transcript?.text ? (
             <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{session.transcript.text}</p>
           ) : (
@@ -519,12 +559,13 @@ function Detail({
         <div className="pen-doc pen-reveal mt-7">
           {/* His own notes come first on purpose: what he wrote is the spine. */}
           <div className="pen-sec">
-            <div className="mb-2 flex items-baseline justify-between">
-              <span className="pen-label">Your notes</span>
-              <span className="pen-mono text-[10px]" style={{ color: 'var(--faint)' }}>{saved ? 'saved' : 'saving…'}</span>
-            </div>
-            <textarea className="pen-notes-input" value={draft} onChange={(e) => setDraft(e.target.value)}
-                      placeholder="Anything you want to remember, in your own words. This stays yours — everything below is generated separately." />
+            <NoteEditor
+              sessionId={session.id}
+              blocks={blocks}
+              saveState={notesState}
+              canEnhance={utts.length > 0}
+              onChange={(next) => { dirtyNotes.current = true; setBlocks(next) }}
+            />
           </div>
 
           {session.status === 'transcribing' && <div className="pen-sec"><Muted>Transcribing. This runs on its own — you can close the tab.</Muted></div>}

@@ -35,6 +35,27 @@ export type PenNotes = {
 
 export type ChatTurn = { role: 'user' | 'assistant'; content: string; ts: number }
 
+/** One paragraph of the note, with provenance. Grey text means "a machine wrote this and
+ *  you have not endorsed it yet" — editing a block promotes it to 'user'. */
+export type NoteBlock = { id: string; text: string; source: 'user' | 'ai' }
+
+export type Deliverable = {
+  id: string
+  kind: 'email' | 'memo' | 'tracker'
+  title: string
+  body: string
+  ref: string
+  ts: number
+}
+
+/** Archive-wide answer, with the recordings it drew on so the UI can cite them. */
+export type ArchiveTurn = {
+  role: 'user' | 'assistant'
+  content: string
+  citations?: { session_id: string; title: string }[]
+  ts: number
+}
+
 export type PenSession = {
   id: string
   user_email: string
@@ -52,6 +73,10 @@ export type PenSession = {
   meeting_type: MeetingType | null
   chat: ChatTurn[]
   action_done: number[]
+  note_blocks: NoteBlock[]
+  transcript_edits: Record<string, string>
+  deliverables: Deliverable[]
+  briefing_sent_at: string | null
   user_notes: string | null
   client_name: string | null
   error_text: string | null

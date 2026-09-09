@@ -166,3 +166,53 @@
 .pen-utt + .pen-utt { border-top: 1px solid var(--hair); }
 
 @media (max-width: 900px) { .pen-utt { grid-template-columns: 1fr; gap: 2px; } }
+
+/* ============================================================ Jot & Enhance
+   Provenance is per block. Black = you wrote it. Grey = a machine wrote it and you
+   have not endorsed it yet. Both are editable; the fields are invisible so the thing
+   reads as a document rather than a form. */
+.pen-blocks { margin-left: -2px; }
+
+.pen-block { position: relative; padding: 2px 0 2px 12px; border-radius: 4px; }
+.pen-block::before {
+  content: ''; position: absolute; left: 0; top: 5px; bottom: 5px; width: 2px;
+  border-radius: 2px; background: transparent; transition: background .22s ease;
+}
+/* Only machine text carries a marginal rule — your own words need no annotation. */
+.pen-block[data-source='ai']::before { background: var(--accent-line); }
+.pen-block[data-source='ai']:focus-within::before { background: var(--accent); }
+
+.pen-block-input {
+  display: block; width: 100%; border: none; outline: none; resize: none; background: transparent;
+  font-family: var(--serif); font-size: 16px; line-height: 1.68; padding: 0;
+  overflow: hidden; transition: color .3s ease;
+}
+.pen-block[data-source='user'] .pen-block-input { color: var(--ink); }
+.pen-block[data-source='ai']   .pen-block-input { color: #9A968C; }
+.pen-block[data-source='ai']:focus-within .pen-block-input { color: #7E7A70; }
+.pen-block-input::placeholder { color: var(--faint); }
+.pen-block-reveal { color: #9A968C; margin: 0; }
+
+.pen-block + .pen-block { margin-top: 12px; }
+
+/* Enhance — quiet until it has something to do */
+.pen-enhance {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--mono); font-size: 11px; letter-spacing: .04em;
+  padding: 5px 11px; border-radius: 999px;
+  border: 1px solid var(--accent-line); background: var(--accent-wash); color: var(--accent-ink);
+  transition: background .16s ease, border-color .16s ease, opacity .16s ease;
+}
+.pen-enhance:hover:not(:disabled) { background: #E2EEF3; border-color: #BFD6E1; }
+.pen-enhance:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ======================================================== editable transcript */
+.pen-utt-input {
+  display: block; width: 100%; border: none; outline: none; resize: none; background: transparent;
+  font-family: var(--serif); font-size: 15px; line-height: 1.6; padding: 1px 0; overflow: hidden;
+  color: var(--ink); border-radius: 3px;
+}
+.pen-utt-input:focus { background: #FCFAF3; box-shadow: 0 0 0 6px #FCFAF3; }
+.pen-utt[data-edited='true'] .pen-spk-tag::after {
+  content: 'edited'; display: block; font-size: 8.5px; letter-spacing: .1em; color: var(--accent);
+}
