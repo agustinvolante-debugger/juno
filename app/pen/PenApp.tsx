@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PenSession, MeetingType, ChatTurn, PenNotes, NoteBlock } from '@/lib/pen/store'
 import NoteEditor, { blocksFrom } from './NoteEditor'
 import TranscriptEditor from './TranscriptEditor'
+import ArchivePalette from './ArchivePalette'
 import { prepareAudio, fmtMB, fmtDur } from '@/lib/pen/encode'
 
 // The File System Access API isn't in the default TS lib.
@@ -38,6 +39,7 @@ export default function PenApp({ initial, loadError }: { initial: PenSession[]; 
   const [dragOver, setDragOver] = useState(false)
   const [tab, setTab] = useState<'note' | 'transcript'>('note')
   const [chatOpen, setChatOpen] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
 
   const active = useMemo(() => sessions.find((s) => s.id === activeId) ?? null, [sessions, activeId])
@@ -205,6 +207,10 @@ export default function PenApp({ initial, loadError }: { initial: PenSession[]; 
           <h1 className="pen-display text-[34px] leading-none">Pen</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <button className="pen-cmdk" onClick={() => setPaletteOpen(true)} title="Ask across every recording">
+            <span>Ask your archive</span>
+            <kbd className="pen-kbd">&#8984;K</kbd>
+          </button>
           {supportsPicker && (
             <button className="pen-btn pen-btn-primary" onClick={connectPen}>
               Connect pen
@@ -318,6 +324,18 @@ export default function PenApp({ initial, loadError }: { initial: PenSession[]; 
           )}
         </section>
       </div>
+
+      <ArchivePalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        onCite={(sessionId) => {
+          setActiveId(sessionId)
+          setTab('note')
+          setChatOpen(false)
+          setPaletteOpen(false)
+          window.scrollTo({ top: 0, behavior: 'smooth' })
+        }}
+      />
     </main>
   )
 }

@@ -48,11 +48,15 @@ export type Deliverable = {
   ts: number
 }
 
-/** Archive-wide answer, with the recordings it drew on so the UI can cite them. */
+/** A citation ties an inline [n] marker in the answer back to a specific recording, so the
+ *  UI can render it as a pill that jumps to that session. */
+export type Citation = { marker: number; session_id: string; title: string; quote: string }
+
+/** Archive-wide answer, with the recordings it drew on so every claim is traceable. */
 export type ArchiveTurn = {
   role: 'user' | 'assistant'
   content: string
-  citations?: { session_id: string; title: string }[]
+  citations?: Citation[]
   ts: number
 }
 
