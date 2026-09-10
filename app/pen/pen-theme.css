@@ -444,3 +444,139 @@
 .pen-confirm-no:hover { background: var(--sunk); }
 .pen-confirm-yes { color: #fff; background: var(--bad); border: 1px solid var(--bad); }
 .pen-confirm-yes:hover { background: #872A22; }
+
+/* ============================================================ landing page
+   Extends the app's own type and palette rather than inventing a second identity.
+   Contrast comes from inverting the pricing block to ink, not from a new colour. */
+.pen-lp { background: var(--paper); color: var(--ink); }
+/* padding-INLINE only. A `padding: 0 22px` shorthand also sets padding-top/bottom to 0, and
+   because this file loads after Tailwind it silently overrode every pt-* utility used on these
+   sections. Same reasoning for the margin resets below. */
+.pen-lp-wrap { max-width: 1120px; margin-inline: auto; padding-inline: 22px; }
+@media (min-width: 640px) { .pen-lp-wrap { padding-inline: 32px; } }
+
+/* Not sticky. A light translucent bar cut a bright band across the inverted pricing
+   section, and on a four-section page a persistent nav is not earning that cost — both
+   CTAs are already prominent. */
+.pen-lp-nav { padding: 20px 0 4px; }
+.pen-lp-navlink {
+  font-family: var(--mono); font-size: 11.5px; color: var(--dim);
+  padding: 7px 11px; border-radius: 7px; transition: color .15s ease, background .15s ease;
+}
+.pen-lp-navlink:hover { color: var(--ink); background: var(--sunk); }
+
+/* Buttons — one shape, four weights */
+.pen-lp-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: var(--mono); font-size: 12.5px; letter-spacing: .01em; white-space: nowrap;
+  padding: 12px 20px; border-radius: 9px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  transition: transform .16s cubic-bezier(.2,.7,.3,1), background .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+.pen-lp-btn:hover { transform: translateY(-1px); background: var(--sunk); border-color: #DAD5C9; }
+.pen-lp-btn:active { transform: translateY(0); }
+.pen-lp-btn-sm { padding: 8px 14px; font-size: 11.5px; }
+.pen-lp-btn-primary { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.pen-lp-btn-primary:hover { background: #302D24; border-color: #302D24; box-shadow: 0 8px 20px -10px rgba(22,21,15,.5); }
+.pen-lp-btn-ghost {
+  background: transparent; border-color: rgba(251,250,246,.22); color: var(--paper);
+}
+.pen-lp-btn-ghost:hover { background: rgba(251,250,246,.07); border-color: rgba(251,250,246,.4); }
+.pen-lp-btn-accent { background: var(--accent); border-color: var(--accent); color: #fff; }
+.pen-lp-btn-accent:hover { background: #35708F; border-color: #35708F; box-shadow: 0 10px 26px -12px rgba(44,95,124,.9); }
+
+.pen-lp-em { color: var(--accent); }
+
+/* Hero specimen — the product's actual artifact, not an abstract illustration */
+.pen-lp-specimen {
+  margin: 0; border-radius: 14px; overflow: hidden;
+  background: var(--panel); border: 1px solid var(--line);
+  box-shadow: 0 1px 2px rgba(22,21,15,.03), 0 18px 40px -20px rgba(22,21,15,.17);
+}
+.pen-lp-specimen-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 11px 18px; border-bottom: 1px solid var(--hair); background: var(--sunk);
+}
+.pen-lp-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 3px rgba(63,107,74,.14); }
+.pen-lp-black { font-size: 16.5px; line-height: 1.55; color: var(--ink); margin-block: 0; }
+.pen-lp-grey {
+  font-size: 15.5px; line-height: 1.62; color: #9A968C; margin: 8px 0 0;
+  /* mt-* on this element is intentionally NOT used; spacing lives here. */
+  padding-left: 13px; border-left: 2px solid var(--accent-line);
+}
+.pen-lp-legend {
+  display: flex; flex-wrap: wrap; gap: 16px; margin-top: 26px; padding-top: 15px;
+  border-top: 1px solid var(--hair);
+  font-family: var(--mono); font-size: 10px; color: var(--faint);
+}
+.pen-lp-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.pen-lp-legend i { width: 9px; height: 9px; border-radius: 2px; display: block; }
+.pen-lp-swatch-ink { background: var(--ink); }
+.pen-lp-swatch-grey { background: #9A968C; }
+
+/* Steps */
+.pen-lp-step { background: var(--paper); padding: 30px 26px 34px; height: 100%; }
+
+/* The missed block, echoing the app's hatched treatment */
+.pen-lp-missed {
+  border-radius: 14px; padding: 28px 26px;
+  background:
+    repeating-linear-gradient(135deg, rgba(138,101,22,.045) 0 1px, transparent 1px 8px),
+    var(--warn-wash);
+  border: 1px solid #EFE2C4;
+}
+
+/* Pricing — inverted for contrast, same palette */
+.pen-lp-dark { background: var(--ink); }
+.pen-lp-plan {
+  position: relative; display: flex; flex-direction: column; height: 100%;
+  padding: 32px 28px 30px; border-radius: 15px;
+  background: rgba(251,250,246,.035);
+  border: 1px solid rgba(251,250,246,.11);
+  transition: transform .22s cubic-bezier(.2,.7,.3,1), border-color .22s ease;
+}
+.pen-lp-plan:hover { transform: translateY(-2px); border-color: rgba(251,250,246,.2); }
+.pen-lp-plan-pro {
+  background:
+    radial-gradient(120% 90% at 50% -10%, rgba(44,95,124,.34) 0%, transparent 62%),
+    rgba(251,250,246,.05);
+  border-color: rgba(120,170,196,.42);
+  box-shadow: 0 0 0 1px rgba(120,170,196,.14), 0 26px 60px -30px rgba(44,95,124,.75);
+}
+.pen-lp-plan-pro:hover { border-color: rgba(147,192,215,.6); }
+.pen-lp-ribbon {
+  position: absolute; top: -1px; right: 22px; transform: translateY(-50%);
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase;
+  padding: 4px 10px; border-radius: 999px;
+  background: var(--accent); color: #fff;
+  box-shadow: 0 6px 16px -8px rgba(44,95,124,.9);
+}
+.pen-lp-feats { list-style: none; margin: 26px 0 30px; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.pen-lp-feats li { display: flex; gap: 10px; align-items: flex-start; font-size: 14.5px; line-height: 1.5; color: rgba(251,250,246,.86); }
+.pen-lp-feats svg { width: 15px; height: 15px; flex: 0 0 15px; margin-top: 3px; }
+
+/* Footer */
+.pen-lp-foot { border-top: 1px solid var(--line); background: var(--paper); }
+.pen-lp-footlink {
+  font-family: var(--mono); font-size: 11px; color: var(--dim);
+  transition: color .15s ease;
+}
+.pen-lp-footlink:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+
+@media (max-width: 1023px) {
+  .pen-lp-specimen { max-width: 560px; }
+}
+
+/* Landing reveal. CSS, not JS: an animation always completes, so the page can never be
+   left invisible by a script that failed to run. */
+@keyframes penLpRise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+.pen-lp-rise {
+  animation: penLpRise .62s cubic-bezier(.2,.7,.3,1) both;
+  animation-delay: var(--d, 0s);
+}
+@media (prefers-reduced-motion: reduce) {
+  .pen-lp-rise { animation: none; }
+}

@@ -1,26 +1,16 @@
-import Link from 'next/link'
 import { authedEmail } from '@/lib/news/auth'
 import { listSessions } from '@/lib/pen/store'
 import PenApp from './PenApp'
+import Landing from './Landing'
 
 export const dynamic = 'force-dynamic'
 
 export default async function PenPage() {
   const email = await authedEmail()
 
-  if (!email) {
-    return (
-      <main className="mx-auto max-w-md px-6 py-24">
-        <h1 className="text-2xl font-semibold tracking-tight">Pen</h1>
-        <p className="mt-3 text-[15px] leading-relaxed" style={{ color: 'var(--pen-soft)' }}>
-          Plug in the recorder, get the meeting written up. Sign in to continue.
-        </p>
-        <Link href="/auth/signin?callbackUrl=/pen" className="pen-btn pen-btn-primary mt-6 inline-block">
-          Sign in with Google
-        </Link>
-      </main>
-    )
-  }
+  // Signed out gets the landing page; signed in goes straight to the app. Same URL, so a
+  // shared link works for someone who has never seen it and for someone who lives in it.
+  if (!email) return <Landing />
 
   let sessions: Awaited<ReturnType<typeof listSessions>> = []
   let loadError: string | null = null
