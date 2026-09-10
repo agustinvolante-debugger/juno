@@ -36,6 +36,8 @@ export default function Landing() {
       <Hero />
       <HowItWorks />
       <TheCatch />
+      <WhatYouGet />
+      <Compounds />
       <Pricing />
       <Footer />
     </div>
@@ -239,6 +241,144 @@ function TheCatch() {
         </Reveal>
       </div>
     </section>
+  )
+}
+
+/* ---------------------------------------------------------- what you get */
+
+function WhatYouGet() {
+  return (
+    <section className="pen-lp-wrap pt-28 sm:pt-36">
+      <Reveal>
+        <div className="pen-label">Out of one meeting</div>
+        <h2 className="pen-display mt-4 max-w-[26ch] text-[clamp(28px,4vw,40px)] leading-[1.12] tracking-[-0.015em]">
+          A summary you can send, a list you can work from, an email already written.
+        </h2>
+      </Reveal>
+
+      <div className="mt-14 grid gap-5 lg:grid-cols-[1.05fr_1fr]">
+        {/* Left: the note, as it actually renders */}
+        <Reveal delay={0.06}>
+          <div className="pen-lp-card h-full">
+            <div className="pen-label">Summary</div>
+            <p className="mt-2.5 text-[16px] leading-[1.62]">
+              Third viewing with the Hendersons. Sarah led on the renovated kitchen; Tom went
+              straight to price and flagged it as above their ceiling. No garage came up again,
+              now three properties running. They asked to return at the weekend with her mother.
+            </p>
+
+            <div className="pen-label mt-8">Next actions</div>
+            <ul className="pen-lp-todo">
+              {[
+                ['Check whether the HOA permits enclosing the carport', 'PRIORITY \u00B7 before the weekend'],
+                ['Send comps for the street to justify the asking price', ''],
+                ['Confirm the weekend time and that her mother is coming', ''],
+              ].map(([task, meta]) => (
+                <li key={task}>
+                  <span className="pen-lp-check" aria-hidden />
+                  <span>
+                    <span className="text-[15px] leading-snug">{task}</span>
+                    {meta && (
+                      <span className="pen-mono mt-1 block text-[10px]" style={{ color: 'var(--bad)' }}>{meta}</span>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Reveal>
+
+        {/* Right: the two things that leave the app */}
+        <div className="grid gap-5">
+          <Reveal delay={0.12}>
+            <div className="pen-lp-card">
+              <div className="flex items-center justify-between">
+                <div className="pen-label">Drafted from one line</div>
+                <span className="pen-lp-tag">Draft email</span>
+              </div>
+              <pre className="pen-lp-pre">{`To: the listing agent
+Subject: Carport / HOA before Saturday
+
+Quick one before the second viewing — can you confirm
+whether the HOA allows the carport to be enclosed? The
+buyers have asked about a garage at all three properties,
+so it will decide whether they bid.`}</pre>
+            </div>
+          </Reveal>
+
+          <Reveal delay={0.18}>
+            <div className="pen-lp-card">
+              <div className="flex items-center justify-between">
+                <div className="pen-label">In your inbox after</div>
+                <span className="pen-lp-tag">Briefing</span>
+              </div>
+              <p className="mt-3 text-[14.5px] leading-[1.6]" style={{ color: 'var(--soft)' }}>
+                One email with the summary, the three things you nearly missed, what is still
+                open, and every action with its owner. Sent to you, not to anyone else.
+              </p>
+              <div className="pen-lp-mailrow">
+                <span className="pen-mono text-[10.5px]" style={{ color: 'var(--faint)' }}>
+                  Briefing &mdash; Ridgewood walk-through
+                </span>
+                <span className="pen-lp-dot" />
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* ------------------------------------------------------------- compounding */
+
+function Compounds() {
+  return (
+    <section className="pen-lp-wrap pt-28 sm:pt-36">
+      <div className="grid gap-12 lg:grid-cols-[1fr_0.92fr] lg:gap-20">
+        <Reveal>
+          <div className="pen-label">Why the tenth is better than the first</div>
+          <h2 className="pen-display mt-4 text-[clamp(28px,4vw,40px)] leading-[1.12] tracking-[-0.015em]">
+            Every recording makes the next one sharper.
+          </h2>
+          <p className="mt-6 max-w-[42ch] text-[17px] leading-[1.62]" style={{ color: 'var(--soft)' }}>
+            One meeting gives you a note. Several give you a picture: what these people keep
+            asking for, what they have quietly ruled out, what you still have not found out.
+            Pen keeps that picture and updates it every time you record.
+          </p>
+          <p className="mt-5 max-w-[42ch] text-[17px] leading-[1.62]" style={{ color: 'var(--soft)' }}>
+            It is also the part no general notetaker can give you. They summarise a meeting.
+            This remembers a relationship.
+          </p>
+        </Reveal>
+
+        <Reveal delay={0.1}>
+          <div className="pen-lp-card">
+            <header className="flex items-baseline justify-between">
+              <h3 className="pen-display text-[20px]">The Hendersons</h3>
+              <span className="pen-mono text-[10px]" style={{ color: 'var(--faint)' }}>3 meetings</span>
+            </header>
+
+            <Facet label="Must have" items={['Covered parking — raised at all three viewings', 'A kitchen that has already been done']} />
+            <Facet label="Ruled out" items={['Anything over their stated ceiling', 'Busy through-roads']} tone="bad" />
+            <Facet label="Never said outright" items={['The kitchen decides it for her; the number decides it for him']} tone="accent" />
+            <Facet label="Still unknown" items={['The actual ceiling. He has referred to it twice without naming it.']} />
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  )
+}
+
+function Facet({ label, items, tone }: { label: string; items: string[]; tone?: 'bad' | 'accent' }) {
+  const color = tone === 'bad' ? 'var(--bad)' : tone === 'accent' ? 'var(--accent-ink)' : 'var(--dim)'
+  return (
+    <div className="mt-5">
+      <div className="pen-mono text-[9.5px] uppercase tracking-[.12em]" style={{ color }}>{label}</div>
+      <ul className="mt-1.5 space-y-1.5">
+        {items.map((t) => <li key={t} className="text-[14.5px] leading-snug">{t}</li>)}
+      </ul>
+    </div>
   )
 }
 

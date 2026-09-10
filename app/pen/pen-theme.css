@@ -660,3 +660,34 @@
 }
 .pen-usage td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .pen-usage tbody tr:hover td { background: var(--panel); }
+
+/* ------------------------------------------- landing: outputs & compounding */
+.pen-lp-card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  padding: 24px 24px 26px;
+  box-shadow: 0 1px 2px rgba(22,21,15,.03), 0 14px 34px -22px rgba(22,21,15,.14);
+}
+
+.pen-lp-todo { list-style: none; margin: 10px 0 0; padding: 0; }
+.pen-lp-todo li { display: flex; gap: 11px; align-items: flex-start; padding: 10px 0; }
+.pen-lp-todo li + li { border-top: 1px solid var(--hair); }
+.pen-lp-check {
+  width: 15px; height: 15px; flex: 0 0 15px; margin-top: 3px;
+  border: 1.5px solid #CFC9BC; border-radius: 4px; background: var(--panel);
+}
+
+.pen-lp-tag {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em; text-transform: uppercase;
+  padding: 3px 9px; border-radius: 999px;
+  background: var(--accent-wash); color: var(--accent-ink); border: 1px solid var(--accent-line);
+}
+.pen-lp-pre {
+  margin: 14px 0 0; padding: 15px 16px; border-radius: 10px;
+  background: var(--sunk); border: 1px solid var(--hair);
+  font-family: var(--mono); font-size: 12px; line-height: 1.72; color: var(--soft);
+  white-space: pre-wrap; overflow-x: auto;
+}
+.pen-lp-mailrow {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 16px; padding-top: 13px; border-top: 1px solid var(--hair);
+}
