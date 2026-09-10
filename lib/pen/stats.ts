@@ -9,6 +9,7 @@
 //                     anything, and did they come back", derived from pen_sessions with no
 //                     new tables.
 import { supabaseAdmin } from '@/lib/supabase'
+import { slugType, displayType } from './store'
 import type { PenNotes, MeetingType } from './store'
 
 export type OpenAction = {
@@ -42,7 +43,8 @@ export type ArchiveStats = {
   actionsOpen: number
   missedSurfaced: number
   peopleMet: number
-  byType: Record<MeetingType | 'unknown', number>
+  /** One row per distinct category, newest-first by last use. Drives the left nav. */
+  categories: { slug: string; label: string; count: number }[]
   openActions: OpenAction[]
   clients: ClientCard[]
   firstAt: string | null
@@ -70,7 +72,7 @@ export async function archiveStats(userEmail: string): Promise<ArchiveStats> {
   if (error) throw new Error(error.message)
   const rows = (data ?? []) as Row[]
 
-  const byType: ArchiveStats['byType'] = { showing: 0, clinical: 0, generic: 0, unknown: 0 }
+  const cats = new Map<string, { slug: string; label: string; count: number }>()
   const people = new Set<string>()
   const openActions: OpenAction[] = []
   let minutes = 0
@@ -83,7 +85,12 @@ export async function archiveStats(userEmail: string): Promise<ArchiveStats> {
     const mins = (r.duration_sec ?? 0) / 60
     minutes += mins
     if (r.status === 'transcribed' || r.status === 'noted') transcribedMinutes += mins
-    byType[r.meeting_type ?? 'unknown'] += 1
+    // Group by slug, display the first label seen for it.
+    const label = displayType(r.meeting_type) || 'Uncategorised'
+    const slug = slugType(label) || 'uncategorised'
+    const cur = cats.get(slug)
+    if (cur) cur.count += 1
+    else cats.set(slug, { slug, label, count: 1 })
 
     const n = r.notes ?? {}
     missedSurfaced += n.missed?.length ?? 0
@@ -144,7 +151,7 @@ export async function archiveStats(userEmail: string): Promise<ArchiveStats> {
     actionsOpen,
     missedSurfaced,
     peopleMet: people.size,
-    byType,
+    categories: Array.from(cats.values()).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label)),
     openActions: openActions.slice(0, 40),
     clients,
     firstAt: stamps[0] ?? null,

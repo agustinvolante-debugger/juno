@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase'
+import type { MeetingType } from '@/lib/pen/categories'
 
 export const BUCKET = 'pen-audio'
 
@@ -7,7 +8,8 @@ export type PenStatus = 'uploaded' | 'transcribing' | 'transcribed' | 'noted' | 
 export type Utterance = { speaker: string; text: string; start: number; end: number }
 export type Transcript = { text?: string; utterances?: Utterance[] }
 
-export type MeetingType = 'showing' | 'clinical' | 'generic'
+export { slugType, COMMON_TYPES, isViewing, displayType } from '@/lib/pen/categories'
+export type { MeetingType } from '@/lib/pen/categories'
 
 export type Person = { name: string; role: string; speaker: string; note: string }
 export type Decision = { decision: string; who: string }

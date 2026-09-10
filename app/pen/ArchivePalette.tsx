@@ -21,10 +21,15 @@ const STARTERS = [
 
 export default function ArchivePalette({
   open,
+  seed,
+  onSeedConsumed,
   onOpenChange,
   onCite,
 }: {
   open: boolean
+  /** A question typed into the page-level search box; asked immediately on open. */
+  seed?: string | null
+  onSeedConsumed?: () => void
   onOpenChange: (v: boolean) => void
   onCite: (sessionId: string) => void
 }) {
@@ -63,6 +68,15 @@ export default function ArchivePalette({
   useEffect(() => {
     if (open) requestAnimationFrame(() => inputRef.current?.focus())
   }, [open])
+
+  // A question arriving from the page search is asked straight away rather than dropped into
+  // the box for a second Enter.
+  useEffect(() => {
+    if (!open || !seed) return
+    onSeedConsumed?.()
+    void ask(seed)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, seed])
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })

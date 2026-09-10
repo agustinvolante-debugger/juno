@@ -8,6 +8,8 @@
 // model to record the ACTION, not the clinical detail behind it. "Chase the cardiology
 // referral for the Tuesday admission" is useful; the diagnosis is not needed in a note
 // stored outside the hospital's systems. Keeps derived PHI to the minimum the job requires.
+import { isViewing } from '@/lib/pen/categories'
+export { isViewing }
 import Anthropic from '@anthropic-ai/sdk'
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
 import type { PenNotes, MeetingType } from './store'
@@ -18,13 +20,6 @@ const MODEL = 'claude-opus-5'
 const NOTES_SCHEMA = {
   type: 'object',
   properties: {
-    meeting_type: {
-      type: 'string',
-      enum: ['showing', 'clinical', 'generic'],
-      description:
-        'showing = someone being shown a property. clinical = healthcare staff discussing patients, ' +
-        'rounds, referrals, scheduling or clinical admin. generic = anything else.',
-    },
     headline: { type: 'string', description: 'A short title for this meeting, under 60 characters.' },
     summary: { type: 'string', description: '3 to 5 sentences. What happened and where it was left.' },
     people: {
@@ -90,7 +85,9 @@ const NOTES_SCHEMA = {
     },
     showing: {
       type: 'object',
-      description: 'Fill ONLY when meeting_type is "showing". Otherwise use empty arrays.',
+      description:
+        'Fill ONLY when told this is a property viewing. Otherwise return empty arrays — do ' +
+        'not invent reactions for a meeting that was not a viewing.',
       properties: {
         reactions: {
           type: 'array',
@@ -139,7 +136,7 @@ const NOTES_SCHEMA = {
     },
   },
   required: [
-    'meeting_type', 'headline', 'summary', 'people', 'decisions',
+    'headline', 'summary', 'people', 'decisions',
     'actions', 'open_questions', 'missed', 'showing',
   ],
   additionalProperties: false,
@@ -164,10 +161,18 @@ rather than naming a condition. Never copy identifiers — dates of birth, recor
 addresses, phone numbers — into the notes. These notes are stored outside the systems the
 original conversation belongs to, so carry the minimum that makes them useful.`
 
-export async function extractNotes(dialogue: string, opts?: { forceType?: MeetingType; priorProfile?: unknown }): Promise<PenNotes> {
-  const forced = opts?.forceType
-    ? `\n\nThe user has told you this is a "${opts.forceType}" meeting. Use that as meeting_type even if you would have guessed otherwise.`
-    : ''
+export async function extractNotes(
+  dialogue: string,
+  opts?: { category?: MeetingType | null; priorProfile?: unknown },
+): Promise<PenNotes> {
+  const cat = (opts?.category ?? '').trim()
+  const forced = cat
+    ? `\n\nThis recording has been categorised as: "${cat}". ` +
+      (isViewing(cat)
+        ? 'It IS a property viewing, so fill the showing block.'
+        : 'It is NOT a property viewing, so leave every field in the showing block empty.')
+    : '\n\nThe category is unknown. Leave the showing block empty unless the transcript is ' +
+      'unmistakably someone being shown a property.'
   const prior = opts?.priorProfile
     ? `\n\nWhat you already know about these people from earlier meetings — use it to sharpen the ` +
       `notes, and flag anything that contradicts it under "missed":\n${JSON.stringify(opts.priorProfile)}`

@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { COMMON_TYPES, slugType, isViewing, displayType } from '@/lib/pen/categories'
 import type { PenSession, MeetingType, ChatTurn, PenNotes, NoteBlock } from '@/lib/pen/store'
 import NoteEditor, { blocksFrom } from './NoteEditor'
 import TranscriptEditor from './TranscriptEditor'
@@ -24,12 +25,6 @@ declare global {
 // Audio, plus the video containers a phone produces — the audio track is extracted in the
 // browser and the picture discarded, so a walkthrough filmed on a phone still works.
 const MEDIA_RE = /\.(wav|wave|mp3|m4a|aac|ogg|opus|webm|amr|3gp|wma|flac|aif|aiff|mp4|m4v|mov|qt)$/i
-
-const TYPE_LABEL: Record<MeetingType, string> = {
-  showing: 'Property showing',
-  clinical: 'Clinical / admin',
-  generic: 'General meeting',
-}
 
 type Pending = { file: File; picked: boolean }
 type Progress = { name: string; phase: string; pct: number }
@@ -57,6 +52,10 @@ export default function PenApp({
   const [tab, setTab] = useState<'note' | 'transcript'>('note')
   const [chatOpen, setChatOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const [paletteSeed, setPaletteSeed] = useState<string | null>(null)
+  const [catFilter, setCatFilter] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [catAsk, setCatAsk] = useState<Record<string, string[]>>({})
   const fileInput = useRef<HTMLInputElement>(null)
 
   const active = useMemo(() => sessions.find((s) => s.id === activeId) ?? null, [sessions, activeId])
@@ -104,7 +103,20 @@ export default function PenApp({
         setErr((await r.json()).error ?? 'could not write the notes')
         return
       }
-      patchLocal(((await r.json()) as { session: PenSession }).session)
+      const j = (await r.json()) as {
+        session: PenSession
+        category?: { value: string | null; confidence: number | null; alternatives: string[] }
+      }
+      patchLocal(j.session)
+
+      // The categoriser abstains rather than guesses. When it does, say so once and offer its
+      // runners-up — a silently blank category is a filter that quietly loses recordings.
+      setCatAsk((m) => {
+        const next = { ...m }
+        if (!type && !j.session.meeting_type) next[id] = j.category?.alternatives ?? []
+        else delete next[id]
+        return next
+      })
     },
     [patchLocal],
   )
@@ -235,20 +247,20 @@ export default function PenApp({
 
   /* ------------------------------------------------------------------- view */
 
-  const grouped = useMemo(() => groupByDay(sessions), [sessions])
+  const visible = useMemo(
+    () => (catFilter ? sessions.filter((x) => (slugType(displayType(x.meeting_type)) || 'uncategorised') === catFilter) : sessions),
+    [sessions, catFilter],
+  )
+  const grouped = useMemo(() => groupByDay(visible), [visible])
 
   return (
     <main className="mx-auto max-w-[1460px] px-5 pb-24 pt-8 sm:px-8">
-      <header className="flex flex-wrap items-end justify-between gap-4 border-b pb-5" style={{ borderColor: 'var(--line)' }}>
-        <div>
-          <div className="pen-label mb-1.5">Recorder → notes</div>
-          <h1 className="pen-display text-[34px] leading-none">Pen</h1>
+      <header className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-baseline gap-3">
+          <h1 className="pen-display text-[28px] leading-none">Pen</h1>
+          <span className="pen-label">Recorder &rarr; notes</span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button className="pen-cmdk" onClick={() => setPaletteOpen(true)} title="Ask across every recording">
-            <span>Ask your archive</span>
-            <kbd className="pen-kbd">&#8984;K</kbd>
-          </button>
           {supportsPicker && (
             <button className="pen-btn pen-btn-primary" onClick={connectPen}>
               Connect pen
@@ -262,6 +274,19 @@ export default function PenApp({
           <SignOut email={email} />
         </div>
       </header>
+
+      {/* Search gets its own row, centred. In the header it was a 180px chip competing with
+          three buttons; asking the archive a question is the thing this app is for. */}
+      <ArchiveSearch
+        value={query}
+        onChange={setQuery}
+        suggestions={searchSuggestions(stats)}
+        onAsk={(q) => {
+          setPaletteSeed(q)
+          setPaletteOpen(true)
+          setQuery('')
+        }}
+      />
 
       {loadError && (
         <Banner tone="bad">
@@ -287,9 +312,51 @@ export default function PenApp({
         />
       )}
 
-      <div className="mt-7 grid gap-8 lg:grid-cols-[286px_minmax(0,1fr)]">
-        {/* ---------------------------------------------------------- rail */}
-        <aside>
+      <div className="pen-shell">
+        {/* ------------------------------------------------------ categories */}
+        <nav className="pen-cats">
+          <div className="pen-cats-list">
+            <button
+              className="pen-cat"
+              data-active={activeId === null}
+              onClick={() => { setActiveId(null); setCatFilter(null) }}
+            >
+              <span className="pen-cat-label">Your archive</span>
+              {!!stats?.actionsOpen && <span className="pen-cat-n">{stats.actionsOpen} open</span>}
+            </button>
+            <button
+              className="pen-cat"
+              data-active={catFilter === null && activeId !== null}
+              onClick={() => setCatFilter(null)}
+            >
+              <span className="pen-cat-label">All recordings</span>
+              <span className="pen-cat-n">{sessions.length}</span>
+            </button>
+          </div>
+
+          {!!stats?.categories.length && (
+            <>
+              <div className="pen-cats-head pen-label">Categories</div>
+              <div className="pen-cats-list">
+                {stats.categories.map((c) => (
+                  <button
+                    key={c.slug}
+                    className="pen-cat"
+                    data-active={catFilter === c.slug}
+                    onClick={() => setCatFilter(catFilter === c.slug ? null : c.slug)}
+                    title={c.label}
+                  >
+                    <span className="pen-cat-label">{c.label}</span>
+                    <span className="pen-cat-n">{c.count}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </nav>
+
+        {/* --------------------------------- recordings (rail; ordered right in CSS) */}
+        <aside className="pen-rail">
           <div
             className="pen-drop px-5 py-6 text-center"
             data-over={dragOver}
@@ -300,23 +367,16 @@ export default function PenApp({
             <div className="pen-label">Drop recordings</div>
           </div>
 
-          {sessions.length === 0 ? (
+          {visible.length === 0 ? (
             <p className="mt-6 text-[14px] leading-relaxed" style={{ color: 'var(--dim)' }}>
-              Nothing yet. Plug the pen into USB, press <strong style={{ color: 'var(--soft)' }}>Connect pen</strong>,
-              and choose the drive that appears.
+              {catFilter ? (
+                <>Nothing in this category. <button className="underline" onClick={() => setCatFilter(null)}>Show everything</button>.</>
+              ) : (
+                <>Nothing yet. Plug the pen into USB, press <strong style={{ color: 'var(--soft)' }}>Connect pen</strong>, and choose the drive that appears.</>
+              )}
             </p>
           ) : (
             <div className="mt-6">
-              <button
-                className="pen-ov-back"
-                data-active={activeId === null}
-                onClick={() => setActiveId(null)}
-              >
-                Your archive
-                {stats && stats.actionsOpen > 0 && (
-                  <span className="pen-ov-badge">{stats.actionsOpen}</span>
-                )}
-              </button>
               {grouped.map(([day, rows]) => (
                 <div key={day} className="mb-5">
                   <div className="pen-label mb-1.5">{day}</div>
@@ -331,7 +391,7 @@ export default function PenApp({
                       </div>
                       <div className="pen-mono mt-1.5 text-[10.5px]" style={{ color: 'var(--faint)' }}>
                         {fmtDur(s.duration_sec ?? 0)}
-                        {s.meeting_type ? ` · ${TYPE_LABEL[s.meeting_type].toLowerCase()}` : ''}
+                        {s.meeting_type ? ` · ${displayType(s.meeting_type).toLowerCase()}` : ''}
                       </div>
                     </div>
                   ))}
@@ -341,8 +401,7 @@ export default function PenApp({
           )}
         </aside>
 
-        {/* -------------------------------------------------------- detail */}
-        <section className="min-w-0">
+        <section className="pen-shell-main min-w-0">
           {!active ? (
             stats ? (
               <Overview
@@ -364,6 +423,7 @@ export default function PenApp({
                 session={active} tab={tab} setTab={setTab}
                 chatOpen={chatOpen} onToggleChat={() => setChatOpen((v) => !v)}
                 onNotes={(type) => makeNotes(active.id, type)}
+                askCategory={catAsk[active.id]}
                 onDelete={() => removeSession(active.id)}
                 onPatch={async (patch) => {
                   const r = await fetch(`/api/pen/sessions/${active.id}`, {
@@ -388,6 +448,8 @@ export default function PenApp({
 
       <ArchivePalette
         open={paletteOpen}
+        seed={paletteSeed}
+        onSeedConsumed={() => setPaletteSeed(null)}
         onOpenChange={setPaletteOpen}
         onCite={(sessionId) => {
           setActiveId(sessionId)
@@ -398,6 +460,250 @@ export default function PenApp({
         }}
       />
     </main>
+  )
+}
+
+/* =============================================================== search */
+
+/**
+ * Suggestions are derived from what is actually in the archive, not a fixed list. A prompt
+ * that names your own client or your own overdue action is worth clicking; "What did we
+ * discuss?" is not.
+ */
+function searchSuggestions(stats: ArchiveStats | null): string[] {
+  const out: string[] = []
+  if (stats?.actionsOpen) {
+    out.push(`What have I still not done? (${stats.actionsOpen} open)`)
+  }
+  const client = stats?.clients[0]?.name
+  if (client) out.push(`What does ${client} actually want?`)
+  const top = stats?.categories.find((c) => c.count > 1)
+  if (top) out.push(`Sum up my ${top.label.toLowerCase()} recordings`)
+  const person = stats?.peopleMet
+  if (out.length < 3 && person) out.push('Who owes me something?')
+  for (const f of ['What did I miss this week?', 'What was left unresolved?', 'What did I commit to?']) {
+    if (out.length >= 3) break
+    if (!out.includes(f)) out.push(f)
+  }
+  return out.slice(0, 3)
+}
+
+function ArchiveSearch({
+  value,
+  onChange,
+  suggestions,
+  onAsk,
+}: {
+  value: string
+  onChange: (v: string) => void
+  suggestions: string[]
+  onAsk: (q: string) => void
+}) {
+  return (
+    <div className="pen-search-wrap">
+      <form
+        className="pen-search"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (value.trim()) onAsk(value.trim())
+        }}
+      >
+        <svg className="pen-search-icon" viewBox="0 0 20 20" aria-hidden>
+          <circle cx="8.6" cy="8.6" r="5.4" fill="none" stroke="currentColor" strokeWidth="1.8" />
+          <path d="M12.7 12.7 L17 17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Ask anything across every recording…"
+          aria-label="Ask your archive"
+          className="pen-search-input"
+        />
+        <kbd className="pen-kbd pen-search-kbd">&#8984;K</kbd>
+      </form>
+
+      <div className="pen-search-sugg">
+        {suggestions.map((q) => (
+          <button key={q} className="pen-sugg" onClick={() => onAsk(q)}>
+            {q}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ========================================================== title editing */
+
+/**
+ * Click the title to rename it. Optimistic: the new name is on screen before the request
+ * goes, and it reverts with a message if the write fails — a rename that silently didn't
+ * save is worse than one that visibly didn't.
+ */
+function TitleEdit({
+  title,
+  onSave,
+}: {
+  title: string
+  onSave: (next: string) => Promise<void>
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(title)
+  const [failed, setFailed] = useState(false)
+  // The new name is on screen before the request goes. `optimistic` holds it until the prop
+  // catches up, and is thrown away if the write fails.
+  const [optimistic, setOptimistic] = useState<string | null>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  // A textarea, not an input: titles here run two lines at this size, and a single-line box
+  // scrolls the text out of sight exactly when you are trying to read what you're renaming.
+  function autoSize(el: HTMLTextAreaElement | null) {
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }
+
+  useEffect(() => {
+    setDraft(title)
+    setOptimistic((o) => (o === null || o === title ? null : o))
+  }, [title])
+  useEffect(() => {
+    if (editing)
+      requestAnimationFrame(() => {
+        autoSize(inputRef.current)
+        inputRef.current?.select()
+      })
+  }, [editing])
+
+  async function commit() {
+    const next = draft.trim()
+    setEditing(false)
+    if (!next || next === title) {
+      setDraft(title)
+      return
+    }
+    setFailed(false)
+    setOptimistic(next)
+    try {
+      await onSave(next)
+    } catch {
+      setOptimistic(null)
+      setDraft(title)
+      setFailed(true)
+      window.setTimeout(() => setFailed(false), 4000)
+    }
+  }
+
+  const shown = optimistic ?? title
+
+  if (!editing) {
+    return (
+      <div>
+        <button className="pen-title" onClick={() => setEditing(true)} title="Click to rename">
+          <span>{shown}</span>
+          <svg className="pen-title-pen" viewBox="0 0 16 16" aria-hidden>
+            <path d="M11.2 2.6l2.2 2.2-7.5 7.5-2.9.7.7-2.9 7.5-7.5z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+          </svg>
+        </button>
+        {failed && (
+          <div className="pen-mono mt-1 text-[10.5px]" style={{ color: 'var(--bad)' }}>
+            Rename didn&rsquo;t save — the old name is back.
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <textarea
+      ref={inputRef}
+      className="pen-title-input"
+      rows={1}
+      value={draft}
+      maxLength={140}
+      onChange={(e) => {
+        setDraft(e.target.value)
+        autoSize(e.target)
+      }}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          void commit()
+        }
+        if (e.key === 'Escape') {
+          setDraft(title)
+          setEditing(false)
+        }
+      }}
+    />
+  )
+}
+
+/* ======================================================= category picker */
+
+/**
+ * Replaces the old three-option select. The categoriser proposes; this is the override, and
+ * it accepts anything the user types rather than forcing a bad fit from a closed list.
+ */
+function CategoryPicker({
+  value,
+  onPick,
+  busy,
+}: {
+  value: string | null
+  onPick: (v: string) => void
+  busy?: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const [custom, setCustom] = useState('')
+
+  return (
+    <div className="pen-catpick">
+      <button className="pen-catpick-btn" data-empty={!value} disabled={busy} onClick={() => setOpen((v) => !v)}>
+        {busy ? 'Working…' : value || 'Set a category'}
+        <span className="pen-catpick-chev" aria-hidden>{open ? '\u2039' : '\u203A'}</span>
+      </button>
+
+      {open && (
+        <div className="pen-catpick-menu">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              const v = custom.trim()
+              if (!v) return
+              setCustom('')
+              setOpen(false)
+              onPick(v)
+            }}
+          >
+            <input
+              className="pen-catpick-input"
+              value={custom}
+              onChange={(e) => setCustom(e.target.value)}
+              placeholder="Type your own…"
+              maxLength={40}
+              autoFocus
+            />
+          </form>
+          <div className="pen-catpick-list">
+            {COMMON_TYPES.map((t) => (
+              <button
+                key={t}
+                className="pen-catpick-opt"
+                data-active={value === t}
+                onClick={() => {
+                  setOpen(false)
+                  onPick(t)
+                }}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -484,7 +790,7 @@ function ImportTray({
 /* =================================================================== detail */
 
 function Detail({
-  session, tab, setTab, chatOpen, onToggleChat, onNotes, onDelete, onPatch,
+  session, tab, setTab, chatOpen, onToggleChat, onNotes, onDelete, onPatch, askCategory,
 }: {
   session: PenSession
   tab: 'note' | 'transcript'
@@ -492,6 +798,8 @@ function Detail({
   chatOpen: boolean
   onToggleChat: () => void
   onNotes: (type?: MeetingType) => void
+  /** Present when the categoriser wasn't confident enough to commit; its runners-up. */
+  askCategory?: string[]
   onDelete: () => void
   onPatch: (p: Partial<Pick<PenSession, 'user_notes' | 'title' | 'client_name' | 'action_done' | 'note_blocks' | 'transcript_edits' | 'briefing_sent_at'>>) => Promise<void>
 }) {
@@ -563,10 +871,11 @@ function Detail({
     <div className="min-w-0">
       {/* --------------------------------------------------------- header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <h2 className="pen-display text-[29px] leading-[1.12]">
-            {session.title || n.headline || session.source_name || 'Untitled'}
-          </h2>
+        <div className="min-w-0 flex-1 basis-[280px]">
+          <TitleEdit
+            title={session.title || n.headline || session.source_name || 'Untitled'}
+            onSave={(next) => onPatch({ title: next })}
+          />
           <div className="pen-mono mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px]" style={{ color: 'var(--dim)' }}>
             <span>{session.recorded_at ? new Date(session.recorded_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—'}</span>
             <span style={{ color: 'var(--faint)' }}>·</span>
@@ -574,7 +883,7 @@ function Detail({
             {session.client_name && (<><span style={{ color: 'var(--faint)' }}>·</span><span>{session.client_name}</span></>)}
           </div>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="pen-pill" data-s={session.status}>{session.status}</span>
           {/* Keyed off the transcript, not the status. A session can land in `error` with a
               perfectly good transcript (a failed save, a transient API error), and gating the
@@ -627,18 +936,32 @@ function Detail({
             </button>
           ))}
         </div>
-        {n.meeting_type && (
-          <label className="flex items-center gap-2 pb-1.5">
-            <span className="pen-label">Type</span>
-            <select value={session.meeting_type ?? n.meeting_type} disabled={busy}
-                    onChange={(e) => regenerate(e.target.value as MeetingType)}
-                    className="pen-mono rounded-md border px-2 py-1 text-[11px] outline-none"
-                    style={{ borderColor: 'var(--line)', background: 'var(--panel)', color: 'var(--soft)' }}>
-              {(Object.keys(TYPE_LABEL) as MeetingType[]).map((t) => (
-                <option key={t} value={t}>{TYPE_LABEL[t]}</option>
-              ))}
-            </select>
-          </label>
+        {utts.length > 0 && (
+          <div className="flex items-center gap-2 pb-1.5">
+            <span className="pen-label">Category</span>
+            <CategoryPicker
+              value={displayType(session.meeting_type) || null}
+              busy={busy}
+              onPick={(v) => regenerate(v)}
+            />
+            {askCategory && !session.meeting_type && (
+              <span className="pen-mono text-[10.5px]" style={{ color: 'var(--warn)' }}>
+                not sure what this was
+                {askCategory.length > 0 && (
+                  <>
+                    {' — '}
+                    {askCategory.slice(0, 2).map((a, i) => (
+                      <span key={a}>
+                        {i > 0 && ' or '}
+                        <button className="underline" onClick={() => regenerate(a)}>{a}</button>
+                      </span>
+                    ))}
+                    ?
+                  </>
+                )}
+              </span>
+            )}
+          </div>
         )}
       </div>
 
@@ -786,7 +1109,7 @@ function Detail({
             </div>
           )}
 
-          {n.meeting_type === 'showing' && n.showing && <ShowingBlock showing={n.showing} />}
+          {isViewing(session.meeting_type ?? n.meeting_type) && n.showing && <ShowingBlock showing={n.showing} />}
         </div>
       )}
 
@@ -868,9 +1191,10 @@ function ChatPanel({ session, onChat, onClose }: { session: PenSession; onChat: 
 
   useEffect(() => {
     // Kept client-side so the panel needs no extra round trip to render its starters.
-    const t = session.meeting_type ?? session.notes?.meeting_type
-    if (t === 'showing') setSuggestions(['What did they actually like?', 'What were the objections?', 'Did they say they’d come back?'])
-    else if (t === 'clinical') setSuggestions(['What needs doing today?', 'Who owes me something?', 'What did I agree to follow up on?'])
+    // Categories are free-form now, so match on what the words mean rather than on an enum.
+    const t = session.meeting_type ?? session.notes?.meeting_type ?? ''
+    if (isViewing(t)) setSuggestions(['What did they actually like?', 'What were the objections?', 'Did they say they’d come back?'])
+    else if (/clinic|patient|ward|admin|round/i.test(t)) setSuggestions(['What needs doing today?', 'Who owes me something?', 'What did I agree to follow up on?'])
     else setSuggestions(['What did I commit to?', 'What did I miss?', 'Was anything left unresolved?'])
   }, [session.id, session.meeting_type, session.notes?.meeting_type])
 
