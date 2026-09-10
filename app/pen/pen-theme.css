@@ -580,3 +580,83 @@
 @media (prefers-reduced-motion: reduce) {
   .pen-lp-rise { animation: none; }
 }
+
+/* =========================================================== archive overview
+   Stat tiles and a to-do list, not charts: the data's job is magnitude and
+   accountability. Figures use the mono — a serif figure reads as decoration. */
+.pen-ov-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+  padding-bottom: 20px; border-bottom: 1px solid var(--line);
+}
+
+.pen-ov-tiles {
+  display: grid; gap: 1px; margin-top: 22px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  background: var(--line); border: 1px solid var(--line); border-radius: 11px; overflow: hidden;
+}
+@media (min-width: 760px) { .pen-ov-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.pen-ov-tile { background: var(--panel); padding: 17px 18px 18px; }
+
+/* Meter: fill and track are steps of the SAME ramp, so state reads across the whole bar. */
+.pen-ov-meter-wrap { margin-top: 24px; }
+.pen-ov-meter {
+  margin-top: 8px; height: 7px; border-radius: 999px; overflow: hidden;
+  background: var(--accent-line);
+}
+.pen-ov-meter > span { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+
+.pen-ov-sec { margin-top: 38px; padding-top: 26px; border-top: 1px solid var(--line); }
+.pen-ov-list { list-style: none; margin: 0; padding: 0; }
+
+.pen-ov-act {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  width: 100%; text-align: left; padding: 12px 12px 12px 14px; border-radius: 9px;
+  border: 1px solid transparent; transition: background .14s ease, border-color .14s ease;
+}
+.pen-ov-act:hover { background: var(--panel); border-color: var(--line); }
+.pen-ov-list li + li { border-top: 1px solid var(--hair); }
+.pen-ov-act-main { display: flex; flex-direction: column; min-width: 0; }
+.pen-ov-act-go {
+  font-family: var(--mono); font-size: 13px; color: var(--faint); flex: 0 0 auto;
+  opacity: 0; transform: translateX(-3px);
+  transition: opacity .14s ease, transform .14s ease;
+}
+.pen-ov-act:hover .pen-ov-act-go { opacity: 1; transform: none; }
+
+.pen-ov-client {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 11px;
+  padding: 18px 20px 20px;
+}
+
+/* Rail entry back to the overview, with the count that makes it worth clicking */
+.pen-ov-back {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; text-align: left; margin-bottom: 16px;
+  font-family: var(--mono); font-size: 11px; letter-spacing: .04em;
+  padding: 9px 11px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--soft);
+  transition: background .14s ease, border-color .14s ease, color .14s ease;
+}
+.pen-ov-back:hover { background: var(--sunk); border-color: #DAD5C9; color: var(--ink); }
+.pen-ov-back[data-active='true'] {
+  background: var(--accent-wash); border-color: var(--accent-line); color: var(--accent-ink);
+}
+.pen-ov-badge {
+  display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: 999px; background: var(--warn); color: #fff;
+  font-family: var(--mono); font-size: 9.5px;
+}
+
+/* Owner usage table. Columns of numbers, so tabular figures here specifically. */
+.pen-usage { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.pen-usage th {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .11em; text-transform: uppercase;
+  color: var(--dim); font-weight: 400; text-align: left;
+  padding: 0 12px 8px 0; border-bottom: 1px solid var(--ink); white-space: nowrap;
+}
+.pen-usage th.n, .pen-usage td.n { text-align: right; }
+.pen-usage td {
+  padding: 10px 12px 10px 0; border-bottom: 1px solid var(--hair); white-space: nowrap;
+}
+.pen-usage td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.pen-usage tbody tr:hover td { background: var(--panel); }

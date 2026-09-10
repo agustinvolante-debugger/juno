@@ -5,6 +5,8 @@ import type { PenSession, MeetingType, ChatTurn, PenNotes, NoteBlock } from '@/l
 import NoteEditor, { blocksFrom } from './NoteEditor'
 import TranscriptEditor from './TranscriptEditor'
 import ArchivePalette from './ArchivePalette'
+import Overview from './Overview'
+import type { ArchiveStats } from '@/lib/pen/stats'
 import DeliverableSheet, { DeliverableActions, type SheetRequest } from './DeliverableSheet'
 import SendBriefing from './SendBriefing'
 import { prepareAudio, fmtMB, fmtDur, SOFT_SIZE_LIMIT } from '@/lib/pen/encode'
@@ -31,7 +33,15 @@ const TYPE_LABEL: Record<MeetingType, string> = {
 type Pending = { file: File; picked: boolean }
 type Progress = { name: string; phase: string; pct: number }
 
-export default function PenApp({ initial, loadError }: { initial: PenSession[]; loadError: string | null }) {
+export default function PenApp({
+  initial,
+  stats,
+  loadError,
+}: {
+  initial: PenSession[]
+  stats: ArchiveStats | null
+  loadError: string | null
+}) {
   const [sessions, setSessions] = useState<PenSession[]>(initial)
   const [activeId, setActiveId] = useState<string | null>(initial[0]?.id ?? null)
   const [pending, setPending] = useState<Pending[]>([])
@@ -293,6 +303,16 @@ export default function PenApp({ initial, loadError }: { initial: PenSession[]; 
             </p>
           ) : (
             <div className="mt-6">
+              <button
+                className="pen-ov-back"
+                data-active={activeId === null}
+                onClick={() => setActiveId(null)}
+              >
+                Your archive
+                {stats && stats.actionsOpen > 0 && (
+                  <span className="pen-ov-badge">{stats.actionsOpen}</span>
+                )}
+              </button>
               {grouped.map(([day, rows]) => (
                 <div key={day} className="mb-5">
                   <div className="pen-label mb-1.5">{day}</div>
@@ -320,9 +340,20 @@ export default function PenApp({ initial, loadError }: { initial: PenSession[]; 
         {/* -------------------------------------------------------- detail */}
         <section className="min-w-0">
           {!active ? (
-            <div className="pen-panel px-8 py-16 text-center">
-              <p className="text-[15px]" style={{ color: 'var(--dim)' }}>Choose a recording on the left.</p>
-            </div>
+            stats ? (
+              <Overview
+                stats={stats}
+                onOpen={(id) => {
+                  setActiveId(id)
+                  setTab('note')
+                  window.scrollTo({ top: 0, behavior: 'smooth' })
+                }}
+              />
+            ) : (
+              <div className="pen-panel px-8 py-16 text-center">
+                <p className="text-[15px]" style={{ color: 'var(--dim)' }}>Choose a recording on the left.</p>
+              </div>
+            )
           ) : (
             <div className={chatOpen ? 'grid gap-7 xl:grid-cols-[minmax(0,1fr)_352px]' : ''}>
               <Detail
