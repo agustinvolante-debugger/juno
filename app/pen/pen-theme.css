@@ -691,3 +691,33 @@
   display: flex; align-items: center; justify-content: space-between;
   margin-top: 16px; padding-top: 13px; border-top: 1px solid var(--hair);
 }
+
+/* ---------------------------------------------- landing: eyebrows and tabs
+   Section eyebrows do wayfinding, so they are larger than the app's micro-labels and
+   carry a short rule. At 10px they were decoration; at this size they tell you where
+   you are on the page. */
+.pen-lp-eyebrow {
+  display: inline-flex; align-items: center; gap: 10px;
+  font-family: var(--mono); font-size: 12.5px; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--accent);
+}
+.pen-lp-eyebrow::before {
+  content: ''; width: 22px; height: 1px; background: currentColor; opacity: .55; flex: 0 0 22px;
+}
+.pen-lp-eyebrow-dark { color: var(--accent-line); }
+@media (max-width: 480px) {
+  .pen-lp-eyebrow { font-size: 11px; letter-spacing: .13em; }
+  .pen-lp-eyebrow::before { width: 14px; flex-basis: 14px; }
+}
+
+.pen-lp-tabs { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px; }
+.pen-lp-tab {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .03em; white-space: nowrap;
+  padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--dim);
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+.pen-lp-tab:hover { color: var(--ink); border-color: #DAD5C9; }
+.pen-lp-tab[data-active='true'] {
+  background: var(--ink); border-color: var(--ink); color: var(--paper);
+}

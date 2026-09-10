@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { motion, useReducedMotion } from 'motion/react'
+import { useState } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import type { CSSProperties } from 'react'
 
 // The signed-out face of pen.tryjunoapp.com.
@@ -68,7 +69,7 @@ function Hero() {
       <div className="grid items-center gap-14 lg:grid-cols-[1.05fr_1fr] lg:gap-20">
         <div>
           <Reveal>
-            <div className="pen-label">A recorder pen &rarr; a written meeting</div>
+            <div className="pen-lp-eyebrow">A recorder pen &rarr; a written meeting</div>
           </Reveal>
           <Reveal delay={0.05}>
             <h1 className="pen-display mt-5 text-[clamp(40px,7vw,68px)] leading-[1.03] tracking-[-0.02em]">
@@ -106,54 +107,135 @@ function Hero() {
 
 /**
  * The hero visual is the product's actual signature: your shorthand in black, the machine's
- * expansion in grey beneath it. Showing the artifact beats describing it.
+ * expansion in grey beneath it. Three worked examples rather than one, because the two real
+ * users are a realtor and a hospital PA — a page that only shows property viewings tells
+ * everyone else this isn't for them.
  */
+
+type Example = {
+  id: string
+  tab: string
+  meta: string
+  lines: { black: string; grey: string }[]
+}
+
+const EXAMPLES: Example[] = [
+  {
+    id: 'property',
+    tab: 'Property viewing',
+    meta: 'Ridgewood walk-through \u00B7 38 min',
+    lines: [
+      {
+        black: 'kitchen big win, price still an issue',
+        grey:
+          'Sarah went straight to the island and called it lovely. Tom\u2019s first question was ' +
+          'the asking price, which he said was above what they had agreed between themselves.',
+      },
+      {
+        black: 'no garage again',
+        grey:
+          'Third property in a row without one. Sarah raised it in passing rather than as an ' +
+          'objection, which makes it a filter rather than a preference.',
+      },
+    ],
+  },
+  {
+    id: 'client',
+    tab: 'Client meeting',
+    meta: 'Quarterly review, Head of Treasury \u00B7 52 min',
+    lines: [
+      {
+        black: 'covenant headroom is the real blocker',
+        grey:
+          'She said the board will not approve new facilities until the leverage test has two ' +
+          'quarters of clearance. Her CFO put that at March at the earliest, and she did not ' +
+          'contradict him.',
+      },
+      {
+        black: 'wants the pricing grid before legal',
+        grey:
+          'Asked twice for indicative pricing ahead of documentation, which is the reverse of ' +
+          'last year\u2019s process. She wants something to take to the board, not a signed deal.',
+      },
+    ],
+  },
+  {
+    id: 'coffee',
+    tab: 'Coffee',
+    meta: 'Coffee with Dani \u00B7 24 min',
+    lines: [
+      {
+        black: 'she offered to intro me to her old cto',
+        grey:
+          'Said she would send it this week and asked you to remind her if it went quiet. She ' +
+          'has worked with him twice and rates him on hiring rather than architecture.',
+      },
+      {
+        black: 'they killed the marketplace thing',
+        grey:
+          'Two years in, shut it down over supply, not demand. She mentioned it once and moved ' +
+          'on, but it is the reason she left.',
+      },
+    ],
+  },
+]
+
 function NoteSpecimen() {
   const still = useReducedMotion()
+  const [active, setActive] = useState(0)
+  const ex = EXAMPLES[active]
+
   return (
-    <figure className="pen-lp-specimen">
-      <div className="pen-lp-specimen-bar">
-        <span className="pen-mono text-[10px]" style={{ color: 'var(--faint)' }}>
-          Ridgewood walk-through &middot; 38 min
-        </span>
-        <span className="pen-lp-dot" />
+    <div>
+      <div className="pen-lp-tabs" role="tablist" aria-label="Example recordings">
+        {EXAMPLES.map((e, i) => (
+          <button
+            key={e.id}
+            role="tab"
+            aria-selected={i === active}
+            data-active={i === active}
+            className="pen-lp-tab"
+            onClick={() => setActive(i)}
+          >
+            {e.tab}
+          </button>
+        ))}
       </div>
 
-      <div className="px-6 py-6 sm:px-7">
-        <div className="pen-label mb-3">Your notes</div>
-
-        <p className="pen-lp-black">kitchen big win, price still an issue</p>
-
-        <motion.p
-          className="pen-lp-grey"
-          initial={still ? false : { opacity: 0, y: 6 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ ...SPRING, delay: 0.5 }}
-        >
-          Sarah went straight to the island and called it lovely. Tom&rsquo;s first question was the
-          asking price, which he said was above what they had agreed between themselves.
-        </motion.p>
-
-        <p className="pen-lp-black" style={{ marginTop: 22 }}>no garage again</p>
-
-        <motion.p
-          className="pen-lp-grey"
-          initial={still ? false : { opacity: 0, y: 6 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ ...SPRING, delay: 0.75 }}
-        >
-          Third property in a row without one. Sarah raised it in passing rather than as an
-          objection, which makes it a filter rather than a preference.
-        </motion.p>
-
-        <div className="pen-lp-legend">
-          <span><i className="pen-lp-swatch-ink" /> you wrote this</span>
-          <span><i className="pen-lp-swatch-grey" /> written from the recording</span>
+      <figure className="pen-lp-specimen">
+        <div className="pen-lp-specimen-bar">
+          <span className="pen-mono text-[10px]" style={{ color: 'var(--faint)' }}>{ex.meta}</span>
+          <span className="pen-lp-dot" />
         </div>
-      </div>
-    </figure>
+
+        <div className="px-6 py-6 sm:px-7">
+          <div className="pen-label mb-3">Your notes</div>
+
+          {/* Keyed motion.div, no AnimatePresence. `mode="wait"` played the old example out
+              before the new one in, which made a tab feel sluggish AND left the previous
+              lines on screen beside the new header while it did. Remounting on key gives an
+              instant swap with a fade-in, which is what a tab should do. */}
+          <motion.div
+            key={ex.id}
+            initial={still ? false : { opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.19, ease: [0.2, 0.7, 0.3, 1] }}
+          >
+            {ex.lines.map((l, i) => (
+              <div key={l.black} style={{ marginTop: i === 0 ? 0 : 22 }}>
+                <p className="pen-lp-black">{l.black}</p>
+                <p className="pen-lp-grey">{l.grey}</p>
+              </div>
+            ))}
+          </motion.div>
+
+          <div className="pen-lp-legend">
+            <span><i className="pen-lp-swatch-ink" /> you wrote this</span>
+            <span><i className="pen-lp-swatch-grey" /> written from the recording</span>
+          </div>
+        </div>
+      </figure>
+    </div>
   )
 }
 
@@ -181,7 +263,7 @@ function HowItWorks() {
   return (
     <section id="how" className="pen-lp-wrap pt-28 sm:pt-36">
       <Reveal>
-        <div className="pen-label">How it works</div>
+        <div className="pen-lp-eyebrow">How it works</div>
         <h2 className="pen-display mt-4 max-w-[24ch] text-[clamp(28px,4vw,40px)] leading-[1.12] tracking-[-0.015em]">
           Three steps, and two of them are plugging in a cable.
         </h2>
@@ -209,7 +291,7 @@ function TheCatch() {
     <section className="pen-lp-wrap pt-28 sm:pt-36">
       <div className="grid gap-12 lg:grid-cols-[0.85fr_1fr] lg:gap-20">
         <Reveal>
-          <div className="pen-label">The part that earns its keep</div>
+          <div className="pen-lp-eyebrow">The part that earns its keep</div>
           <h2 className="pen-display mt-4 text-[clamp(28px,4vw,40px)] leading-[1.12] tracking-[-0.015em]">
             A summary tells you what you already remember.
           </h2>
@@ -250,7 +332,7 @@ function WhatYouGet() {
   return (
     <section className="pen-lp-wrap pt-28 sm:pt-36">
       <Reveal>
-        <div className="pen-label">Out of one meeting</div>
+        <div className="pen-lp-eyebrow">Out of one meeting</div>
         <h2 className="pen-display mt-4 max-w-[26ch] text-[clamp(28px,4vw,40px)] leading-[1.12] tracking-[-0.015em]">
           A summary you can send, a list you can work from, an email already written.
         </h2>
@@ -337,7 +419,7 @@ function Compounds() {
     <section className="pen-lp-wrap pt-28 sm:pt-36">
       <div className="grid gap-12 lg:grid-cols-[1fr_0.92fr] lg:gap-20">
         <Reveal>
-          <div className="pen-label">Why the tenth is better than the first</div>
+          <div className="pen-lp-eyebrow">Why the tenth is better than the first</div>
           <h2 className="pen-display mt-4 text-[clamp(28px,4vw,40px)] leading-[1.12] tracking-[-0.015em]">
             Every recording makes the next one sharper.
           </h2>
@@ -406,7 +488,7 @@ function Pricing() {
     <section id="pricing" className="pen-lp-dark mt-28 sm:mt-36">
       <div className="pen-lp-wrap py-24 sm:py-28">
         <Reveal>
-          <div className="pen-label" style={{ color: 'rgba(251,250,246,.42)' }}>Pricing</div>
+          <div className="pen-lp-eyebrow pen-lp-eyebrow-dark">Pricing</div>
           <h2 className="pen-display mt-4 max-w-[22ch] text-[clamp(30px,4.4vw,44px)] leading-[1.1] tracking-[-0.015em]" style={{ color: 'var(--paper)' }}>
             Start free. Pay when it becomes the way you work.
           </h2>
@@ -452,11 +534,9 @@ function Pricing() {
               <Link href={SIGN_IN} className="pen-lp-btn pen-lp-btn-accent mt-auto w-full justify-center">
                 Start free
               </Link>
-              {/* Honest: there is no billing yet, so nobody is charged and nobody is promised a
-                  date. Saying so beats a checkout button that does not take money. */}
-              <p className="pen-mono mt-3 text-center text-[10px]" style={{ color: 'rgba(251,250,246,.58)' }}>
-                Billing isn&rsquo;t live yet. Pro is open to everyone meanwhile.
-              </p>
+              {/* The "Free while in beta" ribbon carries this now, so the line under the
+                  button was saying it twice. The CTA still signs you in rather than opening a
+                  checkout, so nothing here claims to take payment. */}
             </article>
           </Reveal>
         </div>
