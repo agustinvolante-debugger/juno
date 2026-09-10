@@ -64,6 +64,20 @@ export default function PenApp({ initial, loadError }: { initial: PenSession[]; 
     setSessions((prev) => prev.map((x) => (x.id === s.id ? s : x)))
   }, [])
 
+  const removeSession = useCallback(async (id: string) => {
+    const r = await fetch(`/api/pen/sessions/${id}`, { method: 'DELETE' })
+    if (!r.ok) {
+      setErr((await r.json().catch(() => ({}))).error ?? 'could not delete that recording')
+      return
+    }
+    setSessions((prev) => {
+      const next = prev.filter((x) => x.id !== id)
+      // Move to the neighbouring recording rather than dumping the user on an empty pane.
+      setActiveId((cur) => (cur === id ? (next[0]?.id ?? null) : cur))
+      return next
+    })
+  }, [])
+
   const makeNotes = useCallback(
     async (id: string, type?: MeetingType) => {
       const r = await fetch('/api/pen/notes', {
@@ -306,6 +320,7 @@ export default function PenApp({ initial, loadError }: { initial: PenSession[]; 
                 session={active} tab={tab} setTab={setTab}
                 chatOpen={chatOpen} onToggleChat={() => setChatOpen((v) => !v)}
                 onNotes={(type) => makeNotes(active.id, type)}
+                onDelete={() => removeSession(active.id)}
                 onPatch={async (patch) => {
                   const r = await fetch(`/api/pen/sessions/${active.id}`, {
                     method: 'PATCH',
@@ -425,7 +440,7 @@ function ImportTray({
 /* =================================================================== detail */
 
 function Detail({
-  session, tab, setTab, chatOpen, onToggleChat, onNotes, onPatch,
+  session, tab, setTab, chatOpen, onToggleChat, onNotes, onDelete, onPatch,
 }: {
   session: PenSession
   tab: 'note' | 'transcript'
@@ -433,10 +448,13 @@ function Detail({
   chatOpen: boolean
   onToggleChat: () => void
   onNotes: (type?: MeetingType) => void
+  onDelete: () => void
   onPatch: (p: Partial<Pick<PenSession, 'user_notes' | 'title' | 'client_name' | 'action_done' | 'note_blocks' | 'transcript_edits' | 'briefing_sent_at'>>) => Promise<void>
 }) {
   const [busy, setBusy] = useState(false)
   const [sheet, setSheet] = useState<SheetRequest | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  useEffect(() => setConfirmDelete(false), [session.id])
 
   // Note blocks. Keyed off session.id ONLY — including the server copy in the deps would
   // reset the editor mid-typing every time an autosave round-tripped.
@@ -533,6 +551,19 @@ function Detail({
             disabled={!n.summary && !n.actions?.length && !n.missed?.length && !n.open_questions?.length}
             onSent={(iso) => void onPatch({ briefing_sent_at: iso })}
           />
+          {/* Two-step, inline. Deletion takes the audio with it and cannot be undone, so it
+              asks — but a modal for one row would be heavier than the action deserves. */}
+          {confirmDelete ? (
+            <span className="pen-confirm">
+              <span>Delete for good?</span>
+              <button className="pen-confirm-no" onClick={() => setConfirmDelete(false)}>Keep</button>
+              <button className="pen-confirm-yes" onClick={onDelete}>Delete</button>
+            </span>
+          ) : (
+            <button className="pen-btn pen-btn-quiet" onClick={() => setConfirmDelete(true)} title="Delete this recording and its audio">
+              Delete
+            </button>
+          )}
         </div>
       </div>
 

@@ -156,14 +156,17 @@ export async function createSession(row: {
     .single()
   // Plugging the pen in twice hits the dedupe index. That's success, not failure.
   if (error) {
+    // 23505 = unique violation, i.e. the pen was plugged in twice. That is success, not failure.
+    // Matched on recorded_at (the file's own mtime, stable) rather than `bytes`, which is the
+    // size AFTER a re-encode that is not bit-identical between runs.
     if (error.code === '23505') {
-      const existing = await supabaseAdmin
+      let q = supabaseAdmin
         .from('pen_sessions')
         .select('*')
         .eq('user_email', row.user_email)
         .eq('source_name', row.source_name)
-        .eq('bytes', row.bytes)
-        .maybeSingle()
+      q = row.recorded_at ? q.eq('recorded_at', row.recorded_at) : q.is('recorded_at', null)
+      const existing = await q.maybeSingle()
       if (existing.data) return { session: existing.data as PenSession, duplicate: true }
     }
     throw new Error(error.message)
@@ -177,6 +180,27 @@ export async function updateSession(id: string, patch: Record<string, unknown>) 
     .update({ ...patch, updated_at: new Date().toISOString() })
     .eq('id', id)
   if (error) throw new Error(error.message)
+}
+
+/** Removes the row AND the audio object. Leaving a recording of a private conversation in
+ *  the bucket after the user deleted it would be the wrong default. */
+export async function deleteSession(userEmail: string, id: string): Promise<boolean> {
+  const session = await getSession(userEmail, id)
+  if (!session) return false
+
+  if (session.storage_path) {
+    // Best-effort: a missing object should not block the row from going.
+    const { error } = await supabaseAdmin.storage.from(BUCKET).remove([session.storage_path])
+    if (error) console.warn(`pen: could not remove ${session.storage_path}: ${error.message}`)
+  }
+
+  const { error } = await supabaseAdmin
+    .from('pen_sessions')
+    .delete()
+    .eq('user_email', userEmail)
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+  return true
 }
 
 export async function upsertClientProfile(userEmail: string, name: string, profile: unknown, bumpShowing = true) {

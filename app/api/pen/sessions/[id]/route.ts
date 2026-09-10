@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
-import { getSession, updateSession } from '@/lib/pen/store'
+import { getSession, updateSession, deleteSession } from '@/lib/pen/store'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,4 +58,17 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
   await updateSession(id, patch)
   return NextResponse.json({ ok: true })
+}
+
+export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const email = await authedEmail()
+  if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  const { id } = await ctx.params
+  try {
+    const ok = await deleteSession(email, id)
+    if (!ok) return NextResponse.json({ error: 'not found' }, { status: 404 })
+    return NextResponse.json({ ok: true })
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
+  }
 }

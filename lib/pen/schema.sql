@@ -82,3 +82,15 @@ create index if not exists pen_clients_user on pen_clients(user_email);
 -- Archive-wide chat (feature 2). One running conversation per user; citations reference
 -- pen_sessions.id so the UI can link an answer back to the recordings it came from.
 -- create table if not exists public.pen_archive_chat (user_email text primary key, messages jsonb default '[]'::jsonb, updated_at timestamptz default now());
+
+-- ---------------------------------------------------------------------------
+-- 2026-09-10 — fix import dedupe. Run each line separately in the SQL editor.
+--
+-- The old key was (user_email, source_name, bytes), but `bytes` is the size AFTER the
+-- browser downsamples to mono 16 kHz, and that re-encode is not bit-identical between runs.
+-- So re-importing the same file produced a slightly different size and slipped past the
+-- index. `recorded_at` comes from the file's own mtime on the pen and never changes, which
+-- makes it the correct natural key.
+-- ---------------------------------------------------------------------------
+-- drop index if exists pen_sessions_dedupe;
+-- create unique index if not exists pen_sessions_dedupe on pen_sessions(user_email, source_name, recorded_at);
