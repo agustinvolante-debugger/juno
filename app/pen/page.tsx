@@ -26,5 +26,5 @@ export default async function PenPage() {
     loadError = (e as Error).message
   }
 
-  return <PenApp initial={sessions} stats={stats} loadError={loadError} />
+  return <PenApp initial={sessions} stats={stats} loadError={loadError} email={email} />
 }

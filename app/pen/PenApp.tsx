@@ -6,6 +6,7 @@ import NoteEditor, { blocksFrom } from './NoteEditor'
 import TranscriptEditor from './TranscriptEditor'
 import ArchivePalette from './ArchivePalette'
 import Overview from './Overview'
+import SignOut from './SignOut'
 import type { ArchiveStats } from '@/lib/pen/stats'
 import DeliverableSheet, { DeliverableActions, type SheetRequest } from './DeliverableSheet'
 import SendBriefing from './SendBriefing'
@@ -37,10 +38,12 @@ export default function PenApp({
   initial,
   stats,
   loadError,
+  email,
 }: {
   initial: PenSession[]
   stats: ArchiveStats | null
   loadError: string | null
+  email: string
 }) {
   const [sessions, setSessions] = useState<PenSession[]>(initial)
   const [activeId, setActiveId] = useState<string | null>(initial[0]?.id ?? null)
@@ -256,6 +259,7 @@ export default function PenApp({
           </button>
           <input ref={fileInput} type="file" multiple accept="audio/*,video/mp4,video/quicktime,video/x-m4v,.mov,.mp4,.m4v" className="hidden"
                  onChange={(e) => e.target.files && addFiles(e.target.files)} />
+          <SignOut email={email} />
         </div>
       </header>
 
