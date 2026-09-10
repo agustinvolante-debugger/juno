@@ -721,3 +721,27 @@
 .pen-lp-tab[data-active='true'] {
   background: var(--ink); border-color: var(--ink); color: var(--paper);
 }
+
+/* --------------------------------------------- landing: multi-use framing */
+.pen-lp-strong { color: var(--ink); }
+
+.pen-lp-tabcap {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--faint); margin: 0 0 9px;
+}
+
+/* Sits inside the specimen, after the example, so the point is stated rather than only
+   demonstrated by the tabs. */
+.pen-lp-anyconv {
+  margin: 24px 0 0; padding: 13px 15px; border-radius: 9px;
+  background: var(--sunk); border: 1px solid var(--hair);
+  font-size: 13.5px; line-height: 1.58; color: var(--soft);
+}
+
+/* Example swap. CSS so the hero's content is never invisible waiting for a script. */
+@keyframes penLpSwap {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+.pen-lp-swap { animation: penLpSwap .19s cubic-bezier(.2,.7,.3,1) both; }
+@media (prefers-reduced-motion: reduce) { .pen-lp-swap { animation: none; } }

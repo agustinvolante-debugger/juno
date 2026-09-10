@@ -69,7 +69,7 @@ function Hero() {
       <div className="grid items-center gap-14 lg:grid-cols-[1.05fr_1fr] lg:gap-20">
         <div>
           <Reveal>
-            <div className="pen-lp-eyebrow">A recorder pen &rarr; a written meeting</div>
+            <div className="pen-lp-eyebrow">Any conversation, written up</div>
           </Reveal>
           <Reveal delay={0.05}>
             <h1 className="pen-display mt-5 text-[clamp(40px,7vw,68px)] leading-[1.03] tracking-[-0.02em]">
@@ -82,6 +82,7 @@ function Hero() {
             <p className="mt-7 max-w-[46ch] text-[18px] leading-[1.6]" style={{ color: 'var(--soft)' }}>
               Record with a pen in your shirt pocket. Plug it into your laptop. Pen writes up
               what was said, who said it, what you agreed to, and the thing you nearly missed.
+              <span className="pen-lp-strong"> Any conversation, not just the ones with an agenda.</span>
             </p>
           </Reveal>
           <Reveal delay={0.15}>
@@ -187,6 +188,9 @@ function NoteSpecimen() {
 
   return (
     <div>
+      <p className="pen-lp-tabcap">
+        Same pen, same pocket &mdash; three very different conversations:
+      </p>
       <div className="pen-lp-tabs" role="tablist" aria-label="Example recordings">
         {EXAMPLES.map((e, i) => (
           <button
@@ -211,23 +215,23 @@ function NoteSpecimen() {
         <div className="px-6 py-6 sm:px-7">
           <div className="pen-label mb-3">Your notes</div>
 
-          {/* Keyed motion.div, no AnimatePresence. `mode="wait"` played the old example out
-              before the new one in, which made a tab feel sluggish AND left the previous
-              lines on screen beside the new header while it did. Remounting on key gives an
-              instant swap with a fade-in, which is what a tab should do. */}
-          <motion.div
-            key={ex.id}
-            initial={still ? false : { opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.19, ease: [0.2, 0.7, 0.3, 1] }}
-          >
+          {/* Keyed plain div, not motion. Remounting on key restarts a CSS animation, so the
+              swap is animated without the hero's own content ever starting at opacity 0 and
+              waiting for a script. AnimatePresence mode="wait" was also leaving the previous
+              example on screen beside the new header, so it is gone for both reasons. */}
+          <div key={ex.id} className="pen-lp-swap">
             {ex.lines.map((l, i) => (
               <div key={l.black} style={{ marginTop: i === 0 ? 0 : 22 }}>
                 <p className="pen-lp-black">{l.black}</p>
                 <p className="pen-lp-grey">{l.grey}</p>
               </div>
             ))}
-          </motion.div>
+          </div>
+
+          <p className="pen-lp-anyconv">
+            A viewing, a quarterly review, a coffee with someone whose favour you&rsquo;ll want in
+            six months. It does not know which of those matters most. Neither do you, at the time.
+          </p>
 
           <div className="pen-lp-legend">
             <span><i className="pen-lp-swatch-ink" /> you wrote this</span>
