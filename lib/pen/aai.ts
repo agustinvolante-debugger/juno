@@ -45,7 +45,13 @@ export async function submit(opts: {
       ...(opts.webhookUrl ? { webhook_url: opts.webhookUrl } : {}),
       punctuate: true,
       format_text: true,
-      language_code: 'en_us',
+      // Detect the language instead of assuming English. He is bilingual and both users are in
+      // Florida, so a Spanish recording is plausible and would previously have transcribed as
+      // garbled English rather than failing. Mutually exclusive with language_code.
+      // Caveat: AssemblyAI wants 15-90s of speech for a reliable read, so a very short clip can
+      // be misdetected. If the pairing with speaker_labels is ever rejected, submit() throws
+      // with the API's own message and it surfaces in the UI rather than failing quietly.
+      language_detection: true,
     }),
   })
   if (!res.ok) throw new Error(`assemblyai submit ${res.status}: ${(await res.text()).slice(0, 300)}`)

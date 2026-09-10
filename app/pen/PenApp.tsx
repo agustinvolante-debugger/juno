@@ -7,7 +7,7 @@ import TranscriptEditor from './TranscriptEditor'
 import ArchivePalette from './ArchivePalette'
 import DeliverableSheet, { DeliverableActions, type SheetRequest } from './DeliverableSheet'
 import SendBriefing from './SendBriefing'
-import { prepareAudio, fmtMB, fmtDur } from '@/lib/pen/encode'
+import { prepareAudio, fmtMB, fmtDur, SOFT_SIZE_LIMIT } from '@/lib/pen/encode'
 
 // The File System Access API isn't in the default TS lib.
 type FsHandle = { kind: 'file' | 'directory'; name: string; getFile?: () => Promise<File> }
@@ -18,7 +18,9 @@ declare global {
   }
 }
 
-const AUDIO_RE = /\.(wav|mp3|m4a|aac|ogg|opus|webm|amr|3gp|wma|flac)$/i
+// Audio, plus the video containers a phone produces — the audio track is extracted in the
+// browser and the picture discarded, so a walkthrough filmed on a phone still works.
+const MEDIA_RE = /\.(wav|wave|mp3|m4a|aac|ogg|opus|webm|amr|3gp|wma|flac|aif|aiff|mp4|m4v|mov|qt)$/i
 
 const TYPE_LABEL: Record<MeetingType, string> = {
   showing: 'Property showing',
@@ -122,10 +124,10 @@ export default function PenApp({ initial, loadError }: { initial: PenSession[]; 
       const dir = await window.showDirectoryPicker!({ id: 'pen-recorder', mode: 'read' })
       const found: File[] = []
       for await (const entry of dir.values()) {
-        if (entry.kind === 'file' && AUDIO_RE.test(entry.name) && entry.getFile) found.push(await entry.getFile())
+        if (entry.kind === 'file' && MEDIA_RE.test(entry.name) && entry.getFile) found.push(await entry.getFile())
       }
       if (!found.length) {
-        setErr(`No audio in “${dir.name}”. Recorders often keep files in a subfolder — try picking that one.`)
+        setErr(`No recordings in “${dir.name}”. Recorders often keep files in a subfolder — try picking that one.`)
         return
       }
       found.sort((a, b) => b.lastModified - a.lastModified)
@@ -137,8 +139,8 @@ export default function PenApp({ initial, loadError }: { initial: PenSession[]; 
   }
 
   function addFiles(files: FileList | File[]) {
-    const list = Array.from(files).filter((f) => AUDIO_RE.test(f.name))
-    if (!list.length) return setErr('Those files don’t look like audio.')
+    const list = Array.from(files).filter((f) => MEDIA_RE.test(f.name))
+    if (!list.length) return setErr('Those files aren’t audio or video that can be read here.')
     setPenName(null)
     setPending((prev) => [...prev, ...list.map((f) => ({ file: f, picked: true }))])
   }
@@ -166,6 +168,13 @@ export default function PenApp({ initial, loadError }: { initial: PenSession[]; 
         })
         if (!urlRes.ok) throw new Error((await urlRes.json()).error ?? 'could not get an upload URL')
         const { path, signedUrl } = (await urlRes.json()) as { path: string; signedUrl: string }
+
+        if (prep.blob.size > SOFT_SIZE_LIMIT) {
+          throw new Error(
+            `${fmtMB(prep.blob.size)} is over the storage limit on this plan. Split the recording, ` +
+              `or lower the segment length on the pen so it saves shorter files.`,
+          )
+        }
 
         await putWithProgress(signedUrl, prep.blob, prep.mime, (pct) =>
           setProgress({ name: file.name, phase: `Uploading · ${prep.note}`, pct: 15 + pct * 0.6 }),
@@ -235,7 +244,7 @@ export default function PenApp({ initial, loadError }: { initial: PenSession[]; 
           <button className="pen-btn" onClick={() => fileInput.current?.click()}>
             Add files
           </button>
-          <input ref={fileInput} type="file" multiple accept="audio/*" className="hidden"
+          <input ref={fileInput} type="file" multiple accept="audio/*,video/mp4,video/quicktime,video/x-m4v,.mov,.mp4,.m4v" className="hidden"
                  onChange={(e) => e.target.files && addFiles(e.target.files)} />
         </div>
       </header>

@@ -14,8 +14,21 @@
 
 const TARGET_RATE = 16000
 
+// Already-compressed audio: uploaded untouched, since re-encoding only loses information.
 const PASSTHROUGH = /^audio\/(mpeg|mp3|mp4|aac|m4a|ogg|opus|webm|amr|3gpp)/i
 const PASSTHROUGH_EXT = /\.(mp3|m4a|aac|ogg|opus|webm|amr|3gp|wma)$/i
+
+// Uncompressed or lossless audio, and VIDEO. All of these get decoded to mono 16 kHz.
+// FLAC and AIFF are here rather than in passthrough on purpose: they are lossless, so an hour
+// runs to hundreds of megabytes and would not fit the bucket.
+// Video matters more — a 40-minute phone video is gigabytes, so uploading it whole is not an
+// option. We decode the audio track out of the container and send only that.
+const RE_ENCODE_EXT = /\.(wav|wave|flac|aif|aiff|mp4|m4v|mov|qt)$/i
+const VIDEO_EXT = /\.(mp4|m4v|mov|qt)$/i
+
+/** Warn above this. The bucket has no explicit cap so it inherits the project global,
+ *  which is 50 MB on Supabase's free plan. Kept as a soft warning, not a hard block. */
+export const SOFT_SIZE_LIMIT = 45 * 1024 * 1024
 
 export type Prepared = {
   blob: Blob
@@ -26,7 +39,13 @@ export type Prepared = {
 }
 
 function isCompressed(file: File) {
+  // Extension wins: an .mp4 has MIME audio/mp4 or video/mp4 but must still be decoded.
+  if (RE_ENCODE_EXT.test(file.name)) return false
   return PASSTHROUGH.test(file.type) || PASSTHROUGH_EXT.test(file.name)
+}
+
+export function isVideo(file: File) {
+  return VIDEO_EXT.test(file.name) || /^video\//i.test(file.type)
 }
 
 /** 16-bit PCM WAV from an AudioBuffer's first channel. */
@@ -78,7 +97,9 @@ export async function prepareAudio(file: File): Promise<Prepared> {
     }
   }
 
-  // Uncompressed (WAV/PCM off the pen): decode → mono → 16 kHz → 16-bit WAV.
+  // Uncompressed audio, lossless audio, or video: decode → mono → 16 kHz → 16-bit WAV.
+  // For video this is an audio EXTRACTION — decodeAudioData reads the audio track out of the
+  // container and the picture is discarded, which is the only way a phone video fits.
   const raw = await file.arrayBuffer()
   const AC: typeof AudioContext =
     window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
@@ -86,6 +107,14 @@ export async function prepareAudio(file: File): Promise<Prepared> {
   let decoded: AudioBuffer
   try {
     decoded = await decodeCtx.decodeAudioData(raw.slice(0))
+  } catch {
+    // Codecs vary by browser, and .mov in particular is not universally decodable. Say what
+    // to do about it rather than surfacing a DOMException.
+    throw new Error(
+      isVideo(file)
+        ? `${file.name}: this browser can't read the audio out of that video. Try Chrome, or export the audio as .m4a first.`
+        : `${file.name}: that file couldn't be decoded — it may be corrupt or use an unsupported codec.`,
+    )
   } finally {
     void decodeCtx.close()
   }
@@ -104,7 +133,9 @@ export async function prepareAudio(file: File): Promise<Prepared> {
     mime: 'audio/wav',
     durationSec: decoded.duration,
     originalBytes,
-    note: `${fmtMB(originalBytes)} → ${fmtMB(blob.size)} (mono 16 kHz)`,
+    note: isVideo(file)
+      ? `audio extracted, ${fmtMB(originalBytes)} → ${fmtMB(blob.size)}`
+      : `${fmtMB(originalBytes)} → ${fmtMB(blob.size)} (mono 16 kHz)`,
   }
 }
 
