@@ -766,3 +766,28 @@
 }
 .pen-lp-swap { animation: penLpSwap .19s cubic-bezier(.2,.7,.3,1) both; }
 @media (prefers-reduced-motion: reduce) { .pen-lp-swap { animation: none; } }
+
+/* ------------------------------------------------------------- hero headline
+   Spans the whole container rather than a 62ch measure — the right third of the page
+   was empty. `text-wrap: balance` so if it does wrap it breaks into even lines
+   instead of leaving one word stranded. */
+.pen-lp-h1 {
+  font-family: var(--display); font-weight: 400;
+  font-size: clamp(33px, 5.1vw, 62px);
+  line-height: 1.04;
+  letter-spacing: -0.025em;
+  margin: 22px 0 0;
+  text-wrap: balance;
+}
+
+/* Section headings in FULL-WIDTH sections use the whole container. The two-column sections
+   keep their narrow measure — a heading beside a card should not run under it. */
+.pen-lp-h2 {
+  font-family: var(--display); font-weight: 400;
+  font-size: clamp(29px, 4.6vw, 54px);
+  line-height: 1.07;
+  letter-spacing: -0.022em;
+  margin: 20px 0 0;
+  text-wrap: balance;
+}
+.pen-lp-h2-tight { max-width: 30ch; }

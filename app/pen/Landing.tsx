@@ -66,26 +66,32 @@ function Nav() {
 
 function Hero() {
   return (
-    <section className="pen-lp-wrap pt-14 sm:pt-20">
-      <div className="max-w-[62ch]">
-        <Reveal>
-          <div className="pen-lp-eyebrow">Any conversation, written up</div>
-        </Reveal>
-        <Reveal delay={0.05}>
-          <h1 className="pen-display mt-5 text-[clamp(40px,7vw,68px)] leading-[1.03] tracking-[-0.02em]">
-            You were in the room.
-            <br />
-            <span className="pen-lp-em">Now you have the notes.</span>
-          </h1>
-        </Reveal>
+    <section className="pen-lp-wrap pt-20 pb-4 sm:pt-28">
+      <Reveal>
+        <div className="pen-lp-eyebrow">Any conversation, written up</div>
+      </Reveal>
+
+      {/* Full container width, no measure cap: the headline is the page's biggest asset and
+          the right third was sitting empty. Sized to hold both sentences on one line on a
+          desktop, with text-wrap:balance so the fallback is two even lines rather than one
+          long and one orphaned word. */}
+      <Reveal delay={0.05}>
+        <h1 className="pen-lp-h1">
+          Focus on the conversation.{' '}
+          <span className="pen-lp-em">We&rsquo;ll capture the details.</span>
+        </h1>
+      </Reveal>
+
+      <div className="mt-12 grid gap-10 sm:mt-14 lg:grid-cols-[1fr_auto] lg:items-end lg:gap-16">
         <Reveal delay={0.1}>
-          <p className="mt-7 max-w-[52ch] text-[18.5px] leading-[1.6]" style={{ color: 'var(--soft)' }}>
+          <p className="max-w-[58ch] text-[19px] leading-[1.58]" style={{ color: 'var(--soft)' }}>
             Record with a pen in your shirt pocket. Plug it into your laptop. Pen writes up what
             was said, who said it, what you agreed to, and the thing you nearly missed.
           </p>
         </Reveal>
+
         <Reveal delay={0.15}>
-          <div className="mt-9 flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Link href={SIGN_IN} className="pen-lp-btn pen-lp-btn-primary">Start free</Link>
             <a href="#how" className="pen-lp-btn">See how it works</a>
           </div>
@@ -190,11 +196,11 @@ function MultiUse() {
     <section className="pen-lp-wrap pt-24 sm:pt-32">
       <Reveal>
         <div className="pen-lp-eyebrow">Same pen, same pocket</div>
-        <h2 className="pen-display mt-5 max-w-[34ch] text-[clamp(30px,4.8vw,50px)] leading-[1.08] tracking-[-0.02em]">
+        <h2 className="pen-lp-h2">
           A viewing, a quarterly review, a coffee with someone whose favour you&rsquo;ll want in
           six months.
         </h2>
-        <p className="mt-6 max-w-[52ch] text-[19px] leading-[1.55]" style={{ color: 'var(--soft)' }}>
+        <p className="mt-7 max-w-[62ch] text-[20px] leading-[1.55]" style={{ color: 'var(--soft)' }}>
           It doesn&rsquo;t know which of those matters most.
           <span className="pen-lp-strong"> Neither do you, at the time.</span>
         </p>
@@ -567,7 +573,7 @@ function Pricing() {
       <div className="pen-lp-wrap py-24 sm:py-28">
         <Reveal>
           <div className="pen-lp-eyebrow pen-lp-eyebrow-dark">Pricing</div>
-          <h2 className="pen-display mt-4 max-w-[22ch] text-[clamp(30px,4.4vw,44px)] leading-[1.1] tracking-[-0.015em]" style={{ color: 'var(--paper)' }}>
+          <h2 className="pen-lp-h2 pen-lp-h2-tight" style={{ color: 'var(--paper)' }}>
             Start free. Pay when it becomes the way you work.
           </h2>
         </Reveal>
