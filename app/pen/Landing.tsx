@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import type { CSSProperties } from 'react'
 
@@ -35,6 +35,7 @@ export default function Landing() {
     <div className="pen-lp">
       <Nav />
       <Hero />
+      <MultiUse />
       <HowItWorks />
       <TheCatch />
       <WhatYouGet />
@@ -65,57 +66,54 @@ function Nav() {
 
 function Hero() {
   return (
-    <section className="pen-lp-wrap pt-16 sm:pt-24">
-      <div className="grid items-center gap-14 lg:grid-cols-[1.05fr_1fr] lg:gap-20">
-        <div>
-          <Reveal>
-            <div className="pen-lp-eyebrow">Any conversation, written up</div>
-          </Reveal>
-          <Reveal delay={0.05}>
-            <h1 className="pen-display mt-5 text-[clamp(40px,7vw,68px)] leading-[1.03] tracking-[-0.02em]">
-              You were in the room.
-              <br />
-              <span className="pen-lp-em">Now you have the notes.</span>
-            </h1>
-          </Reveal>
-          <Reveal delay={0.1}>
-            <p className="mt-7 max-w-[46ch] text-[18px] leading-[1.6]" style={{ color: 'var(--soft)' }}>
-              Record with a pen in your shirt pocket. Plug it into your laptop. Pen writes up
-              what was said, who said it, what you agreed to, and the thing you nearly missed.
-              <span className="pen-lp-strong"> Any conversation, not just the ones with an agenda.</span>
-            </p>
-          </Reveal>
-          <Reveal delay={0.15}>
-            <div className="mt-9 flex flex-wrap items-center gap-3">
-              <Link href={SIGN_IN} className="pen-lp-btn pen-lp-btn-primary">
-                Start free
-              </Link>
-              <a href="#how" className="pen-lp-btn">See how it works</a>
-            </div>
-            <p className="pen-mono mt-4 text-[11px]" style={{ color: 'var(--faint)' }}>
-              {`${FREE_MINUTES} minutes free \u00B7 no card \u00B7 works with any USB recorder`}
-            </p>
-          </Reveal>
-        </div>
-
-        <Reveal delay={0.2}>
-          <NoteSpecimen />
+    <section className="pen-lp-wrap pt-14 sm:pt-20">
+      <div className="max-w-[62ch]">
+        <Reveal>
+          <div className="pen-lp-eyebrow">Any conversation, written up</div>
+        </Reveal>
+        <Reveal delay={0.05}>
+          <h1 className="pen-display mt-5 text-[clamp(40px,7vw,68px)] leading-[1.03] tracking-[-0.02em]">
+            You were in the room.
+            <br />
+            <span className="pen-lp-em">Now you have the notes.</span>
+          </h1>
+        </Reveal>
+        <Reveal delay={0.1}>
+          <p className="mt-7 max-w-[52ch] text-[18.5px] leading-[1.6]" style={{ color: 'var(--soft)' }}>
+            Record with a pen in your shirt pocket. Plug it into your laptop. Pen writes up what
+            was said, who said it, what you agreed to, and the thing you nearly missed.
+          </p>
+        </Reveal>
+        <Reveal delay={0.15}>
+          <div className="mt-9 flex flex-wrap items-center gap-3">
+            <Link href={SIGN_IN} className="pen-lp-btn pen-lp-btn-primary">Start free</Link>
+            <a href="#how" className="pen-lp-btn">See how it works</a>
+          </div>
+          <p className="pen-mono mt-4 text-[11px]" style={{ color: 'var(--faint)' }}>
+            {`${FREE_MINUTES} minutes free \u00B7 no card \u00B7 works with any USB recorder`}
+          </p>
         </Reveal>
       </div>
     </section>
   )
 }
 
+/* -------------------------------------------------- the multi-use section */
+
 /**
- * The hero visual is the product's actual signature: your shorthand in black, the machine's
- * expansion in grey beneath it. Three worked examples rather than one, because the two real
- * users are a realtor and a hospital PA — a page that only shows property viewings tells
- * everyone else this isn't for them.
+ * The multi-use argument, given the room it needs. This used to be a grey footnote at the
+ * bottom of a half-width card and was the single most-missed thing on the page: it is the
+ * reason this is not a work tool, so it is now the section title.
+ *
+ * The card is full width because a note is prose — at half width the lines were too short to
+ * read as a document, which is the whole impression it exists to create.
  */
 
 type Example = {
   id: string
   tab: string
+  /** Narrow-screen label. Three full labels do not fit 390px and "Coffee" got clipped. */
+  short: string
   meta: string
   lines: { black: string; grey: string }[]
 }
@@ -124,6 +122,7 @@ const EXAMPLES: Example[] = [
   {
     id: 'property',
     tab: 'Property viewing',
+    short: 'Viewing',
     meta: 'Ridgewood walk-through \u00B7 38 min',
     lines: [
       {
@@ -143,6 +142,7 @@ const EXAMPLES: Example[] = [
   {
     id: 'client',
     tab: 'Client meeting',
+    short: 'Client',
     meta: 'Quarterly review, Head of Treasury \u00B7 52 min',
     lines: [
       {
@@ -163,6 +163,7 @@ const EXAMPLES: Example[] = [
   {
     id: 'coffee',
     tab: 'Coffee',
+    short: 'Coffee',
     meta: 'Coffee with Dani \u00B7 24 min',
     lines: [
       {
@@ -181,64 +182,137 @@ const EXAMPLES: Example[] = [
   },
 ]
 
-function NoteSpecimen() {
-  const still = useReducedMotion()
+function MultiUse() {
   const [active, setActive] = useState(0)
   const ex = EXAMPLES[active]
 
   return (
-    <div>
-      <p className="pen-lp-tabcap">
-        Same pen, same pocket &mdash; three very different conversations:
-      </p>
-      <div className="pen-lp-tabs" role="tablist" aria-label="Example recordings">
-        {EXAMPLES.map((e, i) => (
-          <button
-            key={e.id}
-            role="tab"
-            aria-selected={i === active}
-            data-active={i === active}
-            className="pen-lp-tab"
-            onClick={() => setActive(i)}
-          >
-            {e.tab}
-          </button>
-        ))}
-      </div>
+    <section className="pen-lp-wrap pt-24 sm:pt-32">
+      <Reveal>
+        <div className="pen-lp-eyebrow">Same pen, same pocket</div>
+        <h2 className="pen-display mt-5 max-w-[34ch] text-[clamp(30px,4.8vw,50px)] leading-[1.08] tracking-[-0.02em]">
+          A viewing, a quarterly review, a coffee with someone whose favour you&rsquo;ll want in
+          six months.
+        </h2>
+        <p className="mt-6 max-w-[52ch] text-[19px] leading-[1.55]" style={{ color: 'var(--soft)' }}>
+          It doesn&rsquo;t know which of those matters most.
+          <span className="pen-lp-strong"> Neither do you, at the time.</span>
+        </p>
+      </Reveal>
 
-      <figure className="pen-lp-specimen">
-        <div className="pen-lp-specimen-bar">
-          <span className="pen-mono text-[10px]" style={{ color: 'var(--faint)' }}>{ex.meta}</span>
-          <span className="pen-lp-dot" />
-        </div>
+      <Reveal delay={0.08}>
+        <Segmented
+          items={EXAMPLES.map((e) => ({ long: e.tab, short: e.short }))}
+          active={active}
+          onChange={setActive}
+        />
+      </Reveal>
 
-        <div className="px-6 py-6 sm:px-7">
-          <div className="pen-label mb-3">Your notes</div>
-
-          {/* Keyed plain div, not motion. Remounting on key restarts a CSS animation, so the
-              swap is animated without the hero's own content ever starting at opacity 0 and
-              waiting for a script. AnimatePresence mode="wait" was also leaving the previous
-              example on screen beside the new header, so it is gone for both reasons. */}
-          <div key={ex.id} className="pen-lp-swap">
-            {ex.lines.map((l, i) => (
-              <div key={l.black} style={{ marginTop: i === 0 ? 0 : 22 }}>
-                <p className="pen-lp-black">{l.black}</p>
-                <p className="pen-lp-grey">{l.grey}</p>
-              </div>
-            ))}
+      <Reveal delay={0.14}>
+        <figure className="pen-lp-specimen">
+          <div className="pen-lp-specimen-bar">
+            <span className="pen-mono text-[11px]" style={{ color: 'var(--faint)' }}>{ex.meta}</span>
+            <span className="pen-lp-dot" />
           </div>
 
-          <p className="pen-lp-anyconv">
-            A viewing, a quarterly review, a coffee with someone whose favour you&rsquo;ll want in
-            six months. It does not know which of those matters most. Neither do you, at the time.
-          </p>
+          <div className="pen-lp-specimen-body">
+            <div className="pen-label mb-4">Your notes</div>
 
-          <div className="pen-lp-legend">
-            <span><i className="pen-lp-swatch-ink" /> you wrote this</span>
-            <span><i className="pen-lp-swatch-grey" /> written from the recording</span>
+            {/* Keyed plain div: remounting restarts a CSS animation, so this content is never
+                invisible waiting for a script. */}
+            <div key={ex.id} className="pen-lp-swap">
+              {ex.lines.map((l, i) => (
+                <div key={l.black} style={{ marginTop: i === 0 ? 0 : 26 }}>
+                  <p className="pen-lp-black">{l.black}</p>
+                  <p className="pen-lp-grey">{l.grey}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="pen-lp-legend">
+              <span><i className="pen-lp-swatch-ink" /> you wrote this</span>
+              <span><i className="pen-lp-swatch-grey" /> written from the recording</span>
+            </div>
           </div>
-        </div>
-      </figure>
+        </figure>
+      </Reveal>
+    </section>
+  )
+}
+
+/**
+ * Segmented control, iOS-style: an inset track with a single elevated pill whose position and
+ * width are measured from the active segment and animated.
+ *
+ * The obvious implementation is motion's `layoutId` on a conditionally-rendered pill, and it
+ * does not animate here — measured it jumping straight to the target on the first frame
+ * (178px to 521px in 16ms). One pill whose x and width are animated is deterministic, works
+ * without shared-layout semantics, and is what the real control does. Labels are plain text
+ * above it, so the control is fully usable if the animation never runs at all.
+ */
+function Segmented({
+  items,
+  active,
+  onChange,
+}: {
+  items: { long: string; short: string }[]
+  active: number
+  onChange: (i: number) => void
+}) {
+  const trackRef = useRef<HTMLDivElement>(null)
+  const btnRefs = useRef<(HTMLButtonElement | null)[]>([])
+  const [pill, setPill] = useState<{ x: number; w: number } | null>(null)
+
+  const measure = useCallback(() => {
+    const track = trackRef.current
+    const btn = btnRefs.current[active]
+    if (!track || !btn) return
+    const t = track.getBoundingClientRect()
+    const b = btn.getBoundingClientRect()
+    setPill({ x: b.left - t.left, w: b.width })
+  }, [active])
+
+  // Before paint, so the pill is never briefly in the wrong place.
+  useLayoutEffect(measure, [measure])
+
+  useEffect(() => {
+    // Fonts land after first paint and change the segment widths, so remeasure then too.
+    const onResize = () => measure()
+    window.addEventListener('resize', onResize)
+    document.fonts?.ready.then(measure).catch(() => {})
+    return () => window.removeEventListener('resize', onResize)
+  }, [measure])
+
+  return (
+    <div className="pen-seg" role="tablist" aria-label="Example recordings" ref={trackRef}>
+      {pill && (
+        <motion.span
+          className="pen-seg-pill"
+          aria-hidden
+          initial={false}
+          animate={{ x: pill.x, width: pill.w }}
+          transition={{ type: 'spring', stiffness: 380, damping: 32, mass: 0.7 }}
+        />
+      )}
+      {items.map((it, i) => (
+        <button
+          key={it.long}
+          ref={(el) => {
+            btnRefs.current[i] = el
+          }}
+          role="tab"
+          aria-selected={i === active}
+          aria-label={it.long}
+          data-active={i === active}
+          className="pen-seg-btn"
+          onClick={() => onChange(i)}
+        >
+          {/* Both rendered, one hidden by CSS. No resize listener needed for the swap, and
+              the pill remeasures on resize anyway. aria-label always carries the full name. */}
+          <span className="pen-seg-long">{it.long}</span>
+          <span className="pen-seg-short">{it.short}</span>
+        </button>
+      ))}
     </div>
   )
 }

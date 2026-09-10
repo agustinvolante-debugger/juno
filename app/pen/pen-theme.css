@@ -489,25 +489,30 @@
 
 /* Hero specimen — the product's actual artifact, not an abstract illustration */
 .pen-lp-specimen {
-  margin: 0; border-radius: 14px; overflow: hidden;
+  margin: 22px 0 0; border-radius: 16px; overflow: hidden;
   background: var(--panel); border: 1px solid var(--line);
-  box-shadow: 0 1px 2px rgba(22,21,15,.03), 0 18px 40px -20px rgba(22,21,15,.17);
+  box-shadow: 0 1px 2px rgba(22,21,15,.03), 0 22px 50px -24px rgba(22,21,15,.18);
 }
+/* Prose needs a measure even inside a wide card — full-bleed lines are unreadable. */
+.pen-lp-specimen-body { padding: 28px 26px 26px; }
+@media (min-width: 640px) { .pen-lp-specimen-body { padding: 34px 40px 30px; } }
+.pen-lp-specimen-body > * { max-width: 74ch; }
 .pen-lp-specimen-bar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 11px 18px; border-bottom: 1px solid var(--hair); background: var(--sunk);
+  padding: 14px 22px; border-bottom: 1px solid var(--hair); background: var(--sunk);
 }
+@media (min-width: 640px) { .pen-lp-specimen-bar { padding: 15px 40px; } }
 .pen-lp-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 3px rgba(63,107,74,.14); }
-.pen-lp-black { font-size: 16.5px; line-height: 1.55; color: var(--ink); margin-block: 0; }
+.pen-lp-black { font-size: 19px; line-height: 1.5; color: var(--ink); margin-block: 0; }
 .pen-lp-grey {
-  font-size: 15.5px; line-height: 1.62; color: #9A968C; margin: 8px 0 0;
+  font-size: 17.5px; line-height: 1.6; color: #9A968C; margin: 10px 0 0;
   /* mt-* on this element is intentionally NOT used; spacing lives here. */
   padding-left: 13px; border-left: 2px solid var(--accent-line);
 }
 .pen-lp-legend {
-  display: flex; flex-wrap: wrap; gap: 16px; margin-top: 26px; padding-top: 15px;
+  display: flex; flex-wrap: wrap; gap: 18px; margin-top: 32px; padding-top: 17px;
   border-top: 1px solid var(--hair);
-  font-family: var(--mono); font-size: 10px; color: var(--faint);
+  font-family: var(--mono); font-size: 10.5px; color: var(--faint);
 }
 .pen-lp-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .pen-lp-legend i { width: 9px; height: 9px; border-radius: 2px; display: block; }
@@ -710,33 +715,49 @@
   .pen-lp-eyebrow::before { width: 14px; flex-basis: 14px; }
 }
 
-.pen-lp-tabs { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px; }
-.pen-lp-tab {
-  font-family: var(--mono); font-size: 11px; letter-spacing: .03em; white-space: nowrap;
-  padding: 6px 12px; border-radius: 999px;
-  border: 1px solid var(--line); background: var(--panel); color: var(--dim);
-  transition: background .15s ease, border-color .15s ease, color .15s ease;
+/* ------------------------------------------------- iOS-style segmented control
+   An inset track with an elevated pill that slides between segments. Deliberately
+   larger than a chip: this is the page's main affordance for showing range. */
+.pen-seg {
+  position: relative; display: inline-flex; gap: 4px; margin-top: 34px; padding: 5px;
+  border-radius: 999px; background: var(--sunk); border: 1px solid var(--line);
+  max-width: 100%; overflow-x: auto; scrollbar-width: none;
 }
-.pen-lp-tab:hover { color: var(--ink); border-color: #DAD5C9; }
-.pen-lp-tab[data-active='true'] {
-  background: var(--ink); border-color: var(--ink); color: var(--paper);
+.pen-seg::-webkit-scrollbar { display: none; }
+.pen-seg-btn {
+  position: relative; z-index: 1; flex: 0 0 auto;
+  padding: 11px 22px; border-radius: 999px; border: none; background: none;
+  font-family: var(--mono); font-size: 13.5px; letter-spacing: .01em; white-space: nowrap;
+  color: var(--dim); transition: color .18s ease;
+}
+.pen-seg-btn:hover { color: var(--soft); }
+.pen-seg-btn[data-active='true'] { color: var(--ink); }
+/* One pill, positioned from a measurement of the active segment. left/top come from the
+   track's padding; x and width are animated. */
+/* left:0 — the measured x already contains the track's padding, so a CSS left as well
+   pushed the pill one padding-width right of its segment. */
+.pen-seg-pill {
+  position: absolute; left: 0; top: 5px; bottom: 5px; z-index: 0;
+  border-radius: 999px; background: var(--panel);
+  box-shadow: 0 1px 2px rgba(22,21,15,.07), 0 3px 8px -2px rgba(22,21,15,.13);
+  border: 1px solid rgba(22,21,15,.06);
+  pointer-events: none;
+}
+.pen-seg-short { display: none; }
+@media (max-width: 560px) {
+  /* Full width so it doesn't sit orphaned, equal segments, short labels. Three full
+     labels do not fit 390px — "Coffee" was clipped and the scroll was not discoverable. */
+  .pen-seg { display: flex; width: 100%; overflow-x: visible; }
+  .pen-seg-btn { flex: 1 1 0; padding: 11px 8px; font-size: 12.5px; text-align: center; }
+  .pen-seg-long { display: none; }
+  .pen-seg-short { display: inline; }
 }
 
 /* --------------------------------------------- landing: multi-use framing */
 .pen-lp-strong { color: var(--ink); }
 
-.pen-lp-tabcap {
-  font-family: var(--mono); font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase;
-  color: var(--faint); margin: 0 0 9px;
-}
-
-/* Sits inside the specimen, after the example, so the point is stated rather than only
-   demonstrated by the tabs. */
-.pen-lp-anyconv {
-  margin: 24px 0 0; padding: 13px 15px; border-radius: 9px;
-  background: var(--sunk); border: 1px solid var(--hair);
-  font-size: 13.5px; line-height: 1.58; color: var(--soft);
-}
+/* .pen-lp-tabcap and .pen-lp-anyconv are gone: that copy is now the MultiUse section
+   title, where it can actually be read. It was a grey footnote nobody saw. */
 
 /* Example swap. CSS so the hero's content is never invisible waiting for a script. */
 @keyframes penLpSwap {
