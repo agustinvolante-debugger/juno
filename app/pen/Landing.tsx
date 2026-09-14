@@ -14,6 +14,37 @@ import type { CSSProperties } from 'react'
 
 const SPRING = { type: 'spring' as const, stiffness: 260, damping: 30, mass: 0.9 }
 const FREE_MINUTES = 120
+
+/**
+ * Stripe Checkout links, one per plan. Payment Links are used rather than a server-side
+ * session so nothing here needs a secret — these are publishable URLs.
+ *
+ * Until they are set the buttons fall back to sign-in and say so. A button that looks like it
+ * takes payment but does not is worse than one that admits the till is not open yet.
+ */
+const STRIPE_STARTER = process.env.NEXT_PUBLIC_STRIPE_STARTER_URL ?? ''
+const STRIPE_PRO = process.env.NEXT_PUBLIC_STRIPE_PRO_URL ?? ''
+
+function PlanCta({ href, children, variant }: { href: string; children: React.ReactNode; variant: 'ghost' | 'accent' }) {
+  const cls = `pen-lp-btn ${variant === 'accent' ? 'pen-lp-btn-accent' : 'pen-lp-btn-ghost'} mt-auto w-full justify-center`
+  if (!href) {
+    return (
+      <div className="mt-auto w-full">
+        <Link href={SIGN_IN} className={cls.replace('mt-auto ', '')}>
+          {children}
+        </Link>
+        <p className="pen-mono mt-2.5 text-center text-[10px]" style={{ color: 'rgba(251,250,246,.42)' }}>
+          Card payments open at launch
+        </p>
+      </div>
+    )
+  }
+  return (
+    <a href={href} className={cls} rel="noopener">
+      {children}
+    </a>
+  )
+}
 const SIGN_IN = '/auth/signin?callbackUrl=/pen'
 
 /**
@@ -92,11 +123,11 @@ function Hero() {
 
         <Reveal delay={0.15}>
           <div className="flex flex-wrap items-center gap-3">
-            <Link href={SIGN_IN} className="pen-lp-btn pen-lp-btn-primary">Start free</Link>
+            <Link href={SIGN_IN} className="pen-lp-btn pen-lp-btn-primary">Try it free</Link>
             <a href="#how" className="pen-lp-btn">See how it works</a>
           </div>
           <p className="pen-mono mt-4 text-[11px]" style={{ color: 'var(--faint)' }}>
-            {`${FREE_MINUTES} minutes free \u00B7 no card \u00B7 works with any USB recorder`}
+            {`First ${FREE_MINUTES} minutes free \u00B7 then $5 a month \u00B7 works with any USB recorder`}
           </p>
         </Reveal>
       </div>
@@ -574,7 +605,7 @@ function Pricing() {
         <Reveal>
           <div className="pen-lp-eyebrow pen-lp-eyebrow-dark">Pricing</div>
           <h2 className="pen-lp-h2 pen-lp-h2-tight" style={{ color: 'var(--paper)' }}>
-            Start free. Pay when it becomes the way you work.
+            Try it free. Then $5 a month.
           </h2>
         </Reveal>
 
@@ -584,24 +615,23 @@ function Pricing() {
               <header>
                 <h3 className="pen-mono text-[11px] uppercase tracking-[.14em]" style={{ color: 'rgba(251,250,246,.5)' }}>Starter</h3>
                 <div className="mt-4 flex items-baseline gap-2">
-                  <span className="pen-display text-[46px] leading-none" style={{ color: 'var(--paper)' }}>Free</span>
+                  <span className="pen-display text-[46px] leading-none" style={{ color: 'var(--paper)' }}>$5</span>
+                  <span className="pen-mono text-[12px]" style={{ color: 'rgba(251,250,246,.5)' }}>/month</span>
                 </div>
                 <p className="mt-3 text-[14.5px] leading-[1.55]" style={{ color: 'rgba(251,250,246,.6)' }}>
-                  Enough to find out whether it changes anything. No card.
+                  Your first {FREE_MINUTES} minutes are free. Enough to find out whether it changes anything.
                 </p>
               </header>
               <ul className="pen-lp-feats">
                 {FREE.map((f) => <Feat key={f}>{f}</Feat>)}
               </ul>
-              <Link href={SIGN_IN} className="pen-lp-btn pen-lp-btn-ghost mt-auto w-full justify-center">
-                Start free
-              </Link>
+              <PlanCta href={STRIPE_STARTER} variant="ghost">Get Starter</PlanCta>
             </article>
           </Reveal>
 
           <Reveal delay={0.12} className="order-1 lg:order-2">
             <article className="pen-lp-plan pen-lp-plan-pro">
-              <span className="pen-lp-ribbon">Free while in beta</span>
+              <span className="pen-lp-ribbon">Most popular</span>
               <header>
                 <h3 className="pen-mono text-[11px] uppercase tracking-[.14em]" style={{ color: 'var(--accent-line)' }}>Pro</h3>
                 <div className="mt-4 flex items-baseline gap-2">
@@ -615,12 +645,9 @@ function Pricing() {
               <ul className="pen-lp-feats">
                 {PRO.map((f) => <Feat key={f} pro>{f}</Feat>)}
               </ul>
-              <Link href={SIGN_IN} className="pen-lp-btn pen-lp-btn-accent mt-auto w-full justify-center">
-                Start free
-              </Link>
-              {/* The "Free while in beta" ribbon carries this now, so the line under the
-                  button was saying it twice. The CTA still signs you in rather than opening a
-                  checkout, so nothing here claims to take payment. */}
+              <PlanCta href={STRIPE_PRO} variant="accent">Get Pro</PlanCta>
+              {/* Both CTAs go to Stripe Checkout once the Payment Link env vars are set; until
+                  then they sign you in and say plainly that card payments are not open. */}
             </article>
           </Reveal>
         </div>

@@ -12,7 +12,17 @@
 // matters for speech. Files that are ALREADY compressed (mp3/m4a/opus off the pen) are
 // passed through untouched, since re-encoding them would only lose information.
 
+import { writeOggOpus, type OpusPacket } from './ogg'
+
 const TARGET_RATE = 16000
+
+// Speech at 24 kbps mono is comfortably intelligible and transcribes as well as the WAV it
+// came from; half an hour lands around 5MB against the 50MB object ceiling.
+const OPUS_BITRATE = 24000
+
+// Below this the WAV is small enough to upload as-is, and skipping the encode keeps short
+// imports instant.
+const COMPRESS_ABOVE = 12 * 1024 * 1024
 
 // Already-compressed audio: uploaded untouched, since re-encoding only loses information.
 const PASSTHROUGH = /^audio\/(mpeg|mp3|mp4|aac|m4a|ogg|opus|webm|amr|3gpp)/i
@@ -24,6 +34,7 @@ const PASSTHROUGH_EXT = /\.(mp3|m4a|aac|ogg|opus|webm|amr|3gp|wma)$/i
 // Video matters more — a 40-minute phone video is gigabytes, so uploading it whole is not an
 // option. We decode the audio track out of the container and send only that.
 const RE_ENCODE_EXT = /\.(wav|wave|flac|aif|aiff|mp4|m4v|mov|qt)$/i
+const RE_ENCODE_MIME = /^audio\/(wav|wave|x-wav|x-pn-wav|vnd\.wave|flac|x-flac|aiff|x-aiff|basic|l16)$/i
 const VIDEO_EXT = /\.(mp4|m4v|mov|qt)$/i
 
 /** Warn above this. The bucket has no explicit cap so it inherits the project global,
@@ -41,6 +52,8 @@ export type Prepared = {
 function isCompressed(file: File) {
   // Extension wins: an .mp4 has MIME audio/mp4 or video/mp4 but must still be decoded.
   if (RE_ENCODE_EXT.test(file.name)) return false
+  // MIME is the backstop for a recorder that writes an unusual extension.
+  if (RE_ENCODE_MIME.test(file.type)) return false
   return PASSTHROUGH.test(file.type) || PASSTHROUGH_EXT.test(file.name)
 }
 
@@ -127,16 +140,107 @@ export async function prepareAudio(file: File): Promise<Prepared> {
   src.start()
   const rendered = await off.startRendering()
 
-  const blob = bufferToWav(rendered)
+  const wav = bufferToWav(rendered)
+
+  // WAV is the pen's native format and the one that gets no smaller here — 16 kHz mono PCM is
+  // 256 kbps, so half an hour is ~55MB and Supabase refuses anything over 50MB. Compress.
+  if (wav.size > COMPRESS_ABOVE) {
+    try {
+      const ogg = await toOpus(rendered)
+      return {
+        blob: ogg,
+        mime: 'audio/ogg',
+        durationSec: decoded.duration,
+        originalBytes,
+        note: `${fmtMB(originalBytes)} → ${fmtMB(ogg.size)} (Opus)`,
+      }
+    } catch {
+      // Safari has no AudioEncoder. Fall through to WAV and let the size check speak if it
+      // is genuinely too big — a worse-compressed upload beats a failed one.
+    }
+  }
+
   return {
-    blob,
+    blob: wav,
     mime: 'audio/wav',
     durationSec: decoded.duration,
     originalBytes,
     note: isVideo(file)
-      ? `audio extracted, ${fmtMB(originalBytes)} → ${fmtMB(blob.size)}`
-      : `${fmtMB(originalBytes)} → ${fmtMB(blob.size)} (mono 16 kHz)`,
+      ? `audio extracted, ${fmtMB(originalBytes)} → ${fmtMB(wav.size)}`
+      : `${fmtMB(originalBytes)} → ${fmtMB(wav.size)} (mono 16 kHz)`,
   }
+}
+
+type AudioEncoderCtor = new (init: {
+  output: (chunk: EncodedAudioChunk, meta?: { decoderConfig?: { description?: BufferSource } }) => void
+  error: (e: DOMException) => void
+}) => {
+  configure: (c: { codec: string; sampleRate: number; numberOfChannels: number; bitrate: number }) => void
+  encode: (d: AudioData) => void
+  flush: () => Promise<void>
+  close: () => void
+}
+
+/**
+ * Encode a mono AudioBuffer to Ogg/Opus with WebCodecs.
+ *
+ * Opus granule positions are counted at 48 kHz no matter the encoder's input rate, so they
+ * come from each chunk's timestamp rather than from a sample counter.
+ */
+async function toOpus(buf: AudioBuffer): Promise<Blob> {
+  const Ctor = (globalThis as unknown as { AudioEncoder?: AudioEncoderCtor }).AudioEncoder
+  const DataCtor = (globalThis as unknown as { AudioData?: typeof AudioData }).AudioData
+  if (!Ctor || !DataCtor) throw new Error('no AudioEncoder')
+
+  const packets: OpusPacket[] = []
+  let preSkip = 3840 // 80ms at 48 kHz — Opus's usual lookahead, overridden below if reported.
+
+  const encoder = new Ctor({
+    output: (chunk, meta) => {
+      const desc = meta?.decoderConfig?.description
+      if (desc) {
+        // When the encoder hands back an OpusHead, take its pre-skip rather than guessing.
+        const d = desc instanceof ArrayBuffer ? new Uint8Array(desc) : new Uint8Array((desc as ArrayBufferView).buffer)
+        if (d.length >= 12 && String.fromCharCode(...d.slice(0, 8)) === 'OpusHead') {
+          preSkip = d[10] | (d[11] << 8)
+        }
+      }
+      const data = new Uint8Array(chunk.byteLength)
+      chunk.copyTo(data)
+      const endUs = chunk.timestamp + (chunk.duration ?? 0)
+      packets.push({ data, granule: Math.round((endUs * 48000) / 1e6) })
+    },
+    error: (e) => {
+      throw e
+    },
+  })
+
+  encoder.configure({ codec: 'opus', sampleRate: buf.sampleRate, numberOfChannels: 1, bitrate: OPUS_BITRATE })
+
+  // Fed in ~1s slices: small enough to stay off the main thread for long, large enough that
+  // an hour of audio isn't hundreds of thousands of calls.
+  const pcm = buf.getChannelData(0)
+  const slice = buf.sampleRate
+  for (let off = 0; off < pcm.length; off += slice) {
+    const n = Math.min(slice, pcm.length - off)
+    const chunk = new Float32Array(n)
+    chunk.set(pcm.subarray(off, off + n))
+    const ad = new DataCtor({
+      format: 'f32-planar',
+      sampleRate: buf.sampleRate,
+      numberOfFrames: n,
+      numberOfChannels: 1,
+      timestamp: Math.round((off / buf.sampleRate) * 1e6),
+      data: chunk,
+    })
+    encoder.encode(ad)
+    ad.close()
+  }
+
+  await encoder.flush()
+  encoder.close()
+  if (!packets.length) throw new Error('encoder produced nothing')
+  return writeOggOpus(packets, 1, buf.sampleRate, preSkip)
 }
 
 async function probeDuration(file: File): Promise<number> {

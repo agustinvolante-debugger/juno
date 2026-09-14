@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { postJson, errMessage } from '@/lib/pen/http'
 import { AnimatePresence, motion } from 'motion/react'
 import type { NoteBlock } from '@/lib/pen/store'
 
@@ -122,13 +123,10 @@ export default function NoteEditor({
     setError(null)
     setEnhancing(true)
     try {
-      const r = await fetch('/api/pen/enhance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: sessionId, blocks }),
-      })
-      if (!r.ok) throw new Error((await r.json()).error ?? 'could not enhance')
-      const { expansions } = (await r.json()) as { expansions: Record<string, string> }
+      const { expansions } = await postJson<{ expansions: Record<string, string> }>(
+        '/api/pen/enhance',
+        { id: sessionId, blocks },
+      )
 
       if (!Object.keys(expansions).length) {
         setError('Nothing in the recording backed up those notes, so nothing was added.')
@@ -154,7 +152,7 @@ export default function NoteEditor({
       // Word-by-word reveal is a one-off; afterwards the block is an ordinary editable field.
       window.setTimeout(() => setRevealing(new Set()), 2600)
     } catch (e) {
-      setError((e as Error).message)
+      setError(errMessage(e, 'Could not enhance those notes.'))
     } finally {
       setEnhancing(false)
     }

@@ -5,13 +5,27 @@ import { COMMON_TYPES, slugType, isViewing, displayType } from '@/lib/pen/catego
 import type { PenSession, MeetingType, ChatTurn, PenNotes, NoteBlock } from '@/lib/pen/store'
 import NoteEditor, { blocksFrom } from './NoteEditor'
 import TranscriptEditor from './TranscriptEditor'
-import ArchivePalette from './ArchivePalette'
+import ChatView from './ChatView'
+import DocView from './DocView'
 import Overview from './Overview'
 import SignOut from './SignOut'
 import type { ArchiveStats } from '@/lib/pen/stats'
 import DeliverableSheet, { DeliverableActions, type SheetRequest } from './DeliverableSheet'
 import SendBriefing from './SendBriefing'
 import { prepareAudio, fmtMB, fmtDur, SOFT_SIZE_LIMIT } from '@/lib/pen/encode'
+import { postJson, getJson, patchJson, del, errMessage } from '@/lib/pen/http'
+import type { ChatSummary } from '@/lib/pen/chats'
+import type { DocSummary } from '@/lib/pen/docs'
+
+/**
+ * What the main column is showing. Chat and pages are views, not overlays: the whole point
+ * of the overhaul is that you can leave a conversation and come back to it.
+ */
+type View =
+  | { k: 'archive' }
+  | { k: 'session'; id: string }
+  | { k: 'chat'; id: string | null }
+  | { k: 'doc'; id: string }
 
 // The File System Access API isn't in the default TS lib.
 type FsHandle = { kind: 'file' | 'directory'; name: string; getFile?: () => Promise<File> }
@@ -25,6 +39,20 @@ declare global {
 // Audio, plus the video containers a phone produces — the audio track is extracted in the
 // browser and the picture discarded, so a walkthrough filmed on a phone still works.
 const MEDIA_RE = /\.(wav|wave|mp3|m4a|aac|ogg|opus|webm|amr|3gp|wma|flac|aif|aiff|mp4|m4v|mov|qt)$/i
+
+/**
+ * What the file picker offers. `audio/*` nominally covers WAV, but files coming off a USB
+ * recorder often arrive with an empty or vendor-specific MIME type, and the picker then greys
+ * them out with no explanation. The WAV types and extensions are therefore listed explicitly.
+ * MEDIA_RE remains the real gate — this only controls what the dialog shows.
+ */
+const ACCEPT = [
+  'audio/*',
+  'audio/wav', 'audio/wave', 'audio/x-wav', 'audio/x-pn-wav', 'audio/vnd.wave',
+  'video/mp4', 'video/quicktime', 'video/x-m4v',
+  '.wav', '.wave', '.mp3', '.m4a', '.aac', '.ogg', '.opus', '.webm', '.amr', '.3gp', '.wma',
+  '.flac', '.aif', '.aiff', '.mp4', '.m4v', '.mov', '.qt',
+].join(',')
 
 type Pending = { file: File; picked: boolean }
 type Progress = { name: string; phase: string; pct: number }
@@ -41,7 +69,9 @@ export default function PenApp({
   email: string
 }) {
   const [sessions, setSessions] = useState<PenSession[]>(initial)
-  const [activeId, setActiveId] = useState<string | null>(initial[0]?.id ?? null)
+  const openSession = useCallback((id: string | null) => {
+    setView(id ? { k: 'session', id } : { k: 'archive' })
+  }, [])
   const [pending, setPending] = useState<Pending[]>([])
   const [penName, setPenName] = useState<string | null>(null)
   const [consent, setConsent] = useState(false)
@@ -51,13 +81,42 @@ export default function PenApp({
   const [dragOver, setDragOver] = useState(false)
   const [tab, setTab] = useState<'note' | 'transcript'>('note')
   const [chatOpen, setChatOpen] = useState(false)
-  const [paletteOpen, setPaletteOpen] = useState(false)
-  const [paletteSeed, setPaletteSeed] = useState<string | null>(null)
+  const [view, setView] = useState<View>({ k: 'archive' })
+  const [chatSeed, setChatSeed] = useState<string | null>(null)
+  const [chats, setChats] = useState<ChatSummary[]>([])
+  const [docs, setDocs] = useState<DocSummary[]>([])
   const [catFilter, setCatFilter] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [catAsk, setCatAsk] = useState<Record<string, string[]>>({})
   const fileInput = useRef<HTMLInputElement>(null)
 
+  const refreshChats = useCallback(async () => {
+    try {
+      setChats((await getJson<{ chats: ChatSummary[] }>('/api/pen/chats')).chats)
+    } catch {
+      // A sidebar that can't list threads shouldn't take the app down with it.
+    }
+  }, [])
+  const refreshDocs = useCallback(async () => {
+    try {
+      setDocs((await getJson<{ docs: DocSummary[] }>('/api/pen/docs')).docs)
+    } catch {
+      /* same */
+    }
+  }, [])
+  useEffect(() => {
+    void refreshChats()
+    void refreshDocs()
+  }, [refreshChats, refreshDocs])
+
+  /** Start a thread from the header search. The question is asked once the view mounts. */
+  const askArchive = useCallback((question: string) => {
+    setChatSeed(question)
+    setView({ k: 'chat', id: null })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [])
+
+  const activeId = view.k === 'session' ? view.id : null
   const active = useMemo(() => sessions.find((s) => s.id === activeId) ?? null, [sessions, activeId])
 
   // Feature-detect after mount, or the server and client disagree and the fallback banner flashes.
@@ -87,25 +146,22 @@ export default function PenApp({
     setSessions((prev) => {
       const next = prev.filter((x) => x.id !== id)
       // Move to the neighbouring recording rather than dumping the user on an empty pane.
-      setActiveId((cur) => (cur === id ? (next[0]?.id ?? null) : cur))
+      setView((v) => (v.k === 'session' && v.id === id ? { k: 'archive' } : v))
       return next
     })
   }, [])
 
   const makeNotes = useCallback(
     async (id: string, type?: MeetingType) => {
-      const r = await fetch('/api/pen/notes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, ...(type ? { type } : {}) }),
-      })
-      if (!r.ok) {
-        setErr((await r.json()).error ?? 'could not write the notes')
-        return
-      }
-      const j = (await r.json()) as {
+      let j: {
         session: PenSession
         category?: { value: string | null; confidence: number | null; alternatives: string[] }
+      }
+      try {
+        j = await postJson('/api/pen/notes', { id, ...(type ? { type } : {}) })
+      } catch (e) {
+        setErr(errMessage(e, 'Could not write the notes.'))
+        return
       }
       patchLocal(j.session)
 
@@ -224,7 +280,7 @@ export default function PenApp({
         const { session, duplicate } = (await sRes.json()) as { session: PenSession; duplicate: boolean }
 
         setSessions((prev) => [session, ...prev.filter((x) => x.id !== session.id)])
-        setActiveId(session.id)
+        openSession(session.id)
 
         if (!duplicate) {
           setProgress({ name: file.name, phase: 'Sending for transcription', pct: 92 })
@@ -254,13 +310,27 @@ export default function PenApp({
   const grouped = useMemo(() => groupByDay(visible), [visible])
 
   return (
-    <main className="mx-auto max-w-[1460px] px-5 pb-24 pt-8 sm:px-8">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-baseline gap-3">
+    <main className="mx-auto max-w-[1460px] px-5 pb-24 pt-10 sm:px-8 sm:pt-12">
+      {/* Three columns so the search sits dead centre AND on the same horizontal axis as the
+          buttons. `justify-between` couldn't do both — it centres the search only when the
+          two side groups happen to be the same width. */}
+      <header className="pen-head">
+        <div className="pen-head-left">
           <h1 className="pen-display text-[28px] leading-none">Pen</h1>
           <span className="pen-label">Recorder &rarr; notes</span>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+
+        <ArchiveSearch
+          value={query}
+          onChange={setQuery}
+          suggestions={searchSuggestions(stats)}
+          onAsk={(q) => {
+            askArchive(q)
+            setQuery('')
+          }}
+        />
+
+        <div className="pen-head-right">
           {supportsPicker && (
             <button className="pen-btn pen-btn-primary" onClick={connectPen}>
               Connect pen
@@ -269,24 +339,12 @@ export default function PenApp({
           <button className="pen-btn" onClick={() => fileInput.current?.click()}>
             Add files
           </button>
-          <input ref={fileInput} type="file" multiple accept="audio/*,video/mp4,video/quicktime,video/x-m4v,.mov,.mp4,.m4v" className="hidden"
+          <input ref={fileInput} type="file" multiple accept={ACCEPT} className="hidden"
                  onChange={(e) => e.target.files && addFiles(e.target.files)} />
           <SignOut email={email} />
         </div>
       </header>
 
-      {/* Search gets its own row, centred. In the header it was a 180px chip competing with
-          three buttons; asking the archive a question is the thing this app is for. */}
-      <ArchiveSearch
-        value={query}
-        onChange={setQuery}
-        suggestions={searchSuggestions(stats)}
-        onAsk={(q) => {
-          setPaletteSeed(q)
-          setPaletteOpen(true)
-          setQuery('')
-        }}
-      />
 
       {loadError && (
         <Banner tone="bad">
@@ -318,15 +376,15 @@ export default function PenApp({
           <div className="pen-cats-list">
             <button
               className="pen-cat"
-              data-active={activeId === null}
-              onClick={() => { setActiveId(null); setCatFilter(null) }}
+              data-active={view.k === 'archive'}
+              onClick={() => { setView({ k: 'archive' }); setCatFilter(null) }}
             >
               <span className="pen-cat-label">Your archive</span>
               {!!stats?.actionsOpen && <span className="pen-cat-n">{stats.actionsOpen} open</span>}
             </button>
             <button
               className="pen-cat"
-              data-active={catFilter === null && activeId !== null}
+              data-active={catFilter === null && view.k !== 'archive'}
               onClick={() => setCatFilter(null)}
             >
               <span className="pen-cat-label">All recordings</span>
@@ -348,6 +406,61 @@ export default function PenApp({
                   >
                     <span className="pen-cat-label">{c.label}</span>
                     <span className="pen-cat-n">{c.count}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* ---------------------------------------------------------- chats */}
+          <div className="pen-cats-head pen-label pen-cats-head-row">
+            <span>Chats</span>
+            <button
+              className="pen-cats-new"
+              title="New chat"
+              onClick={() => {
+                setChatSeed(null)
+                setView({ k: 'chat', id: null })
+              }}
+            >
+              +
+            </button>
+          </div>
+          {chats.length === 0 ? (
+            <p className="pen-cats-empty">Ask something in the search bar and it lands here.</p>
+          ) : (
+            <div className="pen-cats-list">
+              {chats.slice(0, 12).map((c) => (
+                <button
+                  key={c.id}
+                  className="pen-cat"
+                  data-active={view.k === 'chat' && view.id === c.id}
+                  onClick={() => {
+                    setChatSeed(null)
+                    setView({ k: 'chat', id: c.id })
+                  }}
+                  title={c.title ?? 'Untitled chat'}
+                >
+                  <span className="pen-cat-label">{c.title ?? 'Untitled chat'}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* ---------------------------------------------------------- pages */}
+          {docs.length > 0 && (
+            <>
+              <div className="pen-cats-head pen-label">Pages</div>
+              <div className="pen-cats-list">
+                {docs.slice(0, 12).map((d) => (
+                  <button
+                    key={d.id}
+                    className="pen-cat"
+                    data-active={view.k === 'doc' && view.id === d.id}
+                    onClick={() => setView({ k: 'doc', id: d.id })}
+                    title={d.title}
+                  >
+                    <span className="pen-cat-label">{d.title}</span>
                   </button>
                 ))}
               </div>
@@ -382,7 +495,7 @@ export default function PenApp({
                   <div className="pen-label mb-1.5">{day}</div>
                   {rows.map((s) => (
                     <div key={s.id} className="pen-row px-2.5 py-3" data-active={s.id === activeId}
-                         onClick={() => { setActiveId(s.id); setTab('note'); setChatOpen(false) }}>
+                         onClick={() => { openSession(s.id); setTab('note'); setChatOpen(false) }}>
                       <div className="flex items-start justify-between gap-2">
                         <span className="pen-row-title min-w-0 flex-1 text-[14.5px] font-medium leading-snug">
                           {s.title || s.client_name || s.source_name || 'Untitled'}
@@ -402,12 +515,43 @@ export default function PenApp({
         </aside>
 
         <section className="pen-shell-main min-w-0">
-          {!active ? (
+          {view.k === 'chat' ? (
+            <ChatView
+              chatId={view.id}
+              seed={chatSeed}
+              onSeedConsumed={() => setChatSeed(null)}
+              onThreadChanged={(id) => {
+                setView({ k: 'chat', id })
+                void refreshChats()
+              }}
+              onDocCreated={(id) => {
+                setView({ k: 'doc', id })
+                void refreshDocs()
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+              }}
+              onCite={(sessionId) => {
+                openSession(sessionId)
+                setTab('note')
+                setChatOpen(false)
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+              }}
+            />
+          ) : view.k === 'doc' ? (
+            <DocView
+              docId={view.id}
+              onRenamed={() => void refreshDocs()}
+              onDeleted={() => {
+                setView({ k: 'archive' })
+                void refreshDocs()
+              }}
+            />
+          ) : !active ? (
+
             stats ? (
               <Overview
                 stats={stats}
                 onOpen={(id) => {
-                  setActiveId(id)
+                  openSession(id)
                   setTab('note')
                   window.scrollTo({ top: 0, behavior: 'smooth' })
                 }}
@@ -420,6 +564,7 @@ export default function PenApp({
           ) : (
             <div className={chatOpen ? 'grid gap-7 xl:grid-cols-[minmax(0,1fr)_352px]' : ''}>
               <Detail
+                selfEmail={email}
                 session={active} tab={tab} setTab={setTab}
                 chatOpen={chatOpen} onToggleChat={() => setChatOpen((v) => !v)}
                 onNotes={(type) => makeNotes(active.id, type)}
@@ -446,19 +591,6 @@ export default function PenApp({
         </section>
       </div>
 
-      <ArchivePalette
-        open={paletteOpen}
-        seed={paletteSeed}
-        onSeedConsumed={() => setPaletteSeed(null)}
-        onOpenChange={setPaletteOpen}
-        onCite={(sessionId) => {
-          setActiveId(sessionId)
-          setTab('note')
-          setChatOpen(false)
-          setPaletteOpen(false)
-          window.scrollTo({ top: 0, behavior: 'smooth' })
-        }}
-      />
     </main>
   )
 }
@@ -499,13 +631,43 @@ function ArchiveSearch({
   suggestions: string[]
   onAsk: (q: string) => void
 }) {
+  const [focused, setFocused] = useState(false)
+  const wrap = useRef<HTMLDivElement>(null)
+  const input = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        input.current?.focus()
+        input.current?.select()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  // Suggestions appear on focus rather than sitting under the bar permanently. In the header
+  // a fixed second row pushed the whole app down for something read once.
+  useEffect(() => {
+    if (!focused) return
+    const onDown = (e: MouseEvent) => {
+      if (!wrap.current?.contains(e.target as Node)) setFocused(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [focused])
+
   return (
-    <div className="pen-search-wrap">
+    <div className="pen-search-wrap" ref={wrap}>
       <form
         className="pen-search"
         onSubmit={(e) => {
           e.preventDefault()
-          if (value.trim()) onAsk(value.trim())
+          if (value.trim()) {
+            setFocused(false)
+            onAsk(value.trim())
+          }
         }}
       >
         <svg className="pen-search-icon" viewBox="0 0 20 20" aria-hidden>
@@ -513,8 +675,11 @@ function ArchiveSearch({
           <path d="M12.7 12.7 L17 17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
         </svg>
         <input
+          ref={input}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onKeyDown={(e) => e.key === 'Escape' && setFocused(false)}
           placeholder="Ask anything across every recording…"
           aria-label="Ask your archive"
           className="pen-search-input"
@@ -522,13 +687,25 @@ function ArchiveSearch({
         <kbd className="pen-kbd pen-search-kbd">&#8984;K</kbd>
       </form>
 
-      <div className="pen-search-sugg">
-        {suggestions.map((q) => (
-          <button key={q} className="pen-sugg" onClick={() => onAsk(q)}>
-            {q}
-          </button>
-        ))}
-      </div>
+      {focused && suggestions.length > 0 && (
+        <div className="pen-search-sugg">
+          <div className="pen-label px-1 pb-1.5">Try asking</div>
+          {suggestions.map((q) => (
+            <button
+              key={q}
+              className="pen-sugg"
+              // mousedown, not click: the input's blur would close the panel first.
+              onMouseDown={(e) => {
+                e.preventDefault()
+                setFocused(false)
+                onAsk(q)
+              }}
+            >
+              {q}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -790,7 +967,7 @@ function ImportTray({
 /* =================================================================== detail */
 
 function Detail({
-  session, tab, setTab, chatOpen, onToggleChat, onNotes, onDelete, onPatch, askCategory,
+  session, tab, setTab, chatOpen, onToggleChat, onNotes, onDelete, onPatch, askCategory, selfEmail,
 }: {
   session: PenSession
   tab: 'note' | 'transcript'
@@ -800,6 +977,8 @@ function Detail({
   onNotes: (type?: MeetingType) => void
   /** Present when the categoriser wasn't confident enough to commit; its runners-up. */
   askCategory?: string[]
+  /** The signed-in address — named in the briefing recipients popover. */
+  selfEmail: string
   onDelete: () => void
   onPatch: (p: Partial<Pick<PenSession, 'user_notes' | 'title' | 'client_name' | 'action_done' | 'note_blocks' | 'transcript_edits' | 'briefing_sent_at'>>) => Promise<void>
 }) {
@@ -899,6 +1078,7 @@ function Detail({
             </button>
           )}
           <SendBriefing
+            selfEmail={selfEmail}
             sessionId={session.id}
             sentAt={session.briefing_sent_at}
             disabled={!n.summary && !n.actions?.length && !n.missed?.length && !n.open_questions?.length}
@@ -1206,15 +1386,10 @@ function ChatPanel({ session, onChat, onClose }: { session: PenSession; onChat: 
     setThinking(true)
     setQ('')
     try {
-      const r = await fetch('/api/pen/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: session.id, question }),
-      })
-      if (!r.ok) throw new Error((await r.json()).error ?? 'could not get an answer')
-      onChat({ ...session, chat: ((await r.json()) as { chat: ChatTurn[] }).chat })
+      const j = await postJson<{ chat: ChatTurn[] }>('/api/pen/chat', { id: session.id, question })
+      onChat({ ...session, chat: j.chat })
     } catch (e) {
-      setError((e as Error).message)
+      setError(errMessage(e, 'Could not get an answer.'))
     } finally {
       setThinking(false)
     }

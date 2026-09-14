@@ -14,7 +14,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
 import { supabaseAdmin } from '@/lib/supabase'
-import type { ArchiveTurn, PenNotes, MeetingType } from './store'
+import type { ArchiveTurn, PenNotes, MeetingType, Transcript } from './store'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const MODEL = 'claude-opus-5'
@@ -59,7 +59,7 @@ const ANSWER_SCHEMA = {
         properties: {
           marker: { type: 'integer', description: 'The number used inline, e.g. 1 for [1]' },
           session_id: { type: 'string' },
-          quote: { type: 'string', description: 'A short verbatim line from that recording, or ""' },
+          quote: { type: 'string', description: 'A short line quoted VERBATIM from that recording\'s transcript, or "" if none applies. Never paraphrase into this field.' },
         },
         required: ['marker', 'session_id', 'quote'],
         additionalProperties: false,
@@ -69,6 +69,55 @@ const ANSWER_SCHEMA = {
   required: ['answer', 'citations'],
   additionalProperties: false,
 } as const
+
+// ~213 tokens per minute of speech, measured on real recordings. So the whole archive can
+// never go in the selection prompt (400 hours would be ~5M tokens), but the handful of
+// recordings that survive selection comfortably can — which is why stage 1 stays on the notes
+// index and stage 2 now reads the actual words.
+const MAX_TRANSCRIPT_CHARS = 24000
+const MAX_ANSWER_ROWS = 8
+
+const STOPWORDS = new Set(
+  ('a about all also am an and any are as at be been but by can did do does for from get got had has have ' +
+   'he her him his how i if in into is it its just me more my no not of on or our out said say she should ' +
+   'so some than that the their them then there these they this to was we were what when where which who ' +
+   'why will with would you your anything everything something did do tell show find search across recording ' +
+   'recordings meeting meetings').split(' '),
+)
+
+/**
+ * Distinctive words in the question, for a literal transcript scan.
+ *
+ * The selection stage reads extracted notes, so a detail the extractor didn't think notable —
+ * an HOA fee, a name said once — is invisible to it even though the transcript contains it.
+ * This is the cheap safety net: quoted phrases and uncommon words, matched literally.
+ */
+export function keyTerms(question: string): string[] {
+  const quoted = Array.from(question.matchAll(/"([^"]{3,60})"/g)).map((m) => m[1].toLowerCase())
+  const words = (question.toLowerCase().match(/[a-z0-9][a-z0-9'-]{3,}/g) ?? [])
+    .filter((w) => !STOPWORDS.has(w))
+  return Array.from(new Set([...quoted, ...words])).slice(0, 6)
+}
+
+/**
+ * Recordings whose transcript literally contains one of the terms. Runs in Postgres so the
+ * transcripts never leave the database — pulling every transcript into the function to grep
+ * them in JS would move megabytes per question.
+ */
+async function transcriptMatches(userEmail: string, terms: string[]): Promise<string[]> {
+  if (!terms.length) return []
+  const or = terms.map((t) => `transcript->>text.ilike.*${t.replace(/[*,()]/g, '')}*`).join(',')
+  const { data, error } = await supabaseAdmin
+    .from('pen_sessions')
+    .select('id')
+    .eq('user_email', userEmail)
+    .or(or)
+    .limit(12)
+  // A failed prefilter must not take the question down with it — the model's selection stands
+  // on its own, this only adds to it.
+  if (error) return []
+  return (data ?? []).map((r) => r.id as string)
+}
 
 /** Compact enough that hundreds of recordings still fit in the selection prompt. */
 function indexLine(r: IndexRow) {
@@ -85,6 +134,23 @@ function indexLine(r: IndexRow) {
   ]
     .filter(Boolean)
     .join(' | ')
+}
+
+/**
+ * The transcript as the user sees it: AssemblyAI's utterances with their manual corrections
+ * applied on top. Searching the uncorrected original would find the garbled version of a name
+ * the user has already fixed.
+ */
+function dialogueOf(t: Transcript | null | undefined, edits: Record<string, string> | null | undefined): string {
+  if (!t) return '(not transcribed)'
+  const e = edits ?? {}
+  const body = t.utterances?.length
+    ? t.utterances.map((u, i) => `Speaker ${u.speaker}: ${e[String(i)] ?? u.text}`).join('\n')
+    : (t.text ?? '')
+  if (!body) return '(not transcribed)'
+  return body.length > MAX_TRANSCRIPT_CHARS
+    ? `${body.slice(0, MAX_TRANSCRIPT_CHARS)}\n[transcript truncated]`
+    : body
 }
 
 export async function askArchive(opts: {
@@ -130,7 +196,12 @@ export async function askArchive(opts: {
     output_config: { format: jsonSchemaOutputFormat(SELECT_SCHEMA) },
   })
 
-  const wanted = (sel.parsed_output?.session_ids ?? []).filter((id) => rows.some((r) => r.id === id)).slice(0, 12)
+  const picked = (sel.parsed_output?.session_ids ?? []).filter((id) => rows.some((r) => r.id === id))
+  // Union, model first: what it reasoned about leads, and literal transcript hits it could not
+  // have seen from the notes get appended rather than displacing them.
+  const literal = await transcriptMatches(opts.userEmail, keyTerms(opts.question))
+  const wanted = Array.from(new Set([...picked, ...literal.filter((id) => rows.some((r) => r.id === id))]))
+    .slice(0, MAX_ANSWER_ROWS)
   if (!wanted.length) {
     return {
       answer:
@@ -143,7 +214,7 @@ export async function askArchive(opts: {
   /* ------------------------------------------------------- stage 2: answer */
   const { data: full, error: e2 } = await supabaseAdmin
     .from('pen_sessions')
-    .select('id,title,client_name,meeting_type,recorded_at,created_at,notes,user_notes')
+    .select('id,title,client_name,meeting_type,recorded_at,created_at,notes,user_notes,transcript,transcript_edits')
     .in('id', wanted)
   if (e2) throw new Error(e2.message)
 
@@ -153,7 +224,11 @@ export async function askArchive(opts: {
   const corpus = marked
     .filter((m) => m.row)
     .map((m) => {
-      const r = m.row as IndexRow & { user_notes?: string | null }
+      const r = m.row as IndexRow & {
+        user_notes?: string | null
+        transcript?: Transcript | null
+        transcript_edits?: Record<string, string> | null
+      }
       return (
         `--- [${m.marker}] recording ${r.id}\n` +
         `title: ${r.title ?? 'untitled'}\n` +
@@ -161,7 +236,8 @@ export async function askArchive(opts: {
         `type: ${r.meeting_type ?? 'unknown'}\n` +
         (r.client_name ? `with: ${r.client_name}\n` : '') +
         (r.user_notes ? `their own notes: ${r.user_notes.slice(0, 1500)}\n` : '') +
-        `extracted notes: ${JSON.stringify(r.notes ?? {})}\n`
+        `extracted notes: ${JSON.stringify(r.notes ?? {})}\n` +
+        `transcript:\n${dialogueOf(r.transcript, r.transcript_edits)}\n`
       )
     })
     .join('\n')
@@ -171,6 +247,9 @@ export async function askArchive(opts: {
     max_tokens: 3000,
     system:
       `You answer questions about someone's own archive of recorded meetings. Today is ${today}.\n\n` +
+      '- Each recording gives you its extracted notes AND its transcript. The transcript is what ' +
+      'was actually said: prefer it for anything specific, and use it whenever the notes are ' +
+      'silent on the question.\n' +
       '- Answer only from the recordings supplied. If they do not settle it, say so.\n' +
       '- Cite inline with the bracketed number each recording was given, e.g. [2]. Every factual ' +
       'claim needs a marker, and never cite a number you were not given.\n' +

@@ -94,3 +94,20 @@ create index if not exists pen_clients_user on pen_clients(user_email);
 -- ---------------------------------------------------------------------------
 -- drop index if exists pen_sessions_dedupe;
 -- create unique index if not exists pen_sessions_dedupe on pen_sessions(user_email, source_name, recorded_at);
+
+-- ---------------------------------------------------------------------------
+-- 2026-09-10 — chat threads and pages. Run each line separately in the SQL editor
+-- (it splits multi-line DDL and you get "syntax error at or near ...").
+--
+-- pen_chats replaces the single running conversation in pen_archive_chat: search is now a
+-- persistent thread you can leave and come back to, so there are many per user.
+--
+-- pen_docs holds artifacts a chat produced — a summary, a prep doc, a checklist. They are
+-- editable after the fact, which is the whole point: the model writes the first draft and
+-- the user owns it from there. chat_id is where it came from, kept nullable so a page
+-- outlives the thread that made it.
+-- ---------------------------------------------------------------------------
+-- create table if not exists public.pen_chats (id uuid primary key default gen_random_uuid(), user_email text not null, title text, messages jsonb not null default '[]'::jsonb, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+-- create index if not exists pen_chats_user on public.pen_chats(user_email, updated_at desc);
+-- create table if not exists public.pen_docs (id uuid primary key default gen_random_uuid(), user_email text not null, chat_id uuid references public.pen_chats(id) on delete set null, kind text not null default 'summary', title text not null default 'Untitled', body text not null default '', source_ids jsonb not null default '[]'::jsonb, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+-- create index if not exists pen_docs_user on public.pen_docs(user_email, updated_at desc);

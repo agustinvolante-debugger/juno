@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { postJson, errMessage } from '@/lib/pen/http'
 import { AnimatePresence, motion } from 'motion/react'
 import type { Deliverable } from '@/lib/pen/store'
 
@@ -53,21 +54,17 @@ export default function DeliverableSheet({
     setLoading(true)
     setError(null)
     setDeliverable(null)
-    fetch('/api/pen/deliverable', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: sessionId, kind: request.kind, item: request.item }),
+    postJson<{ deliverable: Deliverable }>('/api/pen/deliverable', {
+      id: sessionId,
+      kind: request.kind,
+      item: request.item,
     })
-      .then(async (r) => {
-        if (!r.ok) throw new Error((await r.json()).error ?? 'could not draft that')
-        return r.json()
-      })
-      .then((j: { deliverable: Deliverable }) => {
+      .then((j) => {
         if (!alive) return
         setDeliverable(j.deliverable)
         setDraft(j.deliverable.body)
       })
-      .catch((e) => alive && setError((e as Error).message))
+      .catch((e) => alive && setError(errMessage(e, 'Could not draft that.')))
       .finally(() => alive && setLoading(false))
     return () => {
       alive = false

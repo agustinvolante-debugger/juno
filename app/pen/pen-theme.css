@@ -221,52 +221,6 @@
 /* ==================================================== Cmd+K archive palette
    A sheet above the layout, not a page. Backdrop blur so the archive behind it stays
    visible — you are asking about that material, so it should not disappear. */
-.pen-scrim {
-  position: fixed; inset: 0; z-index: 60;
-  background: rgba(22, 21, 15, 0.22);
-  backdrop-filter: blur(3px) saturate(120%);
-  -webkit-backdrop-filter: blur(3px) saturate(120%);
-}
-/* Centred with flex, NOT transform: motion animates `y`/`scale` by writing its own
-   transform, which would clobber a CSS translateX(-50%) and push the sheet off-centre. */
-.pen-palette-wrap {
-  position: fixed; inset: 0; z-index: 61; display: flex;
-  align-items: flex-start; justify-content: center;
-  padding: 12vh 16px 16px; pointer-events: none;
-}
-.pen-palette {
-  pointer-events: auto;
-  width: min(680px, 100%);
-  max-height: min(72vh, 720px); display: flex; flex-direction: column;
-  background: rgba(255, 255, 255, 0.86);
-  backdrop-filter: blur(22px) saturate(160%);
-  -webkit-backdrop-filter: blur(22px) saturate(160%);
-  border: 1px solid rgba(231, 227, 217, 0.9);
-  border-radius: 15px;
-  box-shadow: 0 1px 2px rgba(22,21,15,.05), 0 12px 28px -8px rgba(22,21,15,.16), 0 40px 80px -24px rgba(22,21,15,.22);
-  overflow: hidden;
-}
-.pen-palette-head {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 16px; border-bottom: 1px solid var(--hair); flex: 0 0 auto;
-}
-.pen-palette-body { flex: 1 1 auto; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
-.pen-palette-foot {
-  flex: 0 0 auto; display: flex; align-items: flex-end; gap: 8px;
-  padding: 11px 12px; border-top: 1px solid var(--hair); background: rgba(251,250,246,.6);
-}
-.pen-palette-input {
-  flex: 1 1 auto; min-height: 38px; max-height: 120px; resize: none; overflow-y: auto;
-  border: 1px solid var(--line); border-radius: 9px; background: var(--panel);
-  padding: 9px 11px; font-family: var(--serif); font-size: 14.5px; outline: none;
-}
-.pen-palette-input:focus { border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-wash); }
-
-.pen-kbd {
-  font-family: var(--mono); font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase;
-  padding: 2px 6px; border-radius: 5px; border: 1px solid var(--line);
-  background: var(--sunk); color: var(--dim);
-}
 .pen-starter {
   text-align: left; font-family: var(--serif); font-size: 14px; color: var(--soft);
   padding: 9px 12px; border-radius: 9px; border: 1px solid var(--line); background: var(--panel);
@@ -672,6 +626,24 @@
   background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
   padding: 24px 24px 26px;
   box-shadow: 0 1px 2px rgba(22,21,15,.03), 0 14px 34px -22px rgba(22,21,15,.14);
+  /* Same timing and distance as .pen-lp-plan, so the page has one hover gesture rather than
+     two. The dark plan cards signal with border brightness; on paper that is nearly
+     invisible, so the equivalent here is the shadow deepening under the lift. */
+  transition:
+    transform .22s cubic-bezier(.2,.7,.3,1),
+    border-color .22s ease,
+    box-shadow .22s ease;
+}
+.pen-lp-card:hover {
+  transform: translateY(-2px);
+  border-color: #DCD6C8;
+  box-shadow: 0 2px 4px rgba(22,21,15,.04), 0 22px 46px -24px rgba(22,21,15,.22);
+}
+
+/* Respect a reduced-motion preference: keep the colour change, drop the movement. */
+@media (prefers-reduced-motion: reduce) {
+  .pen-lp-card, .pen-lp-plan { transition: border-color .22s ease, box-shadow .22s ease; }
+  .pen-lp-card:hover, .pen-lp-plan:hover { transform: none; }
 }
 
 .pen-lp-todo { list-style: none; margin: 10px 0 0; padding: 0; }
@@ -840,7 +812,8 @@
 .pen-rail:hover::-webkit-scrollbar-thumb { background: #DDD8CC; }
 
 /* ---- category navigation ---- */
-.pen-cats-head { padding: 0 8px 7px; }
+.pen-cats-head { padding: 16px 8px 7px; }
+.pen-cats-head:first-child { padding-top: 0; }
 .pen-cats-list { display: flex; flex-direction: column; gap: 1px; }
 .pen-cat {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
@@ -861,7 +834,7 @@
 .pen-cat-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---- the search, centre stage ---- */
-.pen-search-wrap { max-width: 640px; margin: 0 auto; width: 100%; }
+.pen-search-wrap { max-width: 620px; margin: 0 auto; width: 100%; position: relative; }
 .pen-search {
   display: flex; align-items: center; gap: 11px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 13px;
@@ -882,19 +855,19 @@
 .pen-search-input::placeholder { color: var(--faint); }
 .pen-search-kbd { flex: none; }
 
+.pen-search-wrap { position: relative; }
 .pen-search-sugg {
-  display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 11px;
+  position: absolute; z-index: 40; top: calc(100% + 7px); left: 0; right: 0;
+  display: flex; flex-direction: column; gap: 1px; padding: 8px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 18px 40px -16px rgba(22, 21, 15, .3);
 }
 .pen-sugg {
-  font-family: var(--ui); font-size: 12px; font-weight: 500;
-  color: var(--soft); background: var(--panel);
-  border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px;
-  transition: all .13s;
+  font-family: var(--ui); font-size: 13px; font-weight: 500; text-align: left;
+  color: var(--soft); border-radius: 7px; padding: 8px 10px;
+  transition: background .12s, color .12s;
 }
-.pen-sugg:hover {
-  color: var(--accent-ink); background: var(--accent-wash);
-  border-color: var(--accent-line); transform: translateY(-1px);
-}
+.pen-sugg:hover { color: var(--accent-ink); background: var(--accent-wash); }
 
 /* ---- inline title editing ---- */
 .pen-title {
@@ -951,16 +924,196 @@
 .pen-catpick-opt:hover { background: var(--sunk); color: var(--ink); }
 .pen-catpick-opt[data-active='true'] { color: var(--accent-ink); font-weight: 600; }
 
+
+/* ========================================================== header ======= */
+/* Three explicit columns. The side groups take what they need; the search takes the middle
+   and is therefore centred on the page, not merely between two unequal neighbours. */
+.pen-head {
+  display: grid;
+  grid-template-columns: 1fr minmax(0, 620px) 1fr;
+  align-items: center;
+  gap: 30px;
+  padding-bottom: 38px;
+}
+.pen-head-left { display: flex; align-items: baseline; gap: 11px; }
+.pen-head-right { display: flex; align-items: center; justify-content: flex-end; gap: 9px; }
+
+/* ========================================================== chat view ==== */
+.pen-chatview { display: flex; flex-direction: column; min-height: calc(100vh - 210px); }
+.pen-chatview-body { flex: 1 1 auto; display: flex; flex-direction: column; gap: 15px; padding-bottom: 22px; }
+.pen-chat-empty { padding: 26px 2px 8px; }
+
+.pen-turn-q {
+  align-self: flex-end; max-width: 78%; padding: 10px 15px; border-radius: 14px 14px 4px 14px;
+  background: var(--accent); color: #fff; font-size: 14.5px; line-height: 1.55;
+}
+.pen-turn-a {
+  align-self: flex-start; max-width: 100%; width: 100%;
+  padding: 16px 18px; border-radius: 12px;
+  background: var(--panel); border: 1px solid var(--line);
+}
+.pen-answer { font-family: var(--serif); font-size: 15.5px; line-height: 1.72; color: var(--ink); }
+
+.pen-chat-error {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 11px 13px; border-radius: 10px; font-size: 13.5px; line-height: 1.5;
+  background: var(--bad-wash); border: 1px solid #EFD6D2; color: var(--bad);
+}
+.pen-chat-error-x { font-size: 17px; line-height: 1; color: var(--bad); opacity: .6; padding: 0 2px; }
+.pen-chat-error-x:hover { opacity: 1; }
+
+/* Quick actions sit under the thread — they act on the conversation, not one message. */
+.pen-quick { padding-top: 4px; }
+.pen-quick-row { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
+.pen-quick-btn {
+  font-family: var(--ui); font-size: 12.5px; font-weight: 600;
+  color: var(--accent-ink); background: var(--accent-wash);
+  border: 1px solid var(--accent-line); border-radius: 999px; padding: 7px 14px;
+  transition: all .13s;
+}
+.pen-quick-btn:hover:not(:disabled) { background: #E1EDF2; border-color: var(--accent); transform: translateY(-1px); }
+.pen-quick-btn:disabled { opacity: .5; cursor: wait; }
+
+.pen-composer {
+  position: sticky; bottom: 0; display: flex; align-items: flex-end; gap: 9px;
+  padding: 12px 0 4px; background: linear-gradient(to bottom, transparent, var(--paper) 26%);
+}
+.pen-composer-input {
+  flex: 1; min-width: 0; resize: none; overflow-y: auto;
+  font-family: var(--serif); font-size: 15px; line-height: 1.55; color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 11px;
+  padding: 11px 14px; outline: none;
+  box-shadow: 0 1px 2px rgba(22, 21, 15, .04);
+}
+.pen-composer-input:focus { border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-wash); }
+.pen-composer-input::placeholder { color: var(--faint); }
+.pen-composer .pen-btn { height: 43px; padding: 0 18px; }
+
+/* ============================================================== pages ==== */
+.pen-doc-title {
+  font-family: var(--display); font-weight: 400; letter-spacing: -0.015em;
+  font-size: 29px; line-height: 1.12; color: var(--ink);
+  width: 100%; margin: -2px -6px; padding: 2px 6px;
+  background: none; border: 1px solid transparent; border-radius: 6px; outline: none;
+}
+.pen-doc-title:hover { background: var(--sunk); }
+.pen-doc-title:focus { background: var(--panel); border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-wash); }
+
+.pen-doc-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; margin-top: 22px; }
+.pen-doc-single { margin-top: 22px; }
+.pen-doc-body {
+  width: 100%; min-height: 62vh; resize: vertical;
+  font-family: var(--mono); font-size: 13px; line-height: 1.72; color: var(--soft);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 18px; outline: none;
+}
+.pen-doc-body:focus { border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-wash); }
+.pen-doc-preview {
+  min-height: 62vh; padding: 22px 24px; border-radius: 10px;
+  background: var(--panel); border: 1px solid var(--line); overflow-wrap: anywhere;
+}
+
+.pen-md-h { font-family: var(--display); color: var(--ink); margin: 20px 0 7px; line-height: 1.24; }
+.pen-md-h:first-child { margin-top: 0; }
+.pen-md-h[data-l='1'] { font-size: 24px; }
+.pen-md-h[data-l='2'] { font-size: 20px; }
+.pen-md-h[data-l='3'], .pen-md-h[data-l='4'] { font-size: 16.5px; }
+.pen-md-p { font-family: var(--serif); font-size: 15px; line-height: 1.7; color: var(--ink); margin: 9px 0; }
+.pen-md-ul { margin: 9px 0; padding-left: 3px; display: flex; flex-direction: column; gap: 6px; }
+.pen-md-ul li {
+  font-family: var(--serif); font-size: 15px; line-height: 1.6; color: var(--ink);
+  padding-left: 17px; position: relative;
+}
+.pen-md-ul li::before { content: '·'; position: absolute; left: 5px; color: var(--faint); }
+.pen-md-task { display: flex; gap: 9px; padding-left: 0 !important; }
+.pen-md-task::before { content: none !important; }
+.pen-md-task[data-done='true'] { color: var(--dim); text-decoration: line-through; }
+.pen-md-box {
+  flex: none; width: 15px; height: 15px; margin-top: 4px; border-radius: 4px;
+  border: 1.5px solid #CFC9BC; background: var(--panel);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10px; color: var(--accent);
+}
+
+.pen-save {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--faint); min-width: 58px; text-align: right;
+}
+.pen-save[data-s='failed'] { color: var(--bad); }
+
+/* ---- sidebar: chats and pages ---- */
+.pen-cats-head-row { display: flex; align-items: center; justify-content: space-between; }
+.pen-cats-new {
+  font-family: var(--ui); font-size: 15px; line-height: 1; color: var(--dim);
+  width: 19px; height: 19px; border-radius: 5px;
+}
+.pen-cats-new:hover { background: var(--sunk); color: var(--ink); }
+.pen-cats-empty {
+  font-size: 12px; line-height: 1.5; color: var(--faint); padding: 0 8px 8px;
+}
+
 /* ---- workspace, narrow ---- */
 @media (max-width: 1180px) {
   .pen-shell { grid-template-columns: 152px minmax(0, 1fr); }
   .pen-rail { order: 4; grid-column: 1 / -1; position: static; max-height: none; }
 }
+@media (max-width: 1040px) {
+  /* The header's three columns stop fitting: the search drops to its own full-width row
+     below the logo and buttons rather than being crushed between them. */
+  .pen-head { grid-template-columns: auto auto; row-gap: 16px; gap: 16px; padding-bottom: 22px; }
+  .pen-head-left { grid-row: 1; }
+  .pen-head-right { grid-row: 1; grid-column: 2; flex-wrap: wrap; }
+  .pen-search-wrap { grid-row: 2; grid-column: 1 / -1; max-width: none; }
+  .pen-doc-split { grid-template-columns: 1fr; }
+  .pen-doc-body { min-height: 40vh; }
+  .pen-doc-preview { min-height: 0; }
+}
 @media (max-width: 720px) {
   .pen-shell { grid-template-columns: 1fr; gap: 16px; }
+  .pen-turn-q { max-width: 92%; }
+  .pen-chatview { min-height: 0; }
   .pen-cats { position: static; }
   /* Categories become a wrapping pill row rather than a column that eats the whole screen. */
   .pen-cats-list { flex-direction: row; flex-wrap: wrap; gap: 6px; }
   .pen-cat { width: auto; border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; }
   .pen-cats-head { padding: 10px 2px 6px; }
 }
+
+/* ---- briefing recipients ---- */
+.pen-brief-more {
+  font-family: var(--ui); font-size: 12px; font-weight: 600; color: var(--dim);
+  min-width: 28px; height: 32px; padding: 0 8px; border-radius: 7px;
+  border: 1px solid var(--line); background: var(--panel);
+  transition: all .12s;
+}
+.pen-brief-more:hover:not(:disabled) { color: var(--accent-ink); background: var(--accent-wash); border-color: var(--accent-line); }
+.pen-brief-more[aria-expanded='true'] { color: var(--accent-ink); background: var(--accent-wash); border-color: var(--accent-line); }
+.pen-brief-more:disabled { opacity: .42; cursor: not-allowed; }
+
+.pen-brief-pop {
+  position: absolute; z-index: 40; top: calc(100% + 7px); right: 0; width: 272px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 11px;
+  padding: 11px; box-shadow: 0 16px 38px -14px rgba(22, 21, 15, .3);
+}
+.pen-brief-self {
+  font-family: var(--mono); font-size: 10.5px; color: var(--soft);
+  margin: 6px 0 8px; overflow-wrap: anywhere;
+}
+.pen-brief-self span { color: var(--faint); }
+.pen-brief-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 7px; }
+.pen-brief-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--mono); font-size: 10.5px; color: var(--accent-ink);
+  background: var(--accent-wash); border: 1px solid var(--accent-line);
+  border-radius: 999px; padding: 3px 5px 3px 9px;
+}
+.pen-brief-chip button { font-size: 13px; line-height: 1; color: var(--accent); opacity: .65; padding: 0 3px; }
+.pen-brief-chip button:hover { opacity: 1; }
+.pen-brief-input {
+  width: 100%; font-family: var(--ui); font-size: 12.5px; color: var(--ink);
+  background: var(--sunk); border: 1px solid var(--line); border-radius: 7px;
+  padding: 7px 9px; outline: none;
+}
+.pen-brief-input:focus { border-color: var(--accent-line); background: var(--panel); }
+.pen-brief-input:disabled { opacity: .55; }
+.pen-brief-hint { font-size: 11px; line-height: 1.45; color: var(--faint); margin-top: 7px; }
