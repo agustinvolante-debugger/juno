@@ -1082,8 +1082,14 @@
 .pen-meter-cta:hover { background: #E1EDF2; border-color: var(--accent); }
 .pen-meter-note { display: block; margin-top: 8px; font-size: 10.5px; line-height: 1.45; color: var(--faint); }
 
+/* `display: contents` keeps nav and rail as direct grid children on desktop, so the
+   three-column layout below is completely unaffected by the wrapper. */
+.pen-side { display: contents; }
+.pen-browse { display: none; }
+.pen-scrim { display: none; }
+
 /* ---- workspace, narrow ---- */
-@media (max-width: 1180px) {
+@media (min-width: 901px) and (max-width: 1180px) {
   .pen-shell { grid-template-columns: 152px minmax(0, 1fr); }
   .pen-rail { order: 4; grid-column: 1 / -1; position: static; max-height: none; }
 }
@@ -1098,15 +1104,98 @@
   .pen-doc-body { min-height: 40vh; }
   .pen-doc-preview { min-height: 0; }
 }
+/* ---- phones and small tablets: navigation becomes a drawer ---- */
+@media (max-width: 900px) {
+  /* The note gets the whole screen. Previously nav, meter, categories, chats and pages
+     stacked above it — roughly 600px of chrome to scroll past before reading anything. */
+  .pen-shell { display: block; }
+
+  .pen-side {
+    display: flex; flex-direction: column; gap: 4px;
+    position: fixed; z-index: 60; top: 0; left: 0; bottom: 0;
+    width: min(86vw, 340px); padding: 18px 14px 28px;
+    background: var(--paper); border-right: 1px solid var(--line);
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+    transform: translateX(-100%);
+    transition: transform .26s cubic-bezier(.2,.7,.3,1);
+    box-shadow: 0 0 60px -12px rgba(22,21,15,.3);
+  }
+  .pen-shell[data-nav='open'] .pen-side { transform: translateX(0); }
+
+  .pen-scrim {
+    display: block; position: fixed; inset: 0; z-index: 55;
+    background: rgba(22,21,15,.36); border: 0; padding: 0;
+    opacity: 0; pointer-events: none; transition: opacity .26s ease;
+  }
+  .pen-shell[data-nav='open'] .pen-scrim { opacity: 1; pointer-events: auto; }
+
+  /* Inside the drawer these are stacked panels, not sticky columns. */
+  .pen-cats, .pen-rail {
+    position: static; max-height: none; width: auto; order: 0;
+  }
+  .pen-cats-list { flex-direction: column; }
+  .pen-cat { width: 100%; border-radius: 7px; border-color: transparent; padding: 9px 10px; }
+  .pen-cat[data-active='true'] { border-color: var(--accent-line); }
+  .pen-rail { margin-top: 10px; border-top: 1px solid var(--hair); padding-top: 12px; }
+
+  .pen-browse {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-family: var(--ui); font-size: 12.5px; font-weight: 600; color: var(--ink);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 0 12px; height: 40px;
+  }
+  .pen-browse svg { width: 16px; height: 16px; }
+  .pen-browse[aria-expanded='true'] {
+    color: var(--accent-ink); background: var(--accent-wash); border-color: var(--accent-line);
+  }
+
+  /* Controls get a real tap target. */
+  .pen-btn, .pen-brief, .pen-acct-out { min-height: 40px; }
+  .pen-browse { order: -1; }
+
+  /* ⌘K means nothing on a phone and was eating the placeholder's width. */
+  .pen-search-kbd { display: none; }
+}
+
+/* ---- phone header: one row, not four ---- */
+@media (max-width: 680px) {
+  .pen-head { grid-template-columns: auto 1fr; row-gap: 12px; gap: 10px; padding-bottom: 18px; }
+  .pen-head-right { gap: 7px; flex-wrap: nowrap; }
+
+  /* The strapline costs ~120px of a 390px row and says nothing a returning user needs. */
+  .pen-head-left .pen-label { display: none; }
+
+  /* "Connect pen" reads a USB drive via showDirectoryPicker, which no mobile browser
+     implements — and the pen plugs into a laptop anyway. Offering it here is a dead end. */
+  .pen-head-right .pen-btn-primary { display: none; }
+
+  .pen-browse, .pen-head-right .pen-btn, .pen-acct-out { padding-inline: 11px; font-size: 12px; }
+  .pen-browse svg { width: 15px; height: 15px; }
+}
+
+/* The tab row carried the tabs and the category control side by side; at 390px they crushed
+   each other. Below 680px the category gets its own line under the tabs. */
+@media (max-width: 680px) {
+  .pen-tabrow { flex-wrap: wrap; gap: 0 !important; }
+  .pen-tabrow > div:first-child { order: 1; }
+  .pen-tabrow-cat {
+    order: 2; width: 100%; flex-wrap: wrap;
+    padding: 4px 0 10px; margin-top: -1px;
+  }
+}
+
+/* Very narrow: drop the word, keep the icon. */
+@media (max-width: 400px) {
+  .pen-browse { gap: 0; padding-inline: 12px; }
+  .pen-browse-t { display: none; }
+}
+
 @media (max-width: 720px) {
-  .pen-shell { grid-template-columns: 1fr; gap: 16px; }
   .pen-turn-q { max-width: 92%; }
   .pen-chatview { min-height: 0; }
-  .pen-cats { position: static; }
-  /* Categories become a wrapping pill row rather than a column that eats the whole screen. */
-  .pen-cats-list { flex-direction: row; flex-wrap: wrap; gap: 6px; }
-  .pen-cat { width: auto; border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; }
-  .pen-cats-head { padding: 10px 2px 6px; }
+  /* The wrapping pill row that used to live here was for when the nav sat inline above the
+     content. It is a drawer below 900px now, where a scannable vertical list beats pills —
+     chat titles are long and were being truncated into uselessness. */
 }
 
 /* ---- briefing recipients ---- */
@@ -1147,3 +1236,18 @@
 .pen-brief-input:focus { border-color: var(--accent-line); background: var(--panel); }
 .pen-brief-input:disabled { opacity: .55; }
 .pen-brief-hint { font-size: 11px; line-height: 1.45; color: var(--faint); margin-top: 7px; }
+
+/* Anchored popovers do not survive a 390px screen: the briefing panel is 272px wide and hangs
+   off a button mid-row, so it rendered 91px off the left edge. On a phone they become bottom
+   sheets — no anchoring maths, nothing clipped, and within thumb reach. */
+@media (max-width: 680px) {
+  .pen-brief-pop,
+  .pen-catpick-menu {
+    position: fixed;
+    inset: auto 10px calc(10px + env(safe-area-inset-bottom)) 10px;
+    width: auto; max-height: 62vh; overflow-y: auto; z-index: 70;
+    border-radius: 14px;
+    box-shadow: 0 -10px 46px -12px rgba(22, 21, 15, .34);
+  }
+  .pen-catpick-list { max-height: none; }
+}

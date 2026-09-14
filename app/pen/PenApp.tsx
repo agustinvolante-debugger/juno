@@ -78,6 +78,7 @@ export default function PenApp({
 
   const openSession = useCallback((id: string | null) => {
     setView(id ? { k: 'session', id } : { k: 'archive' })
+    setNavOpen(false)
   }, [])
   const [pending, setPending] = useState<Pending[]>([])
   const [penName, setPenName] = useState<string | null>(null)
@@ -94,6 +95,20 @@ export default function PenApp({
   const [docs, setDocs] = useState<DocSummary[]>([])
   const [catFilter, setCatFilter] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+  const [navOpen, setNavOpen] = useState(false)
+
+  useEffect(() => {
+    if (!navOpen) return
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setNavOpen(false)
+    window.addEventListener('keydown', onKey)
+    // Without this the page scrolls under the drawer on iOS, which reads as the app breaking.
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prev
+    }
+  }, [navOpen])
   const [catAsk, setCatAsk] = useState<Record<string, string[]>>({})
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -357,6 +372,18 @@ export default function PenApp({
         />
 
         <div className="pen-head-right">
+          <button
+            className="pen-browse"
+            onClick={() => setNavOpen((v) => !v)}
+            aria-expanded={navOpen}
+            aria-label="Browse recordings and categories"
+          >
+            <svg viewBox="0 0 18 18" aria-hidden>
+              <path d="M2.5 4.5h13M2.5 9h13M2.5 13.5h13" fill="none" stroke="currentColor"
+                    strokeWidth="1.7" strokeLinecap="round" />
+            </svg>
+            <span className="pen-browse-t">Browse</span>
+          </button>
           {supportsPicker && (
             <button className="pen-btn pen-btn-primary" onClick={connectPen}>
               Connect pen
@@ -396,14 +423,18 @@ export default function PenApp({
         />
       )}
 
-      <div className="pen-shell">
+      <div className="pen-shell" data-nav={navOpen ? 'open' : 'closed'}>
+        {/* On desktop `.pen-side` is display:contents, so nav and rail stay direct grid
+            children and the three-column layout is untouched. On a phone it becomes a single
+            off-canvas drawer, which is the only way the note gets the whole screen. */}
+        <div className="pen-side">
         {/* ------------------------------------------------------ categories */}
         <nav className="pen-cats">
           <div className="pen-cats-list">
             <button
               className="pen-cat"
               data-active={view.k === 'archive'}
-              onClick={() => { setView({ k: 'archive' }); setCatFilter(null) }}
+              onClick={() => { setView({ k: 'archive' }); setCatFilter(null); setNavOpen(false) }}
             >
               <span className="pen-cat-label">Your archive</span>
               {!!stats?.actionsOpen && <span className="pen-cat-n">{stats.actionsOpen} open</span>}
@@ -411,7 +442,7 @@ export default function PenApp({
             <button
               className="pen-cat"
               data-active={catFilter === null && view.k !== 'archive'}
-              onClick={() => setCatFilter(null)}
+              onClick={() => { setCatFilter(null); setNavOpen(false) }}
             >
               <span className="pen-cat-label">All recordings</span>
               <span className="pen-cat-n">{sessions.length}</span>
@@ -429,7 +460,7 @@ export default function PenApp({
                     key={c.slug}
                     className="pen-cat"
                     data-active={catFilter === c.slug}
-                    onClick={() => setCatFilter(catFilter === c.slug ? null : c.slug)}
+                    onClick={() => { setCatFilter(catFilter === c.slug ? null : c.slug); setNavOpen(false) }}
                     title={c.label}
                   >
                     <span className="pen-cat-label">{c.label}</span>
@@ -449,6 +480,7 @@ export default function PenApp({
               onClick={() => {
                 setChatSeed(null)
                 setView({ k: 'chat', id: null })
+                setNavOpen(false)
               }}
             >
               +
@@ -466,6 +498,7 @@ export default function PenApp({
                   onClick={() => {
                     setChatSeed(null)
                     setView({ k: 'chat', id: c.id })
+                    setNavOpen(false)
                   }}
                   title={c.title ?? 'Untitled chat'}
                 >
@@ -485,7 +518,7 @@ export default function PenApp({
                     key={d.id}
                     className="pen-cat"
                     data-active={view.k === 'doc' && view.id === d.id}
-                    onClick={() => setView({ k: 'doc', id: d.id })}
+                    onClick={() => { setView({ k: 'doc', id: d.id }); setNavOpen(false) }}
                     title={d.title}
                   >
                     <span className="pen-cat-label">{d.title}</span>
@@ -541,6 +574,14 @@ export default function PenApp({
             </div>
           )}
         </aside>
+        </div>
+
+        <button
+          className="pen-scrim"
+          aria-label="Close navigation"
+          tabIndex={navOpen ? 0 : -1}
+          onClick={() => setNavOpen(false)}
+        />
 
         <section className="pen-shell-main min-w-0">
           {view.k === 'chat' ? (
@@ -1176,7 +1217,7 @@ function Detail({
       {session.error_text && <Banner tone="bad">{session.error_text}</Banner>}
 
       {/* ----------------------------------------------------------- tabs */}
-      <div className="mt-5 flex items-center justify-between gap-4 border-b" style={{ borderColor: 'var(--line)' }}>
+      <div className="pen-tabrow mt-5 flex items-center justify-between gap-4 border-b" style={{ borderColor: 'var(--line)' }}>
         <div className="flex gap-1">
           {(['note', 'transcript'] as const).map((t) => (
             <button key={t} onClick={() => setTab(t)} className="pen-mono px-3 py-2.5 text-[11.5px] uppercase tracking-wider"
@@ -1190,7 +1231,7 @@ function Detail({
           ))}
         </div>
         {utts.length > 0 && (
-          <div className="flex items-center gap-2 pb-1.5">
+          <div className="pen-tabrow-cat flex items-center gap-2 pb-1.5">
             <span className="pen-label">Category</span>
             <CategoryPicker
               value={displayType(session.meeting_type) || null}
