@@ -1052,6 +1052,36 @@
   font-size: 12px; line-height: 1.5; color: var(--faint); padding: 0 8px 8px;
 }
 
+/* ---- usage meter ---- */
+.pen-meter { padding: 16px 8px 4px; }
+.pen-meter-head { display: flex; align-items: baseline; justify-content: space-between; }
+.pen-meter-bar {
+  position: relative; height: 5px; margin-top: 8px; border-radius: 999px;
+  background: var(--sunk); overflow: hidden;
+}
+.pen-meter-bar span {
+  display: block; height: 100%; border-radius: 999px; background: var(--accent);
+  transition: width .4s cubic-bezier(.2,.7,.3,1);
+}
+.pen-meter[data-tone='close'] .pen-meter-bar span { background: var(--warn); }
+.pen-meter[data-tone='over'] .pen-meter-bar span { background: var(--bad); }
+.pen-meter-n {
+  font-family: var(--mono); font-size: 11px; color: var(--soft);
+  font-variant-numeric: tabular-nums; margin-top: 7px;
+}
+.pen-meter-n strong { color: var(--ink); font-weight: 500; }
+.pen-meter[data-tone='over'] .pen-meter-n strong { color: var(--bad); }
+.pen-meter-sub { font-size: 11px; line-height: 1.45; color: var(--faint); margin-top: 2px; }
+.pen-meter-cta {
+  display: inline-block; margin-top: 9px;
+  font-family: var(--ui); font-size: 11.5px; font-weight: 600;
+  color: var(--accent-ink); background: var(--accent-wash);
+  border: 1px solid var(--accent-line); border-radius: 999px; padding: 5px 11px;
+  transition: all .13s;
+}
+.pen-meter-cta:hover { background: #E1EDF2; border-color: var(--accent); }
+.pen-meter-note { display: block; margin-top: 8px; font-size: 10.5px; line-height: 1.45; color: var(--faint); }
+
 /* ---- workspace, narrow ---- */
 @media (max-width: 1180px) {
   .pen-shell { grid-template-columns: 152px minmax(0, 1fr); }

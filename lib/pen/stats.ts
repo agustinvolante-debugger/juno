@@ -9,6 +9,7 @@
 //                     anything, and did they come back", derived from pen_sessions with no
 //                     new tables.
 import { supabaseAdmin } from '@/lib/supabase'
+import { STARTER_MINUTES, monthStart, nextMonthStart, type Usage } from './plan'
 import { slugType, displayType } from './store'
 import type { PenNotes, MeetingType } from './store'
 
@@ -39,6 +40,8 @@ export type ArchiveStats = {
   recordings: number
   minutes: number
   transcribedMinutes: number
+  /** Recording minutes used this calendar month, against the plan's allowance. */
+  usage: Usage
   actionsTotal: number
   actionsOpen: number
   missedSurfaced: number
@@ -76,7 +79,11 @@ export async function archiveStats(userEmail: string): Promise<ArchiveStats> {
   const people = new Set<string>()
   const openActions: OpenAction[] = []
   let minutes = 0
+  let monthMinutes = 0
   let transcribedMinutes = 0
+  // Counted against when the audio was RECORDED, not when it was imported: a week of
+  // showings uploaded on Sunday belongs to the week it happened in.
+  const since = monthStart().getTime()
   let actionsTotal = 0
   let actionsOpen = 0
   let missedSurfaced = 0
@@ -84,6 +91,7 @@ export async function archiveStats(userEmail: string): Promise<ArchiveStats> {
   for (const r of rows) {
     const mins = (r.duration_sec ?? 0) / 60
     minutes += mins
+    if (new Date(r.recorded_at ?? r.created_at).getTime() >= since) monthMinutes += mins
     if (r.status === 'transcribed' || r.status === 'noted') transcribedMinutes += mins
     // Group by slug, display the first label seen for it.
     const label = displayType(r.meeting_type) || 'Uncategorised'
@@ -146,6 +154,11 @@ export async function archiveStats(userEmail: string): Promise<ArchiveStats> {
   return {
     recordings: rows.length,
     minutes: Math.round(minutes),
+    usage: {
+      used: Math.round(monthMinutes),
+      allowance: STARTER_MINUTES,
+      resetsAt: nextMonthStart().toISOString(),
+    },
     transcribedMinutes: Math.round(transcribedMinutes),
     actionsTotal,
     actionsOpen,

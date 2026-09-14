@@ -186,15 +186,18 @@ export async function updateSession(id: string, patch: Record<string, unknown>) 
 
 /** Removes the row AND the audio object. Leaving a recording of a private conversation in
  *  the bucket after the user deleted it would be the wrong default. */
+/**
+ * Deletes the row FIRST, then the stored audio.
+ *
+ * The order matters and used to be the other way round. Both steps can fail independently,
+ * so pick which wreckage you prefer: an orphaned object is wasted bytes nobody can see and a
+ * sweep can reclaim, whereas a surviving row whose audio is already gone is a recording the
+ * user can open, play and re-transcribe — all of which break. We saw exactly that when a
+ * Supabase DELETE returned 504 after the object had gone.
+ */
 export async function deleteSession(userEmail: string, id: string): Promise<boolean> {
   const session = await getSession(userEmail, id)
   if (!session) return false
-
-  if (session.storage_path) {
-    // Best-effort: a missing object should not block the row from going.
-    const { error } = await supabaseAdmin.storage.from(BUCKET).remove([session.storage_path])
-    if (error) console.warn(`pen: could not remove ${session.storage_path}: ${error.message}`)
-  }
 
   const { error } = await supabaseAdmin
     .from('pen_sessions')
@@ -202,6 +205,12 @@ export async function deleteSession(userEmail: string, id: string): Promise<bool
     .eq('user_email', userEmail)
     .eq('id', id)
   if (error) throw new Error(error.message)
+
+  if (session.storage_path) {
+    // Best effort, and deliberately after the row: failing here costs storage, not correctness.
+    const { error: se } = await supabaseAdmin.storage.from(BUCKET).remove([session.storage_path])
+    if (se) console.warn(`pen: orphaned object ${session.storage_path}: ${se.message}`)
+  }
   return true
 }
 

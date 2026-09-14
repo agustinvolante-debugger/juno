@@ -13,7 +13,7 @@ import type { CSSProperties } from 'react'
 // for contrast without leaving the palette.
 
 const SPRING = { type: 'spring' as const, stiffness: 260, damping: 30, mass: 0.9 }
-const FREE_MINUTES = 120
+import { STARTER_MINUTES as FREE_MINUTES } from '@/lib/pen/plan'
 
 /**
  * Stripe Checkout links, one per plan. Payment Links are used rather than a server-side
