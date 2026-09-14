@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { COMMON_TYPES, slugType, isViewing, displayType } from '@/lib/pen/categories'
 import type { PenSession, MeetingType, ChatTurn, PenNotes, NoteBlock } from '@/lib/pen/store'
 import NoteEditor, { blocksFrom } from './NoteEditor'
@@ -16,7 +17,7 @@ import { prepareAudio, fmtMB, fmtDur, SOFT_SIZE_LIMIT } from '@/lib/pen/encode'
 import { postJson, getJson, patchJson, del, errMessage } from '@/lib/pen/http'
 import type { ChatSummary } from '@/lib/pen/chats'
 import type { DocSummary } from '@/lib/pen/docs'
-import type { Usage } from '@/lib/pen/plan'
+import { STARTER_MINUTES, monthStart, nextMonthStart, type Usage } from '@/lib/pen/plan'
 
 /** Same Stripe Payment Link the landing page uses; empty until it is configured. */
 const UPGRADE_URL = process.env.NEXT_PUBLIC_STRIPE_PRO_URL ?? ''
@@ -73,6 +74,8 @@ export default function PenApp({
   email: string
 }) {
   const [sessions, setSessions] = useState<PenSession[]>(initial)
+  const router = useRouter()
+
   const openSession = useCallback((id: string | null) => {
     setView(id ? { k: 'session', id } : { k: 'archive' })
   }, [])
@@ -120,6 +123,21 @@ export default function PenApp({
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
 
+  // Same array that feeds the recordings list, so the meter can never disagree with it.
+  // `stats` is a server snapshot taken at page load and is not refetched on import.
+  const usage = useMemo<Usage>(() => {
+    const since = monthStart().getTime()
+    const mins = sessions.reduce((n, x) => {
+      const when = new Date(x.recorded_at ?? x.created_at).getTime()
+      return when >= since ? n + (x.duration_sec ?? 0) / 60 : n
+    }, 0)
+    return {
+      used: Math.round(mins),
+      allowance: stats?.usage.allowance ?? STARTER_MINUTES,
+      resetsAt: stats?.usage.resetsAt ?? nextMonthStart().toISOString(),
+    }
+  }, [sessions, stats])
+
   const activeId = view.k === 'session' ? view.id : null
   const active = useMemo(() => sessions.find((s) => s.id === activeId) ?? null, [sessions, activeId])
 
@@ -133,9 +151,11 @@ export default function PenApp({
 
   const refresh = useCallback(async () => {
     const r = await fetch('/api/pen/sessions', { cache: 'no-store' })
-    if (!r.ok) return
-    setSessions(((await r.json()) as { sessions: PenSession[] }).sessions)
-  }, [])
+    if (r.ok) setSessions(((await r.json()) as { sessions: PenSession[] }).sessions)
+    // `stats` arrives as a server prop; re-running the server component is the only thing
+    // that refreshes it. Without this the Overview and categories sit frozen at page load.
+    router.refresh()
+  }, [router])
 
   const patchLocal = useCallback((s: PenSession) => {
     setSessions((prev) => prev.map((x) => (x.id === s.id ? s : x)))
@@ -153,7 +173,8 @@ export default function PenApp({
       setView((v) => (v.k === 'session' && v.id === id ? { k: 'archive' } : v))
       return next
     })
-  }, [])
+    router.refresh()
+  }, [router])
 
   const makeNotes = useCallback(
     async (id: string, type?: MeetingType) => {
@@ -177,8 +198,9 @@ export default function PenApp({
         else delete next[id]
         return next
       })
+      router.refresh()
     },
-    [patchLocal],
+    [patchLocal, router],
   )
 
   // Poll anything mid-transcription. Also covers a webhook that never arrives.
@@ -396,7 +418,7 @@ export default function PenApp({
             </button>
           </div>
 
-          {stats?.usage && <UsageMeter usage={stats.usage} upgradeUrl={UPGRADE_URL} />}
+          <UsageMeter usage={usage} upgradeUrl={UPGRADE_URL} />
 
           {!!stats?.categories.length && (
             <>
