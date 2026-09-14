@@ -47,6 +47,12 @@ export default function ChatView({
   const [making, setMaking] = useState<DocKind | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  // Refs, not state, because both guards have to hold WITHIN a single render pass. Clearing
+  // the seed via a parent setState does not take effect before the effect can run again, and
+  // React re-invokes effects in development — which created three identical threads from one
+  // click, 35ms apart, each POSTing without a thread id.
+  const askedSeed = useRef<string | null>(null)
+  const inFlight = useRef(false)
 
   // `id` tracks the thread the answers belong to. A brand-new thread has no id until the
   // first answer comes back, so it is state rather than a prop.
@@ -86,7 +92,8 @@ export default function ChatView({
   // A question typed in the header is asked on arrival rather than dropped into the composer
   // for a second Enter. Consumed immediately so a re-render can't ask it twice.
   useEffect(() => {
-    if (!seed) return
+    if (!seed || askedSeed.current === seed) return
+    askedSeed.current = seed
     onSeedConsumed?.()
     void ask(seed)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -94,7 +101,10 @@ export default function ChatView({
 
   async function ask(question: string) {
     const text = question.trim()
-    if (!text || thinking) return
+    // `thinking` is state and lags by a render; the ref closes the window in which two calls
+    // can both pass this check and create two threads.
+    if (!text || inFlight.current) return
+    inFlight.current = true
     setError(null)
     setQ('')
     setThinking(true)
@@ -115,6 +125,7 @@ export default function ChatView({
       setQ(text) // Give the question back rather than making them retype it.
       setError(errMessage(e, 'Could not search the archive.'))
     } finally {
+      inFlight.current = false
       setThinking(false)
     }
   }
