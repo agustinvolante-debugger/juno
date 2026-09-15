@@ -14,10 +14,15 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
 import { supabaseAdmin } from '@/lib/supabase'
+import { stripMarkdown } from './plaintext'
 import type { ArchiveTurn, PenNotes, MeetingType, Transcript } from './store'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-const MODEL = 'claude-opus-5'
+// Both stages are retrieval, not synthesis — pick the recordings, then answer from what is in
+// front of you and cite it. Haiku 4.5 does that accurately, costs a fraction, and answers fast
+// enough to feel like search rather than a request. Extraction stays on Opus, where the task is
+// noticing what someone missed rather than reporting what they said.
+const MODEL = 'claude-haiku-4-5'
 
 type IndexRow = {
   id: string
@@ -54,10 +59,14 @@ const ANSWER_SCHEMA = {
     },
     citations: {
       type: 'array',
+      description:
+        'ONE entry per recording you cited — never several entries sharing a marker. A marker ' +
+        'identifies a recording, not a footnote, so the list is at most as long as the number of ' +
+        'recordings you were given.',
       items: {
         type: 'object',
         properties: {
-          marker: { type: 'integer', description: 'The number used inline, e.g. 1 for [1]' },
+          marker: { type: 'integer', description: 'The number used inline, e.g. 1 for [1]. Each appears once in this array.' },
           session_id: { type: 'string' },
           quote: { type: 'string', description: 'A short line quoted VERBATIM from that recording\'s transcript, or "" if none applies. Never paraphrase into this field.' },
         },
@@ -75,7 +84,9 @@ const ANSWER_SCHEMA = {
 // recordings that survive selection comfortably can — which is why stage 1 stays on the notes
 // index and stage 2 now reads the actual words.
 const MAX_TRANSCRIPT_CHARS = 24000
-const MAX_ANSWER_ROWS = 8
+// 12 transcripts at the cap below is ~66k tokens, comfortable inside Haiku's window, and it
+// covers a real early archive without selection ever running.
+const MAX_ANSWER_ROWS = 12
 
 const STOPWORDS = new Set(
   ('a about all also am an and any are as at be been but by can did do does for from get got had has have ' +
@@ -174,6 +185,16 @@ export async function askArchive(opts: {
   const today = new Date().toISOString().slice(0, 10)
 
   /* ------------------------------------------------------- stage 1: select */
+  //
+  // Selection exists to keep hundreds of transcripts out of one prompt. Below the answer
+  // stage's own limit there is nothing to select — everything fits — and running the stage
+  // anyway just adds a way to be wrong. It was: on a six-recording archive it rejected
+  // relevant recordings on two of four ordinary questions, including one the per-recording
+  // chat answered in detail, and the user saw "nothing in your archive covers that".
+  if (rows.length <= MAX_ANSWER_ROWS) {
+    return answerFrom(rows.map((r) => r.id), rows, opts, today)
+  }
+
   const sel = await anthropic.messages.parse({
     model: MODEL,
     // max_tokens is a budget for thinking AND output, not just output. Opus 5 reasons by
@@ -183,10 +204,16 @@ export async function askArchive(opts: {
     // nothing, a truncated answer costs the whole request.
     max_tokens: 8000,
     system:
-      'You pick which recordings are needed to answer a question about someone\'s archive of ' +
-      'meetings. Prefer few: only what the question actually needs. Read relative dates ' +
-      `("last week", "yesterday") against today's date. If nothing in the index is relevant, ` +
-      'return an empty list rather than guessing.',
+      'You pick which recordings might help answer a question about someone\'s archive of ' +
+      'meetings.\n\n' +
+      'WHEN IN DOUBT, INCLUDE IT. You are reading short summaries, not the recordings ' +
+      'themselves, so a detail can easily be present in a transcript and absent from its ' +
+      'summary. Including a recording that turns out to be irrelevant costs almost nothing; ' +
+      'leaving one out makes the answer wrong, and the user is told their archive has nothing ' +
+      'on the subject when it does.\n' +
+      `Read relative dates ("last week", "yesterday") against today's date. ` +
+      'Return an empty list only when the question is plainly about something outside this ' +
+      'archive entirely.',
     messages: [
       {
         role: 'user',
@@ -207,16 +234,25 @@ export async function askArchive(opts: {
   const literal = await transcriptMatches(opts.userEmail, keyTerms(opts.question))
   const wanted = Array.from(new Set([...picked, ...literal.filter((id) => rows.some((r) => r.id === id))]))
     .slice(0, MAX_ANSWER_ROWS)
-  if (!wanted.length) {
-    return {
-      answer:
-        'Nothing in your archive covers that. Either the recordings you mean have not been ' +
-        'transcribed yet, or the question is about something that was never recorded.',
-      citations: [],
-    }
-  }
+  // An empty selection is not evidence of an empty archive — it is one model reading short
+  // summaries and being timid. Telling someone their archive has nothing on a subject it
+  // demonstrably covers is the worst answer this thing can give, so fall back to the most
+  // recent recordings and let the answer stage decide against the actual transcripts. It is
+  // grounded and will say "that is not in these recordings" when that is genuinely true.
+  const rowsToRead = wanted.length ? wanted : rows.slice(0, MAX_ANSWER_ROWS).map((r) => r.id)
 
-  /* ------------------------------------------------------- stage 2: answer */
+  return answerFrom(rowsToRead, rows, opts, today)
+}
+
+/* --------------------------------------------------------- stage 2: answer */
+
+async function answerFrom(
+  wanted: string[],
+  rows: IndexRow[],
+  opts: { userEmail: string; question: string; history: ArchiveTurn[] },
+  today: string,
+): Promise<{ answer: string; citations: { marker: number; session_id: string; title: string; quote: string }[] }> {
+  wanted = wanted.slice(0, MAX_ANSWER_ROWS)
   const { data: full, error: e2 } = await supabaseAdmin
     .from('pen_sessions')
     .select('id,title,client_name,meeting_type,recorded_at,created_at,notes,user_notes,transcript,transcript_edits')
@@ -258,8 +294,18 @@ export async function askArchive(opts: {
       '- Answer only from the recordings supplied. If they do not settle it, say so.\n' +
       '- Cite inline with the bracketed number each recording was given, e.g. [2]. Every factual ' +
       'claim needs a marker, and never cite a number you were not given.\n' +
-      '- Be brief and concrete. Prose, not headings. Do not restate the question.\n' +
+      '- PLAIN PROSE ONLY. The answer is rendered as plain text, so markdown does not format — ' +
+      'asterisks, hashes and numbered headings appear literally on screen. No **bold**, no ' +
+      'headings, no bulleted or numbered lists. Paragraphs and sentences.\n' +
+      '- Be brief. Answer the question asked and stop; a few short paragraphs, not a report. ' +
+      'Detail belongs in the recording, not in a wall of text. Do not restate the question.\n' +
       '- When several recordings agree, cite them together, e.g. [1][3].\n' +
+      '- The citations list has ONE entry per recording, not one per claim. If you cite [1] ' +
+      'twelve times in the prose, [1] still appears once in the list.\n' +
+      '- These are the USER\'S OWN recordings, and a diarised transcript labels speakers A and B ' +
+      'without saying which is them. Do not decide who the user was. Say "the interviewer" and ' +
+      '"the candidate", or name people the transcript names; never write "you said" or "you ' +
+      'interviewed" unless the transcript makes it explicit.\n' +
       '- Never invent names, numbers, dates or identifiers.',
     messages: [
       ...opts.history.slice(-6).map((t) => ({ role: t.role, content: t.content })),
@@ -269,16 +315,36 @@ export async function askArchive(opts: {
   })
 
   const parsed = ans.parsed_output
-  const answer = parsed?.answer ?? ''
-  const citations = (parsed?.citations ?? [])
-    .filter((c) => byId.has(c.session_id))
-    .map((c) => ({
+  const answer = stripMarkdown(parsed?.answer ?? '')
+
+  // Markers are assigned HERE, by position, when the corpus is built — the model is told which
+  // number each recording has, it does not choose them. So the mapping is already known and the
+  // citations array is a convenience, not the source of truth. Backfilling from it means a
+  // marker in the prose always becomes a clickable pill, even on a run where the model returns
+  // an incomplete list (Haiku does, intermittently) — and a marker with no pill is a dead
+  // reference in an answer whose whole point is being traceable.
+  const byMarker = new Map(marked.map((m) => [m.marker, m.id]))
+  const out = new Map<number, { marker: number; session_id: string; title: string; quote: string }>()
+
+  for (const c of parsed?.citations ?? []) {
+    if (!byId.has(c.session_id)) continue
+    out.set(c.marker, {
       marker: c.marker,
       session_id: c.session_id,
       title: (byId.get(c.session_id) as IndexRow).title ?? 'Untitled',
       quote: c.quote ?? '',
-    }))
+    })
+  }
 
+  for (const m of answer.matchAll(/\[(\d+)\]/g)) {
+    const n = Number(m[1])
+    if (out.has(n)) continue
+    const id = byMarker.get(n)
+    if (!id || !byId.has(id)) continue
+    out.set(n, { marker: n, session_id: id, title: (byId.get(id) as IndexRow).title ?? 'Untitled', quote: '' })
+  }
+
+  const citations = Array.from(out.values()).sort((a, b) => a.marker - b.marker)
   return { answer, citations }
 }
 

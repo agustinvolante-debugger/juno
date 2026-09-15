@@ -2,10 +2,13 @@
 // the recording and says so plainly when the recording does not contain the answer. The whole
 // point of asking your own meeting a question is that the answer is trustworthy.
 import Anthropic from '@anthropic-ai/sdk'
+import { stripMarkdown } from './plaintext'
 import type { ChatTurn, PenNotes } from './store'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-const MODEL = 'claude-opus-5'
+// The transcript is already in context; the job is to read it and answer accurately, which is
+// Haiku's shape. See lib/pen/archive.ts for the same reasoning.
+const MODEL = 'claude-haiku-4-5'
 
 const SYSTEM = `You answer questions about one specific meeting, using only its transcript.
 
@@ -15,6 +18,8 @@ const SYSTEM = `You answer questions about one specific meeting, using only its 
 - Speaker labels come from an imperfect diarizer. If attribution is genuinely ambiguous, say so
   rather than picking a speaker.
 - Be brief. Two or three sentences unless asked to go long. The person asking was in the room.
+- Plain prose only. The answer is rendered as plain text, so **asterisks**, # headings and
+  bulleted lists appear literally on screen rather than formatting.
 - Never invent identifiers, dates or numbers that are not spoken in the transcript.`
 
 export function suggestedQuestions(notes: PenNotes): string[] {
@@ -62,9 +67,10 @@ export async function askTranscript(opts: {
     ],
   })
 
-  return res.content
-    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-    .map((b) => b.text)
-    .join('')
-    .trim()
+  return stripMarkdown(
+    res.content
+      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+      .map((b) => b.text)
+      .join(''),
+  )
 }
