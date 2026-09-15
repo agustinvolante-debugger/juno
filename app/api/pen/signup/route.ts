@@ -92,7 +92,6 @@ async function notifyOwner(s: Signup, created: boolean) {
     ['Email', s.email],
     ['Phone', s.phone ?? '—'],
     ['Role', s.role ?? '—'],
-    ['Already owns one', s.has_recorder ? 'yes' : 'no'],
     ['Ship to', [s.ship_line1, s.ship_line2, s.ship_city, s.ship_state, s.ship_postcode, s.ship_country].filter(Boolean).join(', ') || '—'],
     ['Note', s.note ?? '—'],
   ]

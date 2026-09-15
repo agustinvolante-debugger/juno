@@ -11,7 +11,6 @@ export type Signup = {
   email: string
   phone?: string | null
   role?: string | null
-  has_recorder: boolean
   ship_line1?: string | null
   ship_line2?: string | null
   ship_city?: string | null
@@ -44,9 +43,6 @@ export function validate(b: Record<string, unknown>): { ok: true; value: Signup 
   if (!city) return { ok: false, error: 'We need a city to send the recorder.' }
   if (!postcode) return { ok: false, error: 'We need a ZIP or postcode to send the recorder.' }
 
-  // Retained: someone who already owns a recorder is still worth knowing about, and it is a
-  // fair question even when we are posting one anyway.
-  const hasRecorder = b.has_recorder === true
 
   return {
     ok: true,
@@ -55,7 +51,6 @@ export function validate(b: Record<string, unknown>): { ok: true; value: Signup 
       email,
       phone: str(b.phone, 40) || null,
       role: str(b.role, 60) || null,
-      has_recorder: hasRecorder,
       ship_line1: line1 || null,
       ship_line2: str(b.ship_line2, 200) || null,
       ship_city: city || null,

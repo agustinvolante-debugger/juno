@@ -11,7 +11,6 @@ type State = 'idle' | 'sending' | 'done'
 export default function SignupPage() {
   const [state, setState] = useState<State>('idle')
   const [error, setError] = useState<string | null>(null)
-  const [hasRecorder, setHasRecorder] = useState(false)
   const startedAt = useRef(Date.now())
   const firstField = useRef<HTMLInputElement>(null)
 
@@ -29,7 +28,6 @@ export default function SignupPage() {
         email: f.get('email'),
         phone: f.get('phone'),
         role: f.get('role'),
-        has_recorder: hasRecorder,
         ship_line1: f.get('ship_line1'),
         ship_line2: f.get('ship_line2'),
         ship_city: f.get('ship_city'),
@@ -114,25 +112,7 @@ export default function SignupPage() {
             </label>
           </div>
 
-          {/* No longer gates the address — a recorder ships with every plan — but still worth
-              asking: someone who already owns one may not want a second, and it is a cheap
-              signal about how they will actually use it. */}
-          <fieldset className="pen-su-choice">
-            <legend className="pen-label">Do you already own a voice recorder?</legend>
-            <div className="pen-su-choice-row">
-              <button type="button" className="pen-su-opt" data-on={!hasRecorder} onClick={() => setHasRecorder(false)}>
-                <strong>No</strong>
-                <span>Send me the pen</span>
-              </button>
-              <button type="button" className="pen-su-opt" data-on={hasRecorder} onClick={() => setHasRecorder(true)}>
-                <strong>Yes</strong>
-                <span>I&rsquo;ll use mine too</span>
-              </button>
-            </div>
-          </fieldset>
-
-          {(
-            <div className="pen-su-ship">
+          <div className="pen-su-ship">
               <div className="pen-label pen-su-ship-head">Where to send the recorder</div>
               <div className="pen-su-grid">
                 <label className="pen-su-field pen-su-wide">
@@ -160,8 +140,7 @@ export default function SignupPage() {
                   <input name="ship_country" autoComplete="country-name" defaultValue="United States" />
                 </label>
               </div>
-            </div>
-          )}
+          </div>
 
           <label className="pen-su-field pen-su-wide">
             <span className="pen-label">Anything we should know <em>optional</em></span>
