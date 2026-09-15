@@ -13,7 +13,7 @@ import type { CSSProperties } from 'react'
 // for contrast without leaving the palette.
 
 const SPRING = { type: 'spring' as const, stiffness: 260, damping: 30, mass: 0.9 }
-import { STARTER_MINUTES as FREE_MINUTES } from '@/lib/pen/plan'
+import { UPFRONT_USD, UPFRONT_MONTHS, MONTHLY_USD } from '@/lib/pen/plan'
 
 /**
  * Stripe Checkout links, one per plan. Payment Links are used rather than a server-side
@@ -22,8 +22,13 @@ import { STARTER_MINUTES as FREE_MINUTES } from '@/lib/pen/plan'
  * Until they are set the buttons fall back to sign-in and say so. A button that looks like it
  * takes payment but does not is worse than one that admits the till is not open yet.
  */
-const STRIPE_STARTER = process.env.NEXT_PUBLIC_STRIPE_STARTER_URL ?? ''
-const STRIPE_PRO = process.env.NEXT_PUBLIC_STRIPE_PRO_URL ?? ''
+// One plan, so one link. The older per-tier vars are still read as a fallback so an
+// out-of-date environment keeps working rather than silently showing a dead button.
+const STRIPE_URL =
+  process.env.NEXT_PUBLIC_STRIPE_URL ||
+  process.env.NEXT_PUBLIC_STRIPE_STARTER_URL ||
+  process.env.NEXT_PUBLIC_STRIPE_PRO_URL ||
+  ''
 
 function PlanCta({ href, children, variant }: { href: string; children: React.ReactNode; variant: 'ghost' | 'accent' }) {
   const cls = `pen-lp-btn ${variant === 'accent' ? 'pen-lp-btn-accent' : 'pen-lp-btn-ghost'} mt-auto w-full justify-center`
@@ -127,11 +132,11 @@ function Hero() {
 
         <Reveal delay={0.15}>
           <div className="flex flex-wrap items-center gap-3">
-            <Link href={`${SIGN_UP}?from=hero`} className="pen-lp-btn pen-lp-btn-primary">Try it free</Link>
+            <Link href={`${SIGN_UP}?from=hero`} className="pen-lp-btn pen-lp-btn-primary">Get started</Link>
             <a href="#how" className="pen-lp-btn">See how it works</a>
           </div>
           <p className="pen-mono mt-4 text-[11px]" style={{ color: 'var(--faint)' }}>
-            {`First ${FREE_MINUTES} minutes free \u00B7 then $5 a month \u00B7 works with any USB recorder`}
+            {`$${UPFRONT_USD} for your first ${UPFRONT_MONTHS} months, pen included \u00B7 then $${MONTHLY_USD} a month`}
           </p>
         </Reveal>
       </div>
@@ -585,17 +590,12 @@ function Facet({ label, items, tone }: { label: string; items: string[]; tone?: 
 
 /* ----------------------------------------------------------------- pricing */
 
-const FREE = [
-  `${FREE_MINUTES} minutes of recording a month`,
-  'Full transcript with who said what',
-  'Summary, decisions, action items',
-  'What you might have missed',
-  'Ask questions about one recording',
-]
-
-const PRO = [
+const INCLUDED = [
+  'A recorder, posted to you',
   'Unlimited minutes, unlimited recordings',
-  'Everything in Starter',
+  'Full transcript with who said what',
+  'Summary, decisions and action items',
+  'What you might have missed',
   'Ask across every recording you own',
   'Draft emails, memos and tracker rows',
   'A briefing in your inbox after each meeting',
@@ -609,52 +609,49 @@ function Pricing() {
         <Reveal>
           <div className="pen-lp-eyebrow pen-lp-eyebrow-dark">Pricing</div>
           <h2 className="pen-lp-h2 pen-lp-h2-tight" style={{ color: 'var(--paper)' }}>
-            Try it free. Then $5 a month.
+            One plan. The recorder comes with it.
           </h2>
         </Reveal>
 
-        <div className="mt-14 grid gap-6 lg:grid-cols-2 lg:gap-7">
-          <Reveal delay={0.06} className="order-2 lg:order-1">
-            <article className="pen-lp-plan">
-              <header>
-                <h3 className="pen-mono text-[11px] uppercase tracking-[.14em]" style={{ color: 'rgba(251,250,246,.5)' }}>Starter</h3>
-                <div className="mt-4 flex items-baseline gap-2">
-                  <span className="pen-display text-[46px] leading-none" style={{ color: 'var(--paper)' }}>$5</span>
-                  <span className="pen-mono text-[12px]" style={{ color: 'rgba(251,250,246,.5)' }}>/month</span>
-                </div>
-                <p className="mt-3 text-[14.5px] leading-[1.55]" style={{ color: 'rgba(251,250,246,.6)' }}>
-                  Your first {FREE_MINUTES} minutes are free. Enough to find out whether it changes anything.
-                </p>
-              </header>
-              <ul className="pen-lp-feats">
-                {FREE.map((f) => <Feat key={f}>{f}</Feat>)}
-              </ul>
-              <PlanCta href={STRIPE_STARTER} variant="ghost">Get Starter</PlanCta>
-            </article>
-          </Reveal>
-
-          <Reveal delay={0.12} className="order-1 lg:order-2">
+        <div className="mt-14 flex justify-center">
+          <Reveal delay={0.08} className="w-full max-w-[520px]">
             <article className="pen-lp-plan pen-lp-plan-pro">
-              <span className="pen-lp-ribbon">Most popular</span>
               <header>
-                <h3 className="pen-mono text-[11px] uppercase tracking-[.14em]" style={{ color: 'var(--accent-line)' }}>Pro</h3>
+                <h3 className="pen-mono text-[11px] uppercase tracking-[.14em]" style={{ color: 'var(--accent-line)' }}>
+                  Everything, one price
+                </h3>
                 <div className="mt-4 flex items-baseline gap-2">
-                  <span className="pen-display text-[46px] leading-none" style={{ color: 'var(--paper)' }}>$15</span>
-                  <span className="pen-mono text-[12px]" style={{ color: 'rgba(251,250,246,.5)' }}>/month</span>
+                  <span className="pen-display text-[52px] leading-none" style={{ color: 'var(--paper)' }}>
+                    ${UPFRONT_USD}
+                  </span>
+                  <span className="pen-mono text-[12px]" style={{ color: 'rgba(251,250,246,.55)' }}>
+                    first {UPFRONT_MONTHS} months
+                  </span>
                 </div>
-                <p className="mt-3 text-[14.5px] leading-[1.55]" style={{ color: 'rgba(251,250,246,.72)' }}>
-                  For anyone whose week is back-to-back and whose memory is the weak link.
+                <p className="mt-3 text-[15px] leading-[1.55]" style={{ color: 'rgba(251,250,246,.72)' }}>
+                  Three months and a recorder, posted to you. After that it&rsquo;s ${MONTHLY_USD} a
+                  month, and you can stop whenever you like.
                 </p>
               </header>
+
               <ul className="pen-lp-feats">
-                {PRO.map((f) => <Feat key={f} pro>{f}</Feat>)}
+                {INCLUDED.map((f) => <Feat key={f} pro>{f}</Feat>)}
               </ul>
-              <PlanCta href={STRIPE_PRO} variant="accent">Get Pro</PlanCta>
-              {/* Both CTAs go to Stripe Checkout once the Payment Link env vars are set; until
-                  then they sign you in and say plainly that card payments are not open. */}
+
+              <PlanCta href={STRIPE_URL} variant="accent">Get started</PlanCta>
             </article>
           </Reveal>
         </div>
+
+        <Reveal delay={0.16}>
+          {/* $45 over 3 months is exactly the $15 monthly rate, so there is no discount to
+              claim and pretending otherwise would be noticed. What you actually get for paying
+              up front is the recorder, which is the thing worth saying. */}
+          <p className="pen-lp-pricing-note">
+            That&rsquo;s three months at the usual rate, with the recorder thrown in.
+            No card details beyond the first payment, and nothing to cancel if you stop.
+          </p>
+        </Reveal>
       </div>
     </section>
   )

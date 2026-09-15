@@ -17,10 +17,7 @@ import { prepareAudio, fmtMB, fmtDur, SOFT_SIZE_LIMIT } from '@/lib/pen/encode'
 import { postJson, getJson, patchJson, del, errMessage, PenHttpError } from '@/lib/pen/http'
 import type { ChatSummary } from '@/lib/pen/chats'
 import type { DocSummary } from '@/lib/pen/docs'
-import { STARTER_MINUTES, monthStart, nextMonthStart, type Usage } from '@/lib/pen/plan'
-
-/** Same Stripe Payment Link the landing page uses; empty until it is configured. */
-const UPGRADE_URL = process.env.NEXT_PUBLIC_STRIPE_PRO_URL ?? ''
+import { monthStart, nextMonthStart, type Usage } from '@/lib/pen/plan'
 
 /**
  * What the main column is showing. Chat and pages are views, not overlays: the whole point
@@ -156,7 +153,6 @@ export default function PenApp({
     }, 0)
     return {
       used: Math.round(mins),
-      allowance: stats?.usage.allowance ?? STARTER_MINUTES,
       resetsAt: stats?.usage.resetsAt ?? nextMonthStart().toISOString(),
     }
   }, [sessions, stats])
@@ -480,7 +476,7 @@ export default function PenApp({
             </button>
           </div>
 
-          <UsageMeter usage={usage} upgradeUrl={UPGRADE_URL} />
+          <UsageMeter usage={usage} />
 
           {!!stats?.categories.length && (
             <>
@@ -715,44 +711,27 @@ function useIsPhone(): boolean {
 /* ============================================================ usage meter */
 
 /**
- * Minutes used this month, always visible in the nav.
+ * Minutes recorded this month.
  *
- * It is a NUDGE, not a gate — nothing in the app currently refuses a recording once the
- * allowance is spent, so the copy must not imply otherwise. Over the line it says "over by
- * N", never "blocked", because claiming an enforcement that does not exist is the kind of
- * thing a user discovers at the worst moment.
+ * It used to be a gauge against a 120-minute allowance, with an upgrade prompt as it filled.
+ * The plan is unlimited now, so a bar with no ceiling would be decoration and an upgrade CTA
+ * would be a lie. What is left is the number itself, which is still worth showing: it is the
+ * evidence that the archive is accumulating, which is the whole reason to keep recording.
  */
-function UsageMeter({ usage, upgradeUrl }: { usage: Usage; upgradeUrl: string }) {
-  const pct = usage.allowance > 0 ? Math.min(100, (usage.used / usage.allowance) * 100) : 0
-  const over = usage.used > usage.allowance
-  const close = !over && pct >= 80
+function UsageMeter({ usage }: { usage: Usage }) {
+  const hours = usage.used / 60
   const resets = new Date(usage.resetsAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })
 
   return (
-    <div className="pen-meter" data-tone={over ? 'over' : close ? 'close' : 'ok'}>
+    <div className="pen-meter">
       <div className="pen-meter-head">
-        <span className="pen-label">Minutes this month</span>
-      </div>
-      <div className="pen-meter-bar" role="img"
-           aria-label={`${usage.used} of ${usage.allowance} minutes used this month`}>
-        <span style={{ width: `${pct}%` }} />
+        <span className="pen-label">Recorded this month</span>
       </div>
       <div className="pen-meter-n">
-        <strong>{usage.used}</strong> of {usage.allowance}
+        <strong>{hours >= 1 ? `${hours.toFixed(1)}h` : `${usage.used}m`}</strong>
+        <span className="pen-meter-un">unlimited</span>
       </div>
-      <div className="pen-meter-sub">
-        {over
-          ? `${usage.used - usage.allowance} over · resets ${resets}`
-          : `Resets ${resets}`}
-      </div>
-      {(over || close) &&
-        (upgradeUrl ? (
-          <a className="pen-meter-cta" href={upgradeUrl} rel="noopener">
-            Upgrade for unlimited
-          </a>
-        ) : (
-          <span className="pen-meter-note">Unlimited minutes on Pro, coming at launch</span>
-        ))}
+      <div className="pen-meter-sub">Resets {resets}</div>
     </div>
   )
 }

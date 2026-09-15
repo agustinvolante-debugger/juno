@@ -57,7 +57,7 @@ export default function SignupPage() {
             <h1 className="pen-display text-[34px] leading-tight">You&rsquo;re on the list.</h1>
             <p className="mt-4 text-[16px] leading-relaxed" style={{ color: 'var(--soft)' }}>
               There&rsquo;s a confirmation in your inbox. We&rsquo;ll email you the moment your
-              account is open{hasRecorder ? '' : ', and sort out getting a recorder to you'}.
+              account is open, and get the recorder in the post.
             </p>
             <Link href="/pen" className="pen-lp-btn pen-lp-btn-ghost mt-8 inline-flex">Back to the site</Link>
           </div>
@@ -74,7 +74,7 @@ export default function SignupPage() {
           <div className="pen-lp-eyebrow pen-su-eyebrow">Get started</div>
           <h1 className="pen-display pen-su-h1">Record the meeting. Read the write-up.</h1>
           <p className="mt-4 max-w-[52ch] text-[16.5px] leading-relaxed" style={{ color: 'var(--soft)' }}>
-            Tell us where to send things. Takes a minute, and there&rsquo;s no card.
+            Your plan includes a recorder, so we need somewhere to post it. Takes a minute.
           </p>
         </header>
 
@@ -114,29 +114,30 @@ export default function SignupPage() {
             </label>
           </div>
 
-          {/* The one question that decides whether anything gets posted. Asked plainly so the
-              address section only appears for people it applies to. */}
+          {/* No longer gates the address — a recorder ships with every plan — but still worth
+              asking: someone who already owns one may not want a second, and it is a cheap
+              signal about how they will actually use it. */}
           <fieldset className="pen-su-choice">
-            <legend className="pen-label">Do you have a voice recorder?</legend>
+            <legend className="pen-label">Do you already own a voice recorder?</legend>
             <div className="pen-su-choice-row">
               <button type="button" className="pen-su-opt" data-on={!hasRecorder} onClick={() => setHasRecorder(false)}>
-                <strong>Send me one</strong>
-                <span>I&rsquo;ll use the pen</span>
+                <strong>No</strong>
+                <span>Send me the pen</span>
               </button>
               <button type="button" className="pen-su-opt" data-on={hasRecorder} onClick={() => setHasRecorder(true)}>
-                <strong>I have one</strong>
-                <span>Or I&rsquo;ll use my phone</span>
+                <strong>Yes</strong>
+                <span>I&rsquo;ll use mine too</span>
               </button>
             </div>
           </fieldset>
 
-          {!hasRecorder && (
+          {(
             <div className="pen-su-ship">
-              <div className="pen-label pen-su-ship-head">Where to send it</div>
+              <div className="pen-label pen-su-ship-head">Where to send the recorder</div>
               <div className="pen-su-grid">
                 <label className="pen-su-field pen-su-wide">
                   <span className="pen-label">Street address</span>
-                  <input name="ship_line1" autoComplete="address-line1" placeholder="1200 Brickell Ave" />
+                  <input name="ship_line1" required autoComplete="address-line1" placeholder="1200 Brickell Ave" />
                 </label>
                 <label className="pen-su-field pen-su-wide">
                   <span className="pen-label">Apartment, suite <em>optional</em></span>
@@ -144,7 +145,7 @@ export default function SignupPage() {
                 </label>
                 <label className="pen-su-field">
                   <span className="pen-label">City</span>
-                  <input name="ship_city" autoComplete="address-level2" placeholder="Miami" />
+                  <input name="ship_city" required autoComplete="address-level2" placeholder="Miami" />
                 </label>
                 <label className="pen-su-field">
                   <span className="pen-label">State</span>
@@ -152,7 +153,7 @@ export default function SignupPage() {
                 </label>
                 <label className="pen-su-field">
                   <span className="pen-label">ZIP / postcode</span>
-                  <input name="ship_postcode" autoComplete="postal-code" placeholder="33131" inputMode="numeric" />
+                  <input name="ship_postcode" required autoComplete="postal-code" placeholder="33131" inputMode="numeric" />
                 </label>
                 <label className="pen-su-field">
                   <span className="pen-label">Country</span>
@@ -174,8 +175,7 @@ export default function SignupPage() {
           </button>
 
           <p className="pen-su-fine">
-            We use this to set up your account and, if you need one, to post a recorder. Nothing
-            else, and no card.
+            We use this to set up your account and post your recorder. Nothing else.
           </p>
         </form>
       </main>

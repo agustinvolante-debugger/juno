@@ -36,16 +36,17 @@ export function validate(b: Record<string, unknown>): { ok: true; value: Signup 
   const email = str(b.email, 200)
   if (!EMAIL_RE.test(email)) return { ok: false, error: 'That email address doesn’t look right.' }
 
-  const hasRecorder = b.has_recorder === true
-  const wantsPen = !hasRecorder
-
-  // Only enforced when we actually have to post something.
+  // Every plan includes a recorder, so there is always something to post.
   const line1 = str(b.ship_line1, 200)
   const city = str(b.ship_city, 120)
   const postcode = str(b.ship_postcode, 32)
-  if (wantsPen && (!line1 || !city || !postcode)) {
-    return { ok: false, error: 'We need a street, a city and a postcode to send the pen.' }
-  }
+  if (!line1) return { ok: false, error: 'We need a street address to send the recorder.' }
+  if (!city) return { ok: false, error: 'We need a city to send the recorder.' }
+  if (!postcode) return { ok: false, error: 'We need a ZIP or postcode to send the recorder.' }
+
+  // Retained: someone who already owns a recorder is still worth knowing about, and it is a
+  // fair question even when we are posting one anyway.
+  const hasRecorder = b.has_recorder === true
 
   return {
     ok: true,

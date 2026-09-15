@@ -1059,6 +1059,7 @@
 /* ---- usage meter ---- */
 .pen-meter { padding: 16px 8px 4px; }
 .pen-meter-head { display: flex; align-items: baseline; justify-content: space-between; }
+/* Still used by the phone import sheet's progress. */
 .pen-meter-bar {
   position: relative; height: 5px; margin-top: 8px; border-radius: 999px;
   background: var(--sunk); overflow: hidden;
@@ -1070,8 +1071,13 @@
 .pen-meter[data-tone='close'] .pen-meter-bar span { background: var(--warn); }
 .pen-meter[data-tone='over'] .pen-meter-bar span { background: var(--bad); }
 .pen-meter-n {
+  display: flex; align-items: baseline; gap: 8px;
   font-family: var(--mono); font-size: 11px; color: var(--soft);
   font-variant-numeric: tabular-nums; margin-top: 7px;
+}
+.pen-meter-n strong { font-size: 17px; }
+.pen-meter-un {
+  font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--good);
 }
 .pen-meter-n strong { color: var(--ink); font-weight: 500; }
 .pen-meter[data-tone='over'] .pen-meter-n strong { color: var(--bad); }
@@ -1435,4 +1441,9 @@
   width: 50px; height: 50px; border-radius: 999px; margin-bottom: 22px;
   display: flex; align-items: center; justify-content: center;
   background: var(--good-wash); border: 1px solid #D6E4D9; color: var(--good); font-size: 23px;
+}
+
+.pen-lp-pricing-note {
+  margin: 26px auto 0; max-width: 46ch; text-align: center;
+  font-size: 13.5px; line-height: 1.6; color: rgba(251, 250, 246, .5);
 }

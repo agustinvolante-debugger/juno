@@ -9,7 +9,7 @@
 //                     anything, and did they come back", derived from pen_sessions with no
 //                     new tables.
 import { supabaseAdmin } from '@/lib/supabase'
-import { STARTER_MINUTES, monthStart, nextMonthStart, type Usage } from './plan'
+import { monthStart, nextMonthStart, type Usage } from './plan'
 import { slugType, displayType } from './store'
 import type { PenNotes, MeetingType } from './store'
 
@@ -156,7 +156,6 @@ export async function archiveStats(userEmail: string): Promise<ArchiveStats> {
     minutes: Math.round(minutes),
     usage: {
       used: Math.round(monthMinutes),
-      allowance: STARTER_MINUTES,
       resetsAt: nextMonthStart().toISOString(),
     },
     transcribedMinutes: Math.round(transcribedMinutes),

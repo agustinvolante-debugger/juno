@@ -55,7 +55,7 @@ export async function POST(req: Request) {
 
     // Confirmation to them, and a heads-up to us. Neither is allowed to fail the signup —
     // the record is already saved, and an email problem is ours, not theirs.
-    void sendConfirmation(v.value.name, v.value.email, !v.value.has_recorder).catch(() => {})
+    void sendConfirmation(v.value.name, v.value.email).catch(() => {})
     void notifyOwner(v.value, created).catch(() => {})
 
     return NextResponse.json({ ok: true, created })
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
 
 const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-async function sendConfirmation(name: string, email: string, wantsPen: boolean) {
+async function sendConfirmation(name: string, email: string) {
   const first = name.split(/\s+/)[0]
   await sendEmailResult({
     to: email,
@@ -77,10 +77,7 @@ async function sendConfirmation(name: string, email: string, wantsPen: boolean) 
       `<p>Hi ${esc(first)},</p>` +
       `<p>You’re on the list. Pen turns a recorded conversation into the write-up — what was said, ` +
       `who said it, what you agreed to, and the thing you nearly missed.</p>` +
-      (wantsPen
-        ? `<p>We have your address and will be in touch about getting a recorder to you.</p>`
-        : `<p>You said you already have a recorder, so there’s nothing to ship — you’ll be able to ` +
-          `upload straight away.</p>`) +
+      `<p>We have your address and will get the recorder in the post.</p>` +
       `<p>We’ll email you the moment your account is open. Replying to this reaches a person.</p>` +
       `<p style="color:#514E45">— Agustin</p>` +
       `</body></html>`,
@@ -95,7 +92,7 @@ async function notifyOwner(s: Signup, created: boolean) {
     ['Email', s.email],
     ['Phone', s.phone ?? '—'],
     ['Role', s.role ?? '—'],
-    ['Has a recorder', s.has_recorder ? 'yes' : 'no — wants one'],
+    ['Already owns one', s.has_recorder ? 'yes' : 'no'],
     ['Ship to', [s.ship_line1, s.ship_line2, s.ship_city, s.ship_state, s.ship_postcode, s.ship_country].filter(Boolean).join(', ') || '—'],
     ['Note', s.note ?? '—'],
   ]

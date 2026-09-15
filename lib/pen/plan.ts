@@ -1,13 +1,21 @@
-// Plan allowances. Shared so the landing page and the in-app meter can never disagree about
-// what a plan includes — they were two separate numbers waiting to drift apart.
+// The plan. One of them.
+//
+// Was a free 120-minute Starter and a $15 Pro. Now: $45 covers the first three months and
+// the recorder, then $15/month, unlimited minutes. Nothing is free, so nothing in the product
+// may say it is.
 
-export const STARTER_MINUTES = 120
+/** Charged up front. Covers the first three months and the pen. */
+export const UPFRONT_USD = 45
+export const UPFRONT_MONTHS = 3
+/** Charged monthly after the up-front period. */
+export const MONTHLY_USD = 15
+
+/** No cap. Kept as a named export so the meter reads as a decision rather than a missing check. */
+export const MINUTES_UNLIMITED = true
 
 export type Usage = {
   /** Minutes recorded in the current calendar month. */
   used: number
-  /** The month's allowance. */
-  allowance: number
   /** ISO timestamp of the next reset (first instant of next month, UTC). */
   resetsAt: string
 }
