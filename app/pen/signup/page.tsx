@@ -1,0 +1,184 @@
+'use client'
+
+import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
+import { ROLES } from '@/lib/pen/signup-fields'
+import { postJson, errMessage } from '@/lib/pen/http'
+import '../pen-theme.css'
+
+type State = 'idle' | 'sending' | 'done'
+
+export default function SignupPage() {
+  const [state, setState] = useState<State>('idle')
+  const [error, setError] = useState<string | null>(null)
+  const [hasRecorder, setHasRecorder] = useState(false)
+  const startedAt = useRef(Date.now())
+  const firstField = useRef<HTMLInputElement>(null)
+
+  useEffect(() => firstField.current?.focus(), [])
+
+  async function submit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (state === 'sending') return
+    setError(null)
+    setState('sending')
+    const f = new FormData(e.currentTarget)
+    try {
+      await postJson('/api/pen/signup', {
+        name: f.get('name'),
+        email: f.get('email'),
+        phone: f.get('phone'),
+        role: f.get('role'),
+        has_recorder: hasRecorder,
+        ship_line1: f.get('ship_line1'),
+        ship_line2: f.get('ship_line2'),
+        ship_city: f.get('ship_city'),
+        ship_state: f.get('ship_state'),
+        ship_postcode: f.get('ship_postcode'),
+        ship_country: f.get('ship_country'),
+        note: f.get('note'),
+        company: f.get('company'), // honeypot
+        elapsed: Date.now() - startedAt.current,
+        source: new URLSearchParams(window.location.search).get('from') ?? 'landing',
+      })
+      setState('done')
+    } catch (err) {
+      setError(errMessage(err, 'Something went wrong. Try again.'))
+      setState('idle')
+    }
+  }
+
+  if (state === 'done') {
+    return (
+      <div className="pen-root">
+        <main className="pen-su-wrap">
+          <div className="pen-su-done">
+            <div className="pen-su-tick" aria-hidden>&#10003;</div>
+            <h1 className="pen-display text-[34px] leading-tight">You&rsquo;re on the list.</h1>
+            <p className="mt-4 text-[16px] leading-relaxed" style={{ color: 'var(--soft)' }}>
+              There&rsquo;s a confirmation in your inbox. We&rsquo;ll email you the moment your
+              account is open{hasRecorder ? '' : ', and sort out getting a recorder to you'}.
+            </p>
+            <Link href="/pen" className="pen-lp-btn pen-lp-btn-ghost mt-8 inline-flex">Back to the site</Link>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  return (
+    <div className="pen-root">
+      <main className="pen-su-wrap">
+        <header className="pen-su-head">
+          <Link href="/pen" className="pen-su-back">&larr; Pen</Link>
+          <div className="pen-lp-eyebrow pen-su-eyebrow">Get started</div>
+          <h1 className="pen-display pen-su-h1">Record the meeting. Read the write-up.</h1>
+          <p className="mt-4 max-w-[52ch] text-[16.5px] leading-relaxed" style={{ color: 'var(--soft)' }}>
+            Tell us where to send things. Takes a minute, and there&rsquo;s no card.
+          </p>
+        </header>
+
+        <form className="pen-su-form" onSubmit={submit} noValidate>
+          {/* Hidden from people, irresistible to bots. */}
+          <input
+            type="text"
+            name="company"
+            tabIndex={-1}
+            autoComplete="off"
+            aria-hidden="true"
+            className="pen-su-pot"
+          />
+
+          <div className="pen-su-grid">
+            <label className="pen-su-field">
+              <span className="pen-label">Your name</span>
+              <input ref={firstField} name="name" required autoComplete="name" placeholder="Chris Dyas" />
+            </label>
+
+            <label className="pen-su-field">
+              <span className="pen-label">Email</span>
+              <input name="email" type="email" required autoComplete="email" placeholder="you@company.com" inputMode="email" />
+            </label>
+
+            <label className="pen-su-field">
+              <span className="pen-label">Phone <em>optional</em></span>
+              <input name="phone" type="tel" autoComplete="tel" placeholder="(305) 555 0142" inputMode="tel" />
+            </label>
+
+            <label className="pen-su-field">
+              <span className="pen-label">What do you do</span>
+              <select name="role" defaultValue="">
+                <option value="" disabled>Choose one</option>
+                {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </label>
+          </div>
+
+          {/* The one question that decides whether anything gets posted. Asked plainly so the
+              address section only appears for people it applies to. */}
+          <fieldset className="pen-su-choice">
+            <legend className="pen-label">Do you have a voice recorder?</legend>
+            <div className="pen-su-choice-row">
+              <button type="button" className="pen-su-opt" data-on={!hasRecorder} onClick={() => setHasRecorder(false)}>
+                <strong>Send me one</strong>
+                <span>I&rsquo;ll use the pen</span>
+              </button>
+              <button type="button" className="pen-su-opt" data-on={hasRecorder} onClick={() => setHasRecorder(true)}>
+                <strong>I have one</strong>
+                <span>Or I&rsquo;ll use my phone</span>
+              </button>
+            </div>
+          </fieldset>
+
+          {!hasRecorder && (
+            <div className="pen-su-ship">
+              <div className="pen-label pen-su-ship-head">Where to send it</div>
+              <div className="pen-su-grid">
+                <label className="pen-su-field pen-su-wide">
+                  <span className="pen-label">Street address</span>
+                  <input name="ship_line1" autoComplete="address-line1" placeholder="1200 Brickell Ave" />
+                </label>
+                <label className="pen-su-field pen-su-wide">
+                  <span className="pen-label">Apartment, suite <em>optional</em></span>
+                  <input name="ship_line2" autoComplete="address-line2" placeholder="Apt 4B" />
+                </label>
+                <label className="pen-su-field">
+                  <span className="pen-label">City</span>
+                  <input name="ship_city" autoComplete="address-level2" placeholder="Miami" />
+                </label>
+                <label className="pen-su-field">
+                  <span className="pen-label">State</span>
+                  <input name="ship_state" autoComplete="address-level1" placeholder="FL" />
+                </label>
+                <label className="pen-su-field">
+                  <span className="pen-label">ZIP / postcode</span>
+                  <input name="ship_postcode" autoComplete="postal-code" placeholder="33131" inputMode="numeric" />
+                </label>
+                <label className="pen-su-field">
+                  <span className="pen-label">Country</span>
+                  <input name="ship_country" autoComplete="country-name" defaultValue="United States" />
+                </label>
+              </div>
+            </div>
+          )}
+
+          <label className="pen-su-field pen-su-wide">
+            <span className="pen-label">Anything we should know <em>optional</em></span>
+            <textarea name="note" rows={3} placeholder="What you'd want it for, or what you've tried before." />
+          </label>
+
+          {error && <div className="pen-su-err" role="alert">{error}</div>}
+
+          <button className="pen-lp-btn pen-lp-btn-primary pen-su-submit" disabled={state === 'sending'}>
+            {state === 'sending' ? 'Sending…' : 'Get started'}
+          </button>
+
+          <p className="pen-su-fine">
+            We use this to set up your account and, if you need one, to post a recorder. Nothing
+            else, and no card.
+          </p>
+        </form>
+      </main>
+    </div>
+  )
+}

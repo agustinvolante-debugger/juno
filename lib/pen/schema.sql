@@ -111,3 +111,17 @@ create index if not exists pen_clients_user on pen_clients(user_email);
 -- create index if not exists pen_chats_user on public.pen_chats(user_email, updated_at desc);
 -- create table if not exists public.pen_docs (id uuid primary key default gen_random_uuid(), user_email text not null, chat_id uuid references public.pen_chats(id) on delete set null, kind text not null default 'summary', title text not null default 'Untitled', body text not null default '', source_ids jsonb not null default '[]'::jsonb, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
 -- create index if not exists pen_docs_user on public.pen_docs(user_email, updated_at desc);
+
+-- ---------------------------------------------------------------------------
+-- 2026-09-15 — launch sign-ups. Run each line separately in the SQL editor.
+--
+-- Public lead capture from the landing page, so no auth and no link to pen_sessions:
+-- these are people who have not signed in yet. email is unique so a second submission
+-- updates rather than duplicating.
+--
+-- Shipping fields are nullable on purpose — they are only asked for when someone says
+-- they need a pen, and demanding an address before anyone has used anything costs
+-- far more signups than it saves in logistics.
+-- ---------------------------------------------------------------------------
+-- create table if not exists public.pen_signups (id uuid primary key default gen_random_uuid(), name text not null, email text not null, phone text, role text, has_recorder boolean not null default false, ship_line1 text, ship_line2 text, ship_city text, ship_state text, ship_postcode text, ship_country text, note text, source text, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+-- create unique index if not exists pen_signups_email on public.pen_signups(lower(email));

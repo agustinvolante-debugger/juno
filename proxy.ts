@@ -16,6 +16,14 @@ export async function proxy(req: NextRequest) {
   // pen.tryjunoapp.com → the recorder → AI notes app. /pen is a real route that gates
   // itself via authedEmail(), and /api/pen/* passes straight through, so only the root
   // needs rewriting.
+  // The landing page links to /pen/signup, which is the real route. On the subdomain a bare
+  // /signup is what people will type or paste, so map it.
+  if (host.startsWith('pen.') && req.nextUrl.pathname === '/signup') {
+    const url = req.nextUrl.clone()
+    url.pathname = '/pen/signup'
+    return NextResponse.rewrite(url)
+  }
+
   if (host.startsWith('pen.') && req.nextUrl.pathname === '/') {
     const url = req.nextUrl.clone()
     url.pathname = '/pen'

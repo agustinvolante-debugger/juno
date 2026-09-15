@@ -30,7 +30,7 @@ function PlanCta({ href, children, variant }: { href: string; children: React.Re
   if (!href) {
     return (
       <div className="mt-auto w-full">
-        <Link href={SIGN_IN} className={cls.replace('mt-auto ', '')}>
+        <Link href={`${SIGN_UP}?from=pricing`} className={cls.replace('mt-auto ', '')}>
           {children}
         </Link>
         <p className="pen-mono mt-2.5 text-center text-[10px]" style={{ color: 'rgba(251,250,246,.42)' }}>
@@ -46,6 +46,9 @@ function PlanCta({ href, children, variant }: { href: string; children: React.Re
   )
 }
 const SIGN_IN = '/auth/signin?callbackUrl=/pen'
+// Everything that means "I want to try this" goes here. Sign-in is for people who already
+// have an account, which on a launch page is almost nobody.
+const SIGN_UP = '/pen/signup'
 
 /**
  * CSS-driven, deliberately. A marketing page must not start at opacity 0 and wait for JS:
@@ -86,7 +89,8 @@ function Nav() {
         <span className="pen-display text-[21px] leading-none">Pen</span>
         <nav className="flex items-center gap-1.5">
           <a href="#pricing" className="pen-lp-navlink">Pricing</a>
-          <Link href={SIGN_IN} className="pen-lp-btn pen-lp-btn-sm">Sign in</Link>
+          <Link href={SIGN_IN} className="pen-lp-navlink">Sign in</Link>
+          <Link href={`${SIGN_UP}?from=nav`} className="pen-lp-btn pen-lp-btn-sm pen-lp-btn-primary">Sign up</Link>
         </nav>
       </div>
     </header>
@@ -123,7 +127,7 @@ function Hero() {
 
         <Reveal delay={0.15}>
           <div className="flex flex-wrap items-center gap-3">
-            <Link href={SIGN_IN} className="pen-lp-btn pen-lp-btn-primary">Try it free</Link>
+            <Link href={`${SIGN_UP}?from=hero`} className="pen-lp-btn pen-lp-btn-primary">Try it free</Link>
             <a href="#how" className="pen-lp-btn">See how it works</a>
           </div>
           <p className="pen-mono mt-4 text-[11px]" style={{ color: 'var(--faint)' }}>
@@ -684,6 +688,7 @@ function Footer() {
           <a href="#pricing" className="pen-lp-footlink">Pricing</a>
           <Link href="/privacy" className="pen-lp-footlink">Privacy</Link>
           <Link href="/terms" className="pen-lp-footlink">Terms</Link>
+          <Link href={`${SIGN_UP}?from=footer`} className="pen-lp-footlink">Sign up</Link>
           <Link href={SIGN_IN} className="pen-lp-footlink">Sign in</Link>
         </nav>
       </div>
