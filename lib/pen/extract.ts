@@ -180,7 +180,12 @@ export async function extractNotes(
 
   const res = await anthropic.messages.parse({
     model: MODEL,
-    max_tokens: 12000,
+    // max_tokens is a budget for thinking AND output, not just output. Opus 5 reasons by
+    // default, and on a long input it happily spends thousands of tokens doing it — a
+    // measured 2,197 of a 3,000 ceiling — leaving too few to finish the JSON, which then
+    // fails to parse mid-string. Ceilings here are sized for both; unused tokens cost
+    // nothing, a truncated answer costs the whole request.
+    max_tokens: 32000,
     system: SYSTEM,
     messages: [{ role: 'user', content: `Transcript:\n\n${dialogue}${forced}${prior}` }],
     output_config: { format: jsonSchemaOutputFormat(NOTES_SCHEMA) },
@@ -207,7 +212,7 @@ const PROFILE_SCHEMA = {
 export async function updateClientProfile(prior: unknown, latest: PenNotes) {
   const res = await anthropic.messages.parse({
     model: MODEL,
-    max_tokens: 4000,
+    max_tokens: 8000,
     system:
       'You maintain a running picture of what one set of people wants, across many meetings. ' +
       'Merge the new meeting into the existing picture. Prefer patterns seen more than once. ' +

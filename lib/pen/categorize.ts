@@ -64,7 +64,12 @@ export async function categorize(dialogue: string): Promise<{
 
   const res = await anthropic.messages.parse({
     model: MODEL,
-    max_tokens: 700,
+    // max_tokens is a budget for thinking AND output, not just output. Opus 5 reasons by
+    // default, and on a long input it happily spends thousands of tokens doing it — a
+    // measured 2,197 of a 3,000 ceiling — leaving too few to finish the JSON, which then
+    // fails to parse mid-string. Ceilings here are sized for both; unused tokens cost
+    // nothing, a truncated answer costs the whole request.
+    max_tokens: 4000,
     system: SYSTEM,
     messages: [{ role: 'user', content: `Transcript (beginning):\n\n${head}` }],
     output_config: { format: jsonSchemaOutputFormat(SCHEMA) },

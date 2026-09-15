@@ -72,7 +72,12 @@ export async function writeArtifact(opts: {
 
   const r = await anthropic.messages.parse({
     model: MODEL,
-    max_tokens: 4000,
+    // max_tokens is a budget for thinking AND output, not just output. Opus 5 reasons by
+    // default, and on a long input it happily spends thousands of tokens doing it — a
+    // measured 2,197 of a 3,000 ceiling — leaving too few to finish the JSON, which then
+    // fails to parse mid-string. Ceilings here are sized for both; unused tokens cost
+    // nothing, a truncated answer costs the whole request.
+    max_tokens: 16000,
     system:
       'You turn a conversation about someone\'s recorded meetings into a document they will ' +
       'use. Ground every claim in the conversation you are given: it already draws on their ' +
