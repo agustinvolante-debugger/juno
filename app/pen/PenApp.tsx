@@ -96,6 +96,14 @@ export default function PenApp({
   const [catFilter, setCatFilter] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [navOpen, setNavOpen] = useState(false)
+  const isPhone = useIsPhone()
+  // The phone sheet ends on a promise ("we'll email you") rather than vanishing, so it needs a
+  // state of its own — `pending` and `progress` are both empty by then.
+  const [importDone, setImportDone] = useState(false)
+  const closeSheet = useCallback(() => {
+    setImportDone(false)
+    setPending([])
+  }, [])
 
   useEffect(() => {
     if (!navOpen) return
@@ -355,6 +363,9 @@ export default function PenApp({
     }
     setProgress(null)
     setPending([])
+    // On a phone the whole point is that you can now put the phone away, so say so instead of
+    // dropping the user back on a screen with nothing on it.
+    if (isPhone) setImportDone(true)
     void refresh()
   }
 
@@ -430,13 +441,17 @@ export default function PenApp({
         </Banner>
       )}
 
-      {(pending.length > 0 || progress) && (
-        <ImportTray
-          pending={pending} setPending={setPending} penName={penName}
-          consent={consent} setConsent={setConsent}
-          clientName={clientName} setClientName={setClientName}
-          progress={progress} onImport={importPicked}
-        />
+      {(pending.length > 0 || progress || importDone) && (
+        <>
+          {isPhone && <button className="pen-scrim pen-scrim-on" aria-label="Close" onClick={closeSheet} />}
+          <ImportTray
+            pending={pending} setPending={setPending} penName={penName}
+            consent={consent} setConsent={setConsent}
+            clientName={clientName} setClientName={setClientName}
+            progress={progress} onImport={importPicked}
+            phone={isPhone} onClose={closeSheet} done={importDone}
+          />
+        </>
       )}
 
       <div className="pen-shell" data-nav={navOpen ? 'open' : 'closed'}>
@@ -678,6 +693,23 @@ export default function PenApp({
 
     </main>
   )
+}
+
+/**
+ * Matches the 900px breakpoint the CSS drawer already uses, so layout and behaviour agree.
+ * Returns false until mounted — the server has no viewport, and guessing produces a
+ * hydration mismatch on the most important screen in the app.
+ */
+function useIsPhone(): boolean {
+  const [phone, setPhone] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 900px)')
+    const sync = () => setPhone(mq.matches)
+    sync()
+    mq.addEventListener('change', sync)
+    return () => mq.removeEventListener('change', sync)
+  }, [])
+  return phone
 }
 
 /* ============================================================ usage meter */
@@ -1017,7 +1049,7 @@ function CategoryPicker({
 /* ============================================================== import tray */
 
 function ImportTray({
-  pending, setPending, penName, consent, setConsent, clientName, setClientName, progress, onImport,
+  pending, setPending, penName, consent, setConsent, clientName, setClientName, progress, onImport, phone, onClose, done,
 }: {
   pending: Pending[]
   setPending: React.Dispatch<React.SetStateAction<Pending[]>>
@@ -1028,7 +1060,101 @@ function ImportTray({
   setClientName: (v: string) => void
   progress: Progress | null
   onImport: () => void
+  phone?: boolean
+  onClose?: () => void
+  /** Set once the import finished, so the sheet can end on a promise rather than a blank. */
+  done?: boolean
 }) {
+  // On a phone this is a full-screen sheet with one job. The desktop tray assumes you have
+  // just plugged the pen in and are triaging a batch; a phone user has finished one meeting
+  // and wants that one file in, so the multi-select, the client field and the inline progress
+  // bar are all in the way. Same handlers, different shape.
+  if (phone) {
+    const picked = pending.filter((p) => p.picked)
+    return (
+      <div className="pen-imp" role="dialog" aria-modal="true" aria-label="Add a recording">
+        <div className="pen-imp-head">
+          <span className="pen-label">Add a recording</span>
+          <button className="pen-imp-x" onClick={onClose} aria-label="Close">&times;</button>
+        </div>
+
+        <div className="pen-imp-body">
+          {done ? (
+            <div className="pen-imp-done">
+              <div className="pen-imp-tick" aria-hidden>&#10003;</div>
+              <h3 className="pen-display text-[23px] leading-tight">We&rsquo;ll email you when it&rsquo;s ready.</h3>
+              <p className="mt-3 text-[14.5px] leading-relaxed" style={{ color: 'var(--soft)' }}>
+                Transcribing and writing up takes a few minutes. You can close this — the
+                briefing lands in your inbox on its own.
+              </p>
+            </div>
+          ) : progress ? (
+            <div className="pen-imp-progress">
+              <div className="pen-imp-pct">{Math.round(progress.pct)}%</div>
+              <div className="pen-meter-bar"><span style={{ width: `${progress.pct}%` }} /></div>
+              <p className="mt-3 text-[14px]" style={{ color: 'var(--soft)' }}>{progress.phase}</p>
+              <p className="pen-mono mt-1 truncate text-[11px]" style={{ color: 'var(--faint)' }}>{progress.name}</p>
+              <p className="pen-imp-warn">Keep this tab open until it finishes &mdash; leaving Safari stops the upload.</p>
+            </div>
+          ) : (
+            <>
+              <ul className="pen-imp-files">
+                {pending.map((p, i) => (
+                  <li key={`${p.file.name}-${i}`}>
+                    <div className="min-w-0">
+                      <div className="truncate text-[15px]">{p.file.name}</div>
+                      <div className="pen-mono text-[11px]" style={{ color: 'var(--dim)' }}>
+                        {fmtMB(p.file.size)} &middot; {new Date(p.file.lastModified).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <button
+                      className="pen-imp-drop"
+                      onClick={() => setPending((prev) => prev.filter((_, j) => j !== i))}
+                      aria-label={`Remove ${p.file.name}`}
+                    >
+                      &times;
+                    </button>
+                  </li>
+                ))}
+              </ul>
+
+              {/* Deliberately a switch, not a checkbox in a paragraph. In Florida this is a
+                  felony question, and it is the one thing here that should not be easy to
+                  flick past without reading. */}
+              <button
+                className="pen-consent"
+                data-on={consent}
+                onClick={() => setConsent(!consent)}
+                role="switch"
+                aria-checked={consent}
+              >
+                <span className="pen-consent-track"><span className="pen-consent-knob" /></span>
+                <span className="pen-consent-text">
+                  Everyone recorded agreed to it, and this contains no patient or medical information.
+                </span>
+              </button>
+            </>
+          )}
+        </div>
+
+        {!done && !progress && (
+          <div className="pen-imp-foot">
+            <button className="pen-btn pen-btn-accent w-full justify-center" onClick={onImport} disabled={!picked.length}>
+              {picked.length > 1 ? `Add ${picked.length} recordings` : 'Add recording'}
+            </button>
+            <p className="pen-imp-foot-note">You can name who it was with afterwards.</p>
+          </div>
+        )}
+
+        {done && (
+          <div className="pen-imp-foot">
+            <button className="pen-btn pen-btn-primary w-full justify-center" onClick={onClose}>Done</button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <section className="pen-panel mt-6 p-6">
       <div className="flex items-baseline justify-between gap-3">
