@@ -66,9 +66,11 @@
 
 /* ---------------------------------------------------------------- buttons */
 .pen-btn {
-  font-family: var(--ui); font-size: 12.5px; font-weight: 600; letter-spacing: -0.005em;
+  font-family: var(--ui); font-size: 13.5px; font-weight: 600; letter-spacing: -0.005em;
   border: 1px solid var(--line); background: var(--panel); color: var(--ink);
-  border-radius: 7px; padding: 7px 12px; transition: background .12s, border-color .12s;
+  border-radius: 8px; padding: 9px 16px; transition: background .12s, border-color .12s;
+  /* A control that folds its own label in half is never what you want. */
+  white-space: nowrap;
 }
 .pen-btn:hover:not(:disabled) { background: var(--sunk); border-color: #DAD5C9; }
 .pen-btn:disabled { opacity: .42; cursor: not-allowed; }
@@ -778,7 +780,8 @@
   max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .pen-acct-out {
-  font-family: var(--ui); font-size: 12.5px; font-weight: 600; color: var(--dim);
+  font-family: var(--ui); font-size: 13.5px; font-weight: 600; color: var(--dim);
+  white-space: nowrap;
   padding: 6px 11px; border-radius: 7px; border: 1px solid transparent;
   transition: color .14s ease, background .14s ease, border-color .14s ease;
 }
@@ -834,9 +837,9 @@
 .pen-cat-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---- the search, centre stage ---- */
-.pen-search-wrap { max-width: 620px; margin: 0 auto; width: 100%; position: relative; }
+.pen-search-wrap { max-width: 620px; min-width: 0; margin: 0 auto; width: 100%; position: relative; }
 .pen-search {
-  display: flex; align-items: center; gap: 11px;
+  display: flex; align-items: center; gap: 11px; min-width: 0;
   background: var(--panel); border: 1px solid var(--line); border-radius: 13px;
   padding: 0 14px; height: 52px;
   box-shadow: 0 1px 2px rgba(22, 21, 15, .04), 0 8px 22px -14px rgba(22, 21, 15, .22);
@@ -930,9 +933,9 @@
    and is therefore centred on the page, not merely between two unequal neighbours. */
 .pen-head {
   display: grid;
-  grid-template-columns: 1fr minmax(0, 620px) 1fr;
+  grid-template-columns: minmax(max-content, 1fr) minmax(0, 620px) minmax(max-content, 1fr);
   align-items: center;
-  gap: 30px;
+  gap: 26px;
   padding-bottom: 38px;
 }
 .pen-head-left { display: flex; align-items: baseline; gap: 11px; }
@@ -1250,4 +1253,12 @@
     box-shadow: 0 -10px 46px -12px rgba(22, 21, 15, .34);
   }
   .pen-catpick-list { max-height: none; }
+}
+
+
+/* The signed-in address is the least load-bearing thing in the header: drop it as soon as the
+   controls would otherwise be squeezed, rather than letting their labels wrap. */
+@media (max-width: 1320px) {
+  .pen-acct-email { display: none; }
+  .pen-acct { padding-left: 0; margin-left: 0; border-left: none; }
 }

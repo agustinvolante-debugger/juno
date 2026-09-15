@@ -65,13 +65,18 @@ export async function fetchTranscript(id: string): Promise<AaiTranscript> {
 }
 
 /** Speaker-labelled text, which is what the extraction prompt reads. */
-export function toDialogue(t: AaiTranscript, max = 60000): string {
+/**
+ * `max` is a guard against an absurd input, not a budget: 60k chars was about 70 minutes of
+ * speech, so a long meeting lost its ending silently. Opus 5 holds 200k tokens, and 400k
+ * chars is roughly 100k tokens — about eight hours — so the cap now only catches a runaway.
+ */
+export function toDialogue(t: AaiTranscript, max = 400000): string {
   if (t.utterances?.length) {
     const lines = t.utterances.map((u) => `Speaker ${u.speaker}: ${u.text}`)
     const joined = lines.join('\n')
     // Truncating a transcript silently would corrupt the extraction. Say so instead.
     if (joined.length <= max) return joined
-    return joined.slice(0, max) + '\n\n[TRANSCRIPT TRUNCATED — showing is longer than the extraction window]'
+    return joined.slice(0, max) + '\n\n[TRANSCRIPT TRUNCATED — this recording is longer than the extraction window]'
   }
   return (t.text ?? '').slice(0, max)
 }

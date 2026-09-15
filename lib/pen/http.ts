@@ -17,13 +17,15 @@ export class PenHttpError extends Error {
 }
 
 /** Plain-text platform failures, translated into something a person can act on. */
-function friendly(status: number, text: string): string {
+function friendly(status: number, text: string, url = ''): string {
   const t = text.trim()
   if (status === 401) return 'Your session expired. Reload the page and sign in again.'
   if (status === 413) return 'That was too large to send.'
   if (status === 429) return 'Too many requests at once. Give it a moment and try again.'
   if (status === 504 || /timed? ?out|FUNCTION_INVOCATION_TIMEOUT/i.test(t)) {
-    return 'That took too long to answer. Try a narrower question, or ask again.'
+    return /\/(chats|chat|archive)/.test(url)
+      ? 'That took too long to answer. Try a narrower question, or ask again.'
+      : 'That took too long and timed out. Try again — long recordings can take a couple of minutes.'
   }
   if (status === 502 || status === 503) return 'The server is temporarily unavailable. Try again in a moment.'
   if (/An error occurred/i.test(t)) return 'The server hit an error answering that. Try again.'
@@ -32,7 +34,7 @@ function friendly(status: number, text: string): string {
   return `Something went wrong (${status}).`
 }
 
-async function parse<T>(r: Response): Promise<T> {
+async function parse<T>(r: Response, url = ''): Promise<T> {
   const text = await r.text()
   let data: unknown = null
   try {
@@ -47,13 +49,13 @@ async function parse<T>(r: Response): Promise<T> {
     // Auth and rate limits get the friendly wording even when the server sent its own — the
     // API's "unauthorized" is accurate and tells the user nothing about what to do.
     const preferFriendly = r.status === 401 || r.status === 429 || r.status >= 502
-    throw new PenHttpError(preferFriendly || !msg ? friendly(r.status, text) : msg, r.status)
+    throw new PenHttpError(preferFriendly || !msg ? friendly(r.status, text, url) : msg, r.status)
   }
   return data as T
 }
 
 export async function getJson<T>(url: string): Promise<T> {
-  return parse<T>(await fetch(url, { cache: 'no-store' }))
+  return parse<T>(await fetch(url, { cache: 'no-store' }), url)
 }
 
 export async function postJson<T>(url: string, body: unknown): Promise<T> {
@@ -63,6 +65,7 @@ export async function postJson<T>(url: string, body: unknown): Promise<T> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }),
+    url,
   )
 }
 
@@ -73,11 +76,12 @@ export async function patchJson<T>(url: string, body: unknown): Promise<T> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }),
+    url,
   )
 }
 
 export async function del<T>(url: string): Promise<T> {
-  return parse<T>(await fetch(url, { method: 'DELETE' }))
+  return parse<T>(await fetch(url, { method: 'DELETE' }), url)
 }
 
 /** Message for a caught error, without leaking "[object Object]" or an empty string. */

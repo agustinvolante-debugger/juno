@@ -7,7 +7,10 @@ import { categorize, CONFIDENCE_FLOOR } from '@/lib/pen/categorize'
 import { toDialogue } from '@/lib/pen/aai'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+// Two model calls over the whole transcript — categorise, then extract. A 75-minute
+// recording is ~13k tokens in and a full structured note out, which does not finish inside
+// 60s, and the platform's plain-text gateway timeout was surfacing as a nonsense error.
+export const maxDuration = 300
 
 
 // Runs the extraction over a stored transcript. Separate from transcription so notes can be
