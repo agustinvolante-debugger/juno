@@ -13,6 +13,7 @@
 // passed through untouched, since re-encoding them would only lose information.
 
 import { writeOggOpus, type OpusPacket } from './ogg'
+import { transcodeWav, readWavInfo, formatName } from './wav'
 
 const TARGET_RATE = 16000
 
@@ -113,7 +114,22 @@ export async function prepareAudio(file: File): Promise<Prepared> {
   // Uncompressed audio, lossless audio, or video: decode → mono → 16 kHz → 16-bit WAV.
   // For video this is an audio EXTRACTION — decodeAudioData reads the audio track out of the
   // container and the picture is discarded, which is the only way a phone video fits.
-  const raw = await file.arrayBuffer()
+  let raw = await file.arrayBuffer()
+
+  // The pen writes IMA ADPCM inside a .WAV, and no browser's decodeAudioData reads that —
+  // the recorder's own native format failed here with "couldn't be decoded", which sounded
+  // like a corrupt file and never was. Convert to plain PCM first and the rest is unchanged.
+  let transcodedFrom: string | null = null
+  try {
+    const t = transcodeWav(raw)
+    if (t) {
+      raw = t.wav
+      transcodedFrom = t.from
+    }
+  } catch {
+    // Fall through to the browser decoder, which will produce the normal error if it also fails.
+  }
+
   const AC: typeof AudioContext =
     window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
   const decodeCtx = new AC()
@@ -123,10 +139,13 @@ export async function prepareAudio(file: File): Promise<Prepared> {
   } catch {
     // Codecs vary by browser, and .mov in particular is not universally decodable. Say what
     // to do about it rather than surfacing a DOMException.
+    const info = readWavInfo(raw)
     throw new Error(
       isVideo(file)
-        ? `${file.name}: this browser can't read the audio out of that video. Try Chrome, or export the audio as .m4a first.`
-        : `${file.name}: that file couldn't be decoded — it may be corrupt or use an unsupported codec.`,
+        ? `this browser can't read the audio out of that video. Try Chrome, or export the audio as .m4a first.`
+        : info
+          ? `this is a ${formatName(info.formatTag)} WAV, which this browser can't read. Send it over and it can be supported.`
+          : `that file couldn't be decoded — it may be corrupt or use an unsupported codec.`,
     )
   } finally {
     void decodeCtx.close()
@@ -152,7 +171,7 @@ export async function prepareAudio(file: File): Promise<Prepared> {
         mime: 'audio/ogg',
         durationSec: decoded.duration,
         originalBytes,
-        note: `${fmtMB(originalBytes)} → ${fmtMB(ogg.size)} (Opus)`,
+        note: `${transcodedFrom ? `${transcodedFrom} → ` : ''}${fmtMB(originalBytes)} → ${fmtMB(ogg.size)} (Opus)`,
       }
     } catch {
       // Safari has no AudioEncoder. Fall through to WAV and let the size check speak if it
