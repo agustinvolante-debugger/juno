@@ -3,7 +3,8 @@ import type { MeetingType } from '@/lib/pen/categories'
 
 export const BUCKET = 'pen-audio'
 
-export type PenStatus = 'uploaded' | 'transcribing' | 'transcribed' | 'noted' | 'error'
+// `noting` is held while extraction runs, so a second caller can see the row is claimed.
+export type PenStatus = 'uploaded' | 'transcribing' | 'transcribed' | 'noting' | 'noted' | 'error'
 
 export type Utterance = { speaker: string; text: string; start: number; end: number }
 export type Transcript = { text?: string; utterances?: Utterance[] }
@@ -174,6 +175,23 @@ export async function createSession(row: {
     throw new Error(error.message)
   }
   return { session: data as PenSession, duplicate: false }
+}
+
+/**
+ * Flips status from `from` to `to` only if it is still `from`, and reports whether this
+ * caller won. Postgres does the compare-and-set in one statement, which is what makes it safe:
+ * the browser's polling loop and the AssemblyAI webhook can both decide a transcript is ready
+ * at the same moment, and without this they would both pay for extraction and both email.
+ */
+export async function claimStatus(id: string, from: string, to: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from('pen_sessions')
+    .update({ status: to, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('status', from)
+    .select('id')
+  if (error) throw new Error(error.message)
+  return (data?.length ?? 0) > 0
 }
 
 export async function updateSession(id: string, patch: Record<string, unknown>) {

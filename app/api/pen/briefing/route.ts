@@ -1,29 +1,12 @@
 import { NextResponse } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
-import { sendEmailResult } from '@/lib/news/email'
+import { renderBriefing, sendBriefing, hasSomethingToSay } from '@/lib/pen/briefing'
 import { getSession, updateSession } from '@/lib/pen/store'
 import type { PenSession } from '@/lib/pen/store'
-import { buildBriefingHtml } from '@/lib/pen/briefing-html'
-import { fmtDurServer } from '@/lib/pen/briefing-html-util'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-function render(session: PenSession) {
-  const base = (process.env.PEN_PUBLIC_URL || process.env.NEXTAUTH_URL || '').replace(/\/$/, '')
-  return buildBriefingHtml({
-    notes: session.notes ?? {},
-    title: session.title ?? session.source_name ?? 'Untitled recording',
-    dateStr: new Date(session.recorded_at ?? session.created_at).toLocaleString('en-US', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    }),
-    clientName: session.client_name,
-    durationStr: fmtDurServer(session.duration_sec ?? 0),
-    appUrl: base || 'https://pen.tryjunoapp.com',
-    actionDone: Array.isArray(session.action_done) ? session.action_done : [],
-  })
-}
 
 // Compiles the note into an HTML email and sends it to the signed-in user, plus anyone they
 // explicitly add.
@@ -69,7 +52,7 @@ export async function GET(req: Request) {
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
   const session = await getSession(email, id)
   if (!session) return NextResponse.json({ error: 'not found' }, { status: 404 })
-  return new Response(render(session), { headers: { 'Content-Type': 'text/html; charset=utf-8' } })
+  return new Response(renderBriefing(session), { headers: { 'Content-Type': 'text/html; charset=utf-8' } })
 }
 
 export async function POST(req: Request) {
@@ -90,22 +73,12 @@ export async function POST(req: Request) {
   const session = await getSession(email, b.id)
   if (!session) return NextResponse.json({ error: 'not found' }, { status: 404 })
 
-  const n = session.notes ?? {}
-  if (!n.summary && !n.actions?.length && !n.missed?.length && !n.open_questions?.length) {
+  if (!hasSomethingToSay(session)) {
     return NextResponse.json({ error: 'nothing to brief yet — write the notes first' }, { status: 400 })
   }
 
-  const title = session.title ?? session.source_name ?? 'Untitled recording'
-  const html = render(session)
-
   const to = [email, ...extras]
-  const r = await sendEmailResult({
-    to,
-    subject: `Briefing — ${title}`,
-    html,
-    // Replies go to whoever sent it, not to the no-reply sender.
-    replyTo: email,
-  })
+  const r = await sendBriefing({ session, to, replyTo: email })
 
   if (!r.ok) {
     return NextResponse.json({ error: r.error ?? 'Nothing was sent.' }, { status: 502 })

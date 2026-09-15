@@ -14,7 +14,7 @@ import type { ArchiveStats } from '@/lib/pen/stats'
 import DeliverableSheet, { DeliverableActions, type SheetRequest } from './DeliverableSheet'
 import SendBriefing from './SendBriefing'
 import { prepareAudio, fmtMB, fmtDur, SOFT_SIZE_LIMIT } from '@/lib/pen/encode'
-import { postJson, getJson, patchJson, del, errMessage } from '@/lib/pen/http'
+import { postJson, getJson, patchJson, del, errMessage, PenHttpError } from '@/lib/pen/http'
 import type { ChatSummary } from '@/lib/pen/chats'
 import type { DocSummary } from '@/lib/pen/docs'
 import { STARTER_MINUTES, monthStart, nextMonthStart, type Usage } from '@/lib/pen/plan'
@@ -192,15 +192,18 @@ export default function PenApp({
   }, [router])
 
   const makeNotes = useCallback(
-    async (id: string, type?: MeetingType) => {
+    async (id: string, type?: MeetingType, auto = false) => {
       let j: {
         session: PenSession
         category?: { value: string | null; confidence: number | null; alternatives: string[] }
       }
       try {
-        j = await postJson('/api/pen/notes', { id, ...(type ? { type } : {}) })
+        j = await postJson('/api/pen/notes', { id, ...(type ? { type } : {}), ...(auto ? { auto: true } : {}) })
       } catch (e) {
-        setErr(errMessage(e, 'Could not write the notes.'))
+        // A 409 means the webhook claimed it first, which is the normal path now, not an error.
+        if (!(auto && e instanceof PenHttpError && e.status === 409)) {
+          setErr(errMessage(e, 'Could not write the notes.'))
+        }
         return
       }
       patchLocal(j.session)
@@ -218,19 +221,32 @@ export default function PenApp({
     [patchLocal, router],
   )
 
-  // Poll anything mid-transcription. Also covers a webhook that never arrives.
+  // Poll anything mid-transcription, and keep a fallback for a webhook that never arrives.
+  //
+  // The webhook now owns writing the notes, because that is the only path that survives the
+  // tab being closed. The browser only steps in if a transcript has been sitting untouched
+  // for a while, and when it does it takes the same claim, so the two cannot both run.
+  const seenTranscribed = useRef<Record<string, number>>({})
+  const WEBHOOK_GRACE_MS = 90_000
+
   const busyKey = sessions.map((s) => `${s.id}:${s.status}`).join(',')
   useEffect(() => {
-    const busy = sessions.filter((s) => s.status === 'transcribing')
-    if (!busy.length) return
+    const watching = sessions.filter((s) => s.status === 'transcribing' || s.status === 'transcribed')
+    if (!watching.length) return
     const t = setInterval(async () => {
-      for (const s of busy) {
+      for (const s of watching) {
         const r = await fetch(`/api/pen/transcribe?id=${s.id}`, { cache: 'no-store' })
         if (!r.ok) continue
         const j = (await r.json()) as { session?: PenSession }
-        if (j.session && j.session.status !== 'transcribing') {
-          patchLocal(j.session)
-          if (j.session.status === 'transcribed') void makeNotes(j.session.id)
+        if (!j.session) continue
+        if (j.session.status !== s.status) patchLocal(j.session)
+
+        if (j.session.status === 'transcribed') {
+          const first = seenTranscribed.current[j.session.id] ?? Date.now()
+          seenTranscribed.current[j.session.id] = first
+          if (Date.now() - first > WEBHOOK_GRACE_MS) void makeNotes(j.session.id, undefined, true)
+        } else {
+          delete seenTranscribed.current[j.session.id]
         }
       }
     }, 6000)
@@ -1177,7 +1193,7 @@ function Detail({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="pen-pill" data-s={session.status}>{session.status}</span>
+          <span className="pen-pill" data-s={session.status}>{session.status === 'noting' ? 'writing notes' : session.status}</span>
           {/* Keyed off the transcript, not the status. A session can land in `error` with a
               perfectly good transcript (a failed save, a transient API error), and gating the
               retry on status left it with no way out of the UI. */}

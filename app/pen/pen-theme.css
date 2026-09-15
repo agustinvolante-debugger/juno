@@ -61,6 +61,7 @@
 .pen-pill[data-s='uploaded']     { background: var(--sunk); color: var(--soft); border-color: var(--line); }
 .pen-pill[data-s='transcribing'] { background: var(--warn-wash); color: var(--warn); border-color: #EFE2C4; }
 .pen-pill[data-s='transcribed']  { background: var(--accent-wash); color: var(--accent-ink); border-color: var(--accent-line); }
+.pen-pill[data-s='noting']       { background: var(--warn-wash); color: var(--warn); border-color: #EFE2C4; }
 .pen-pill[data-s='noted']        { background: var(--good-wash); color: var(--good); border-color: #D6E4D9; }
 .pen-pill[data-s='error']        { background: var(--bad-wash); color: var(--bad); border-color: #EFD6D2; }
 
