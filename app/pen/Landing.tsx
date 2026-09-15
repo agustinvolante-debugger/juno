@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import type { CSSProperties } from 'react'
@@ -91,7 +92,9 @@ function Nav() {
   return (
     <header className="pen-lp-nav">
       <div className="pen-lp-wrap flex items-center justify-between">
-        <span className="pen-display text-[21px] leading-none">Pen</span>
+        <Link href="/pen" className="flex items-center" aria-label="Pen by Juno">
+          <Image src="/juno_mark.png" alt="Juno" width={32} height={32} className="pen-mark" priority />
+        </Link>
         <nav className="flex items-center gap-1.5">
           <a href="#pricing" className="pen-lp-navlink">Pricing</a>
           <Link href={SIGN_IN} className="pen-lp-navlink">Sign in</Link>
@@ -675,7 +678,7 @@ function Footer() {
     <footer className="pen-lp-foot">
       <div className="pen-lp-wrap flex flex-wrap items-center justify-between gap-5 py-9">
         <div className="flex items-baseline gap-3">
-          <span className="pen-display text-[17px]">Pen</span>
+          <Image src="/juno_mark.png" alt="Juno" width={24} height={24} className="pen-mark" />
           <span className="pen-mono text-[10.5px]" style={{ color: 'var(--faint)' }}>
             &copy; {new Date().getFullYear()}
           </span>

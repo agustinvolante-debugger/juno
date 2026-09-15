@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { COMMON_TYPES, slugType, isViewing, displayType } from '@/lib/pen/categories'
 import type { PenSession, MeetingType, ChatTurn, PenNotes, NoteBlock } from '@/lib/pen/store'
 import NoteEditor, { blocksFrom } from './NoteEditor'
@@ -380,7 +381,10 @@ export default function PenApp({
           two side groups happen to be the same width. */}
       <header className="pen-head">
         <div className="pen-head-left">
-          <h1 className="pen-display text-[28px] leading-none">Pen</h1>
+          {/* The mark is cream-on-near-black with the background baked in, so it sits in its
+              own dark tile rather than floating on the paper ground. */}
+          <Image src="/juno_mark.png" alt="Juno" width={34} height={34} className="pen-mark" priority />
+          <h1 className="sr-only">Pen</h1>
           <span className="pen-label">Recorder &rarr; notes</span>
         </div>
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { ROLES } from '@/lib/pen/signup-fields'
 import { postJson, errMessage } from '@/lib/pen/http'
 import '../pen-theme.css'
@@ -68,7 +69,10 @@ export default function SignupPage() {
     <div className="pen-root">
       <main className="pen-su-wrap">
         <header className="pen-su-head">
-          <Link href="/pen" className="pen-su-back">&larr; Pen</Link>
+          <Link href="/pen" className="pen-su-back" aria-label="Back to Pen">
+            <Image src="/juno_mark.png" alt="Juno" width={24} height={24} className="pen-mark" />
+            <span aria-hidden>&larr;</span>
+          </Link>
           <div className="pen-lp-eyebrow pen-su-eyebrow">Get started</div>
           <h1 className="pen-display pen-su-h1">Record the meeting. Read the write-up.</h1>
           <p className="mt-4 max-w-[52ch] text-[16.5px] leading-relaxed" style={{ color: 'var(--soft)' }}>

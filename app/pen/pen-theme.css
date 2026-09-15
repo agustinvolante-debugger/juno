@@ -939,7 +939,7 @@
   gap: 26px;
   padding-bottom: 38px;
 }
-.pen-head-left { display: flex; align-items: baseline; gap: 11px; }
+.pen-head-left { display: flex; align-items: center; gap: 11px; }
 .pen-head-right { display: flex; align-items: center; justify-content: flex-end; gap: 9px; }
 
 /* ========================================================== chat view ==== */
@@ -1447,3 +1447,15 @@
   margin: 26px auto 0; max-width: 46ch; text-align: center;
   font-size: 13.5px; line-height: 1.6; color: rgba(251, 250, 246, .5);
 }
+
+/* The Juno mark. The asset is cream on near-black with the background baked in, so it keeps
+   its own dark tile instead of being cut out — on the paper ground that reads as an app icon
+   rather than a mistake. */
+.pen-mark {
+  border-radius: 8px;
+  flex: none;
+  display: block;
+  object-fit: cover;
+}
+.pen-su-back { display: inline-flex; align-items: center; gap: 9px; }
+.pen-su-back .pen-mark { border-radius: 6px; }
