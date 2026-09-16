@@ -1,6 +1,13 @@
 import { NextAuthOptions } from 'next-auth'
 import GoogleProvider from 'next-auth/providers/google'
 
+/**
+ * Break-glass override, not the customer list.
+ *
+ * These accounts get in regardless of what the database says, so a Supabase problem or a bad
+ * migration cannot lock everyone — including whoever has to fix it — out of their own
+ * recordings. Real customers live in pen_accounts and are granted by payment, not by a deploy.
+ */
 export const ALLOWED_EMAILS = [
   'agustinvolantesilva@gmail.com',
   'avolantesilva@gmail.com',
@@ -39,7 +46,18 @@ export const authOptions: NextAuthOptions = {
       : undefined,
   callbacks: {
     async signIn({ user }) {
-      return ALLOWED_EMAILS.includes(user.email?.toLowerCase() ?? '')
+      const email = user.email?.toLowerCase() ?? ''
+      if (!email) return false
+      if (ALLOWED_EMAILS.includes(email)) return true
+
+      try {
+        const { isActive } = await import('@/lib/pen/accounts')
+        return await isActive(email)
+      } catch {
+        // If the lookup itself fails, refuse rather than admit everyone. A broken database
+        // should lock the door, not open it.
+        return false
+      }
     },
     async jwt({ token, account }) {
       if (account) {

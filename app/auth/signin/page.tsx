@@ -11,6 +11,39 @@ function SignInContent() {
   // honor ?callbackUrl= so subdomain surfaces (vc., news.) return the user where
   // they came from; the authOptions redirect callback restricts it to *.tryjunoapp.com
   const callbackUrl = searchParams.get('callbackUrl') || '/dashboard'
+  // Someone turned away from Pen is a customer whose payment has not landed, not someone
+  // asking to join a private beta. Telling them to email for access would be a dead end that
+  // costs a sale.
+  const fromPen = callbackUrl.includes('/pen')
+
+  if (denied && fromPen) {
+    return (
+      <div className="min-h-screen bg-[#0c0c0b] flex items-center justify-center px-5">
+        <div className="bg-[#141412] border border-[#222220] rounded-xl p-10 w-full max-w-sm text-center">
+          <div className="font-serif text-3xl text-[#f0ead2] mb-2">Pen</div>
+          <div className="bg-[#1a1a18] border border-[#2a2a28] rounded-lg p-4 my-6">
+            <p className="text-[#e09a30] text-sm font-medium mb-1">No account for this address</p>
+            <p className="text-[#8a8678] text-xs leading-relaxed">
+              Sign in with the email you signed up with. If you have just paid, it can take a
+              moment to come through — try again shortly.
+            </p>
+          </div>
+          <a
+            href="/pen/signup?from=signin"
+            className="block w-full bg-[#c8f04a] text-[#0c0c0b] font-semibold py-3 px-6 rounded-lg hover:opacity-90 transition-opacity mb-3 no-underline"
+          >
+            Get started
+          </a>
+          <a
+            href="mailto:agustinvolantesilva@gmail.com?subject=Pen%20access"
+            className="block text-[#8a8678] text-xs no-underline hover:text-[#f0ead2]"
+          >
+            Something wrong? Email us
+          </a>
+        </div>
+      </div>
+    )
+  }
 
   if (denied) {
     return (

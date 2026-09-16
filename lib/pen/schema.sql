@@ -125,3 +125,21 @@ create index if not exists pen_clients_user on pen_clients(user_email);
 -- ---------------------------------------------------------------------------
 -- create table if not exists public.pen_signups (id uuid primary key default gen_random_uuid(), name text not null, email text not null, phone text, role text, has_recorder boolean not null default false, ship_line1 text, ship_line2 text, ship_city text, ship_state text, ship_postcode text, ship_country text, note text, source text, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
 -- create unique index if not exists pen_signups_email on public.pen_signups(lower(email));
+
+-- ---------------------------------------------------------------------------
+-- 2026-09-15 — accounts. Run each line separately in the SQL editor.
+--
+-- The thing that connects sign-up, payment and access. Before this, sign-in checked a
+-- hardcoded array in lib/auth.ts, so customer 13 could pay and then be refused at the door
+-- with no way to let them in short of a deploy.
+--
+-- status: pending  — signed up, not paid
+--         active   — paying, or granted by hand
+--         cancelled— subscription ended; kept, not deleted, so history survives
+--
+-- The hardcoded list stays in code as a break-glass override, so a database problem cannot
+-- lock everyone out of their own recordings.
+-- ---------------------------------------------------------------------------
+-- create table if not exists public.pen_accounts (id uuid primary key default gen_random_uuid(), email text not null, status text not null default 'pending', plan text, source text, stripe_customer_id text, stripe_subscription_id text, current_period_end timestamptz, activated_at timestamptz, note text, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+-- create unique index if not exists pen_accounts_email on public.pen_accounts(lower(email));
+-- create index if not exists pen_accounts_stripe_customer on public.pen_accounts(stripe_customer_id);

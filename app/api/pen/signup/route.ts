@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { validate, saveSignup, type Signup } from '@/lib/pen/signup'
+import { createPending } from '@/lib/pen/accounts'
 import { sendEmailResult } from '@/lib/news/email'
 
 export const dynamic = 'force-dynamic'
@@ -52,6 +53,10 @@ export async function POST(req: Request) {
 
   try {
     const { created } = await saveSignup(v.value)
+
+    // A pending account, so the person exists in the system before they pay. Stripe flips it
+    // to active; without this the webhook would be creating strangers from scratch.
+    await createPending(v.value.email, v.value.source ?? 'signup').catch(() => {})
 
     // Confirmation to them, and a heads-up to us. Neither is allowed to fail the signup —
     // the record is already saved, and an email problem is ours, not theirs.
