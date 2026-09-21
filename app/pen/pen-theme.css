@@ -47,7 +47,7 @@
 .pen-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
 
 /* ---------------------------------------------------------------- sidebar */
-.pen-row { border-bottom: 1px solid var(--hair); cursor: pointer; transition: background .12s; }
+.pen-row { border-bottom: 1px solid var(--hair); cursor: pointer; transition: background .12s; padding: 13px 11px; border-radius: 9px; }
 .pen-row:hover { background: var(--sunk); }
 .pen-row[data-active='true'] { background: var(--accent-wash); box-shadow: inset 2px 0 0 var(--accent); }
 .pen-row[data-active='true'] .pen-row-title { color: var(--accent-ink); }
@@ -339,9 +339,12 @@
 .pen-copy-icon { display: grid; place-items: center; width: 15px; height: 15px; }
 .pen-copy-icon svg { width: 15px; height: 15px; display: block; }
 
-/* Hover affordances beside an action / takeaway. Hidden until the row is hovered so the
-   note reads as a document at rest, and always visible on touch where hover is a lie. */
-.pen-do { display: flex; gap: 4px; opacity: 0; transition: opacity .16s ease; flex-wrap: wrap; }
+/* Affordances beside an action / takeaway.
+   These used to be opacity:0 until the row was hovered, which meant an entire feature —
+   drafting an email, a memo or a tracker row from a single action — was invisible unless you
+   happened to sweep the mouse over it. Nobody discovers what they cannot see, and on touch
+   there is no hover at all. Quiet at rest, present always, darker on hover. */
+.pen-do { display: flex; gap: 4px; flex-wrap: wrap; opacity: .72; transition: opacity .16s ease; }
 .pen-doable:hover .pen-do, .pen-doable:focus-within .pen-do { opacity: 1; }
 .pen-do-btn {
   font-family: var(--mono); font-size: 12px; letter-spacing: .04em; white-space: nowrap;
@@ -350,7 +353,6 @@
   transition: background .14s ease, color .14s ease, border-color .14s ease;
 }
 .pen-do-btn:hover { background: var(--accent-wash); border-color: var(--accent-line); color: var(--accent-ink); }
-@media (hover: none) { .pen-do { opacity: 1; } }
 
 /* ================================================== send briefing (feat 4) */
 .pen-brief {
@@ -581,10 +583,10 @@
 .pen-ov-act-main { display: flex; flex-direction: column; min-width: 0; }
 .pen-ov-act-go {
   font-family: var(--mono); font-size: 14.5px; color: var(--faint); flex: 0 0 auto;
-  opacity: 0; transform: translateX(-3px);
-  transition: opacity .14s ease, transform .14s ease;
+  opacity: .7;
+  transition: opacity .14s ease, color .14s ease;
 }
-.pen-ov-act:hover .pen-ov-act-go { opacity: 1; transform: none; }
+.pen-ov-act:hover .pen-ov-act-go { opacity: 1; color: var(--accent); }
 
 .pen-ov-client {
   background: var(--panel); border: 1px solid var(--line); border-radius: 11px;
@@ -802,18 +804,13 @@
    in the middle visually. */
 .pen-shell {
   display: grid;
-  grid-template-columns: 178px minmax(0, 1fr) 292px;
-  gap: 22px;
+  grid-template-columns: 336px minmax(0, 1fr);
+  gap: 30px;
   align-items: start;
 }
-.pen-cats       { order: 1; position: sticky; top: 16px; }
-.pen-shell-main { order: 2; }
-.pen-rail       { order: 3; position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; }
-
-/* The rail scrolls inside itself, so hide the scrollbar chrome until it's used. */
-.pen-rail::-webkit-scrollbar { width: 6px; }
-.pen-rail::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
-.pen-rail:hover::-webkit-scrollbar-thumb { background: #DDD8CC; }
+.pen-cats  { position: static; }
+.pen-rail  { position: static; max-height: none; margin-top: 14px; }
+.pen-saved { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--hair); }
 
 /* ---- category navigation ---- */
 .pen-cats-head { padding: 16px 8px 7px; }
@@ -882,8 +879,8 @@
   transition: background .12s;
 }
 .pen-title:hover { background: var(--sunk); }
-.pen-title-pen { width: 14px; height: 14px; flex: none; color: var(--faint); opacity: 0; transition: opacity .12s; }
-.pen-title:hover .pen-title-pen { opacity: 1; }
+.pen-title-pen { width: 15px; height: 15px; flex: none; color: var(--faint); opacity: .75; transition: opacity .12s, color .12s; }
+.pen-title:hover .pen-title-pen { opacity: 1; color: var(--accent); }
 .pen-title-input {
   font-family: var(--display); font-weight: 400; letter-spacing: -0.015em;
   font-size: 29px; line-height: 1.12; color: var(--ink);
@@ -1092,16 +1089,24 @@
 .pen-meter-cta:hover { background: #E1EDF2; border-color: var(--accent); }
 .pen-meter-note { display: block; margin-top: 8px; font-size: 12.5px; line-height: 1.45; color: var(--faint); }
 
-/* `display: contents` keeps nav and rail as direct grid children on desktop, so the
-   three-column layout below is completely unaffected by the wrapper. */
-.pen-side { display: contents; }
+/* One left column holding everything you navigate by, with the recordings as its centre of
+   gravity. Was three columns with the recordings rail on the far right; western reading starts
+   top-left and a right rail reads as an afterthought. */
+.pen-side {
+  display: flex; flex-direction: column;
+  position: sticky; top: 16px;
+  max-height: calc(100vh - 32px); overflow-y: auto;
+}
+.pen-side::-webkit-scrollbar { width: 6px; }
+.pen-side::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
+.pen-side:hover::-webkit-scrollbar-thumb { background: #DDD8CC; }
 .pen-browse { display: none; }
 .pen-scrim { display: none; }
 
 /* ---- workspace, narrow ---- */
 @media (min-width: 901px) and (max-width: 1180px) {
-  .pen-shell { grid-template-columns: 152px minmax(0, 1fr); }
-  .pen-rail { order: 4; grid-column: 1 / -1; position: static; max-height: none; }
+  /* Narrow laptops: keep both columns, just give the left less. */
+  .pen-shell { grid-template-columns: 272px minmax(0, 1fr); gap: 22px; }
 }
 @media (max-width: 1040px) {
   /* The header's three columns stop fitting: the search drops to its own full-width row
@@ -1139,9 +1144,9 @@
   }
   .pen-shell[data-nav='open'] .pen-scrim { opacity: 1; pointer-events: auto; }
 
-  /* Inside the drawer these are stacked panels, not sticky columns. */
-  .pen-cats, .pen-rail {
-    position: static; max-height: none; width: auto; order: 0;
+  /* Inside the drawer these are stacked panels, not a sticky column. */
+  .pen-cats, .pen-rail, .pen-saved {
+    position: static; max-height: none; width: auto;
   }
   .pen-cats-list { flex-direction: column; }
   .pen-cat { width: 100%; border-radius: 7px; border-color: transparent; padding: 9px 10px; }

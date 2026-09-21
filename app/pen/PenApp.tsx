@@ -41,6 +41,9 @@ declare global {
 
 // Audio, plus the video containers a phone produces — the audio track is extracted in the
 // browser and the picture discarded, so a walkthrough filmed on a phone still works.
+/** A category has to group at least this many recordings before it is worth navigating by. */
+const MIN_CAT = 3
+
 const MEDIA_RE = /\.(wav|wave|mp3|m4a|aac|ogg|opus|webm|amr|3gp|wma|flac|aif|aiff|mp4|m4v|mov|qt)$/i
 
 /**
@@ -157,6 +160,12 @@ export default function PenApp({
       resetsAt: stats?.usage.resetsAt ?? nextMonthStart().toISOString(),
     }
   }, [sessions, stats])
+
+  // A category earns a place in the nav by grouping at least this many recordings.
+  const groupingCategories = useMemo(
+    () => (stats?.categories ?? []).filter((c) => c.count >= MIN_CAT),
+    [stats],
+  )
 
   const activeId = view.k === 'session' ? view.id : null
   const active = useMemo(() => sessions.find((s) => s.id === activeId) ?? null, [sessions, activeId])
@@ -480,13 +489,19 @@ export default function PenApp({
             </button>
           </div>
 
-          <UsageMeter usage={usage} />
-
-          {!!stats?.categories.length && (
+          {/* Categories are only navigation once they group something.
+              Measured on a real archive: 11 recordings produced 10 distinct categories, 9 of
+              them holding exactly one recording — "Product brainstorm" and "Product discussion"
+              being the same meeting type described twice. A filter that always returns one item
+              is not a filter, and it was occupying the whole left column and pushing everything
+              else below the fold. The label still appears on each recording, where it is useful
+              description; it stops pretending to be a menu until some category has {MIN_CAT} or
+              more recordings behind it. */}
+          {groupingCategories.length > 0 && (
             <>
-              <div className="pen-cats-head pen-label">Categories</div>
+              <div className="pen-cats-head pen-label">Filter</div>
               <div className="pen-cats-list">
-                {stats.categories.map((c) => (
+                {groupingCategories.map((c) => (
                   <button
                     key={c.slug}
                     className="pen-cat"
@@ -502,6 +517,55 @@ export default function PenApp({
             </>
           )}
 
+        </nav>
+
+        {/* --------------------------------- recordings (rail; ordered right in CSS) */}
+        <aside className="pen-rail">
+          <div
+            className="pen-drop px-5 py-6 text-center"
+            data-over={dragOver}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files) }}
+          >
+            <div className="pen-label">Drop recordings</div>
+          </div>
+
+          {visible.length === 0 ? (
+            <p className="mt-6 text-[14px] leading-relaxed" style={{ color: 'var(--dim)' }}>
+              {catFilter ? (
+                <>Nothing in this category. <button className="underline" onClick={() => setCatFilter(null)}>Show everything</button>.</>
+              ) : (
+                <>Nothing yet. Plug the pen into USB, press <strong style={{ color: 'var(--soft)' }}>Connect pen</strong>, and choose the drive that appears.</>
+              )}
+            </p>
+          ) : (
+            <div className="mt-6">
+              {grouped.map(([day, rows]) => (
+                <div key={day} className="mb-5">
+                  <div className="pen-label mb-1.5">{day}</div>
+                  {rows.map((s) => (
+                    <div key={s.id} className="pen-row px-2.5 py-3" data-active={s.id === activeId}
+                         onClick={() => { openSession(s.id); setTab('note'); setChatOpen(false) }}>
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="pen-row-title min-w-0 flex-1 text-[14.5px] font-medium leading-snug">
+                          {s.title || s.client_name || s.source_name || 'Untitled'}
+                        </span>
+                        <span className="pen-pill" data-s={s.status}>{s.status}</span>
+                      </div>
+                      <div className="pen-mono mt-1.5 text-[12.5px]" style={{ color: 'var(--faint)' }}>
+                        {fmtDur(s.duration_sec ?? 0)}
+                        {s.meeting_type ? ` · ${displayType(s.meeting_type).toLowerCase()}` : ''}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </aside>
+
+        <nav className="pen-saved">
           {/* ---------------------------------------------------------- chats */}
           <div className="pen-cats-head pen-label pen-cats-head-row">
             <span>Chats</span>
@@ -559,52 +623,6 @@ export default function PenApp({
             </>
           )}
         </nav>
-
-        {/* --------------------------------- recordings (rail; ordered right in CSS) */}
-        <aside className="pen-rail">
-          <div
-            className="pen-drop px-5 py-6 text-center"
-            data-over={dragOver}
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files) }}
-          >
-            <div className="pen-label">Drop recordings</div>
-          </div>
-
-          {visible.length === 0 ? (
-            <p className="mt-6 text-[14px] leading-relaxed" style={{ color: 'var(--dim)' }}>
-              {catFilter ? (
-                <>Nothing in this category. <button className="underline" onClick={() => setCatFilter(null)}>Show everything</button>.</>
-              ) : (
-                <>Nothing yet. Plug the pen into USB, press <strong style={{ color: 'var(--soft)' }}>Connect pen</strong>, and choose the drive that appears.</>
-              )}
-            </p>
-          ) : (
-            <div className="mt-6">
-              {grouped.map(([day, rows]) => (
-                <div key={day} className="mb-5">
-                  <div className="pen-label mb-1.5">{day}</div>
-                  {rows.map((s) => (
-                    <div key={s.id} className="pen-row px-2.5 py-3" data-active={s.id === activeId}
-                         onClick={() => { openSession(s.id); setTab('note'); setChatOpen(false) }}>
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="pen-row-title min-w-0 flex-1 text-[14.5px] font-medium leading-snug">
-                          {s.title || s.client_name || s.source_name || 'Untitled'}
-                        </span>
-                        <span className="pen-pill" data-s={s.status}>{s.status}</span>
-                      </div>
-                      <div className="pen-mono mt-1.5 text-[12.5px]" style={{ color: 'var(--faint)' }}>
-                        {fmtDur(s.duration_sec ?? 0)}
-                        {s.meeting_type ? ` · ${displayType(s.meeting_type).toLowerCase()}` : ''}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
-        </aside>
         </div>
 
         <button
