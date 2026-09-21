@@ -478,12 +478,31 @@ export default function PenApp({
             <Icon name="link" size={18} />
             Connect pen
           </button>
-        ) : (
-          <button className="pen-connect" onClick={() => fileInput.current?.click()}>
-            <Icon name="plus" size={18} />
-            Add recordings
-          </button>
-        )}
+        ) : null}
+
+        {/* The drop target belongs next to Connect pen: they are the two ways a recording gets
+            in, and separating them meant the only visible route on a browser without the
+            folder picker was a link at the foot of a list on the other side of the screen.
+            Clickable as well as droppable, because "drag a file here" is not an instruction
+            everyone acts on. */}
+        <button
+          className="pen-drop pen-drop-side"
+          data-over={dragOver}
+          onClick={() => fileInput.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault()
+            setDragOver(false)
+            if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files)
+          }}
+        >
+          <Icon name="plus" size={17} />
+          <span>
+            <strong>Add audio files</strong>
+            <em>or drag them here</em>
+          </span>
+        </button>
 
         <nav className="pen-cats">
           <div className="pen-cats-list">
@@ -723,15 +742,6 @@ export default function PenApp({
               ))}
             </div>
           )}
-          <div
-            className="pen-drop pen-drop-foot"
-            data-over={dragOver}
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files) }}
-          >
-            <span className="pen-label">Or drop files here</span>
-          </div>
         </aside>
       </div>
 
