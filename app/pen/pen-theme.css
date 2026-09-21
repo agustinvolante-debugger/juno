@@ -96,7 +96,7 @@
 .pen-drop[data-over='true'] { border-color: var(--accent); background: var(--accent-wash); }
 
 /* ------------------------------------------------------------ the note */
-.pen-doc { max-width: 68ch; }
+.pen-doc { max-width: none; }
 .pen-doc p { line-height: 1.68; }
 .pen-sec { border-top: 1px solid var(--hair); padding-top: 18px; margin-top: 26px; }
 .pen-sec:first-child { border-top: none; padding-top: 0; margin-top: 0; }
@@ -1625,7 +1625,7 @@
 /* The summary is the machine's contribution, so it is tinted and attributed rather than
    sitting in the same plain type as everything the user wrote. */
 .pen-aicard {
-  margin-top: 22px; padding: 20px 22px;
+  margin-top: 22px; padding: 22px 30px 24px;
   background: var(--accent-wash); border: 1px solid var(--accent-line);
   border-radius: 14px; box-shadow: var(--lift-1);
 }
