@@ -1584,12 +1584,29 @@ function Detail({
             </div>
           )}
 
-          {/* Decided / to do / still open, side by side as in the mock. Three short lists
+          {/* Still open / decided / to do, side by side as in the mock. Three short lists
               stacked vertically read as one long undifferentiated column; side by side you can
-              see at a glance whether a meeting produced decisions, work, or neither. */}
+              see at a glance whether a meeting produced decisions, work, or neither.
+              Still open leads so the unresolved thing sits directly under the summary, rather
+              than last — it is the part most likely to need acting on. */}
           {(!!n.decisions?.length || !!n.actions?.length || !!n.open_questions?.length) && (
             <div className="pen-trio">
-  {!!n.decisions?.length && (
+            {!!n.open_questions?.length && (
+              <div className="pen-sec pen-card">
+                <span className="pen-sec-head"><span className="pen-badge" data-tone="warn"><Icon name="question" size={13} /></span>Still open</span>
+                <ul className="mt-2 list-disc space-y-2.5 pl-5 text-[15px]">
+                  {n.open_questions.map((q, i) => (
+                    <li key={i} className="pen-doable">
+                      {q}
+                      <div className="mt-1.5">
+                        <DeliverableActions onPick={(kind) => setSheet({ kind, item: q })} />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {!!n.decisions?.length && (
               <div className="pen-sec pen-card">
                 <span className="pen-sec-head"><span className="pen-badge" data-tone="good"><Icon name="check" size={13} /></span>Decided</span>
                 <ul className="mt-2 space-y-2">
@@ -1602,7 +1619,7 @@ function Detail({
                 </ul>
               </div>
             )}
-  {!!n.actions?.length && (
+            {!!n.actions?.length && (
               <div className="pen-sec pen-card">
                 <div className="mb-1 flex items-baseline justify-between">
                   <span className="pen-sec-head"><span className="pen-badge" data-tone="accent"><Icon name="checklist" size={13} /></span>Next actions</span>
@@ -1630,21 +1647,6 @@ function Detail({
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-              {!!n.open_questions?.length && (
-              <div className="pen-sec pen-card">
-                <span className="pen-sec-head"><span className="pen-badge" data-tone="warn"><Icon name="question" size={13} /></span>Still open</span>
-                <ul className="mt-2 list-disc space-y-2.5 pl-5 text-[15px]">
-                  {n.open_questions.map((q, i) => (
-                    <li key={i} className="pen-doable">
-                      {q}
-                      <div className="mt-1.5">
-                        <DeliverableActions onPick={(kind) => setSheet({ kind, item: q })} />
-                      </div>
-                    </li>
-                  ))}
-                </ul>
               </div>
             )}
             </div>
