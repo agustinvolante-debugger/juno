@@ -156,7 +156,7 @@ export default function DeliverableSheet({
               </div>
 
               <div className="pen-sheet-foot">
-                <span className="pen-mono text-[12px]" style={{ color: 'var(--faint)' }}>
+                <span className="pen-mono text-[13px]" style={{ color: 'var(--faint)' }}>
                   {deliverable ? 'Edit it before you send — it’s a draft, not a decision.' : ''}
                 </span>
                 <motion.button

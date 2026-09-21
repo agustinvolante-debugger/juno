@@ -167,7 +167,7 @@ export default function NoteEditor({
         <div className="flex items-center gap-3">
           {/* Never claim a save that did not happen. A failed write is loud. */}
           <span
-            className="pen-mono text-[12px] tabular-nums"
+            className="pen-mono text-[13px] tabular-nums"
             style={{ color: saveState === 'failed' ? 'var(--bad)' : 'var(--faint)' }}
             title={saveState === 'failed' ? 'The last save failed — your text is still here but is not stored yet' : undefined}
           >
@@ -247,7 +247,7 @@ export default function NoteEditor({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             transition={SPRING}
-            className="mt-2 text-[14px]"
+            className="mt-2 text-[14.5px]"
             style={{ color: 'var(--warn)' }}
           >
             {error}
@@ -256,7 +256,7 @@ export default function NoteEditor({
       </AnimatePresence>
 
       {blocks.some((b) => b.source === 'ai') && (
-        <p className="pen-mono mt-3 text-[12px]" style={{ color: 'var(--faint)' }}>
+        <p className="pen-mono mt-3 text-[13px]" style={{ color: 'var(--faint)' }}>
           Grey text was written from the recording. Click it to edit — it turns black once you do.
         </p>
       )}

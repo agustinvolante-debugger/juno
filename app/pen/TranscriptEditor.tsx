@@ -33,7 +33,7 @@ export default function TranscriptEditor({
     <div>
       <div className="mb-3 flex items-center justify-between">
         <span className="pen-label">Transcript · click any line to correct it</span>
-        <span className="pen-mono text-[12px]" style={{ color: saveState === 'failed' ? 'var(--bad)' : 'var(--faint)' }}>
+        <span className="pen-mono text-[13px]" style={{ color: saveState === 'failed' ? 'var(--bad)' : 'var(--faint)' }}>
           {saveState === 'failed' ? 'not saved' : saveState === 'saving' ? 'saving…' : 'saved'}
         </span>
       </div>

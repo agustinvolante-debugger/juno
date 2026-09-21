@@ -52,13 +52,13 @@
 .pen-display { font-family: var(--display); font-weight: 400; letter-spacing: -0.015em; }
 .pen-mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .pen-label {
-  font-family: var(--mono); font-size: 12px; letter-spacing: .13em;
+  font-family: var(--mono); font-size: 13px; letter-spacing: .13em;
   text-transform: uppercase; color: var(--dim);
 }
 .pen-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--lift-2); }
 
 /* ---------------------------------------------------------------- sidebar */
-.pen-row { border-bottom: 1px solid var(--hair); cursor: pointer; transition: background .12s; padding: 13px 11px; border-radius: 9px; }
+.pen-row { border-bottom: 1px solid var(--hair); cursor: pointer; transition: background .12s; padding: 13px 11px; border-radius: 8px; }
 .pen-row:hover { background: rgba(255,255,255,.62); }
 .pen-row[data-active='true'] { background: var(--panel); box-shadow: inset 3px 0 0 var(--accent), var(--lift-1); }
 .pen-row[data-active='true'] .pen-row-title { color: var(--accent-ink); }
@@ -66,7 +66,7 @@
 /* ------------------------------------------------------------------ pills */
 .pen-pill {
   display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono);
-  font-size: 12px; letter-spacing: .07em; text-transform: uppercase;
+  font-size: 13px; letter-spacing: .07em; text-transform: uppercase;
   padding: 3px 8px; border-radius: 999px; border: 1px solid transparent; white-space: nowrap;
 }
 .pen-pill[data-s='uploaded']     { background: var(--sunk); color: var(--soft); border-color: var(--line); }
@@ -78,7 +78,7 @@
 
 /* ---------------------------------------------------------------- buttons */
 .pen-btn {
-  font-family: var(--ui); font-size: 15px; font-weight: 600; letter-spacing: -0.005em;
+  font-family: var(--ui); font-size: 16.5px; font-weight: 600; letter-spacing: -0.005em;
   border: 1px solid var(--line); background: var(--panel); color: var(--ink);
   border-radius: 8px; padding: 9px 16px; transition: background .12s, border-color .12s;
   /* A control that folds its own label in half is never what you want. */
@@ -92,7 +92,7 @@
 .pen-btn-accent:hover:not(:disabled) { background: var(--accent-ink); border-color: var(--accent-ink); }
 
 /* -------------------------------------------------------------- dropzone */
-.pen-drop { border: 1.5px dashed #DBD6CA; border-radius: 10px; transition: border-color .12s, background .12s; }
+.pen-drop { border: 1.5px dashed #DBD6CA; border-radius: 12px; transition: border-color .12s, background .12s; }
 .pen-drop[data-over='true'] { border-color: var(--accent); background: var(--accent-wash); }
 
 /* ------------------------------------------------------------ the note */
@@ -118,7 +118,7 @@
 .pen-act[data-done='true'] .pen-act-text { color: var(--faint); text-decoration: line-through; }
 .pen-act-box {
   appearance: none; width: 16px; height: 16px; flex: 0 0 16px; margin-top: 3px; cursor: pointer;
-  border: 1.5px solid #CFC9BC; border-radius: 4px; background: var(--panel); transition: all .12s;
+  border: 1.5px solid #CFC9BC; border-radius: 6px; background: var(--panel); transition: all .12s;
 }
 .pen-act-box:checked { background: var(--good); border-color: var(--good); }
 .pen-act-box:checked::after { content: '✓'; color: #fff; font-size: 13px; display: block; text-align: center; line-height: 13px; }
@@ -128,7 +128,7 @@
   background:
     repeating-linear-gradient(135deg, rgba(138,101,22,.045) 0 1px, transparent 1px 7px),
     var(--warn-wash);
-  border: 1px solid #EFE2C4; border-radius: 10px;
+  border: 1px solid #EFE2C4; border-radius: 12px;
 }
 
 /* --------------------------------------------------------------- chat */
@@ -150,7 +150,7 @@
 
 .pen-notes-input {
   width: 100%; border: none; outline: none; resize: none; background: transparent;
-  font-family: var(--serif); font-size: 16px; line-height: 1.68; color: var(--ink); min-height: 108px;
+  font-family: var(--serif); font-size: 16.5px; line-height: 1.68; color: var(--ink); min-height: 108px;
 }
 .pen-notes-input::placeholder { color: var(--faint); }
 
@@ -188,10 +188,10 @@
    reads as a document rather than a form. */
 .pen-blocks { margin-left: -2px; }
 
-.pen-block { position: relative; padding: 2px 0 2px 12px; border-radius: 4px; }
+.pen-block { position: relative; padding: 2px 0 2px 12px; border-radius: 6px; }
 .pen-block::before {
   content: ''; position: absolute; left: 0; top: 5px; bottom: 5px; width: 2px;
-  border-radius: 2px; background: transparent; transition: background .22s ease;
+  border-radius: 6px; background: transparent; transition: background .22s ease;
 }
 /* Only machine text carries a marginal rule — your own words need no annotation. */
 .pen-block[data-source='ai']::before { background: var(--accent-line); }
@@ -199,7 +199,7 @@
 
 .pen-block-input {
   display: block; width: 100%; border: none; outline: none; resize: none; background: transparent;
-  font-family: var(--serif); font-size: 16px; line-height: 1.68; padding: 0;
+  font-family: var(--serif); font-size: 16.5px; line-height: 1.68; padding: 0;
   overflow: hidden; transition: color .3s ease;
 }
 .pen-block[data-source='user'] .pen-block-input { color: var(--ink); }
@@ -224,8 +224,8 @@
 /* ======================================================== editable transcript */
 .pen-utt-input {
   display: block; width: 100%; border: none; outline: none; resize: none; background: transparent;
-  font-family: var(--serif); font-size: 15px; line-height: 1.6; padding: 1px 0; overflow: hidden;
-  color: var(--ink); border-radius: 3px;
+  font-family: var(--serif); font-size: 16.5px; line-height: 1.6; padding: 1px 0; overflow: hidden;
+  color: var(--ink); border-radius: 6px;
 }
 .pen-utt-input:focus { background: #FCFAF3; box-shadow: 0 0 0 6px #FCFAF3; }
 .pen-utt[data-edited='true'] .pen-spk-tag::after {
@@ -236,18 +236,18 @@
    A sheet above the layout, not a page. Backdrop blur so the archive behind it stays
    visible — you are asking about that material, so it should not disappear. */
 .pen-starter {
-  text-align: left; font-family: var(--serif); font-size: 14px; color: var(--soft);
-  padding: 9px 12px; border-radius: 9px; border: 1px solid var(--line); background: var(--panel);
+  text-align: left; font-family: var(--serif); font-size: 14.5px; color: var(--soft);
+  padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel);
   transition: background .14s ease, border-color .14s ease, color .14s ease;
 }
 .pen-starter:hover { background: var(--accent-wash); border-color: var(--accent-line); color: var(--accent-ink); }
 
 .pen-pal-q {
-  align-self: flex-end; max-width: 86%; padding: 9px 13px; border-radius: 13px 13px 4px 13px;
-  background: var(--accent); color: #fff; font-size: 14px; line-height: 1.5;
+  align-self: flex-end; max-width: 86%; padding: 9px 13px; border-radius: 12px 13px 4px 13px;
+  background: var(--accent); color: #fff; font-size: 14.5px; line-height: 1.5;
 }
 .pen-pal-a {
-  align-self: flex-start; max-width: 96%; padding: 11px 14px; border-radius: 13px 13px 13px 4px;
+  align-self: flex-start; max-width: 96%; padding: 11px 14px; border-radius: 12px 13px 13px 4px;
   background: var(--panel); border: 1px solid var(--line);
 }
 
@@ -264,7 +264,7 @@
   display: inline-flex; align-items: center; gap: 6px; max-width: 260px;
   padding: 4px 10px 4px 4px; border-radius: 999px;
   border: 1px solid var(--accent-line); background: var(--accent-wash); color: var(--accent-ink);
-  font-size: 13.5px; transition: background .14s ease;
+  font-size: 14.5px; transition: background .14s ease;
 }
 .pen-cite-full:hover { background: #E1EDF2; }
 .pen-cite-n {
@@ -298,7 +298,7 @@
   backdrop-filter: blur(24px) saturate(150%);
   -webkit-backdrop-filter: blur(24px) saturate(150%);
   border: 1px solid rgba(231,227,217,.9); border-bottom: none;
-  border-radius: 17px 17px 0 0;
+  border-radius: 16px 17px 0 0;
   box-shadow: 0 -1px 2px rgba(22,21,15,.04), 0 -14px 34px -10px rgba(22,21,15,.17), 0 -44px 90px -30px rgba(22,21,15,.2);
 }
 .pen-sheet-grip {
@@ -309,28 +309,28 @@
   display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
   padding: 8px 18px 13px; border-bottom: 1px solid var(--hair); flex: 0 0 auto;
 }
-.pen-sheet-title { font-family: var(--display); font-size: 20px; line-height: 1.2; margin-top: 3px; }
+.pen-sheet-title { font-family: var(--display); font-size: 21px; line-height: 1.2; margin-top: 3px; }
 .pen-sheet-x {
-  font-family: var(--mono); font-size: 19px; line-height: 1; color: var(--dim);
+  font-family: var(--mono); font-size: 21px; line-height: 1; color: var(--dim);
   width: 28px; height: 28px; border-radius: 8px; flex: 0 0 auto;
   transition: background .14s ease, color .14s ease;
 }
 .pen-sheet-x:hover { background: var(--sunk); color: var(--ink); }
 .pen-sheet-body { flex: 1 1 auto; overflow-y: auto; padding: 14px 18px 4px; }
 .pen-sheet-ref {
-  font-family: var(--mono); font-size: 12.5px; color: var(--faint);
+  font-family: var(--mono); font-size: 13px; color: var(--faint);
   margin-bottom: 12px; line-height: 1.5;
 }
 .pen-sheet-text {
   width: 100%; min-height: 240px; resize: vertical;
-  border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
   padding: 13px 15px; outline: none;
   font-family: var(--serif); font-size: 14.5px; line-height: 1.62; color: var(--ink);
   white-space: pre-wrap;
 }
 .pen-sheet-text:focus { border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-wash); }
 .pen-sheet-skeleton { display: flex; flex-direction: column; gap: 9px; padding: 6px 0 14px; }
-.pen-sheet-skeleton span { display: block; height: 11px; border-radius: 5px; background: var(--line); }
+.pen-sheet-skeleton span { display: block; height: 11px; border-radius: 6px; background: var(--line); }
 .pen-sheet-foot {
   flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 12px 18px 16px; border-top: 1px solid var(--hair); background: rgba(251,250,246,.55);
@@ -339,8 +339,8 @@
 /* Copy, with a checkmark that draws itself */
 .pen-copy {
   display: inline-flex; align-items: center; gap: 7px;
-  font-family: var(--mono); font-size: 13.5px;
-  padding: 8px 14px; border-radius: 9px;
+  font-family: var(--mono); font-size: 14.5px;
+  padding: 8px 14px; border-radius: 8px;
   background: var(--ink); border: 1px solid var(--ink); color: var(--paper);
   transition: background .2s ease, border-color .2s ease;
 }
@@ -358,7 +358,7 @@
 .pen-do { display: flex; gap: 4px; flex-wrap: wrap; opacity: .72; transition: opacity .16s ease; }
 .pen-doable:hover .pen-do, .pen-doable:focus-within .pen-do { opacity: 1; }
 .pen-do-btn {
-  font-family: var(--mono); font-size: 12px; letter-spacing: .04em; white-space: nowrap;
+  font-family: var(--mono); font-size: 13px; letter-spacing: .04em; white-space: nowrap;
   padding: 3px 8px; border-radius: 999px;
   border: 1px solid var(--line); background: var(--panel); color: var(--dim);
   transition: background .14s ease, color .14s ease, border-color .14s ease;
@@ -368,8 +368,8 @@
 /* ================================================== send briefing (feat 4) */
 .pen-brief {
   display: inline-flex; align-items: center; gap: 7px;
-  font-family: var(--ui); font-size: 14px; font-weight: 600; letter-spacing: -0.005em; white-space: nowrap;
-  padding: 7px 12px; border-radius: 7px;
+  font-family: var(--ui); font-size: 14.5px; font-weight: 600; letter-spacing: -0.005em; white-space: nowrap;
+  padding: 7px 12px; border-radius: 8px;
   border: 1px solid var(--line); background: var(--panel); color: var(--ink);
   transition: background .2s ease, border-color .2s ease, color .2s ease;
 }
@@ -393,7 +393,7 @@
   position: absolute; top: calc(100% + 7px); right: 0; z-index: 20;
   max-width: 290px; padding: 8px 11px; border-radius: 8px;
   background: var(--bad-wash); border: 1px solid #EFD6D2; color: var(--bad);
-  font-size: 13.5px; line-height: 1.45;
+  font-size: 14.5px; line-height: 1.45;
   box-shadow: 0 6px 18px -8px rgba(22,21,15,.2);
 }
 
@@ -404,11 +404,11 @@
 .pen-confirm {
   display: inline-flex; align-items: center; gap: 7px;
   font-family: var(--mono); font-size: 13px; color: var(--bad);
-  padding: 5px 6px 5px 11px; border-radius: 7px;
+  padding: 5px 6px 5px 11px; border-radius: 8px;
   background: var(--bad-wash); border: 1px solid #EFD6D2;
 }
 .pen-confirm-no, .pen-confirm-yes {
-  font-family: var(--mono); font-size: 13px; padding: 3px 9px; border-radius: 5px;
+  font-family: var(--mono); font-size: 13px; padding: 3px 9px; border-radius: 6px;
   transition: background .14s ease;
 }
 .pen-confirm-no { color: var(--soft); background: var(--panel); border: 1px solid var(--line); }
@@ -432,15 +432,15 @@
 .pen-lp-nav { padding: 20px 0 4px; }
 .pen-lp-navlink {
   font-family: var(--mono); font-size: 13px; color: var(--dim);
-  padding: 7px 11px; border-radius: 7px; transition: color .15s ease, background .15s ease;
+  padding: 7px 11px; border-radius: 8px; transition: color .15s ease, background .15s ease;
 }
 .pen-lp-navlink:hover { color: var(--ink); background: var(--sunk); }
 
 /* Buttons — one shape, four weights */
 .pen-lp-btn {
   display: inline-flex; align-items: center; gap: 7px;
-  font-family: var(--mono); font-size: 14px; letter-spacing: .01em; white-space: nowrap;
-  padding: 12px 20px; border-radius: 9px;
+  font-family: var(--mono); font-size: 14.5px; letter-spacing: .01em; white-space: nowrap;
+  padding: 12px 20px; border-radius: 8px;
   border: 1px solid var(--line); background: var(--panel); color: var(--ink);
   transition: transform .16s cubic-bezier(.2,.7,.3,1), background .16s ease, border-color .16s ease, box-shadow .16s ease;
 }
@@ -474,19 +474,19 @@
 }
 @media (min-width: 640px) { .pen-lp-specimen-bar { padding: 15px 40px; } }
 .pen-lp-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 3px rgba(63,107,74,.14); }
-.pen-lp-black { font-size: 19px; line-height: 1.5; color: var(--ink); margin-block: 0; }
+.pen-lp-black { font-size: 21px; line-height: 1.5; color: var(--ink); margin-block: 0; }
 .pen-lp-grey {
-  font-size: 17.5px; line-height: 1.6; color: #9A968C; margin: 10px 0 0;
+  font-size: 21px; line-height: 1.6; color: #9A968C; margin: 10px 0 0;
   /* mt-* on this element is intentionally NOT used; spacing lives here. */
   padding-left: 13px; border-left: 2px solid var(--accent-line);
 }
 .pen-lp-legend {
   display: flex; flex-wrap: wrap; gap: 18px; margin-top: 32px; padding-top: 17px;
   border-top: 1px solid var(--hair);
-  font-family: var(--mono); font-size: 12.5px; color: var(--faint);
+  font-family: var(--mono); font-size: 13px; color: var(--faint);
 }
 .pen-lp-legend span { display: inline-flex; align-items: center; gap: 6px; }
-.pen-lp-legend i { width: 9px; height: 9px; border-radius: 2px; display: block; }
+.pen-lp-legend i { width: 9px; height: 9px; border-radius: 6px; display: block; }
 .pen-lp-swatch-ink { background: var(--ink); }
 .pen-lp-swatch-grey { background: #9A968C; }
 
@@ -495,7 +495,7 @@
 
 /* The missed block, echoing the app's hatched treatment */
 .pen-lp-missed {
-  border-radius: 14px; padding: 28px 26px;
+  border-radius: 16px; padding: 28px 26px;
   background:
     repeating-linear-gradient(135deg, rgba(138,101,22,.045) 0 1px, transparent 1px 8px),
     var(--warn-wash);
@@ -506,7 +506,7 @@
 .pen-lp-dark { background: var(--ink); }
 .pen-lp-plan {
   position: relative; display: flex; flex-direction: column; height: 100%;
-  padding: 32px 28px 30px; border-radius: 15px;
+  padding: 32px 28px 30px; border-radius: 16px;
   background: rgba(251,250,246,.035);
   border: 1px solid rgba(251,250,246,.11);
   transition: transform .22s cubic-bezier(.2,.7,.3,1), border-color .22s ease;
@@ -568,7 +568,7 @@
 .pen-ov-tiles {
   display: grid; gap: 1px; margin-top: 22px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  background: var(--line); border: 1px solid var(--line); border-radius: 11px; overflow: hidden;
+  background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
 }
 @media (min-width: 760px) { .pen-ov-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .pen-ov-tile { background: var(--panel); padding: 17px 18px 18px; }
@@ -586,7 +586,7 @@
 
 .pen-ov-act {
   display: flex; align-items: center; justify-content: space-between; gap: 14px;
-  width: 100%; text-align: left; padding: 12px 12px 12px 14px; border-radius: 9px;
+  width: 100%; text-align: left; padding: 12px 12px 12px 14px; border-radius: 8px;
   border: 1px solid transparent; transition: background .14s ease, border-color .14s ease;
 }
 .pen-ov-act:hover { background: var(--panel); border-color: var(--line); }
@@ -600,7 +600,7 @@
 .pen-ov-act:hover .pen-ov-act-go { opacity: 1; color: var(--accent); }
 
 .pen-ov-client {
-  background: var(--panel); border: 1px solid var(--line); border-radius: 11px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
   padding: 18px 20px 20px;
 }
 
@@ -624,7 +624,7 @@
 }
 
 /* Owner usage table. Columns of numbers, so tabular figures here specifically. */
-.pen-usage { width: 100%; border-collapse: collapse; font-size: 15px; }
+.pen-usage { width: 100%; border-collapse: collapse; font-size: 16.5px; }
 .pen-usage th {
   font-family: var(--mono); font-size: 11.5px; letter-spacing: .11em; text-transform: uppercase;
   color: var(--dim); font-weight: 400; text-align: left;
@@ -639,7 +639,7 @@
 
 /* ------------------------------------------- landing: outputs & compounding */
 .pen-lp-card {
-  background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
   padding: 24px 24px 26px;
   box-shadow: var(--lift-2);
   /* Same timing and distance as .pen-lp-plan, so the page has one hover gesture rather than
@@ -667,7 +667,7 @@
 .pen-lp-todo li + li { border-top: 1px solid var(--hair); }
 .pen-lp-check {
   width: 15px; height: 15px; flex: 0 0 15px; margin-top: 3px;
-  border: 1.5px solid #CFC9BC; border-radius: 4px; background: var(--panel);
+  border: 1.5px solid #CFC9BC; border-radius: 6px; background: var(--panel);
 }
 
 .pen-lp-tag {
@@ -676,9 +676,9 @@
   background: var(--accent-wash); color: var(--accent-ink); border: 1px solid var(--accent-line);
 }
 .pen-lp-pre {
-  margin: 14px 0 0; padding: 15px 16px; border-radius: 10px;
+  margin: 14px 0 0; padding: 15px 16px; border-radius: 12px;
   background: var(--sunk); border: 1px solid var(--hair);
-  font-family: var(--mono); font-size: 13.5px; line-height: 1.72; color: var(--soft);
+  font-family: var(--mono); font-size: 14.5px; line-height: 1.72; color: var(--soft);
   white-space: pre-wrap; overflow-x: auto;
 }
 .pen-lp-mailrow {
@@ -692,7 +692,7 @@
    you are on the page. */
 .pen-lp-eyebrow {
   display: inline-flex; align-items: center; gap: 10px;
-  font-family: var(--mono); font-size: 14px; letter-spacing: .16em;
+  font-family: var(--mono); font-size: 14.5px; letter-spacing: .16em;
   text-transform: uppercase; color: var(--accent);
 }
 .pen-lp-eyebrow::before {
@@ -716,7 +716,7 @@
 .pen-seg-btn {
   position: relative; z-index: 1; flex: 0 0 auto;
   padding: 11px 22px; border-radius: 999px; border: none; background: none;
-  font-family: var(--mono); font-size: 15px; letter-spacing: .01em; white-space: nowrap;
+  font-family: var(--mono); font-size: 16.5px; letter-spacing: .01em; white-space: nowrap;
   color: var(--dim); transition: color .18s ease;
 }
 .pen-seg-btn:hover { color: var(--soft); }
@@ -737,7 +737,7 @@
   /* Full width so it doesn't sit orphaned, equal segments, short labels. Three full
      labels do not fit 390px — "Coffee" was clipped and the scroll was not discoverable. */
   .pen-seg { display: flex; width: 100%; overflow-x: visible; }
-  .pen-seg-btn { flex: 1 1 0; padding: 11px 8px; font-size: 14px; text-align: center; }
+  .pen-seg-btn { flex: 1 1 0; padding: 11px 8px; font-size: 14.5px; text-align: center; }
   .pen-seg-long { display: none; }
   .pen-seg-short { display: inline; }
 }
@@ -790,13 +790,13 @@
   border-left: 1px solid var(--line);
 }
 .pen-acct-email {
-  font-family: var(--mono); font-size: 12.5px; color: var(--faint);
+  font-family: var(--mono); font-size: 13px; color: var(--faint);
   max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .pen-acct-out {
-  font-family: var(--ui); font-size: 15px; font-weight: 600; color: var(--dim);
+  font-family: var(--ui); font-size: 16.5px; font-weight: 600; color: var(--dim);
   white-space: nowrap;
-  padding: 6px 11px; border-radius: 7px; border: 1px solid transparent;
+  padding: 6px 11px; border-radius: 8px; border: 1px solid transparent;
   transition: color .14s ease, background .14s ease, border-color .14s ease;
 }
 .pen-acct-out:hover:not(:disabled) { color: var(--ink); background: var(--sunk); border-color: var(--line); }
@@ -822,11 +822,11 @@
 .pen-cats  { position: static; }
 .pen-rail  {
   position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
   padding: 14px 12px; box-shadow: var(--lift-1);
 }
 .pen-rail::-webkit-scrollbar { width: 6px; }
-.pen-rail::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
+.pen-rail::-webkit-scrollbar-thumb { background: transparent; border-radius: 6px; }
 .pen-rail:hover::-webkit-scrollbar-thumb { background: #CFC7B4; }
 .pen-saved { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
 
@@ -836,8 +836,8 @@
 .pen-cats-list { display: flex; flex-direction: column; gap: 1px; }
 .pen-cat {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  width: 100%; text-align: left; padding: 6px 8px; border-radius: 7px;
-  font-family: var(--ui); font-size: 14px; font-weight: 500; color: var(--soft);
+  width: 100%; text-align: left; padding: 6px 8px; border-radius: 8px;
+  font-family: var(--ui); font-size: 14.5px; font-weight: 500; color: var(--soft);
   border: 1px solid transparent; transition: background .12s, color .12s;
 }
 .pen-cat:hover { background: rgba(255,255,255,.62); color: var(--ink); }
@@ -847,7 +847,7 @@
   box-shadow: var(--lift-1);
 }
 .pen-cat-n {
-  font-family: var(--mono); font-size: 12px; color: var(--faint);
+  font-family: var(--mono); font-size: 13px; color: var(--faint);
   font-variant-numeric: tabular-nums; flex: none;
 }
 .pen-cat[data-active='true'] .pen-cat-n { color: var(--accent); }
@@ -857,7 +857,7 @@
 .pen-search-wrap { max-width: 620px; min-width: 0; margin: 0 auto; width: 100%; position: relative; }
 .pen-search {
   display: flex; align-items: center; gap: 11px; min-width: 0;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 13px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
   padding: 0 14px; height: 52px;
   box-shadow: var(--lift-2);
   transition: border-color .14s, box-shadow .14s;
@@ -884,7 +884,7 @@
 }
 .pen-sugg {
   font-family: var(--ui); font-size: 14.5px; font-weight: 500; text-align: left;
-  color: var(--soft); border-radius: 7px; padding: 8px 10px;
+  color: var(--soft); border-radius: 8px; padding: 8px 10px;
   transition: background .12s, color .12s;
 }
 .pen-sugg:hover { color: var(--accent-ink); background: var(--accent-wash); }
@@ -892,7 +892,7 @@
 /* ---- inline title editing ---- */
 .pen-title {
   font-family: var(--display); font-weight: 400; letter-spacing: -0.015em;
-  font-size: 29px; line-height: 1.12; color: var(--ink); text-align: left;
+  font-size: 34px; line-height: 1.12; color: var(--ink); text-align: left;
   display: inline-flex; align-items: baseline; gap: 9px;
   border-radius: 6px; margin: -2px -6px; padding: 2px 6px;
   transition: background .12s;
@@ -902,7 +902,7 @@
 .pen-title:hover .pen-title-pen { opacity: 1; color: var(--accent); }
 .pen-title-input {
   font-family: var(--display); font-weight: 400; letter-spacing: -0.015em;
-  font-size: 29px; line-height: 1.12; color: var(--ink);
+  font-size: 34px; line-height: 1.12; color: var(--ink);
   display: block; width: 100%; margin: -2px -6px; padding: 2px 6px;
   background: var(--panel); border: 1px solid var(--accent-line); border-radius: 6px;
   outline: none; box-shadow: 0 0 0 3px var(--accent-wash);
@@ -926,19 +926,19 @@
 .pen-catpick-chev { color: var(--faint); font-size: 14.5px; line-height: 1; }
 .pen-catpick-menu {
   position: absolute; z-index: 30; top: calc(100% + 6px); right: 0; width: 216px;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 11px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
   padding: 7px; box-shadow: var(--lift-3);
 }
 .pen-catpick-input {
-  width: 100%; font-family: var(--ui); font-size: 14px; color: var(--ink);
-  background: var(--sunk); border: 1px solid var(--line); border-radius: 7px;
+  width: 100%; font-family: var(--ui); font-size: 14.5px; color: var(--ink);
+  background: var(--sunk); border: 1px solid var(--line); border-radius: 8px;
   padding: 6px 9px; outline: none;
 }
 .pen-catpick-input:focus { border-color: var(--accent-line); background: var(--panel); }
 .pen-catpick-list { max-height: 232px; overflow-y: auto; margin-top: 5px; }
 .pen-catpick-opt {
   display: block; width: 100%; text-align: left; border-radius: 6px;
-  font-family: var(--ui); font-size: 14px; font-weight: 500; color: var(--soft);
+  font-family: var(--ui); font-size: 14.5px; font-weight: 500; color: var(--soft);
   padding: 5px 9px;
 }
 .pen-catpick-opt:hover { background: var(--sunk); color: var(--ink); }
@@ -964,7 +964,7 @@
 .pen-chat-empty { padding: 26px 2px 8px; }
 
 .pen-turn-q {
-  align-self: flex-end; max-width: 78%; padding: 10px 15px; border-radius: 14px 14px 4px 14px;
+  align-self: flex-end; max-width: 78%; padding: 10px 15px; border-radius: 16px 14px 4px 14px;
   background: var(--accent); color: #fff; font-size: 14.5px; line-height: 1.55;
 }
 .pen-turn-a {
@@ -972,21 +972,21 @@
   padding: 16px 18px; border-radius: 12px;
   background: var(--panel); border: 1px solid var(--line);
 }
-.pen-answer { font-family: var(--serif); font-size: 15.5px; line-height: 1.72; color: var(--ink); }
+.pen-answer { font-family: var(--serif); font-size: 16.5px; line-height: 1.72; color: var(--ink); }
 
 .pen-chat-error {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
-  padding: 11px 13px; border-radius: 10px; font-size: 15px; line-height: 1.5;
+  padding: 11px 13px; border-radius: 12px; font-size: 16.5px; line-height: 1.5;
   background: var(--bad-wash); border: 1px solid #EFD6D2; color: var(--bad);
 }
-.pen-chat-error-x { font-size: 17px; line-height: 1; color: var(--bad); opacity: .6; padding: 0 2px; }
+.pen-chat-error-x { font-size: 21px; line-height: 1; color: var(--bad); opacity: .6; padding: 0 2px; }
 .pen-chat-error-x:hover { opacity: 1; }
 
 /* Quick actions sit under the thread — they act on the conversation, not one message. */
 .pen-quick { padding-top: 4px; }
 .pen-quick-row { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
 .pen-quick-btn {
-  font-family: var(--ui); font-size: 14px; font-weight: 600;
+  font-family: var(--ui); font-size: 14.5px; font-weight: 600;
   color: var(--accent-ink); background: var(--accent-wash);
   border: 1px solid var(--accent-line); border-radius: 999px; padding: 7px 14px;
   transition: all .13s;
@@ -1000,8 +1000,8 @@
 }
 .pen-composer-input {
   flex: 1; min-width: 0; resize: none; overflow-y: auto;
-  font-family: var(--serif); font-size: 15px; line-height: 1.55; color: var(--ink);
-  background: var(--panel); border: 1px solid var(--line); border-radius: 11px;
+  font-family: var(--serif); font-size: 16.5px; line-height: 1.55; color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
   padding: 11px 14px; outline: none;
   box-shadow: 0 1px 2px rgba(22, 21, 15, .04);
 }
@@ -1012,7 +1012,7 @@
 /* ============================================================== pages ==== */
 .pen-doc-title {
   font-family: var(--display); font-weight: 400; letter-spacing: -0.015em;
-  font-size: 29px; line-height: 1.12; color: var(--ink);
+  font-size: 34px; line-height: 1.12; color: var(--ink);
   width: 100%; margin: -2px -6px; padding: 2px 6px;
   background: none; border: 1px solid transparent; border-radius: 6px; outline: none;
 }
@@ -1024,24 +1024,24 @@
 .pen-doc-body {
   width: 100%; min-height: 62vh; resize: vertical;
   font-family: var(--mono); font-size: 14.5px; line-height: 1.72; color: var(--soft);
-  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
   padding: 18px; outline: none;
 }
 .pen-doc-body:focus { border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-wash); }
 .pen-doc-preview {
-  min-height: 62vh; padding: 22px 24px; border-radius: 10px;
+  min-height: 62vh; padding: 22px 24px; border-radius: 12px;
   background: var(--panel); border: 1px solid var(--line); overflow-wrap: anywhere;
 }
 
 .pen-md-h { font-family: var(--display); color: var(--ink); margin: 20px 0 7px; line-height: 1.24; }
 .pen-md-h:first-child { margin-top: 0; }
-.pen-md-h[data-l='1'] { font-size: 24px; }
-.pen-md-h[data-l='2'] { font-size: 20px; }
+.pen-md-h[data-l='1'] { font-size: 26px; }
+.pen-md-h[data-l='2'] { font-size: 21px; }
 .pen-md-h[data-l='3'], .pen-md-h[data-l='4'] { font-size: 16.5px; }
-.pen-md-p { font-family: var(--serif); font-size: 15px; line-height: 1.7; color: var(--ink); margin: 9px 0; }
+.pen-md-p { font-family: var(--serif); font-size: 16.5px; line-height: 1.7; color: var(--ink); margin: 9px 0; }
 .pen-md-ul { margin: 9px 0; padding-left: 3px; display: flex; flex-direction: column; gap: 6px; }
 .pen-md-ul li {
-  font-family: var(--serif); font-size: 15px; line-height: 1.6; color: var(--ink);
+  font-family: var(--serif); font-size: 16.5px; line-height: 1.6; color: var(--ink);
   padding-left: 17px; position: relative;
 }
 .pen-md-ul li::before { content: '·'; position: absolute; left: 5px; color: var(--faint); }
@@ -1049,14 +1049,14 @@
 .pen-md-task::before { content: none !important; }
 .pen-md-task[data-done='true'] { color: var(--dim); text-decoration: line-through; }
 .pen-md-box {
-  flex: none; width: 15px; height: 15px; margin-top: 4px; border-radius: 4px;
+  flex: none; width: 15px; height: 15px; margin-top: 4px; border-radius: 6px;
   border: 1.5px solid #CFC9BC; background: var(--panel);
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 12px; color: var(--accent);
+  font-size: 13px; color: var(--accent);
 }
 
 .pen-save {
-  font-family: var(--mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase;
+  font-family: var(--mono); font-size: 13px; letter-spacing: .06em; text-transform: uppercase;
   color: var(--faint); min-width: 58px; text-align: right;
 }
 .pen-save[data-s='failed'] { color: var(--bad); }
@@ -1064,12 +1064,12 @@
 /* ---- sidebar: chats and pages ---- */
 .pen-cats-head-row { display: flex; align-items: center; justify-content: space-between; }
 .pen-cats-new {
-  font-family: var(--ui); font-size: 15px; line-height: 1; color: var(--dim);
-  width: 19px; height: 19px; border-radius: 5px;
+  font-family: var(--ui); font-size: 16.5px; line-height: 1; color: var(--dim);
+  width: 19px; height: 19px; border-radius: 6px;
 }
 .pen-cats-new:hover { background: var(--sunk); color: var(--ink); }
 .pen-cats-empty {
-  font-size: 13.5px; line-height: 1.5; color: var(--faint); padding: 0 8px 8px;
+  font-size: 14.5px; line-height: 1.5; color: var(--faint); padding: 0 8px 8px;
 }
 
 /* ---- usage meter ---- */
@@ -1091,7 +1091,7 @@
   font-family: var(--mono); font-size: 13px; color: var(--soft);
   font-variant-numeric: tabular-nums; margin-top: 7px;
 }
-.pen-meter-n strong { font-size: 17px; }
+.pen-meter-n strong { font-size: 21px; }
 .pen-meter-un {
   font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--good);
 }
@@ -1106,7 +1106,7 @@
   transition: all .13s;
 }
 .pen-meter-cta:hover { background: #E1EDF2; border-color: var(--accent); }
-.pen-meter-note { display: block; margin-top: 8px; font-size: 12.5px; line-height: 1.45; color: var(--faint); }
+.pen-meter-note { display: block; margin-top: 8px; font-size: 13px; line-height: 1.45; color: var(--faint); }
 
 /* One left column holding everything you navigate by, with the recordings as its centre of
    gravity. Was three columns with the recordings rail on the far right; western reading starts
@@ -1117,12 +1117,12 @@
   max-height: calc(100vh - 32px); overflow-y: auto;
   background: var(--side);
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 16px;
   padding: 10px 11px 12px;
   box-shadow: var(--lift-1);
 }
 .pen-side::-webkit-scrollbar { width: 6px; }
-.pen-side::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
+.pen-side::-webkit-scrollbar-thumb { background: transparent; border-radius: 6px; }
 .pen-side:hover::-webkit-scrollbar-thumb { background: #DDD8CC; }
 .pen-browse { display: none; }
 .pen-scrim { display: none; }
@@ -1179,13 +1179,13 @@
   /* The drawer holds navigation only. */
   .pen-cats, .pen-saved { position: static; max-height: none; width: auto; }
   .pen-cats-list { flex-direction: column; }
-  .pen-cat { width: 100%; border-radius: 7px; border-color: transparent; padding: 9px 10px; }
+  .pen-cat { width: 100%; border-radius: 8px; border-color: transparent; padding: 9px 10px; }
   .pen-cat[data-active='true'] { border-color: var(--accent-line); }
   .pen-rail { margin-top: 10px; border-top: 1px solid var(--hair); padding-top: 12px; }
 
   .pen-browse {
     display: inline-flex; align-items: center; gap: 7px;
-    font-family: var(--ui); font-size: 14px; font-weight: 600; color: var(--ink);
+    font-family: var(--ui); font-size: 14.5px; font-weight: 600; color: var(--ink);
     background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
     padding: 0 12px; height: 40px;
   }
@@ -1214,7 +1214,7 @@
      implements — and the pen plugs into a laptop anyway. Offering it here is a dead end. */
   .pen-head-right .pen-btn-primary { display: none; }
 
-  .pen-browse, .pen-head-right .pen-btn, .pen-acct-out { padding-inline: 11px; font-size: 13.5px; }
+  .pen-browse, .pen-head-right .pen-btn, .pen-acct-out { padding-inline: 11px; font-size: 14.5px; }
   .pen-browse svg { width: 15px; height: 15px; }
 }
 
@@ -1245,8 +1245,8 @@
 
 /* ---- briefing recipients ---- */
 .pen-brief-more {
-  font-family: var(--ui); font-size: 13.5px; font-weight: 600; color: var(--dim);
-  min-width: 28px; height: 32px; padding: 0 8px; border-radius: 7px;
+  font-family: var(--ui); font-size: 14.5px; font-weight: 600; color: var(--dim);
+  min-width: 28px; height: 32px; padding: 0 8px; border-radius: 8px;
   border: 1px solid var(--line); background: var(--panel);
   transition: all .12s;
 }
@@ -1256,26 +1256,26 @@
 
 .pen-brief-pop {
   position: absolute; z-index: 40; top: calc(100% + 7px); right: 0; width: 272px;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 11px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
   padding: 11px; box-shadow: var(--lift-3);
 }
 .pen-brief-self {
-  font-family: var(--mono); font-size: 12.5px; color: var(--soft);
+  font-family: var(--mono); font-size: 13px; color: var(--soft);
   margin: 6px 0 8px; overflow-wrap: anywhere;
 }
 .pen-brief-self span { color: var(--faint); }
 .pen-brief-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 7px; }
 .pen-brief-chip {
   display: inline-flex; align-items: center; gap: 5px;
-  font-family: var(--mono); font-size: 12.5px; color: var(--accent-ink);
+  font-family: var(--mono); font-size: 13px; color: var(--accent-ink);
   background: var(--accent-wash); border: 1px solid var(--accent-line);
   border-radius: 999px; padding: 3px 5px 3px 9px;
 }
 .pen-brief-chip button { font-size: 14.5px; line-height: 1; color: var(--accent); opacity: .65; padding: 0 3px; }
 .pen-brief-chip button:hover { opacity: 1; }
 .pen-brief-input {
-  width: 100%; font-family: var(--ui); font-size: 14px; color: var(--ink);
-  background: var(--sunk); border: 1px solid var(--line); border-radius: 7px;
+  width: 100%; font-family: var(--ui); font-size: 14.5px; color: var(--ink);
+  background: var(--sunk); border: 1px solid var(--line); border-radius: 8px;
   padding: 7px 9px; outline: none;
 }
 .pen-brief-input:focus { border-color: var(--accent-line); background: var(--panel); }
@@ -1291,7 +1291,7 @@
     position: fixed;
     inset: auto 10px calc(10px + env(safe-area-inset-bottom)) 10px;
     width: auto; max-height: 62vh; overflow-y: auto; z-index: 70;
-    border-radius: 14px;
+    border-radius: 16px;
     box-shadow: 0 -10px 46px -12px rgba(22, 21, 15, .34);
   }
   .pen-catpick-list { max-height: none; }
@@ -1313,7 +1313,7 @@
   max-height: 92vh; display: flex; flex-direction: column;
   background: var(--paper);
   border-top: 1px solid var(--line);
-  border-radius: 18px 18px 0 0;
+  border-radius: 16px 18px 0 0;
   box-shadow: 0 -16px 50px -14px rgba(22, 21, 15, .34);
   animation: penImpUp .26s cubic-bezier(.2, .7, .3, 1);
 }
@@ -1326,7 +1326,7 @@
 }
 .pen-imp-x {
   font-size: 26px; line-height: 1; color: var(--dim);
-  width: 40px; height: 40px; border-radius: 9px; margin: -8px -10px -8px 0;
+  width: 40px; height: 40px; border-radius: 8px; margin: -8px -10px -8px 0;
 }
 .pen-imp-x:hover { background: var(--sunk); color: var(--ink); }
 
@@ -1339,7 +1339,7 @@
 }
 .pen-imp-drop {
   flex: none; width: 34px; height: 34px; border-radius: 8px;
-  font-size: 19px; line-height: 1; color: var(--faint);
+  font-size: 21px; line-height: 1; color: var(--faint);
 }
 .pen-imp-drop:hover { background: var(--sunk); color: var(--bad); }
 
@@ -1362,15 +1362,15 @@
   transition: transform .18s cubic-bezier(.2,.7,.3,1);
 }
 .pen-consent[data-on='true'] .pen-consent-knob { transform: translateX(18px); }
-.pen-consent-text { font-size: 15px; line-height: 1.5; color: var(--warn); }
+.pen-consent-text { font-size: 16.5px; line-height: 1.5; color: var(--warn); }
 .pen-consent[data-on='true'] .pen-consent-text { color: var(--good); }
 
 .pen-imp-foot {
   flex: none; padding: 14px 18px calc(18px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--hair); background: var(--paper);
 }
-.pen-imp-foot .pen-btn { height: 50px; font-size: 15px; }
-.pen-imp-foot-note { margin-top: 9px; text-align: center; font-size: 13.5px; color: var(--faint); }
+.pen-imp-foot .pen-btn { height: 50px; font-size: 16.5px; }
+.pen-imp-foot-note { margin-top: 9px; text-align: center; font-size: 14.5px; color: var(--faint); }
 
 .pen-imp-progress { padding: 22px 2px 10px; }
 .pen-imp-pct {
@@ -1378,9 +1378,9 @@
   font-variant-numeric: tabular-nums; margin-bottom: 14px;
 }
 .pen-imp-warn {
-  margin-top: 18px; padding: 11px 13px; border-radius: 10px;
+  margin-top: 18px; padding: 11px 13px; border-radius: 12px;
   background: var(--warn-wash); border: 1px solid var(--warn-line);
-  font-size: 14px; line-height: 1.5; color: var(--warn);
+  font-size: 14.5px; line-height: 1.5; color: var(--warn);
 }
 
 .pen-imp-done { padding: 26px 2px 14px; }
@@ -1422,8 +1422,8 @@
 .pen-su-field input,
 .pen-su-field select,
 .pen-su-field textarea {
-  font-family: var(--serif); font-size: 16px; color: var(--ink);
-  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  font-family: var(--serif); font-size: 16.5px; color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
   padding: 12px 14px; outline: none; width: 100%;
   transition: border-color .13s ease, box-shadow .13s ease;
 }
@@ -1459,28 +1459,28 @@
 .pen-su-opt[data-on='true'] span { color: var(--accent); }
 
 .pen-su-ship {
-  padding: 19px; border-radius: 13px;
+  padding: 19px; border-radius: 12px;
   background: var(--sunk); border: 1px solid var(--line);
 }
 .pen-su-ship-head { display: block; margin-bottom: 13px; }
 
 .pen-su-err {
-  padding: 12px 14px; border-radius: 10px; font-size: 14px; line-height: 1.5;
+  padding: 12px 14px; border-radius: 12px; font-size: 14.5px; line-height: 1.5;
   background: var(--bad-wash); border: 1px solid #EFD6D2; color: var(--bad);
 }
-.pen-su-submit { width: 100%; justify-content: center; height: 52px; font-size: 15px; }
-.pen-su-fine { font-size: 14px; line-height: 1.55; color: var(--faint); text-align: center; margin: 0; }
+.pen-su-submit { width: 100%; justify-content: center; height: 52px; font-size: 16.5px; }
+.pen-su-fine { font-size: 14.5px; line-height: 1.55; color: var(--faint); text-align: center; margin: 0; }
 
 .pen-su-done { padding-top: 88px; max-width: 46ch; }
 .pen-su-tick {
   width: 50px; height: 50px; border-radius: 999px; margin-bottom: 22px;
   display: flex; align-items: center; justify-content: center;
-  background: var(--good-wash); border: 1px solid #D6E4D9; color: var(--good); font-size: 23px;
+  background: var(--good-wash); border: 1px solid #D6E4D9; color: var(--good); font-size: 26px;
 }
 
 .pen-lp-pricing-note {
   margin: 26px auto 0; max-width: 46ch; text-align: center;
-  font-size: 15px; line-height: 1.6; color: rgba(251, 250, 246, .5);
+  font-size: 16.5px; line-height: 1.6; color: rgba(251, 250, 246, .5);
 }
 
 /* The Juno mark. The asset is cream on near-black with the background baked in, so it keeps
@@ -1498,7 +1498,7 @@
 
 /* ===================================================== sidebar identity === */
 .pen-brand { display: flex; align-items: center; gap: 11px; padding: 0 6px 16px; min-height: 52px; }
-.pen-brand-name { font-size: 25px; line-height: 1; letter-spacing: -0.015em; }
+.pen-brand-name { font-size: 26px; line-height: 1; letter-spacing: -0.015em; }
 .pen-brand-tag { font-family: var(--ui); font-size: 11.5px; color: var(--dim); margin-top: 3px; }
 
 /* The one unmissable action in the sidebar: filled, full width, brand green. */
@@ -1507,7 +1507,7 @@
   width: 100%; height: 46px; margin-bottom: 18px;
   font-family: var(--ui); font-size: 14.5px; font-weight: 600;
   color: #fff; background: var(--accent);
-  border: 1px solid var(--accent); border-radius: 11px;
+  border: 1px solid var(--accent); border-radius: 12px;
   box-shadow: var(--lift-2);
   transition: background .14s ease, transform .14s ease;
 }
@@ -1518,8 +1518,8 @@
    nothing in it is findable at a glance. */
 .pen-cat {
   display: flex; align-items: center; gap: 11px;
-  width: 100%; text-align: left; padding: 9px 10px; border-radius: 9px;
-  font-family: var(--ui); font-size: 14px; font-weight: 500; color: var(--soft);
+  width: 100%; text-align: left; padding: 9px 10px; border-radius: 8px;
+  font-family: var(--ui); font-size: 14.5px; font-weight: 500; color: var(--soft);
   border: 1px solid transparent; transition: background .12s, color .12s;
 }
 .pen-cat svg { flex: none; color: var(--dim); transition: color .12s; }
@@ -1533,7 +1533,7 @@
   background: var(--accent-wash); border: 1px solid var(--accent-line); border-radius: 12px;
 }
 .pen-quotecard p {
-  margin: 0; font-family: var(--display); font-size: 17px; line-height: 1.35;
+  margin: 0; font-family: var(--display); font-size: 21px; line-height: 1.35;
   font-style: italic; color: var(--accent-ink);
 }
 
@@ -1542,18 +1542,18 @@
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   padding: 2px 2px 12px;
 }
-.pen-rail-title { font-family: var(--ui); font-size: 15px; font-weight: 600; color: var(--ink); }
+.pen-rail-title { font-family: var(--ui); font-size: 16.5px; font-weight: 600; color: var(--ink); }
 .pen-rail-new {
   display: inline-flex; align-items: center; gap: 5px;
-  font-family: var(--ui); font-size: 12.5px; font-weight: 600; color: var(--accent-ink);
+  font-family: var(--ui); font-size: 13px; font-weight: 600; color: var(--accent-ink);
   background: var(--accent-wash); border: 1px solid var(--accent-line);
   border-radius: 8px; padding: 6px 10px; transition: all .13s;
 }
 .pen-rail-new:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
 .pen-rail-all {
   display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%;
-  margin-top: 12px; padding: 11px; border-radius: 10px;
-  font-family: var(--ui); font-size: 13.5px; font-weight: 600; color: var(--soft);
+  margin-top: 12px; padding: 11px; border-radius: 12px;
+  font-family: var(--ui); font-size: 14.5px; font-weight: 600; color: var(--soft);
   border: 1px solid var(--line); background: var(--paper);
   transition: all .13s;
 }
@@ -1574,7 +1574,7 @@
   font-family: var(--ui); font-size: 13px; font-weight: 600;
 }
 .pen-acct2-name {
-  font-family: var(--ui); font-size: 14px; font-weight: 600; color: var(--ink);
+  font-family: var(--ui); font-size: 14.5px; font-weight: 600; color: var(--ink);
   max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .pen-acct2-chev { color: var(--dim); transform: rotate(90deg); }
@@ -1595,7 +1595,7 @@
 /* ==================================================== recording detail === */
 .pen-back {
   display: inline-flex; align-items: center; gap: 7px;
-  font-family: var(--ui); font-size: 13.5px; font-weight: 600; color: var(--dim);
+  font-family: var(--ui); font-size: 14.5px; font-weight: 600; color: var(--dim);
   padding: 5px 9px 5px 5px; margin-left: -5px; border-radius: 8px;
   transition: color .12s, background .12s;
 }
@@ -1606,14 +1606,14 @@
 .pen-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin-top: 10px; }
 .pen-meta-bit {
   display: inline-flex; align-items: center; gap: 6px;
-  font-family: var(--ui); font-size: 13.5px; color: var(--soft);
+  font-family: var(--ui); font-size: 14.5px; color: var(--soft);
 }
 .pen-meta-bit svg { color: var(--dim); flex: none; }
 
 .pen-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 13px; }
 .pen-chip {
   display: inline-flex; align-items: center; gap: 6px;
-  font-family: var(--ui); font-size: 12.5px; font-weight: 600;
+  font-family: var(--ui); font-size: 13px; font-weight: 600;
   padding: 5px 11px; border-radius: 999px;
   background: var(--panel); border: 1px solid var(--line); color: var(--soft);
 }
@@ -1627,7 +1627,7 @@
 .pen-aicard {
   margin-top: 22px; padding: 22px 30px 24px;
   background: var(--accent-wash); border: 1px solid var(--accent-line);
-  border-radius: 14px; box-shadow: var(--lift-1);
+  border-radius: 16px; box-shadow: var(--lift-1);
 }
 .pen-aicard-head {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -1635,7 +1635,7 @@
 }
 .pen-aicard-title {
   display: inline-flex; align-items: center; gap: 9px;
-  font-family: var(--ui); font-size: 15px; font-weight: 600; color: var(--accent-ink);
+  font-family: var(--ui); font-size: 16.5px; font-weight: 600; color: var(--accent-ink);
 }
 .pen-aicard-title svg { color: var(--accent); flex: none; }
 .pen-aicard-by {
@@ -1661,7 +1661,7 @@
 @container (min-width: 520px) { .pen-trio { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @container (min-width: 820px) { .pen-trio { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .pen-card {
-  background: var(--panel); border: 1px solid var(--line); border-radius: 13px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
   padding: 16px 16px 18px; box-shadow: var(--lift-1);
 }
 
@@ -1669,12 +1669,12 @@
 /* A heading with a glyph badge, so a card is identifiable before it is read. */
 .pen-sec-head {
   display: inline-flex; align-items: center; gap: 9px;
-  font-family: var(--ui); font-size: 10.5px; font-weight: 700;
+  font-family: var(--ui); font-size: 11.5px; font-weight: 700;
   letter-spacing: .12em; text-transform: uppercase; color: var(--dim);
 }
 .pen-badge {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 24px; height: 24px; border-radius: 7px; flex: none;
+  width: 24px; height: 24px; border-radius: 8px; flex: none;
   background: var(--sunk); color: var(--soft); border: 1px solid var(--line);
 }
 .pen-badge[data-tone='good']   { background: var(--good-wash); color: var(--good); border-color: #C9E0D0; }
@@ -1685,7 +1685,7 @@
    without competing with the filled green button above it. */
 .pen-drop-side {
   display: flex; align-items: center; gap: 11px; width: 100%; text-align: left;
-  padding: 12px 13px; margin-bottom: 18px; border-radius: 11px;
+  padding: 12px 13px; margin-bottom: 18px; border-radius: 12px;
   background: rgba(255, 255, 255, .5);
   border: 1.5px dashed var(--line);
   transition: border-color .14s ease, background .14s ease;
@@ -1693,7 +1693,7 @@
 .pen-drop-side svg { flex: none; color: var(--dim); transition: color .14s ease; }
 .pen-drop-side span { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .pen-drop-side strong {
-  font-family: var(--ui); font-size: 13.5px; font-weight: 600; color: var(--soft);
+  font-family: var(--ui); font-size: 14.5px; font-weight: 600; color: var(--soft);
 }
 .pen-drop-side em {
   font-family: var(--ui); font-size: 11.5px; font-style: normal; color: var(--dim);
@@ -1736,3 +1736,35 @@
   .pen-page { display: block; padding: 14px 16px 28px; min-height: 0; }
   .pen-page > .pen-side { position: fixed; max-height: none; }
 }
+
+
+/* ============================================ accent, where it means something === */
+/* The active tab is set at the source in PenApp, not overridden here — an attribute selector
+   matching an inline style string is the kind of thing that breaks silently when the style
+   is edited. */
+
+/* A ticked action. Done is a state worth seeing from across the room. */
+.pen-act-box:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.pen-act[data-done='true'] .pen-act-text { color: var(--dim); }
+
+/* The summary carries a leading edge, so the machine's contribution is identifiable at a
+   glance in a column of otherwise similar blocks. */
+.pen-aicard { border-left: 3px solid var(--accent); }
+
+/* Follow-through, and any progress: green reads as progress rather than decoration. */
+.pen-meter-bar span { background: var(--accent); }
+
+/* Links inside the note. */
+.pen-doc a { color: var(--accent-ink); text-decoration-color: var(--accent-line); text-underline-offset: 3px; }
+.pen-doc a:hover { text-decoration-color: var(--accent); }
+
+/* The rail row you are reading, and the nav row you are on, already carry the accent bar —
+   give the title itself the colour too so the row reads as active without hunting for the
+   3px edge. */
+.pen-row[data-active='true'] .pen-row-title { color: var(--accent-ink); font-weight: 600; }
+
+/* Inherited the 16px root rather than sitting on the scale. */
+.pen-browse-t { font-size: 14.5px; }

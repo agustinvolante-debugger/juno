@@ -81,8 +81,8 @@ export default function CheckPage() {
   return (
     <div className="pen-root">
       <main className="mx-auto max-w-[680px] px-5 py-12">
-        <h1 className="pen-display text-[30px] leading-tight">Upload check</h1>
-        <p className="mt-3 text-[15px] leading-relaxed" style={{ color: 'var(--soft)' }}>
+        <h1 className="pen-display text-[34px] leading-tight">Upload check</h1>
+        <p className="mt-3 text-[16.5px] leading-relaxed" style={{ color: 'var(--soft)' }}>
           Pick the file that won&rsquo;t upload. This runs the same preparation the app does and
           shows exactly where it stops. Nothing is uploaded and nothing leaves your device.
         </p>
@@ -101,7 +101,7 @@ export default function CheckPage() {
 
           {log.length > 0 && (
             <pre
-              className="pen-mono mt-5 whitespace-pre-wrap text-[13.5px] leading-[1.7]"
+              className="pen-mono mt-5 whitespace-pre-wrap text-[14.5px] leading-[1.7]"
               style={{ color: 'var(--soft)' }}
             >
               {log.join('\n')}
@@ -114,7 +114,7 @@ export default function CheckPage() {
           {caps.map((c) => (
             <div key={c.label} className="px-4 py-3">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <span className="text-[14px]">{c.label}</span>
+                <span className="text-[14.5px]">{c.label}</span>
                 <span
                   className="pen-mono text-[13px]"
                   style={{ color: c.ok === false ? 'var(--bad)' : c.ok ? 'var(--good)' : 'var(--dim)' }}
@@ -123,7 +123,7 @@ export default function CheckPage() {
                 </span>
               </div>
               {c.note && (
-                <p className="mt-1 text-[13.5px] leading-snug" style={{ color: 'var(--faint)' }}>
+                <p className="mt-1 text-[14.5px] leading-snug" style={{ color: 'var(--faint)' }}>
                   {c.note}
                 </p>
               )}

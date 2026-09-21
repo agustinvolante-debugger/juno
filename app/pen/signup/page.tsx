@@ -54,7 +54,7 @@ export default function SignupPage() {
           <div className="pen-su-done">
             <div className="pen-su-tick" aria-hidden>&#10003;</div>
             <h1 className="pen-display text-[34px] leading-tight">You&rsquo;re on the list.</h1>
-            <p className="mt-4 text-[16px] leading-relaxed" style={{ color: 'var(--soft)' }}>
+            <p className="mt-4 text-[16.5px] leading-relaxed" style={{ color: 'var(--soft)' }}>
               There&rsquo;s a confirmation in your inbox. We&rsquo;ll email you the moment your
               account is open, and get the recorder in the post.
             </p>

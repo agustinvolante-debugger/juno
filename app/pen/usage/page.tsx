@@ -13,8 +13,8 @@ export default async function UsagePage() {
   if (!email || !OWNER.includes(email.toLowerCase())) {
     return (
       <main className="mx-auto max-w-md px-6 py-24">
-        <h1 className="pen-display text-[24px]">Not for you</h1>
-        <p className="mt-3 text-[15px]" style={{ color: 'var(--soft)' }}>
+        <h1 className="pen-display text-[26px]">Not for you</h1>
+        <p className="mt-3 text-[16.5px]" style={{ color: 'var(--soft)' }}>
           This page is only visible to the account that runs Pen.
         </p>
         <Link href="/pen" className="pen-btn mt-6 inline-block">Back to Pen</Link>
@@ -49,7 +49,7 @@ export default async function UsagePage() {
       <header className="flex items-end justify-between gap-4 border-b pb-5" style={{ borderColor: 'var(--line)' }}>
         <div>
           <div className="pen-label">Owner only</div>
-          <h1 className="pen-display mt-1.5 text-[28px] leading-none">Who is actually using Pen</h1>
+          <h1 className="pen-display mt-1.5 text-[34px] leading-none">Who is actually using Pen</h1>
         </div>
         <Link href="/pen" className="pen-btn">Back to Pen</Link>
       </header>
@@ -63,30 +63,30 @@ export default async function UsagePage() {
       <div className="pen-ov-tiles">
         <div className="pen-ov-tile">
           <div className="pen-label">Accounts</div>
-          <div className="pen-mono mt-2 text-[30px] leading-none">{rows.length}</div>
-          <div className="mt-1.5 text-[14px]" style={{ color: 'var(--dim)' }}>have recorded something</div>
+          <div className="pen-mono mt-2 text-[34px] leading-none">{rows.length}</div>
+          <div className="mt-1.5 text-[14.5px]" style={{ color: 'var(--dim)' }}>have recorded something</div>
         </div>
         <div className="pen-ov-tile">
           <div className="pen-label">Recordings</div>
-          <div className="pen-mono mt-2 text-[30px] leading-none">{totals.recordings}</div>
-          <div className="mt-1.5 text-[14px]" style={{ color: 'var(--dim)' }}>{totals.minutes} minutes total</div>
+          <div className="pen-mono mt-2 text-[34px] leading-none">{totals.recordings}</div>
+          <div className="mt-1.5 text-[14.5px]" style={{ color: 'var(--dim)' }}>{totals.minutes} minutes total</div>
         </div>
         <div className="pen-ov-tile">
           <div className="pen-label">Notes written</div>
-          <div className="pen-mono mt-2 text-[30px] leading-none">{totals.noted}</div>
-          <div className="mt-1.5 text-[14px]" style={{ color: 'var(--dim)' }}>reached the note stage</div>
+          <div className="pen-mono mt-2 text-[34px] leading-none">{totals.noted}</div>
+          <div className="mt-1.5 text-[14.5px]" style={{ color: 'var(--dim)' }}>reached the note stage</div>
         </div>
         <div className="pen-ov-tile">
           <div className="pen-label">Engaged</div>
-          <div className="pen-mono mt-2 text-[30px] leading-none">{totals.chat + totals.briefings}</div>
-          <div className="mt-1.5 text-[14px]" style={{ color: 'var(--dim)' }}>chat turns + briefings</div>
+          <div className="pen-mono mt-2 text-[34px] leading-none">{totals.chat + totals.briefings}</div>
+          <div className="mt-1.5 text-[14.5px]" style={{ color: 'var(--dim)' }}>chat turns + briefings</div>
         </div>
       </div>
 
       <section className="pen-ov-sec">
         <div className="pen-label mb-3">Per account, most recently active first</div>
         {rows.length === 0 ? (
-          <p className="text-[14px]" style={{ color: 'var(--dim)' }}>Nobody has recorded anything yet.</p>
+          <p className="text-[14.5px]" style={{ color: 'var(--dim)' }}>Nobody has recorded anything yet.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="pen-usage">
@@ -134,7 +134,7 @@ export default async function UsagePage() {
             </table>
           </div>
         )}
-        <p className="pen-mono mt-4 text-[12px] leading-relaxed" style={{ color: 'var(--faint)' }}>
+        <p className="pen-mono mt-4 text-[13px] leading-relaxed" style={{ color: 'var(--faint)' }}>
           Derived from pen_sessions, so it counts real work rather than page loads. &ldquo;Days
           used&rdquo; is distinct calendar days with at least one import — the number that
           separates someone who tried it from someone who uses it.

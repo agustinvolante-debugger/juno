@@ -81,7 +81,7 @@ export default function DocView({
   if (error && !doc) {
     return (
       <div className="pen-panel px-8 py-14 text-center">
-        <p className="text-[15px]" style={{ color: 'var(--bad)' }}>{error}</p>
+        <p className="text-[16.5px]" style={{ color: 'var(--bad)' }}>{error}</p>
       </div>
     )
   }

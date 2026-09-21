@@ -38,7 +38,7 @@ export default function Overview({
           </h2>
         </div>
         {stats.lastAt && (
-          <span className="pen-mono text-[12.5px]" style={{ color: 'var(--faint)' }}>
+          <span className="pen-mono text-[13px]" style={{ color: 'var(--faint)' }}>
             latest {new Date(stats.lastAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
           </span>
         )}
@@ -85,8 +85,8 @@ export default function Overview({
               >
                 <button className="pen-ov-act" onClick={() => onOpen(a.sessionId)}>
                   <span className="pen-ov-act-main">
-                    <span className="text-[15px] leading-snug">{a.action}</span>
-                    <span className="pen-mono mt-1 flex flex-wrap items-center gap-x-2 text-[12px]" style={{ color: 'var(--faint)' }}>
+                    <span className="text-[16.5px] leading-snug">{a.action}</span>
+                    <span className="pen-mono mt-1 flex flex-wrap items-center gap-x-2 text-[13px]" style={{ color: 'var(--faint)' }}>
                       {/* Status carries a word, never colour alone. */}
                       {a.priority === 'high' && <span style={{ color: 'var(--bad)' }}>PRIORITY</span>}
                       {a.owner && <span>{a.owner}</span>}
@@ -100,7 +100,7 @@ export default function Overview({
             ))}
           </ul>
           {stats.openActions.length > 12 && (
-            <p className="pen-mono mt-3 text-[12.5px]" style={{ color: 'var(--faint)' }}>
+            <p className="pen-mono mt-3 text-[13px]" style={{ color: 'var(--faint)' }}>
               and {stats.openActions.length - 12} more
             </p>
           )}
@@ -111,15 +111,15 @@ export default function Overview({
       {stats.clients.length > 0 && (
         <section className="pen-ov-sec">
           <div className="pen-label mb-1">What Pen has worked out</div>
-          <p className="mb-4 text-[15px]" style={{ color: 'var(--dim)' }}>
+          <p className="mb-4 text-[16.5px]" style={{ color: 'var(--dim)' }}>
             Built up across meetings, not from any single one. It sharpens every time you record.
           </p>
           <div className="grid gap-4 lg:grid-cols-2">
             {stats.clients.map((c) => (
               <article key={c.name} className="pen-ov-client">
                 <header className="flex items-baseline justify-between gap-3">
-                  <h3 className="pen-display text-[19px]">{c.name}</h3>
-                  <span className="pen-mono text-[12px]" style={{ color: 'var(--faint)' }}>
+                  <h3 className="pen-display text-[21px]">{c.name}</h3>
+                  <span className="pen-mono text-[13px]" style={{ color: 'var(--faint)' }}>
                     {c.showings} meeting{c.showings === 1 ? '' : 's'}
                   </span>
                 </header>
@@ -142,12 +142,12 @@ function Tile({ label, value, sub, tone }: { label: string; value: string; sub: 
       <div className="pen-label">{label}</div>
       {/* Mono, not the display serif — a serif figure reads as decoration, not data. */}
       <div
-        className="pen-mono mt-2 text-[30px] leading-none"
+        className="pen-mono mt-2 text-[34px] leading-none"
         style={{ color: tone === 'warn' ? 'var(--warn)' : tone === 'good' ? 'var(--good)' : 'var(--ink)' }}
       >
         {value}
       </div>
-      <div className="mt-1.5 text-[14px]" style={{ color: 'var(--dim)' }}>{sub}</div>
+      <div className="mt-1.5 text-[14.5px]" style={{ color: 'var(--dim)' }}>{sub}</div>
     </div>
   )
 }
@@ -160,7 +160,7 @@ function Facet({ label, items, tone }: { label: string; items?: string[]; tone?:
       <div className="pen-mono text-[11.5px] uppercase tracking-[.12em]" style={{ color }}>{label}</div>
       <ul className="mt-1 space-y-1">
         {items.slice(0, 4).map((t) => (
-          <li key={t} className="text-[14px] leading-snug">{t}</li>
+          <li key={t} className="text-[14.5px] leading-snug">{t}</li>
         ))}
       </ul>
     </div>
@@ -170,8 +170,8 @@ function Facet({ label, items, tone }: { label: string; items?: string[]; tone?:
 function EmptyArchive() {
   return (
     <div className="pen-panel px-8 py-14 text-center">
-      <h2 className="pen-display text-[24px]">Nothing recorded yet</h2>
-      <p className="mx-auto mt-3 max-w-[46ch] text-[15px] leading-relaxed" style={{ color: 'var(--soft)' }}>
+      <h2 className="pen-display text-[26px]">Nothing recorded yet</h2>
+      <p className="mx-auto mt-3 max-w-[46ch] text-[16.5px] leading-relaxed" style={{ color: 'var(--soft)' }}>
         Plug the pen in and import one recording. From the second one on, Pen starts joining
         them up: what the same people keep asking for, what you keep forgetting, what is still
         outstanding across everything.

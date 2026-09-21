@@ -39,7 +39,7 @@ function PlanCta({ href, children, variant }: { href: string; children: React.Re
         <Link href={`${SIGN_UP}?from=pricing`} className={cls.replace('mt-auto ', '')}>
           {children}
         </Link>
-        <p className="pen-mono mt-2.5 text-center text-[12px]" style={{ color: 'rgba(251,250,246,.42)' }}>
+        <p className="pen-mono mt-2.5 text-center text-[13px]" style={{ color: 'rgba(251,250,246,.42)' }}>
           Card payments open at launch
         </p>
       </div>
@@ -127,7 +127,7 @@ function Hero() {
 
       <div className="mt-12 grid gap-10 sm:mt-14 lg:grid-cols-[1fr_auto] lg:items-end lg:gap-16">
         <Reveal delay={0.1}>
-          <p className="max-w-[58ch] text-[19px] leading-[1.58]" style={{ color: 'var(--soft)' }}>
+          <p className="max-w-[58ch] text-[21px] leading-[1.58]" style={{ color: 'var(--soft)' }}>
             Record with a pen in your shirt pocket. Plug it into your laptop. Pen writes up what
             was said, who said it, what you agreed to, and the thing you nearly missed.
           </p>
@@ -243,7 +243,7 @@ function MultiUse() {
           A viewing, a quarterly review, a coffee with someone whose favour you&rsquo;ll want in
           six months.
         </h2>
-        <p className="mt-7 max-w-[62ch] text-[20px] leading-[1.55]" style={{ color: 'var(--soft)' }}>
+        <p className="mt-7 max-w-[62ch] text-[21px] leading-[1.55]" style={{ color: 'var(--soft)' }}>
           It doesn&rsquo;t know which of those matters most.
           <span className="pen-lp-strong"> Neither do you, at the time.</span>
         </p>
@@ -400,9 +400,9 @@ function HowItWorks() {
         {STEPS.map((s, i) => (
           <Reveal key={s.n} delay={i * 0.07}>
             <div className="pen-lp-step">
-              <span className="pen-mono text-[12.5px]" style={{ color: 'var(--accent)' }}>{s.n}</span>
-              <h3 className="pen-display mt-3 text-[22px]">{s.h}</h3>
-              <p className="mt-2.5 text-[15px] leading-[1.6]" style={{ color: 'var(--soft)' }}>{s.p}</p>
+              <span className="pen-mono text-[13px]" style={{ color: 'var(--accent)' }}>{s.n}</span>
+              <h3 className="pen-display mt-3 text-[26px]">{s.h}</h3>
+              <p className="mt-2.5 text-[16.5px] leading-[1.6]" style={{ color: 'var(--soft)' }}>{s.p}</p>
             </div>
           </Reveal>
         ))}
@@ -422,7 +422,7 @@ function TheCatch() {
           <h2 className="pen-display mt-4 text-[clamp(28px,4vw,40px)] leading-[1.12] tracking-[-0.015em]">
             A summary tells you what you already remember.
           </h2>
-          <p className="mt-6 max-w-[40ch] text-[17px] leading-[1.62]" style={{ color: 'var(--soft)' }}>
+          <p className="mt-6 max-w-[40ch] text-[21px] leading-[1.62]" style={{ color: 'var(--soft)' }}>
             The useful part is the commitment somebody made in passing, the constraint mentioned
             once, the question asked of you that never got answered. Pen goes looking for those.
           </p>
@@ -441,7 +441,7 @@ function TheCatch() {
                  'The strongest buying signal in the recording, and it arrived in the last thirty seconds.'],
               ].map(([item, why]) => (
                 <li key={item}>
-                  <div className="text-[15.5px] leading-[1.45]">{item}</div>
+                  <div className="text-[16.5px] leading-[1.45]">{item}</div>
                   <div className="mt-1 text-[14.5px] leading-[1.45]" style={{ color: 'var(--warn)' }}>{why}</div>
                 </li>
               ))}
@@ -470,7 +470,7 @@ function WhatYouGet() {
         <Reveal delay={0.06}>
           <div className="pen-lp-card h-full">
             <div className="pen-label">Summary</div>
-            <p className="mt-2.5 text-[16px] leading-[1.62]">
+            <p className="mt-2.5 text-[16.5px] leading-[1.62]">
               Third viewing with the Hendersons. Sarah led on the renovated kitchen; Tom went
               straight to price and flagged it as above their ceiling. No garage came up again,
               now three properties running. They asked to return at the weekend with her mother.
@@ -486,9 +486,9 @@ function WhatYouGet() {
                 <li key={task}>
                   <span className="pen-lp-check" aria-hidden />
                   <span>
-                    <span className="text-[15px] leading-snug">{task}</span>
+                    <span className="text-[16.5px] leading-snug">{task}</span>
                     {meta && (
-                      <span className="pen-mono mt-1 block text-[12px]" style={{ color: 'var(--bad)' }}>{meta}</span>
+                      <span className="pen-mono mt-1 block text-[13px]" style={{ color: 'var(--bad)' }}>{meta}</span>
                     )}
                   </span>
                 </li>
@@ -526,7 +526,7 @@ so it will decide whether they bid.`}</pre>
                 open, and every action with its owner. Sent to you, not to anyone else.
               </p>
               <div className="pen-lp-mailrow">
-                <span className="pen-mono text-[12.5px]" style={{ color: 'var(--faint)' }}>
+                <span className="pen-mono text-[13px]" style={{ color: 'var(--faint)' }}>
                   Briefing &mdash; Ridgewood walk-through
                 </span>
                 <span className="pen-lp-dot" />
@@ -550,12 +550,12 @@ function Compounds() {
           <h2 className="pen-display mt-4 text-[clamp(28px,4vw,40px)] leading-[1.12] tracking-[-0.015em]">
             Every recording makes the next one sharper.
           </h2>
-          <p className="mt-6 max-w-[42ch] text-[17px] leading-[1.62]" style={{ color: 'var(--soft)' }}>
+          <p className="mt-6 max-w-[42ch] text-[21px] leading-[1.62]" style={{ color: 'var(--soft)' }}>
             One meeting gives you a note. Several give you a picture: what these people keep
             asking for, what they have quietly ruled out, what you still have not found out.
             Pen keeps that picture and updates it every time you record.
           </p>
-          <p className="mt-5 max-w-[42ch] text-[17px] leading-[1.62]" style={{ color: 'var(--soft)' }}>
+          <p className="mt-5 max-w-[42ch] text-[21px] leading-[1.62]" style={{ color: 'var(--soft)' }}>
             It is also the part no general notetaker can give you. They summarise a meeting.
             This remembers a relationship.
           </p>
@@ -564,8 +564,8 @@ function Compounds() {
         <Reveal delay={0.1}>
           <div className="pen-lp-card">
             <header className="flex items-baseline justify-between">
-              <h3 className="pen-display text-[20px]">The Hendersons</h3>
-              <span className="pen-mono text-[12px]" style={{ color: 'var(--faint)' }}>3 meetings</span>
+              <h3 className="pen-display text-[21px]">The Hendersons</h3>
+              <span className="pen-mono text-[13px]" style={{ color: 'var(--faint)' }}>3 meetings</span>
             </header>
 
             <Facet label="Must have" items={['Covered parking — raised at all three viewings', 'A kitchen that has already been done']} />
@@ -627,11 +627,11 @@ function Pricing() {
                   <span className="pen-display text-[52px] leading-none" style={{ color: 'var(--paper)' }}>
                     ${UPFRONT_USD}
                   </span>
-                  <span className="pen-mono text-[13.5px]" style={{ color: 'rgba(251,250,246,.55)' }}>
+                  <span className="pen-mono text-[14.5px]" style={{ color: 'rgba(251,250,246,.55)' }}>
                     first {UPFRONT_MONTHS} months
                   </span>
                 </div>
-                <p className="mt-3 text-[15px] leading-[1.55]" style={{ color: 'rgba(251,250,246,.72)' }}>
+                <p className="mt-3 text-[16.5px] leading-[1.55]" style={{ color: 'rgba(251,250,246,.72)' }}>
                   Three months and a recorder, posted to you. After that it&rsquo;s ${MONTHLY_USD} a
                   month, and you can stop whenever you like.
                 </p>
@@ -679,7 +679,7 @@ function Footer() {
       <div className="pen-lp-wrap flex flex-wrap items-center justify-between gap-5 py-9">
         <div className="flex items-baseline gap-3">
           <Image src="/juno_mark.png" alt="Juno" width={24} height={24} className="pen-mark" />
-          <span className="pen-mono text-[12.5px]" style={{ color: 'var(--faint)' }}>
+          <span className="pen-mono text-[13px]" style={{ color: 'var(--faint)' }}>
             &copy; {new Date().getFullYear()}
           </span>
         </div>
@@ -693,7 +693,7 @@ function Footer() {
         </nav>
       </div>
       <div className="pen-lp-wrap pb-10">
-        <p className="pen-mono max-w-[70ch] text-[12px] leading-[1.8]" style={{ color: 'var(--faint)' }}>
+        <p className="pen-mono max-w-[70ch] text-[13px] leading-[1.8]" style={{ color: 'var(--faint)' }}>
           Recording a conversation needs everyone&rsquo;s permission in many places, Florida included.
           Pen asks you to confirm consent before it processes anything.
         </p>
