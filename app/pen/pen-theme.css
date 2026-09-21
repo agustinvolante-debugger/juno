@@ -815,7 +815,7 @@
    in the middle visually. */
 .pen-shell {
   display: grid;
-  grid-template-columns: 248px minmax(0, 1fr) 336px;
+  grid-template-columns: minmax(0, 1fr) 336px;
   gap: 24px;
   align-items: start;
 }
@@ -1118,7 +1118,7 @@
   background: var(--side);
   border: 1px solid var(--line);
   border-radius: 14px;
-  padding: 14px 11px 12px;
+  padding: 10px 11px 12px;
   box-shadow: var(--lift-1);
 }
 .pen-side::-webkit-scrollbar { width: 6px; }
@@ -1129,9 +1129,10 @@
 
 /* ---- workspace, narrow ---- */
 @media (min-width: 901px) and (max-width: 1280px) {
-  /* Not enough room for three columns: the rail drops full width under the note. */
-  .pen-shell { grid-template-columns: 228px minmax(0, 1fr); gap: 20px; }
-  .pen-rail { grid-column: 2; position: static; max-height: none; overflow: visible; margin-top: 18px; }
+  /* Not enough room for the rail beside the note: it drops full width underneath. */
+  .pen-shell { grid-template-columns: minmax(0, 1fr); }
+  .pen-rail { position: static; max-height: none; overflow: visible; margin-top: 18px; }
+  .pen-page { grid-template-columns: 228px minmax(0, 1fr); }
 }
 @media (max-width: 1040px) {
   /* The header's three columns stop fitting: the search drops to its own full-width row
@@ -1496,7 +1497,7 @@
 
 
 /* ===================================================== sidebar identity === */
-.pen-brand { display: flex; align-items: center; gap: 11px; padding: 4px 6px 16px; }
+.pen-brand { display: flex; align-items: center; gap: 11px; padding: 0 6px 16px; min-height: 52px; }
 .pen-brand-name { font-size: 25px; line-height: 1; letter-spacing: -0.015em; }
 .pen-brand-tag { font-family: var(--ui); font-size: 11.5px; color: var(--dim); margin-top: 3px; }
 
@@ -1705,3 +1706,33 @@
 .pen-drop-side[data-over='true'] svg { color: var(--accent); }
 .pen-drop-side:hover strong,
 .pen-drop-side[data-over='true'] strong { color: var(--accent-ink); }
+
+
+/* ======================================================= page shell ====== */
+/* The sidebar is a column of the PAGE, not of the content grid, so it starts at the very top
+   and runs the full height — its brand sits level with the search box instead of a header's
+   height below it. */
+.pen-page {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  gap: 24px;
+  align-items: stretch;
+  max-width: 1720px;
+  margin: 0 auto;
+  padding: 20px 22px 28px;
+  min-height: 100vh;
+}
+.pen-main-col { min-width: 0; display: flex; flex-direction: column; }
+
+/* Fill the height rather than stopping partway down and leaving the ground showing. */
+.pen-page > .pen-side {
+  position: sticky; top: 20px;
+  max-height: calc(100vh - 48px);
+}
+.pen-shell { flex: 1 1 auto; }
+.pen-rail { top: 20px; max-height: calc(100vh - 48px); }
+
+@media (max-width: 900px) {
+  .pen-page { display: block; padding: 14px 16px 28px; min-height: 0; }
+  .pen-page > .pen-side { position: fixed; max-height: none; }
+}

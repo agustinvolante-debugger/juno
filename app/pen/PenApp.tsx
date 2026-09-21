@@ -394,7 +394,163 @@ export default function PenApp({
   const grouped = useMemo(() => groupByDay(visible), [visible])
 
   return (
-    <main className="mx-auto max-w-[1460px] px-5 pb-24 pt-10 sm:px-8 sm:pt-12">
+    <main className="pen-page">
+      {/* The sidebar is a page-level column running the full height, so the brand sits level
+          with the search box rather than a header's height below it. Everything else — the
+          header, the banners, the import tray and the note/rail grid — stacks to its right. */}
+      <div className="pen-side">
+      {/* ------------------------------------------------------ navigation */}
+      <div className="pen-brand">
+        <Image src="/juno_mark.png" alt="" width={34} height={34} className="pen-mark" priority />
+        <div>
+          <div className="pen-display pen-brand-name">Pen</div>
+          <div className="pen-brand-tag">Capture. Understand. Do.</div>
+        </div>
+      </div>
+
+      {supportsPicker ? (
+        <button className="pen-connect" onClick={connectPen}>
+          <Icon name="link" size={18} />
+          Connect pen
+        </button>
+      ) : null}
+
+      {/* The drop target belongs next to Connect pen: they are the two ways a recording gets
+          in, and separating them meant the only visible route on a browser without the
+          folder picker was a link at the foot of a list on the other side of the screen.
+          Clickable as well as droppable, because "drag a file here" is not an instruction
+          everyone acts on. */}
+      <button
+        className="pen-drop pen-drop-side"
+        data-over={dragOver}
+        onClick={() => fileInput.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault()
+          setDragOver(false)
+          if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files)
+        }}
+      >
+        <Icon name="plus" size={17} />
+        <span>
+          <strong>Add audio files</strong>
+          <em>or drag them here</em>
+        </span>
+      </button>
+
+      <nav className="pen-cats">
+        <div className="pen-cats-list">
+          <button
+            className="pen-cat"
+            data-active={view.k === 'archive'}
+            onClick={() => { setView({ k: 'archive' }); setCatFilter(null); setNavOpen(false) }}
+          >
+            <Icon name="home" size={19} />
+            <span className="pen-cat-label">Home</span>
+            {!!stats?.actionsOpen && <span className="pen-cat-n">{stats.actionsOpen}</span>}
+          </button>
+          <button
+            className="pen-cat"
+            data-active={catFilter === null && view.k !== 'archive' && view.k !== 'chat' && view.k !== 'doc'}
+            onClick={() => { setCatFilter(null); setNavOpen(false) }}
+          >
+            <Icon name="recordings" size={19} />
+            <span className="pen-cat-label">All recordings</span>
+            <span className="pen-cat-n">{sessions.length}</span>
+          </button>
+        </div>
+
+        {/* Fixed buckets, not the free-form labels. Measured on a real archive: 11 recordings
+            produced 10 distinct categories, 9 holding a single recording — a filter that
+            always returns one item is not a filter. The specific label still appears on each
+            recording row, where it is good description; navigation happens by bucket. Empty
+            buckets are hidden so the nav only ever offers somewhere to go. */}
+        {bucketCounts.length > 0 && (
+          <div className="pen-cats-list pen-cats-buckets">
+            {bucketCounts.map(([b, n]) => (
+              <button
+                key={b}
+                className="pen-cat"
+                data-active={catFilter === b}
+                onClick={() => { setCatFilter(catFilter === b ? null : b); setNavOpen(false) }}
+              >
+                <Icon name={BUCKET_ICON[b] as IconName} size={19} />
+                <span className="pen-cat-label">{b}</span>
+                <span className="pen-cat-n">{n}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </nav>
+
+      {/* --------------------------------- recordings (rail; ordered right in CSS) */}
+
+      <div className="pen-quotecard">
+        <p>&ldquo;Small moments.<br />Bigger progress.&rdquo;</p>
+      </div>
+
+      <nav className="pen-saved">
+        {/* ---------------------------------------------------------- chats */}
+        <div className="pen-cats-head pen-label pen-cats-head-row">
+          <span>Chats</span>
+          <button
+            className="pen-cats-new"
+            title="New chat"
+            onClick={() => {
+              setChatSeed(null)
+              setView({ k: 'chat', id: null })
+              setNavOpen(false)
+            }}
+          >
+            +
+          </button>
+        </div>
+        {chats.length === 0 ? (
+          <p className="pen-cats-empty">Ask something in the search bar and it lands here.</p>
+        ) : (
+          <div className="pen-cats-list">
+            {chats.slice(0, 4).map((c) => (
+              <button
+                key={c.id}
+                className="pen-cat"
+                data-active={view.k === 'chat' && view.id === c.id}
+                onClick={() => {
+                  setChatSeed(null)
+                  setView({ k: 'chat', id: c.id })
+                  setNavOpen(false)
+                }}
+                title={c.title ?? 'Untitled chat'}
+              >
+                <span className="pen-cat-label">{c.title ?? 'Untitled chat'}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* ---------------------------------------------------------- pages */}
+        {docs.length > 0 && (
+          <>
+            <div className="pen-cats-head pen-label">Pages</div>
+            <div className="pen-cats-list">
+              {docs.slice(0, 4).map((d) => (
+                <button
+                  key={d.id}
+                  className="pen-cat"
+                  data-active={view.k === 'doc' && view.id === d.id}
+                  onClick={() => { setView({ k: 'doc', id: d.id }); setNavOpen(false) }}
+                  title={d.title}
+                >
+                  <span className="pen-cat-label">{d.title}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </nav>
+      </div>
+
+      <div className="pen-main-col">
       {/* Three columns so the search sits dead centre AND on the same horizontal axis as the
           buttons. `justify-between` couldn't do both — it centres the search only when the
           two side groups happen to be the same width. */}
@@ -463,157 +619,7 @@ export default function PenApp({
         {/* On desktop `.pen-side` is display:contents, so nav and rail stay direct grid
             children and the three-column layout is untouched. On a phone it becomes a single
             off-canvas drawer, which is the only way the note gets the whole screen. */}
-        <div className="pen-side">
-        {/* ------------------------------------------------------ navigation */}
-        <div className="pen-brand">
-          <Image src="/juno_mark.png" alt="" width={34} height={34} className="pen-mark" priority />
-          <div>
-            <div className="pen-display pen-brand-name">Pen</div>
-            <div className="pen-brand-tag">Capture. Understand. Do.</div>
-          </div>
-        </div>
 
-        {supportsPicker ? (
-          <button className="pen-connect" onClick={connectPen}>
-            <Icon name="link" size={18} />
-            Connect pen
-          </button>
-        ) : null}
-
-        {/* The drop target belongs next to Connect pen: they are the two ways a recording gets
-            in, and separating them meant the only visible route on a browser without the
-            folder picker was a link at the foot of a list on the other side of the screen.
-            Clickable as well as droppable, because "drag a file here" is not an instruction
-            everyone acts on. */}
-        <button
-          className="pen-drop pen-drop-side"
-          data-over={dragOver}
-          onClick={() => fileInput.current?.click()}
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={(e) => {
-            e.preventDefault()
-            setDragOver(false)
-            if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files)
-          }}
-        >
-          <Icon name="plus" size={17} />
-          <span>
-            <strong>Add audio files</strong>
-            <em>or drag them here</em>
-          </span>
-        </button>
-
-        <nav className="pen-cats">
-          <div className="pen-cats-list">
-            <button
-              className="pen-cat"
-              data-active={view.k === 'archive'}
-              onClick={() => { setView({ k: 'archive' }); setCatFilter(null); setNavOpen(false) }}
-            >
-              <Icon name="home" size={19} />
-              <span className="pen-cat-label">Home</span>
-              {!!stats?.actionsOpen && <span className="pen-cat-n">{stats.actionsOpen}</span>}
-            </button>
-            <button
-              className="pen-cat"
-              data-active={catFilter === null && view.k !== 'archive' && view.k !== 'chat' && view.k !== 'doc'}
-              onClick={() => { setCatFilter(null); setNavOpen(false) }}
-            >
-              <Icon name="recordings" size={19} />
-              <span className="pen-cat-label">All recordings</span>
-              <span className="pen-cat-n">{sessions.length}</span>
-            </button>
-          </div>
-
-          {/* Fixed buckets, not the free-form labels. Measured on a real archive: 11 recordings
-              produced 10 distinct categories, 9 holding a single recording — a filter that
-              always returns one item is not a filter. The specific label still appears on each
-              recording row, where it is good description; navigation happens by bucket. Empty
-              buckets are hidden so the nav only ever offers somewhere to go. */}
-          {bucketCounts.length > 0 && (
-            <div className="pen-cats-list pen-cats-buckets">
-              {bucketCounts.map(([b, n]) => (
-                <button
-                  key={b}
-                  className="pen-cat"
-                  data-active={catFilter === b}
-                  onClick={() => { setCatFilter(catFilter === b ? null : b); setNavOpen(false) }}
-                >
-                  <Icon name={BUCKET_ICON[b] as IconName} size={19} />
-                  <span className="pen-cat-label">{b}</span>
-                  <span className="pen-cat-n">{n}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </nav>
-
-        {/* --------------------------------- recordings (rail; ordered right in CSS) */}
-
-        <div className="pen-quotecard">
-          <p>&ldquo;Small moments.<br />Bigger progress.&rdquo;</p>
-        </div>
-
-        <nav className="pen-saved">
-          {/* ---------------------------------------------------------- chats */}
-          <div className="pen-cats-head pen-label pen-cats-head-row">
-            <span>Chats</span>
-            <button
-              className="pen-cats-new"
-              title="New chat"
-              onClick={() => {
-                setChatSeed(null)
-                setView({ k: 'chat', id: null })
-                setNavOpen(false)
-              }}
-            >
-              +
-            </button>
-          </div>
-          {chats.length === 0 ? (
-            <p className="pen-cats-empty">Ask something in the search bar and it lands here.</p>
-          ) : (
-            <div className="pen-cats-list">
-              {chats.slice(0, 4).map((c) => (
-                <button
-                  key={c.id}
-                  className="pen-cat"
-                  data-active={view.k === 'chat' && view.id === c.id}
-                  onClick={() => {
-                    setChatSeed(null)
-                    setView({ k: 'chat', id: c.id })
-                    setNavOpen(false)
-                  }}
-                  title={c.title ?? 'Untitled chat'}
-                >
-                  <span className="pen-cat-label">{c.title ?? 'Untitled chat'}</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* ---------------------------------------------------------- pages */}
-          {docs.length > 0 && (
-            <>
-              <div className="pen-cats-head pen-label">Pages</div>
-              <div className="pen-cats-list">
-                {docs.slice(0, 4).map((d) => (
-                  <button
-                    key={d.id}
-                    className="pen-cat"
-                    data-active={view.k === 'doc' && view.id === d.id}
-                    onClick={() => { setView({ k: 'doc', id: d.id }); setNavOpen(false) }}
-                    title={d.title}
-                  >
-                    <span className="pen-cat-label">{d.title}</span>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-        </nav>
-        </div>
 
 
         <button
@@ -745,6 +751,7 @@ export default function PenApp({
         </aside>
       </div>
 
+      </div>
     </main>
   )
 }
