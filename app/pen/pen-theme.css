@@ -2,40 +2,51 @@
    readable measure, quiet chrome, one accent. Scoped under .pen-root so the app's dark root
    theme in globals.css doesn't bleed in. */
 .pen-root {
-  --paper:      #FBFAF6;
+  /* Surfaces. The old stack had paper #FBFAF6 against panel #FFFFFF — a measured 1.044:1,
+     which is invisible, so nothing read as a card and the whole interface looked flat and
+     monochrome. The ground is now warmer and a shade darker so white panels genuinely lift
+     off it, with a distinct sidebar tone and an inset well. Measured: page→panel 1.15:1,
+     sidebar→panel 1.28:1, panel→sunk 1.25:1. */
+  --paper:      #F2EFE5;
+  --side:       #E8E3D5;
   --panel:      #FFFFFF;
-  --sunk:       #F4F2EC;
-  --line:       #E7E3D9;
-  --hair:       #F0EDE5;
-  --ink:        #16150F;
-  --soft:       #514E45;
-  --dim:        #646158;   /* 5.93:1 on paper — was #858175 at 3.73:1, failed AA */
-  --faint:      #76736C;   /* 4.53:1 on paper — was #B0ABA0 at 2.19:1, failed badly */
+  --sunk:       #EAE6DB;
+  --line:       #DCD5C4;
+  --hair:       #E8E3D6;
 
-  --accent:     #2C5F7C;   /* slate blue — calm, professional, not "success" */
-  --accent-ink: #1E4257;
-  --accent-wash:#EDF3F6;
-  --accent-line:#D3E2EA;
+  --ink:        #16150F;   /* 15.9:1 on page */
+  --soft:       #514E45;   /* 7.23:1 */
+  --dim:        #646158;   /* 5.38:1 */
+  --faint:      #6E6C65;   /* 4.57:1 — darkened again for the darker ground */
 
-  --good:       #3F6B4A;
-  --good-wash:  #EEF4EF;
+  /* Emerald. Deep enough to carry body-size text (5.70:1 on page, 6.56:1 on white) and to
+     take white button labels at 6.56:1, rather than a mid green that only passes at large
+     sizes. */
+  --accent:     #0B6B44;
+  --accent-ink: #08482E;
+  --accent-wash:#DCEDE3;
+  --accent-line:#A9D2BC;
+
+  /* Status stays distinguishable from the brand green — they mean different things, and a
+     single green for "our colour" and "this succeeded" makes both mean less. Every status is
+     also given an icon, never colour alone. */
+  --good:       #1F6B3E;
+  --good-wash:  #E2EFE6;
   --warn:       #8A6516;
-  --warn-wash:  #FBF5E8;
+  --warn-wash:  #F7EFDC;
+  --warn-line:  #E6D5AE;
   --bad:        #9E3229;
-  --bad-wash:   #FBF1EF;
+  --bad-wash:   #F9EBE8;
+
+  /* Elevation, as three deliberate steps instead of shadows invented per component. */
+  --lift-1: 0 1px 2px rgba(34, 30, 18, .05);
+  --lift-2: 0 1px 2px rgba(34, 30, 18, .05), 0 4px 12px -4px rgba(34, 30, 18, .10);
+  --lift-3: 0 2px 4px rgba(34, 30, 18, .06), 0 16px 34px -12px rgba(34, 30, 18, .20);
 
   --serif:  "Literata", "Iowan Old Style", Palatino, Georgia, serif;
   --display:"Instrument Serif", "Literata", Georgia, serif;
   --mono:   "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  --ui:     "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-
-  background: var(--paper);
-  color: var(--ink);
-  font-family: var(--serif);
-  font-size: 16px;
-  -webkit-font-smoothing: antialiased;
-  min-height: 100dvh;
-}
+  --ui:     "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;}
 .pen-root ::selection { background: #DCE8EE; }
 
 .pen-display { font-family: var(--display); font-weight: 400; letter-spacing: -0.015em; }
@@ -44,12 +55,12 @@
   font-family: var(--mono); font-size: 12px; letter-spacing: .13em;
   text-transform: uppercase; color: var(--dim);
 }
-.pen-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.pen-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--lift-2); }
 
 /* ---------------------------------------------------------------- sidebar */
 .pen-row { border-bottom: 1px solid var(--hair); cursor: pointer; transition: background .12s; padding: 13px 11px; border-radius: 9px; }
-.pen-row:hover { background: var(--sunk); }
-.pen-row[data-active='true'] { background: var(--accent-wash); box-shadow: inset 2px 0 0 var(--accent); }
+.pen-row:hover { background: rgba(255,255,255,.62); }
+.pen-row[data-active='true'] { background: var(--panel); box-shadow: inset 3px 0 0 var(--accent), var(--lift-1); }
 .pen-row[data-active='true'] .pen-row-title { color: var(--accent-ink); }
 
 /* ------------------------------------------------------------------ pills */
@@ -630,7 +641,7 @@
 .pen-lp-card {
   background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
   padding: 24px 24px 26px;
-  box-shadow: 0 1px 2px rgba(22,21,15,.03), 0 14px 34px -22px rgba(22,21,15,.14);
+  box-shadow: var(--lift-2);
   /* Same timing and distance as .pen-lp-plan, so the page has one hover gesture rather than
      two. The dark plan cards signal with border brightness; on paper that is nearly
      invisible, so the equivalent here is the shadow deepening under the lift. */
@@ -642,7 +653,7 @@
 .pen-lp-card:hover {
   transform: translateY(-2px);
   border-color: #DCD6C8;
-  box-shadow: 0 2px 4px rgba(22,21,15,.04), 0 22px 46px -24px rgba(22,21,15,.22);
+  box-shadow: var(--lift-3);
 }
 
 /* Respect a reduced-motion preference: keep the colour change, drop the movement. */
@@ -804,13 +815,20 @@
    in the middle visually. */
 .pen-shell {
   display: grid;
-  grid-template-columns: 336px minmax(0, 1fr);
-  gap: 30px;
+  grid-template-columns: 248px minmax(0, 1fr) 336px;
+  gap: 24px;
   align-items: start;
 }
 .pen-cats  { position: static; }
-.pen-rail  { position: static; max-height: none; margin-top: 14px; }
-.pen-saved { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--hair); }
+.pen-rail  {
+  position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  padding: 14px 12px; box-shadow: var(--lift-1);
+}
+.pen-rail::-webkit-scrollbar { width: 6px; }
+.pen-rail::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
+.pen-rail:hover::-webkit-scrollbar-thumb { background: #CFC7B4; }
+.pen-saved { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
 
 /* ---- category navigation ---- */
 .pen-cats-head { padding: 16px 8px 7px; }
@@ -822,10 +840,11 @@
   font-family: var(--ui); font-size: 14px; font-weight: 500; color: var(--soft);
   border: 1px solid transparent; transition: background .12s, color .12s;
 }
-.pen-cat:hover { background: var(--sunk); color: var(--ink); }
+.pen-cat:hover { background: rgba(255,255,255,.62); color: var(--ink); }
 .pen-cat[data-active='true'] {
-  background: var(--accent-wash); color: var(--accent-ink);
+  background: var(--panel); color: var(--accent-ink);
   border-color: var(--accent-line); font-weight: 600;
+  box-shadow: var(--lift-1);
 }
 .pen-cat-n {
   font-family: var(--mono); font-size: 12px; color: var(--faint);
@@ -840,12 +859,12 @@
   display: flex; align-items: center; gap: 11px; min-width: 0;
   background: var(--panel); border: 1px solid var(--line); border-radius: 13px;
   padding: 0 14px; height: 52px;
-  box-shadow: 0 1px 2px rgba(22, 21, 15, .04), 0 8px 22px -14px rgba(22, 21, 15, .22);
+  box-shadow: var(--lift-2);
   transition: border-color .14s, box-shadow .14s;
 }
 .pen-search:focus-within {
   border-color: var(--accent-line);
-  box-shadow: 0 0 0 3.5px var(--accent-wash), 0 8px 22px -14px rgba(22, 21, 15, .22);
+  box-shadow: 0 0 0 3.5px var(--accent-wash), var(--lift-2);
 }
 .pen-search-icon { width: 19px; height: 19px; flex: none; color: var(--faint); }
 .pen-search:focus-within .pen-search-icon { color: var(--accent); }
@@ -861,7 +880,7 @@
   position: absolute; z-index: 40; top: calc(100% + 7px); left: 0; right: 0;
   display: flex; flex-direction: column; gap: 1px; padding: 8px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
-  box-shadow: 0 18px 40px -16px rgba(22, 21, 15, .3);
+  box-shadow: var(--lift-3);
 }
 .pen-sugg {
   font-family: var(--ui); font-size: 14.5px; font-weight: 500; text-align: left;
@@ -908,7 +927,7 @@
 .pen-catpick-menu {
   position: absolute; z-index: 30; top: calc(100% + 6px); right: 0; width: 216px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 11px;
-  padding: 7px; box-shadow: 0 14px 34px -12px rgba(22, 21, 15, .28);
+  padding: 7px; box-shadow: var(--lift-3);
 }
 .pen-catpick-input {
   width: 100%; font-family: var(--ui); font-size: 14px; color: var(--ink);
@@ -1096,6 +1115,11 @@
   display: flex; flex-direction: column;
   position: sticky; top: 16px;
   max-height: calc(100vh - 32px); overflow-y: auto;
+  background: var(--side);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px 11px 12px;
+  box-shadow: var(--lift-1);
 }
 .pen-side::-webkit-scrollbar { width: 6px; }
 .pen-side::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
@@ -1104,9 +1128,10 @@
 .pen-scrim { display: none; }
 
 /* ---- workspace, narrow ---- */
-@media (min-width: 901px) and (max-width: 1180px) {
-  /* Narrow laptops: keep both columns, just give the left less. */
-  .pen-shell { grid-template-columns: 272px minmax(0, 1fr); gap: 22px; }
+@media (min-width: 901px) and (max-width: 1280px) {
+  /* Not enough room for three columns: the rail drops full width under the note. */
+  .pen-shell { grid-template-columns: 228px minmax(0, 1fr); gap: 20px; }
+  .pen-rail { grid-column: 2; position: static; max-height: none; overflow: visible; margin-top: 18px; }
 }
 @media (max-width: 1040px) {
   /* The header's three columns stop fitting: the search drops to its own full-width row
@@ -1121,15 +1146,21 @@
 }
 /* ---- phones and small tablets: navigation becomes a drawer ---- */
 @media (max-width: 900px) {
-  /* The note gets the whole screen. Previously nav, meter, categories, chats and pages
-     stacked above it — roughly 600px of chrome to scroll past before reading anything. */
-  .pen-shell { display: block; }
+  /* One column, and the recordings come first: on a phone the list is what you arrived to
+     use, and the rail is no longer inside the drawer now that it is its own desktop column. */
+  .pen-shell { display: flex; flex-direction: column; }
+  .pen-shell-main { order: 2; }
+  .pen-rail {
+    order: 1; position: static; max-height: none; overflow: visible;
+    margin-bottom: 18px;
+  }
 
   .pen-side {
     display: flex; flex-direction: column; gap: 4px;
     position: fixed; z-index: 60; top: 0; left: 0; bottom: 0;
-    width: min(86vw, 340px); padding: 18px 14px 28px;
-    background: var(--paper); border-right: 1px solid var(--line);
+    width: min(86vw, 320px); padding: 18px 14px 28px;
+    border-radius: 0; box-shadow: none;
+    background: var(--side); border: 0; border-right: 1px solid var(--line);
     overflow-y: auto; -webkit-overflow-scrolling: touch;
     transform: translateX(-100%);
     transition: transform .26s cubic-bezier(.2,.7,.3,1);
@@ -1144,10 +1175,8 @@
   }
   .pen-shell[data-nav='open'] .pen-scrim { opacity: 1; pointer-events: auto; }
 
-  /* Inside the drawer these are stacked panels, not a sticky column. */
-  .pen-cats, .pen-rail, .pen-saved {
-    position: static; max-height: none; width: auto;
-  }
+  /* The drawer holds navigation only. */
+  .pen-cats, .pen-saved { position: static; max-height: none; width: auto; }
   .pen-cats-list { flex-direction: column; }
   .pen-cat { width: 100%; border-radius: 7px; border-color: transparent; padding: 9px 10px; }
   .pen-cat[data-active='true'] { border-color: var(--accent-line); }
@@ -1227,7 +1256,7 @@
 .pen-brief-pop {
   position: absolute; z-index: 40; top: calc(100% + 7px); right: 0; width: 272px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 11px;
-  padding: 11px; box-shadow: 0 16px 38px -14px rgba(22, 21, 15, .3);
+  padding: 11px; box-shadow: var(--lift-3);
 }
 .pen-brief-self {
   font-family: var(--mono); font-size: 12.5px; color: var(--soft);
@@ -1464,3 +1493,189 @@
 }
 .pen-su-back { display: inline-flex; align-items: center; gap: 9px; }
 .pen-su-back .pen-mark { border-radius: 6px; }
+
+
+/* ===================================================== sidebar identity === */
+.pen-brand { display: flex; align-items: center; gap: 11px; padding: 4px 6px 16px; }
+.pen-brand-name { font-size: 25px; line-height: 1; letter-spacing: -0.015em; }
+.pen-brand-tag { font-family: var(--ui); font-size: 11.5px; color: var(--dim); margin-top: 3px; }
+
+/* The one unmissable action in the sidebar: filled, full width, brand green. */
+.pen-connect {
+  display: flex; align-items: center; justify-content: center; gap: 9px;
+  width: 100%; height: 46px; margin-bottom: 18px;
+  font-family: var(--ui); font-size: 14.5px; font-weight: 600;
+  color: #fff; background: var(--accent);
+  border: 1px solid var(--accent); border-radius: 11px;
+  box-shadow: var(--lift-2);
+  transition: background .14s ease, transform .14s ease;
+}
+.pen-connect:hover { background: var(--accent-ink); }
+.pen-connect:active { transform: translateY(1px); }
+
+/* Nav rows carry an icon, because a column of same-sized grey labels reads as one mass and
+   nothing in it is findable at a glance. */
+.pen-cat {
+  display: flex; align-items: center; gap: 11px;
+  width: 100%; text-align: left; padding: 9px 10px; border-radius: 9px;
+  font-family: var(--ui); font-size: 14px; font-weight: 500; color: var(--soft);
+  border: 1px solid transparent; transition: background .12s, color .12s;
+}
+.pen-cat svg { flex: none; color: var(--dim); transition: color .12s; }
+.pen-cat:hover svg { color: var(--soft); }
+.pen-cat[data-active='true'] svg { color: var(--accent); }
+.pen-cat-label { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pen-cats-buckets { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+
+.pen-quotecard {
+  order: 99; margin-top: 18px; padding: 16px 15px;
+  background: var(--accent-wash); border: 1px solid var(--accent-line); border-radius: 12px;
+}
+.pen-quotecard p {
+  margin: 0; font-family: var(--display); font-size: 17px; line-height: 1.35;
+  font-style: italic; color: var(--accent-ink);
+}
+
+/* ------------------------------------------------- recent recordings rail */
+.pen-rail-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 2px 2px 12px;
+}
+.pen-rail-title { font-family: var(--ui); font-size: 15px; font-weight: 600; color: var(--ink); }
+.pen-rail-new {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--ui); font-size: 12.5px; font-weight: 600; color: var(--accent-ink);
+  background: var(--accent-wash); border: 1px solid var(--accent-line);
+  border-radius: 8px; padding: 6px 10px; transition: all .13s;
+}
+.pen-rail-new:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.pen-rail-all {
+  display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%;
+  margin-top: 12px; padding: 11px; border-radius: 10px;
+  font-family: var(--ui); font-size: 13.5px; font-weight: 600; color: var(--soft);
+  border: 1px solid var(--line); background: var(--paper);
+  transition: all .13s;
+}
+.pen-rail-all:hover { color: var(--accent-ink); border-color: var(--accent-line); background: var(--accent-wash); }
+
+/* ------------------------------------------------------- account chip ---- */
+.pen-acct2 { position: relative; }
+.pen-acct2-btn {
+  display: flex; align-items: center; gap: 9px;
+  padding: 5px 9px 5px 5px; border-radius: 999px;
+  border: 1px solid transparent; transition: background .13s, border-color .13s;
+}
+.pen-acct2-btn:hover { background: var(--panel); border-color: var(--line); }
+.pen-avatar { width: 30px; height: 30px; border-radius: 999px; display: block; object-fit: cover; }
+.pen-avatar-fallback {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent); color: #fff;
+  font-family: var(--ui); font-size: 13px; font-weight: 600;
+}
+.pen-acct2-name {
+  font-family: var(--ui); font-size: 14px; font-weight: 600; color: var(--ink);
+  max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pen-acct2-chev { color: var(--dim); transform: rotate(90deg); }
+.pen-acct2-menu {
+  position: absolute; z-index: 50; top: calc(100% + 7px); right: 0; min-width: 214px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 11px; box-shadow: var(--lift-3);
+}
+.pen-acct2-email {
+  font-family: var(--mono); font-size: 11.5px; color: var(--dim);
+  padding-bottom: 9px; margin-bottom: 8px; border-bottom: 1px solid var(--hair);
+  overflow-wrap: anywhere;
+}
+
+.pen-drop-foot { margin-top: 12px; padding: 14px; text-align: center; }
+@media (max-width: 680px) { .pen-acct2-name { display: none; } }
+
+/* ==================================================== recording detail === */
+.pen-back {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: var(--ui); font-size: 13.5px; font-weight: 600; color: var(--dim);
+  padding: 5px 9px 5px 5px; margin-left: -5px; border-radius: 8px;
+  transition: color .12s, background .12s;
+}
+.pen-back:hover { color: var(--accent-ink); background: var(--accent-wash); }
+
+/* Meta as labelled bits, each with its own glyph, instead of a run of grey strings
+   separated by dots that all look the same until you read them. */
+.pen-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin-top: 10px; }
+.pen-meta-bit {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--ui); font-size: 13.5px; color: var(--soft);
+}
+.pen-meta-bit svg { color: var(--dim); flex: none; }
+
+.pen-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 13px; }
+.pen-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--ui); font-size: 12.5px; font-weight: 600;
+  padding: 5px 11px; border-radius: 999px;
+  background: var(--panel); border: 1px solid var(--line); color: var(--soft);
+}
+.pen-chip svg { flex: none; }
+.pen-chip[data-tone='accent'] { background: var(--accent-wash); border-color: var(--accent-line); color: var(--accent-ink); }
+.pen-chip[data-tone='warn']   { background: var(--warn-wash); border-color: var(--warn-line); color: var(--warn); }
+.pen-chip[data-tone='bad']    { background: var(--bad-wash); border-color: #EFD6D2; color: var(--bad); }
+
+/* The summary is the machine's contribution, so it is tinted and attributed rather than
+   sitting in the same plain type as everything the user wrote. */
+.pen-aicard {
+  margin-top: 22px; padding: 20px 22px;
+  background: var(--accent-wash); border: 1px solid var(--accent-line);
+  border-radius: 14px; box-shadow: var(--lift-1);
+}
+.pen-aicard-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-bottom: 11px;
+}
+.pen-aicard-title {
+  display: inline-flex; align-items: center; gap: 9px;
+  font-family: var(--ui); font-size: 15px; font-weight: 600; color: var(--accent-ink);
+}
+.pen-aicard-title svg { color: var(--accent); flex: none; }
+.pen-aicard-by {
+  font-family: var(--ui); font-size: 11.5px; font-weight: 600; color: var(--accent);
+  background: var(--panel); border: 1px solid var(--accent-line);
+  border-radius: 999px; padding: 4px 10px; white-space: nowrap;
+}
+.pen-aicard-body {
+  margin: 0; font-family: var(--serif); font-size: 16.5px; line-height: 1.66; color: var(--ink);
+}
+
+/* Decided / to do / still open, side by side. Three short lists stacked read as one
+   undifferentiated column; abreast you can see what a meeting produced at a glance.
+   Sized against the COLUMN, not the viewport: at 1512px wide the note column is only ~600px
+   once the sidebar and rail take their share, and a viewport media query put three cards in
+   it at 190px each, which wrapped "Next actions" onto three lines. */
+.pen-shell-main { container-type: inline-size; }
+.pen-trio {
+  display: grid; grid-template-columns: 1fr;
+  gap: 14px; margin-top: 22px; align-items: start;
+}
+.pen-trio > * { margin: 0 !important; }
+@container (min-width: 520px) { .pen-trio { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (min-width: 820px) { .pen-trio { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.pen-card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 13px;
+  padding: 16px 16px 18px; box-shadow: var(--lift-1);
+}
+
+
+/* A heading with a glyph badge, so a card is identifiable before it is read. */
+.pen-sec-head {
+  display: inline-flex; align-items: center; gap: 9px;
+  font-family: var(--ui); font-size: 10.5px; font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--dim);
+}
+.pen-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 7px; flex: none;
+  background: var(--sunk); color: var(--soft); border: 1px solid var(--line);
+}
+.pen-badge[data-tone='good']   { background: var(--good-wash); color: var(--good); border-color: #C9E0D0; }
+.pen-badge[data-tone='accent'] { background: var(--accent-wash); color: var(--accent); border-color: var(--accent-line); }
+.pen-badge[data-tone='warn']   { background: var(--warn-wash); color: var(--warn); border-color: var(--warn-line); }

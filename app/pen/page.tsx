@@ -1,3 +1,5 @@
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { authedEmail } from '@/lib/news/auth'
 import { listSessions } from '@/lib/pen/store'
 import { archiveStats } from '@/lib/pen/stats'
@@ -9,6 +11,9 @@ export const dynamic = 'force-dynamic'
 
 export default async function PenPage() {
   const email = await authedEmail()
+  // Name and picture come free with the Google session; the mock shows both, and an avatar is
+  // a far better "you are signed in as" signal than an elided email address.
+  const session = await getServerSession(authOptions)
 
   // Signed out gets the landing page; signed in goes straight to the app. Same URL, so a
   // shared link works for someone who has never seen it and for someone who lives in it.
@@ -30,5 +35,14 @@ export default async function PenPage() {
     loadError = (e as Error).message
   }
 
-  return <PenApp initial={sessions} stats={stats} loadError={loadError} email={email} />
+  return (
+    <PenApp
+      initial={sessions}
+      stats={stats}
+      loadError={loadError}
+      email={email}
+      name={session?.user?.name ?? null}
+      avatar={session?.user?.image ?? null}
+    />
+  )
 }

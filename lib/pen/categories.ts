@@ -50,3 +50,39 @@ export function displayType(t: string | null | undefined): string {
   if (!raw) return ''
   return LEGACY[raw.toLowerCase()] ?? raw
 }
+
+/**
+ * The fixed nav buckets.
+ *
+ * Free-form categories describe a recording well and navigate terribly: measured on a real
+ * archive, 11 recordings produced 10 distinct labels, 9 holding a single recording, with
+ * "Product brainstorm" and "Product discussion" meaning the same thing. So the specific label
+ * stays on the row, where it is useful, and every recording also maps to one of these, which
+ * is what the sidebar navigates by.
+ */
+export const BUCKETS = ['Meetings', 'Property', 'Personal', 'Shopping', 'Ideas'] as const
+export type Bucket = (typeof BUCKETS)[number]
+
+/** Icon name per bucket, kept here so the nav and the rows cannot disagree. */
+export const BUCKET_ICON: Record<Bucket, string> = {
+  Meetings: 'meetings',
+  Property: 'property',
+  Personal: 'personal',
+  Shopping: 'shopping',
+  Ideas: 'ideas',
+}
+
+/**
+ * Matched on meaning rather than an exact string, because the category is free text and the
+ * categoriser's wording varies run to run. Order matters: the most specific tests come first,
+ * and anything work-shaped that is not clearly something else falls through to Meetings.
+ */
+export function bucketOf(category: string | null | undefined): Bucket {
+  const c = (category ?? '').toLowerCase()
+  if (!c) return 'Meetings'
+  if (/(viewing|showing|walk-?through|open house|property|listing|realtor|real estate|apartment|house)/.test(c)) return 'Property'
+  if (/(shopping|purchase|buying|store|furniture|grocer|order)/.test(c)) return 'Shopping'
+  if (/(idea|brainstorm|concept|plan|strategy|note to self|personal note|lecture|talk|lesson|study|research)/.test(c)) return 'Ideas'
+  if (/(personal|family|friend|coffee|catch-?up|social|doctor|clinic|health|medical|admin)/.test(c)) return 'Personal'
+  return 'Meetings'
+}

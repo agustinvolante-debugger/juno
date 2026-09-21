@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { COMMON_TYPES, slugType, isViewing, displayType } from '@/lib/pen/categories'
+import Icon, { type IconName } from './Icon'
+import { COMMON_TYPES, slugType, isViewing, displayType, BUCKETS, BUCKET_ICON, bucketOf, type Bucket } from '@/lib/pen/categories'
 import type { PenSession, MeetingType, ChatTurn, PenNotes, NoteBlock } from '@/lib/pen/store'
 import NoteEditor, { blocksFrom } from './NoteEditor'
 import TranscriptEditor from './TranscriptEditor'
@@ -68,10 +69,14 @@ export default function PenApp({
   stats,
   loadError,
   email,
+  name,
+  avatar,
 }: {
   initial: PenSession[]
   stats: ArchiveStats | null
   loadError: string | null
+  name?: string | null
+  avatar?: string | null
   email: string
 }) {
   const [sessions, setSessions] = useState<PenSession[]>(initial)
@@ -162,10 +167,15 @@ export default function PenApp({
   }, [sessions, stats])
 
   // A category earns a place in the nav by grouping at least this many recordings.
-  const groupingCategories = useMemo(
-    () => (stats?.categories ?? []).filter((c) => c.count >= MIN_CAT),
-    [stats],
-  )
+  // Only buckets that actually hold something appear in the nav.
+  const bucketCounts = useMemo(() => {
+    const n = new Map<Bucket, number>()
+    for (const x of sessions) {
+      const b = bucketOf(displayType(x.meeting_type))
+      n.set(b, (n.get(b) ?? 0) + 1)
+    }
+    return BUCKETS.filter((b) => (n.get(b) ?? 0) > 0).map((b) => [b, n.get(b)!] as const)
+  }, [sessions])
 
   const activeId = view.k === 'session' ? view.id : null
   const active = useMemo(() => sessions.find((s) => s.id === activeId) ?? null, [sessions, activeId])
@@ -378,7 +388,7 @@ export default function PenApp({
   /* ------------------------------------------------------------------- view */
 
   const visible = useMemo(
-    () => (catFilter ? sessions.filter((x) => (slugType(displayType(x.meeting_type)) || 'uncategorised') === catFilter) : sessions),
+    () => (catFilter ? sessions.filter((x) => bucketOf(displayType(x.meeting_type)) === catFilter) : sessions),
     [sessions, catFilter],
   )
   const grouped = useMemo(() => groupByDay(visible), [visible])
@@ -389,13 +399,7 @@ export default function PenApp({
           buttons. `justify-between` couldn't do both — it centres the search only when the
           two side groups happen to be the same width. */}
       <header className="pen-head">
-        <div className="pen-head-left">
-          {/* The mark is cream-on-near-black with the background baked in, so it sits in its
-              own dark tile rather than floating on the paper ground. */}
-          <Image src="/juno_mark.png" alt="Juno" width={34} height={34} className="pen-mark" priority />
-          <h1 className="sr-only">Pen</h1>
-          <span className="pen-label">Recorder &rarr; notes</span>
-        </div>
+        <div className="pen-head-left" />
 
         <ArchiveSearch
           value={query}
@@ -420,17 +424,9 @@ export default function PenApp({
             </svg>
             <span className="pen-browse-t">Browse</span>
           </button>
-          {supportsPicker && (
-            <button className="pen-btn pen-btn-primary" onClick={connectPen}>
-              Connect pen
-            </button>
-          )}
-          <button className="pen-btn" onClick={() => fileInput.current?.click()}>
-            Add files
-          </button>
           <input ref={fileInput} type="file" multiple accept={ACCEPT} className="hidden"
                  onChange={(e) => e.target.files && addFiles(e.target.files)} />
-          <SignOut email={email} />
+          <Account email={email} name={name} avatar={avatar} />
         </div>
       </header>
 
@@ -468,7 +464,27 @@ export default function PenApp({
             children and the three-column layout is untouched. On a phone it becomes a single
             off-canvas drawer, which is the only way the note gets the whole screen. */}
         <div className="pen-side">
-        {/* ------------------------------------------------------ categories */}
+        {/* ------------------------------------------------------ navigation */}
+        <div className="pen-brand">
+          <Image src="/juno_mark.png" alt="" width={34} height={34} className="pen-mark" priority />
+          <div>
+            <div className="pen-display pen-brand-name">Pen</div>
+            <div className="pen-brand-tag">Capture. Understand. Do.</div>
+          </div>
+        </div>
+
+        {supportsPicker ? (
+          <button className="pen-connect" onClick={connectPen}>
+            <Icon name="link" size={18} />
+            Connect pen
+          </button>
+        ) : (
+          <button className="pen-connect" onClick={() => fileInput.current?.click()}>
+            <Icon name="plus" size={18} />
+            Add recordings
+          </button>
+        )}
+
         <nav className="pen-cats">
           <div className="pen-cats-list">
             <button
@@ -476,94 +492,49 @@ export default function PenApp({
               data-active={view.k === 'archive'}
               onClick={() => { setView({ k: 'archive' }); setCatFilter(null); setNavOpen(false) }}
             >
-              <span className="pen-cat-label">Your archive</span>
-              {!!stats?.actionsOpen && <span className="pen-cat-n">{stats.actionsOpen} open</span>}
+              <Icon name="home" size={19} />
+              <span className="pen-cat-label">Home</span>
+              {!!stats?.actionsOpen && <span className="pen-cat-n">{stats.actionsOpen}</span>}
             </button>
             <button
               className="pen-cat"
-              data-active={catFilter === null && view.k !== 'archive'}
+              data-active={catFilter === null && view.k !== 'archive' && view.k !== 'chat' && view.k !== 'doc'}
               onClick={() => { setCatFilter(null); setNavOpen(false) }}
             >
+              <Icon name="recordings" size={19} />
               <span className="pen-cat-label">All recordings</span>
               <span className="pen-cat-n">{sessions.length}</span>
             </button>
           </div>
 
-          {/* Categories are only navigation once they group something.
-              Measured on a real archive: 11 recordings produced 10 distinct categories, 9 of
-              them holding exactly one recording — "Product brainstorm" and "Product discussion"
-              being the same meeting type described twice. A filter that always returns one item
-              is not a filter, and it was occupying the whole left column and pushing everything
-              else below the fold. The label still appears on each recording, where it is useful
-              description; it stops pretending to be a menu until some category has {MIN_CAT} or
-              more recordings behind it. */}
-          {groupingCategories.length > 0 && (
-            <>
-              <div className="pen-cats-head pen-label">Filter</div>
-              <div className="pen-cats-list">
-                {groupingCategories.map((c) => (
-                  <button
-                    key={c.slug}
-                    className="pen-cat"
-                    data-active={catFilter === c.slug}
-                    onClick={() => { setCatFilter(catFilter === c.slug ? null : c.slug); setNavOpen(false) }}
-                    title={c.label}
-                  >
-                    <span className="pen-cat-label">{c.label}</span>
-                    <span className="pen-cat-n">{c.count}</span>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-
-        </nav>
-
-        {/* --------------------------------- recordings (rail; ordered right in CSS) */}
-        <aside className="pen-rail">
-          <div
-            className="pen-drop px-5 py-6 text-center"
-            data-over={dragOver}
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files) }}
-          >
-            <div className="pen-label">Drop recordings</div>
-          </div>
-
-          {visible.length === 0 ? (
-            <p className="mt-6 text-[14px] leading-relaxed" style={{ color: 'var(--dim)' }}>
-              {catFilter ? (
-                <>Nothing in this category. <button className="underline" onClick={() => setCatFilter(null)}>Show everything</button>.</>
-              ) : (
-                <>Nothing yet. Plug the pen into USB, press <strong style={{ color: 'var(--soft)' }}>Connect pen</strong>, and choose the drive that appears.</>
-              )}
-            </p>
-          ) : (
-            <div className="mt-6">
-              {grouped.map(([day, rows]) => (
-                <div key={day} className="mb-5">
-                  <div className="pen-label mb-1.5">{day}</div>
-                  {rows.map((s) => (
-                    <div key={s.id} className="pen-row px-2.5 py-3" data-active={s.id === activeId}
-                         onClick={() => { openSession(s.id); setTab('note'); setChatOpen(false) }}>
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="pen-row-title min-w-0 flex-1 text-[14.5px] font-medium leading-snug">
-                          {s.title || s.client_name || s.source_name || 'Untitled'}
-                        </span>
-                        <span className="pen-pill" data-s={s.status}>{s.status}</span>
-                      </div>
-                      <div className="pen-mono mt-1.5 text-[12.5px]" style={{ color: 'var(--faint)' }}>
-                        {fmtDur(s.duration_sec ?? 0)}
-                        {s.meeting_type ? ` · ${displayType(s.meeting_type).toLowerCase()}` : ''}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+          {/* Fixed buckets, not the free-form labels. Measured on a real archive: 11 recordings
+              produced 10 distinct categories, 9 holding a single recording — a filter that
+              always returns one item is not a filter. The specific label still appears on each
+              recording row, where it is good description; navigation happens by bucket. Empty
+              buckets are hidden so the nav only ever offers somewhere to go. */}
+          {bucketCounts.length > 0 && (
+            <div className="pen-cats-list pen-cats-buckets">
+              {bucketCounts.map(([b, n]) => (
+                <button
+                  key={b}
+                  className="pen-cat"
+                  data-active={catFilter === b}
+                  onClick={() => { setCatFilter(catFilter === b ? null : b); setNavOpen(false) }}
+                >
+                  <Icon name={BUCKET_ICON[b] as IconName} size={19} />
+                  <span className="pen-cat-label">{b}</span>
+                  <span className="pen-cat-n">{n}</span>
+                </button>
               ))}
             </div>
           )}
-        </aside>
+        </nav>
+
+        {/* --------------------------------- recordings (rail; ordered right in CSS) */}
+
+        <div className="pen-quotecard">
+          <p>&ldquo;Small moments.<br />Bigger progress.&rdquo;</p>
+        </div>
 
         <nav className="pen-saved">
           {/* ---------------------------------------------------------- chats */}
@@ -585,7 +556,7 @@ export default function PenApp({
             <p className="pen-cats-empty">Ask something in the search bar and it lands here.</p>
           ) : (
             <div className="pen-cats-list">
-              {chats.slice(0, 12).map((c) => (
+              {chats.slice(0, 4).map((c) => (
                 <button
                   key={c.id}
                   className="pen-cat"
@@ -608,7 +579,7 @@ export default function PenApp({
             <>
               <div className="pen-cats-head pen-label">Pages</div>
               <div className="pen-cats-list">
-                {docs.slice(0, 12).map((d) => (
+                {docs.slice(0, 4).map((d) => (
                   <button
                     key={d.id}
                     className="pen-cat"
@@ -624,6 +595,7 @@ export default function PenApp({
           )}
         </nav>
         </div>
+
 
         <button
           className="pen-scrim"
@@ -683,6 +655,7 @@ export default function PenApp({
             <div className={chatOpen ? 'grid gap-7 xl:grid-cols-[minmax(0,1fr)_352px]' : ''}>
               <Detail
                 selfEmail={email}
+                onBack={() => setView({ k: 'archive' })}
                 session={active} tab={tab} setTab={setTab}
                 chatOpen={chatOpen} onToggleChat={() => setChatOpen((v) => !v)}
                 onNotes={(type) => makeNotes(active.id, type)}
@@ -707,6 +680,59 @@ export default function PenApp({
             </div>
           )}
         </section>
+
+        {/* --------------------------------------- recent recordings (col 3) */}
+        <aside className="pen-rail">
+          <div className="pen-rail-head">
+            <span className="pen-rail-title">Recent recordings</span>
+            <button className="pen-rail-new" onClick={() => fileInput.current?.click()}>
+              <Icon name="plus" size={15} />
+              New
+            </button>
+          </div>
+
+          {visible.length === 0 ? (
+            <p className="mt-6 text-[14px] leading-relaxed" style={{ color: 'var(--dim)' }}>
+              {catFilter ? (
+                <>Nothing in this category. <button className="underline" onClick={() => setCatFilter(null)}>Show everything</button>.</>
+              ) : (
+                <>Nothing yet. Plug the pen into USB, press <strong style={{ color: 'var(--soft)' }}>Connect pen</strong>, and choose the drive that appears.</>
+              )}
+            </p>
+          ) : (
+            <div className="mt-6">
+              {grouped.map(([day, rows]) => (
+                <div key={day} className="mb-5">
+                  <div className="pen-label mb-1.5">{day}</div>
+                  {rows.map((s) => (
+                    <div key={s.id} className="pen-row px-2.5 py-3" data-active={s.id === activeId}
+                         onClick={() => { openSession(s.id); setTab('note'); setChatOpen(false) }}>
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="pen-row-title min-w-0 flex-1 text-[14.5px] font-medium leading-snug">
+                          {s.title || s.client_name || s.source_name || 'Untitled'}
+                        </span>
+                        <span className="pen-pill" data-s={s.status}>{s.status}</span>
+                      </div>
+                      <div className="pen-mono mt-1.5 text-[12.5px]" style={{ color: 'var(--faint)' }}>
+                        {fmtDur(s.duration_sec ?? 0)}
+                        {s.meeting_type ? ` · ${displayType(s.meeting_type).toLowerCase()}` : ''}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+          <div
+            className="pen-drop pen-drop-foot"
+            data-over={dragOver}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files) }}
+          >
+            <span className="pen-label">Or drop files here</span>
+          </div>
+        </aside>
       </div>
 
     </main>
@@ -728,6 +754,43 @@ function useIsPhone(): boolean {
     return () => mq.removeEventListener('change', sync)
   }, [])
   return phone
+}
+
+/**
+ * Who you are signed in as. The mock shows a photo and a first name; an elided email address
+ * is a worse answer to the same question, and Google already gives us both.
+ */
+function Account({ email, name, avatar }: { email: string; name?: string | null; avatar?: string | null }) {
+  const [open, setOpen] = useState(false)
+  const wrap = useRef<HTMLDivElement>(null)
+  const label = name?.trim() || email.split('@')[0]
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => { if (!wrap.current?.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  return (
+    <div className="pen-acct2" ref={wrap}>
+      <button className="pen-acct2-btn" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        {avatar ? (
+          <Image src={avatar} alt="" width={30} height={30} className="pen-avatar" unoptimized />
+        ) : (
+          <span className="pen-avatar pen-avatar-fallback">{label.slice(0, 1).toUpperCase()}</span>
+        )}
+        <span className="pen-acct2-name">{label}</span>
+        <Icon name="chevron" size={15} className="pen-acct2-chev" />
+      </button>
+      {open && (
+        <div className="pen-acct2-menu">
+          <div className="pen-acct2-email">{email}</div>
+          <SignOut email={email} />
+        </div>
+      )}
+    </div>
+  )
 }
 
 /* ============================================================ usage meter */
@@ -1224,7 +1287,7 @@ function ImportTray({
 /* =================================================================== detail */
 
 function Detail({
-  session, tab, setTab, chatOpen, onToggleChat, onNotes, onDelete, onPatch, askCategory, selfEmail,
+  session, tab, setTab, chatOpen, onToggleChat, onNotes, onDelete, onPatch, askCategory, selfEmail, onBack,
 }: {
   session: PenSession
   tab: 'note' | 'transcript'
@@ -1236,6 +1299,7 @@ function Detail({
   askCategory?: string[]
   /** The signed-in address — named in the briefing recipients popover. */
   selfEmail: string
+  onBack: () => void
   onDelete: () => void
   onPatch: (p: Partial<Pick<PenSession, 'user_notes' | 'title' | 'client_name' | 'action_done' | 'note_blocks' | 'transcript_edits' | 'briefing_sent_at'>>) => Promise<void>
 }) {
@@ -1289,6 +1353,7 @@ function Detail({
 
   const n: PenNotes = session.notes ?? {}
   const utts = session.transcript?.utterances ?? []
+  const speakerCount = useMemo(() => new Set(utts.map((u) => u.speaker)).size, [utts])
   const done = new Set(Array.isArray(session.action_done) ? session.action_done : [])
 
   async function toggleAction(i: number) {
@@ -1306,21 +1371,68 @@ function Detail({
   return (
     <div className="min-w-0">
       {/* --------------------------------------------------------- header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <button className="pen-back" onClick={onBack}>
+        <Icon name="back" size={17} />
+        All recordings
+      </button>
+
+      <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1 basis-[280px]">
           <TitleEdit
             title={session.title || n.headline || session.source_name || 'Untitled'}
             onSave={(next) => onPatch({ title: next })}
           />
-          <div className="pen-mono mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px]" style={{ color: 'var(--dim)' }}>
-            <span>{session.recorded_at ? new Date(session.recorded_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—'}</span>
-            <span style={{ color: 'var(--faint)' }}>·</span>
-            <span>{fmtDur(session.duration_sec ?? 0)}</span>
-            {session.client_name && (<><span style={{ color: 'var(--faint)' }}>·</span><span>{session.client_name}</span></>)}
+          {/* Icons rather than a row of interchangeable grey strings — you can tell the
+              date from the duration from the category without reading any of them. */}
+          <div className="pen-meta">
+            <span className="pen-meta-bit">
+              <Icon name="calendar" size={15} />
+              {session.recorded_at ? new Date(session.recorded_at).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}
+            </span>
+            <span className="pen-meta-bit">
+              <Icon name="clock" size={15} />
+              {fmtDur(session.duration_sec ?? 0)}
+            </span>
+            {!!displayType(session.meeting_type) && (
+              <span className="pen-meta-bit">
+                <Icon name="tag" size={15} />
+                {displayType(session.meeting_type)}
+              </span>
+            )}
+            {speakerCount > 0 && (
+              <span className="pen-meta-bit">
+                <Icon name="people" size={15} />
+                {speakerCount} {speakerCount === 1 ? 'speaker' : 'speakers'}
+              </span>
+            )}
+            {session.client_name && (
+              <span className="pen-meta-bit">
+                <Icon name="personal" size={15} />
+                {session.client_name}
+              </span>
+            )}
+          </div>
+
+          {/* State, as labelled chips rather than one status word. */}
+          <div className="pen-chips">
+            {n.summary && (
+              <span className="pen-chip" data-tone="accent"><Icon name="sparkle" size={14} filled />AI summarised</span>
+            )}
+            {utts.length > 0 && (
+              <span className="pen-chip"><Icon name="check" size={14} />Transcribed</span>
+            )}
+            {session.status === 'transcribing' && (
+              <span className="pen-chip" data-tone="warn"><Icon name="clock" size={14} />Transcribing</span>
+            )}
+            {session.status === 'noting' && (
+              <span className="pen-chip" data-tone="warn"><Icon name="sparkle" size={14} filled />Writing notes</span>
+            )}
+            {session.status === 'error' && (
+              <span className="pen-chip" data-tone="bad"><Icon name="alert" size={14} />Something failed</span>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="pen-pill" data-s={session.status}>{session.status === 'noting' ? 'writing notes' : session.status}</span>
           {/* Keyed off the transcript, not the status. A session can land in `error` with a
               perfectly good transcript (a failed save, a transient API error), and gating the
               retry on status left it with no way out of the UI. */}
@@ -1443,15 +1555,87 @@ function Detail({
           )}
 
           {n.summary && (
-            <div className="pen-sec">
-              <span className="pen-label">Summary</span>
-              <p className="mt-2 text-[16.5px]">{n.summary}</p>
+            <div className="pen-aicard">
+              <div className="pen-aicard-head">
+                <span className="pen-aicard-title">
+                  <Icon name="sparkle" size={18} filled />
+                  AI meeting summary
+                </span>
+                <span className="pen-aicard-by">Generated by AI</span>
+              </div>
+              <p className="pen-aicard-body">{n.summary}</p>
+            </div>
+          )}
+
+          {/* Decided / to do / still open, side by side as in the mock. Three short lists
+              stacked vertically read as one long undifferentiated column; side by side you can
+              see at a glance whether a meeting produced decisions, work, or neither. */}
+          {(!!n.decisions?.length || !!n.actions?.length || !!n.open_questions?.length) && (
+            <div className="pen-trio">
+  {!!n.decisions?.length && (
+              <div className="pen-sec pen-card">
+                <span className="pen-sec-head"><span className="pen-badge" data-tone="good"><Icon name="check" size={13} /></span>Decided</span>
+                <ul className="mt-2 space-y-2">
+                  {n.decisions.map((d, i) => (
+                    <li key={i} className="text-[15px]">
+                      {d.decision}
+                      {d.who && <span className="pen-mono ml-2 text-[12.5px]" style={{ color: 'var(--dim)' }}>{d.who}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+  {!!n.actions?.length && (
+              <div className="pen-sec pen-card">
+                <div className="mb-1 flex items-baseline justify-between">
+                  <span className="pen-sec-head"><span className="pen-badge" data-tone="accent"><Icon name="checklist" size={13} /></span>Next actions</span>
+                  <span className="pen-mono text-[12px]" style={{ color: 'var(--faint)' }}>
+                    {done.size}/{n.actions.length} done
+                  </span>
+                </div>
+                <div className="mt-1.5">
+                  {n.actions.map((a, i) => (
+                    <div key={i} className="pen-act pen-doable" data-done={done.has(i)}>
+                      <input type="checkbox" className="pen-act-box" checked={done.has(i)} onChange={() => toggleAction(i)} />
+                      <div className="min-w-0 flex-1">
+                        <div className="pen-act-text text-[15px] leading-snug">{a.action}</div>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                          {(a.owner || a.due || a.priority === 'high') && (
+                            <div className="pen-mono flex flex-wrap items-center gap-x-2 text-[12.5px]" style={{ color: 'var(--dim)' }}>
+                              {a.priority === 'high' && <span style={{ color: 'var(--bad)' }}>PRIORITY</span>}
+                              {a.owner && <span>{a.owner}</span>}
+                              {a.due && <span style={{ color: 'var(--accent-ink)' }}>{a.due}</span>}
+                            </div>
+                          )}
+                          <DeliverableActions onPick={(kind) => setSheet({ kind, item: a.action })} />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+              {!!n.open_questions?.length && (
+              <div className="pen-sec pen-card">
+                <span className="pen-sec-head"><span className="pen-badge" data-tone="warn"><Icon name="question" size={13} /></span>Still open</span>
+                <ul className="mt-2 list-disc space-y-2.5 pl-5 text-[15px]">
+                  {n.open_questions.map((q, i) => (
+                    <li key={i} className="pen-doable">
+                      {q}
+                      <div className="mt-1.5">
+                        <DeliverableActions onPick={(kind) => setSheet({ kind, item: q })} />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             </div>
           )}
 
           {!!n.people?.length && (
             <div className="pen-sec">
-              <span className="pen-label">In the room</span>
+              <span className="pen-sec-head"><span className="pen-badge"><Icon name="people" size={13} /></span>In the room</span>
               <div className="mt-2.5 flex flex-wrap gap-2">
                 {n.people.map((p, i) => (
                   <span key={i} className="pen-who" title={p.note}>
@@ -1466,36 +1650,7 @@ function Detail({
             </div>
           )}
 
-          {!!n.actions?.length && (
-            <div className="pen-sec">
-              <div className="mb-1 flex items-baseline justify-between">
-                <span className="pen-label">Next actions</span>
-                <span className="pen-mono text-[12px]" style={{ color: 'var(--faint)' }}>
-                  {done.size}/{n.actions.length} done
-                </span>
-              </div>
-              <div className="mt-1.5">
-                {n.actions.map((a, i) => (
-                  <div key={i} className="pen-act pen-doable" data-done={done.has(i)}>
-                    <input type="checkbox" className="pen-act-box" checked={done.has(i)} onChange={() => toggleAction(i)} />
-                    <div className="min-w-0 flex-1">
-                      <div className="pen-act-text text-[15px] leading-snug">{a.action}</div>
-                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                        {(a.owner || a.due || a.priority === 'high') && (
-                          <div className="pen-mono flex flex-wrap items-center gap-x-2 text-[12.5px]" style={{ color: 'var(--dim)' }}>
-                            {a.priority === 'high' && <span style={{ color: 'var(--bad)' }}>PRIORITY</span>}
-                            {a.owner && <span>{a.owner}</span>}
-                            {a.due && <span style={{ color: 'var(--accent-ink)' }}>{a.due}</span>}
-                          </div>
-                        )}
-                        <DeliverableActions onPick={(kind) => setSheet({ kind, item: a.action })} />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          
 
           {!!n.missed?.length && (
             <div className="pen-sec">
@@ -1516,35 +1671,9 @@ function Detail({
             </div>
           )}
 
-          {!!n.decisions?.length && (
-            <div className="pen-sec">
-              <span className="pen-label">Decided</span>
-              <ul className="mt-2 space-y-2">
-                {n.decisions.map((d, i) => (
-                  <li key={i} className="text-[15px]">
-                    {d.decision}
-                    {d.who && <span className="pen-mono ml-2 text-[12.5px]" style={{ color: 'var(--dim)' }}>{d.who}</span>}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          
 
-          {!!n.open_questions?.length && (
-            <div className="pen-sec">
-              <span className="pen-label">Still open</span>
-              <ul className="mt-2 list-disc space-y-2.5 pl-5 text-[15px]">
-                {n.open_questions.map((q, i) => (
-                  <li key={i} className="pen-doable">
-                    {q}
-                    <div className="mt-1.5">
-                      <DeliverableActions onPick={(kind) => setSheet({ kind, item: q })} />
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          
 
           {isViewing(session.meeting_type ?? n.meeting_type) && n.showing && <ShowingBlock showing={n.showing} />}
         </div>
