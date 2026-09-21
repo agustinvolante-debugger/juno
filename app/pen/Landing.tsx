@@ -39,7 +39,7 @@ function PlanCta({ href, children, variant }: { href: string; children: React.Re
         <Link href={`${SIGN_UP}?from=pricing`} className={cls.replace('mt-auto ', '')}>
           {children}
         </Link>
-        <p className="pen-mono mt-2.5 text-center text-[10px]" style={{ color: 'rgba(251,250,246,.42)' }}>
+        <p className="pen-mono mt-2.5 text-center text-[12px]" style={{ color: 'rgba(251,250,246,.42)' }}>
           Card payments open at launch
         </p>
       </div>
@@ -138,7 +138,7 @@ function Hero() {
             <Link href={`${SIGN_UP}?from=hero`} className="pen-lp-btn pen-lp-btn-primary">Get started</Link>
             <a href="#how" className="pen-lp-btn">See how it works</a>
           </div>
-          <p className="pen-mono mt-4 text-[11px]" style={{ color: 'var(--faint)' }}>
+          <p className="pen-mono mt-4 text-[13px]" style={{ color: 'var(--faint)' }}>
             {`$${UPFRONT_USD} for your first ${UPFRONT_MONTHS} months, pen included \u00B7 then $${MONTHLY_USD} a month`}
           </p>
         </Reveal>
@@ -260,7 +260,7 @@ function MultiUse() {
       <Reveal delay={0.14}>
         <figure className="pen-lp-specimen">
           <div className="pen-lp-specimen-bar">
-            <span className="pen-mono text-[11px]" style={{ color: 'var(--faint)' }}>{ex.meta}</span>
+            <span className="pen-mono text-[13px]" style={{ color: 'var(--faint)' }}>{ex.meta}</span>
             <span className="pen-lp-dot" />
           </div>
 
@@ -400,7 +400,7 @@ function HowItWorks() {
         {STEPS.map((s, i) => (
           <Reveal key={s.n} delay={i * 0.07}>
             <div className="pen-lp-step">
-              <span className="pen-mono text-[10.5px]" style={{ color: 'var(--accent)' }}>{s.n}</span>
+              <span className="pen-mono text-[12.5px]" style={{ color: 'var(--accent)' }}>{s.n}</span>
               <h3 className="pen-display mt-3 text-[22px]">{s.h}</h3>
               <p className="mt-2.5 text-[15px] leading-[1.6]" style={{ color: 'var(--soft)' }}>{s.p}</p>
             </div>
@@ -442,7 +442,7 @@ function TheCatch() {
               ].map(([item, why]) => (
                 <li key={item}>
                   <div className="text-[15.5px] leading-[1.45]">{item}</div>
-                  <div className="mt-1 text-[13px] leading-[1.45]" style={{ color: 'var(--warn)' }}>{why}</div>
+                  <div className="mt-1 text-[14.5px] leading-[1.45]" style={{ color: 'var(--warn)' }}>{why}</div>
                 </li>
               ))}
             </ul>
@@ -488,7 +488,7 @@ function WhatYouGet() {
                   <span>
                     <span className="text-[15px] leading-snug">{task}</span>
                     {meta && (
-                      <span className="pen-mono mt-1 block text-[10px]" style={{ color: 'var(--bad)' }}>{meta}</span>
+                      <span className="pen-mono mt-1 block text-[12px]" style={{ color: 'var(--bad)' }}>{meta}</span>
                     )}
                   </span>
                 </li>
@@ -526,7 +526,7 @@ so it will decide whether they bid.`}</pre>
                 open, and every action with its owner. Sent to you, not to anyone else.
               </p>
               <div className="pen-lp-mailrow">
-                <span className="pen-mono text-[10.5px]" style={{ color: 'var(--faint)' }}>
+                <span className="pen-mono text-[12.5px]" style={{ color: 'var(--faint)' }}>
                   Briefing &mdash; Ridgewood walk-through
                 </span>
                 <span className="pen-lp-dot" />
@@ -565,7 +565,7 @@ function Compounds() {
           <div className="pen-lp-card">
             <header className="flex items-baseline justify-between">
               <h3 className="pen-display text-[20px]">The Hendersons</h3>
-              <span className="pen-mono text-[10px]" style={{ color: 'var(--faint)' }}>3 meetings</span>
+              <span className="pen-mono text-[12px]" style={{ color: 'var(--faint)' }}>3 meetings</span>
             </header>
 
             <Facet label="Must have" items={['Covered parking — raised at all three viewings', 'A kitchen that has already been done']} />
@@ -583,7 +583,7 @@ function Facet({ label, items, tone }: { label: string; items: string[]; tone?: 
   const color = tone === 'bad' ? 'var(--bad)' : tone === 'accent' ? 'var(--accent-ink)' : 'var(--dim)'
   return (
     <div className="mt-5">
-      <div className="pen-mono text-[9.5px] uppercase tracking-[.12em]" style={{ color }}>{label}</div>
+      <div className="pen-mono text-[11.5px] uppercase tracking-[.12em]" style={{ color }}>{label}</div>
       <ul className="mt-1.5 space-y-1.5">
         {items.map((t) => <li key={t} className="text-[14.5px] leading-snug">{t}</li>)}
       </ul>
@@ -620,14 +620,14 @@ function Pricing() {
           <Reveal delay={0.08} className="w-full max-w-[520px]">
             <article className="pen-lp-plan pen-lp-plan-pro">
               <header>
-                <h3 className="pen-mono text-[11px] uppercase tracking-[.14em]" style={{ color: 'var(--accent-line)' }}>
+                <h3 className="pen-mono text-[13px] uppercase tracking-[.14em]" style={{ color: 'var(--accent-line)' }}>
                   Everything, one price
                 </h3>
                 <div className="mt-4 flex items-baseline gap-2">
                   <span className="pen-display text-[52px] leading-none" style={{ color: 'var(--paper)' }}>
                     ${UPFRONT_USD}
                   </span>
-                  <span className="pen-mono text-[12px]" style={{ color: 'rgba(251,250,246,.55)' }}>
+                  <span className="pen-mono text-[13.5px]" style={{ color: 'rgba(251,250,246,.55)' }}>
                     first {UPFRONT_MONTHS} months
                   </span>
                 </div>
@@ -679,7 +679,7 @@ function Footer() {
       <div className="pen-lp-wrap flex flex-wrap items-center justify-between gap-5 py-9">
         <div className="flex items-baseline gap-3">
           <Image src="/juno_mark.png" alt="Juno" width={24} height={24} className="pen-mark" />
-          <span className="pen-mono text-[10.5px]" style={{ color: 'var(--faint)' }}>
+          <span className="pen-mono text-[12.5px]" style={{ color: 'var(--faint)' }}>
             &copy; {new Date().getFullYear()}
           </span>
         </div>
@@ -693,7 +693,7 @@ function Footer() {
         </nav>
       </div>
       <div className="pen-lp-wrap pb-10">
-        <p className="pen-mono max-w-[70ch] text-[10px] leading-[1.8]" style={{ color: 'var(--faint)' }}>
+        <p className="pen-mono max-w-[70ch] text-[12px] leading-[1.8]" style={{ color: 'var(--faint)' }}>
           Recording a conversation needs everyone&rsquo;s permission in many places, Florida included.
           Pen asks you to confirm consent before it processes anything.
         </p>

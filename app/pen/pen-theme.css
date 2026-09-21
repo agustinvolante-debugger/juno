@@ -9,8 +9,8 @@
   --hair:       #F0EDE5;
   --ink:        #16150F;
   --soft:       #514E45;
-  --dim:        #858175;
-  --faint:      #B0ABA0;
+  --dim:        #646158;   /* 5.93:1 on paper — was #858175 at 3.73:1, failed AA */
+  --faint:      #76736C;   /* 4.53:1 on paper — was #B0ABA0 at 2.19:1, failed badly */
 
   --accent:     #2C5F7C;   /* slate blue — calm, professional, not "success" */
   --accent-ink: #1E4257;
@@ -41,7 +41,7 @@
 .pen-display { font-family: var(--display); font-weight: 400; letter-spacing: -0.015em; }
 .pen-mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .pen-label {
-  font-family: var(--mono); font-size: 10px; letter-spacing: .13em;
+  font-family: var(--mono); font-size: 12px; letter-spacing: .13em;
   text-transform: uppercase; color: var(--dim);
 }
 .pen-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
@@ -55,7 +55,7 @@
 /* ------------------------------------------------------------------ pills */
 .pen-pill {
   display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono);
-  font-size: 10px; letter-spacing: .07em; text-transform: uppercase;
+  font-size: 12px; letter-spacing: .07em; text-transform: uppercase;
   padding: 3px 8px; border-radius: 999px; border: 1px solid transparent; white-space: nowrap;
 }
 .pen-pill[data-s='uploaded']     { background: var(--sunk); color: var(--soft); border-color: var(--line); }
@@ -67,7 +67,7 @@
 
 /* ---------------------------------------------------------------- buttons */
 .pen-btn {
-  font-family: var(--ui); font-size: 13.5px; font-weight: 600; letter-spacing: -0.005em;
+  font-family: var(--ui); font-size: 15px; font-weight: 600; letter-spacing: -0.005em;
   border: 1px solid var(--line); background: var(--panel); color: var(--ink);
   border-radius: 8px; padding: 9px 16px; transition: background .12s, border-color .12s;
   /* A control that folds its own label in half is never what you want. */
@@ -98,7 +98,7 @@
 .pen-avatar {
   width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
   background: var(--accent-wash); color: var(--accent-ink); border: 1px solid var(--accent-line);
-  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0;
+  font-family: var(--mono); font-size: 11.5px; letter-spacing: 0;
 }
 
 /* Actions — checkable, and struck through once done */
@@ -110,7 +110,7 @@
   border: 1.5px solid #CFC9BC; border-radius: 4px; background: var(--panel); transition: all .12s;
 }
 .pen-act-box:checked { background: var(--good); border-color: var(--good); }
-.pen-act-box:checked::after { content: '✓'; color: #fff; font-size: 11px; display: block; text-align: center; line-height: 13px; }
+.pen-act-box:checked::after { content: '✓'; color: #fff; font-size: 13px; display: block; text-align: center; line-height: 13px; }
 
 /* "What you might have missed" — the most valuable block, so it gets its own texture */
 .pen-missed {
@@ -131,7 +131,7 @@
   border-radius: 12px 12px 12px 3px; max-width: 94%;
 }
 .pen-chip {
-  font-family: var(--mono); font-size: 11px; text-align: left;
+  font-family: var(--mono); font-size: 13px; text-align: left;
   border: 1px solid var(--accent-line); background: var(--accent-wash); color: var(--accent-ink);
   border-radius: 999px; padding: 5px 11px; transition: background .12s;
 }
@@ -202,7 +202,7 @@
 /* Enhance — quiet until it has something to do */
 .pen-enhance {
   display: inline-flex; align-items: center; gap: 5px;
-  font-family: var(--mono); font-size: 11px; letter-spacing: .04em;
+  font-family: var(--mono); font-size: 13px; letter-spacing: .04em;
   padding: 5px 11px; border-radius: 999px;
   border: 1px solid var(--accent-line); background: var(--accent-wash); color: var(--accent-ink);
   transition: background .16s ease, border-color .16s ease, opacity .16s ease;
@@ -218,7 +218,7 @@
 }
 .pen-utt-input:focus { background: #FCFAF3; box-shadow: 0 0 0 6px #FCFAF3; }
 .pen-utt[data-edited='true'] .pen-spk-tag::after {
-  content: 'edited'; display: block; font-size: 8.5px; letter-spacing: .1em; color: var(--accent);
+  content: 'edited'; display: block; font-size: 11.5px; letter-spacing: .1em; color: var(--accent);
 }
 
 /* ==================================================== Cmd+K archive palette
@@ -245,7 +245,7 @@
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 17px; height: 17px; margin: 0 2px; padding: 0 4px;
   vertical-align: 1px; border-radius: 999px;
-  font-family: var(--mono); font-size: 9.5px; line-height: 1;
+  font-family: var(--mono); font-size: 11.5px; line-height: 1;
   background: var(--accent); color: #fff; border: none;
 }
 .pen-cite:hover { background: var(--accent-ink); }
@@ -253,19 +253,19 @@
   display: inline-flex; align-items: center; gap: 6px; max-width: 260px;
   padding: 4px 10px 4px 4px; border-radius: 999px;
   border: 1px solid var(--accent-line); background: var(--accent-wash); color: var(--accent-ink);
-  font-size: 12px; transition: background .14s ease;
+  font-size: 13.5px; transition: background .14s ease;
 }
 .pen-cite-full:hover { background: #E1EDF2; }
 .pen-cite-n {
   display: grid; place-items: center; width: 17px; height: 17px; flex: 0 0 17px;
   border-radius: 999px; background: var(--accent); color: #fff;
-  font-family: var(--mono); font-size: 9.5px;
+  font-family: var(--mono); font-size: 11.5px;
 }
 
 /* The trigger in the header */
 .pen-cmdk {
   display: inline-flex; align-items: center; gap: 7px;
-  font-family: var(--mono); font-size: 11.5px; color: var(--dim);
+  font-family: var(--mono); font-size: 13px; color: var(--dim);
   padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel);
   transition: border-color .14s ease, color .14s ease;
 }
@@ -307,7 +307,7 @@
 .pen-sheet-x:hover { background: var(--sunk); color: var(--ink); }
 .pen-sheet-body { flex: 1 1 auto; overflow-y: auto; padding: 14px 18px 4px; }
 .pen-sheet-ref {
-  font-family: var(--mono); font-size: 10.5px; color: var(--faint);
+  font-family: var(--mono); font-size: 12.5px; color: var(--faint);
   margin-bottom: 12px; line-height: 1.5;
 }
 .pen-sheet-text {
@@ -328,7 +328,7 @@
 /* Copy, with a checkmark that draws itself */
 .pen-copy {
   display: inline-flex; align-items: center; gap: 7px;
-  font-family: var(--mono); font-size: 12px;
+  font-family: var(--mono); font-size: 13.5px;
   padding: 8px 14px; border-radius: 9px;
   background: var(--ink); border: 1px solid var(--ink); color: var(--paper);
   transition: background .2s ease, border-color .2s ease;
@@ -344,7 +344,7 @@
 .pen-do { display: flex; gap: 4px; opacity: 0; transition: opacity .16s ease; flex-wrap: wrap; }
 .pen-doable:hover .pen-do, .pen-doable:focus-within .pen-do { opacity: 1; }
 .pen-do-btn {
-  font-family: var(--mono); font-size: 10px; letter-spacing: .04em; white-space: nowrap;
+  font-family: var(--mono); font-size: 12px; letter-spacing: .04em; white-space: nowrap;
   padding: 3px 8px; border-radius: 999px;
   border: 1px solid var(--line); background: var(--panel); color: var(--dim);
   transition: background .14s ease, color .14s ease, border-color .14s ease;
@@ -355,7 +355,7 @@
 /* ================================================== send briefing (feat 4) */
 .pen-brief {
   display: inline-flex; align-items: center; gap: 7px;
-  font-family: var(--ui); font-size: 12.5px; font-weight: 600; letter-spacing: -0.005em; white-space: nowrap;
+  font-family: var(--ui); font-size: 14px; font-weight: 600; letter-spacing: -0.005em; white-space: nowrap;
   padding: 7px 12px; border-radius: 7px;
   border: 1px solid var(--line); background: var(--panel); color: var(--ink);
   transition: background .2s ease, border-color .2s ease, color .2s ease;
@@ -380,7 +380,7 @@
   position: absolute; top: calc(100% + 7px); right: 0; z-index: 20;
   max-width: 290px; padding: 8px 11px; border-radius: 8px;
   background: var(--bad-wash); border: 1px solid #EFD6D2; color: var(--bad);
-  font-size: 12px; line-height: 1.45;
+  font-size: 13.5px; line-height: 1.45;
   box-shadow: 0 6px 18px -8px rgba(22,21,15,.2);
 }
 
@@ -390,12 +390,12 @@
 
 .pen-confirm {
   display: inline-flex; align-items: center; gap: 7px;
-  font-family: var(--mono); font-size: 11px; color: var(--bad);
+  font-family: var(--mono); font-size: 13px; color: var(--bad);
   padding: 5px 6px 5px 11px; border-radius: 7px;
   background: var(--bad-wash); border: 1px solid #EFD6D2;
 }
 .pen-confirm-no, .pen-confirm-yes {
-  font-family: var(--mono); font-size: 11px; padding: 3px 9px; border-radius: 5px;
+  font-family: var(--mono); font-size: 13px; padding: 3px 9px; border-radius: 5px;
   transition: background .14s ease;
 }
 .pen-confirm-no { color: var(--soft); background: var(--panel); border: 1px solid var(--line); }
@@ -418,7 +418,7 @@
    CTAs are already prominent. */
 .pen-lp-nav { padding: 20px 0 4px; }
 .pen-lp-navlink {
-  font-family: var(--mono); font-size: 11.5px; color: var(--dim);
+  font-family: var(--mono); font-size: 13px; color: var(--dim);
   padding: 7px 11px; border-radius: 7px; transition: color .15s ease, background .15s ease;
 }
 .pen-lp-navlink:hover { color: var(--ink); background: var(--sunk); }
@@ -426,14 +426,14 @@
 /* Buttons — one shape, four weights */
 .pen-lp-btn {
   display: inline-flex; align-items: center; gap: 7px;
-  font-family: var(--mono); font-size: 12.5px; letter-spacing: .01em; white-space: nowrap;
+  font-family: var(--mono); font-size: 14px; letter-spacing: .01em; white-space: nowrap;
   padding: 12px 20px; border-radius: 9px;
   border: 1px solid var(--line); background: var(--panel); color: var(--ink);
   transition: transform .16s cubic-bezier(.2,.7,.3,1), background .16s ease, border-color .16s ease, box-shadow .16s ease;
 }
 .pen-lp-btn:hover { transform: translateY(-1px); background: var(--sunk); border-color: #DAD5C9; }
 .pen-lp-btn:active { transform: translateY(0); }
-.pen-lp-btn-sm { padding: 8px 14px; font-size: 11.5px; }
+.pen-lp-btn-sm { padding: 8px 14px; font-size: 13px; }
 .pen-lp-btn-primary { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 .pen-lp-btn-primary:hover { background: #302D24; border-color: #302D24; box-shadow: 0 8px 20px -10px rgba(22,21,15,.5); }
 .pen-lp-btn-ghost {
@@ -470,7 +470,7 @@
 .pen-lp-legend {
   display: flex; flex-wrap: wrap; gap: 18px; margin-top: 32px; padding-top: 17px;
   border-top: 1px solid var(--hair);
-  font-family: var(--mono); font-size: 10.5px; color: var(--faint);
+  font-family: var(--mono); font-size: 12.5px; color: var(--faint);
 }
 .pen-lp-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .pen-lp-legend i { width: 9px; height: 9px; border-radius: 2px; display: block; }
@@ -509,7 +509,7 @@
 .pen-lp-plan-pro:hover { border-color: rgba(147,192,215,.6); }
 .pen-lp-ribbon {
   position: absolute; top: -1px; right: 22px; transform: translateY(-50%);
-  font-family: var(--mono); font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase;
+  font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase;
   padding: 4px 10px; border-radius: 999px;
   background: var(--accent); color: #fff;
   box-shadow: 0 6px 16px -8px rgba(44,95,124,.9);
@@ -521,7 +521,7 @@
 /* Footer */
 .pen-lp-foot { border-top: 1px solid var(--line); background: var(--paper); }
 .pen-lp-footlink {
-  font-family: var(--mono); font-size: 11px; color: var(--dim);
+  font-family: var(--mono); font-size: 13px; color: var(--dim);
   transition: color .15s ease;
 }
 .pen-lp-footlink:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
@@ -580,7 +580,7 @@
 .pen-ov-list li + li { border-top: 1px solid var(--hair); }
 .pen-ov-act-main { display: flex; flex-direction: column; min-width: 0; }
 .pen-ov-act-go {
-  font-family: var(--mono); font-size: 13px; color: var(--faint); flex: 0 0 auto;
+  font-family: var(--mono); font-size: 14.5px; color: var(--faint); flex: 0 0 auto;
   opacity: 0; transform: translateX(-3px);
   transition: opacity .14s ease, transform .14s ease;
 }
@@ -595,7 +595,7 @@
 .pen-ov-back {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   width: 100%; text-align: left; margin-bottom: 16px;
-  font-family: var(--mono); font-size: 11px; letter-spacing: .04em;
+  font-family: var(--mono); font-size: 13px; letter-spacing: .04em;
   padding: 9px 11px; border-radius: 8px;
   border: 1px solid var(--line); background: var(--panel); color: var(--soft);
   transition: background .14s ease, border-color .14s ease, color .14s ease;
@@ -607,13 +607,13 @@
 .pen-ov-badge {
   display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px;
   border-radius: 999px; background: var(--warn); color: #fff;
-  font-family: var(--mono); font-size: 9.5px;
+  font-family: var(--mono); font-size: 11.5px;
 }
 
 /* Owner usage table. Columns of numbers, so tabular figures here specifically. */
-.pen-usage { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.pen-usage { width: 100%; border-collapse: collapse; font-size: 15px; }
 .pen-usage th {
-  font-family: var(--mono); font-size: 9.5px; letter-spacing: .11em; text-transform: uppercase;
+  font-family: var(--mono); font-size: 11.5px; letter-spacing: .11em; text-transform: uppercase;
   color: var(--dim); font-weight: 400; text-align: left;
   padding: 0 12px 8px 0; border-bottom: 1px solid var(--ink); white-space: nowrap;
 }
@@ -658,14 +658,14 @@
 }
 
 .pen-lp-tag {
-  font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em; text-transform: uppercase;
+  font-family: var(--mono); font-size: 11.5px; letter-spacing: .09em; text-transform: uppercase;
   padding: 3px 9px; border-radius: 999px;
   background: var(--accent-wash); color: var(--accent-ink); border: 1px solid var(--accent-line);
 }
 .pen-lp-pre {
   margin: 14px 0 0; padding: 15px 16px; border-radius: 10px;
   background: var(--sunk); border: 1px solid var(--hair);
-  font-family: var(--mono); font-size: 12px; line-height: 1.72; color: var(--soft);
+  font-family: var(--mono); font-size: 13.5px; line-height: 1.72; color: var(--soft);
   white-space: pre-wrap; overflow-x: auto;
 }
 .pen-lp-mailrow {
@@ -679,7 +679,7 @@
    you are on the page. */
 .pen-lp-eyebrow {
   display: inline-flex; align-items: center; gap: 10px;
-  font-family: var(--mono); font-size: 12.5px; letter-spacing: .16em;
+  font-family: var(--mono); font-size: 14px; letter-spacing: .16em;
   text-transform: uppercase; color: var(--accent);
 }
 .pen-lp-eyebrow::before {
@@ -687,7 +687,7 @@
 }
 .pen-lp-eyebrow-dark { color: var(--accent-line); }
 @media (max-width: 480px) {
-  .pen-lp-eyebrow { font-size: 11px; letter-spacing: .13em; }
+  .pen-lp-eyebrow { font-size: 13px; letter-spacing: .13em; }
   .pen-lp-eyebrow::before { width: 14px; flex-basis: 14px; }
 }
 
@@ -703,7 +703,7 @@
 .pen-seg-btn {
   position: relative; z-index: 1; flex: 0 0 auto;
   padding: 11px 22px; border-radius: 999px; border: none; background: none;
-  font-family: var(--mono); font-size: 13.5px; letter-spacing: .01em; white-space: nowrap;
+  font-family: var(--mono); font-size: 15px; letter-spacing: .01em; white-space: nowrap;
   color: var(--dim); transition: color .18s ease;
 }
 .pen-seg-btn:hover { color: var(--soft); }
@@ -724,7 +724,7 @@
   /* Full width so it doesn't sit orphaned, equal segments, short labels. Three full
      labels do not fit 390px — "Coffee" was clipped and the scroll was not discoverable. */
   .pen-seg { display: flex; width: 100%; overflow-x: visible; }
-  .pen-seg-btn { flex: 1 1 0; padding: 11px 8px; font-size: 12.5px; text-align: center; }
+  .pen-seg-btn { flex: 1 1 0; padding: 11px 8px; font-size: 14px; text-align: center; }
   .pen-seg-long { display: none; }
   .pen-seg-short { display: inline; }
 }
@@ -777,11 +777,11 @@
   border-left: 1px solid var(--line);
 }
 .pen-acct-email {
-  font-family: var(--mono); font-size: 10.5px; color: var(--faint);
+  font-family: var(--mono); font-size: 12.5px; color: var(--faint);
   max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .pen-acct-out {
-  font-family: var(--ui); font-size: 13.5px; font-weight: 600; color: var(--dim);
+  font-family: var(--ui); font-size: 15px; font-weight: 600; color: var(--dim);
   white-space: nowrap;
   padding: 6px 11px; border-radius: 7px; border: 1px solid transparent;
   transition: color .14s ease, background .14s ease, border-color .14s ease;
@@ -822,7 +822,7 @@
 .pen-cat {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   width: 100%; text-align: left; padding: 6px 8px; border-radius: 7px;
-  font-family: var(--ui); font-size: 12.5px; font-weight: 500; color: var(--soft);
+  font-family: var(--ui); font-size: 14px; font-weight: 500; color: var(--soft);
   border: 1px solid transparent; transition: background .12s, color .12s;
 }
 .pen-cat:hover { background: var(--sunk); color: var(--ink); }
@@ -831,7 +831,7 @@
   border-color: var(--accent-line); font-weight: 600;
 }
 .pen-cat-n {
-  font-family: var(--mono); font-size: 10px; color: var(--faint);
+  font-family: var(--mono); font-size: 12px; color: var(--faint);
   font-variant-numeric: tabular-nums; flex: none;
 }
 .pen-cat[data-active='true'] .pen-cat-n { color: var(--accent); }
@@ -867,7 +867,7 @@
   box-shadow: 0 18px 40px -16px rgba(22, 21, 15, .3);
 }
 .pen-sugg {
-  font-family: var(--ui); font-size: 13px; font-weight: 500; text-align: left;
+  font-family: var(--ui); font-size: 14.5px; font-weight: 500; text-align: left;
   color: var(--soft); border-radius: 7px; padding: 8px 10px;
   transition: background .12s, color .12s;
 }
@@ -897,7 +897,7 @@
 .pen-catpick { position: relative; }
 .pen-catpick-btn {
   display: inline-flex; align-items: center; gap: 7px;
-  font-family: var(--ui); font-size: 11.5px; font-weight: 600;
+  font-family: var(--ui); font-size: 13px; font-weight: 600;
   color: var(--accent-ink); background: var(--accent-wash);
   border: 1px solid var(--accent-line); border-radius: 999px; padding: 4px 10px;
   transition: all .12s;
@@ -907,14 +907,14 @@
 }
 .pen-catpick-btn:hover:not(:disabled) { border-color: var(--accent); }
 .pen-catpick-btn:disabled { opacity: .5; cursor: wait; }
-.pen-catpick-chev { color: var(--faint); font-size: 13px; line-height: 1; }
+.pen-catpick-chev { color: var(--faint); font-size: 14.5px; line-height: 1; }
 .pen-catpick-menu {
   position: absolute; z-index: 30; top: calc(100% + 6px); right: 0; width: 216px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 11px;
   padding: 7px; box-shadow: 0 14px 34px -12px rgba(22, 21, 15, .28);
 }
 .pen-catpick-input {
-  width: 100%; font-family: var(--ui); font-size: 12.5px; color: var(--ink);
+  width: 100%; font-family: var(--ui); font-size: 14px; color: var(--ink);
   background: var(--sunk); border: 1px solid var(--line); border-radius: 7px;
   padding: 6px 9px; outline: none;
 }
@@ -922,7 +922,7 @@
 .pen-catpick-list { max-height: 232px; overflow-y: auto; margin-top: 5px; }
 .pen-catpick-opt {
   display: block; width: 100%; text-align: left; border-radius: 6px;
-  font-family: var(--ui); font-size: 12.5px; font-weight: 500; color: var(--soft);
+  font-family: var(--ui); font-size: 14px; font-weight: 500; color: var(--soft);
   padding: 5px 9px;
 }
 .pen-catpick-opt:hover { background: var(--sunk); color: var(--ink); }
@@ -960,7 +960,7 @@
 
 .pen-chat-error {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
-  padding: 11px 13px; border-radius: 10px; font-size: 13.5px; line-height: 1.5;
+  padding: 11px 13px; border-radius: 10px; font-size: 15px; line-height: 1.5;
   background: var(--bad-wash); border: 1px solid #EFD6D2; color: var(--bad);
 }
 .pen-chat-error-x { font-size: 17px; line-height: 1; color: var(--bad); opacity: .6; padding: 0 2px; }
@@ -970,7 +970,7 @@
 .pen-quick { padding-top: 4px; }
 .pen-quick-row { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
 .pen-quick-btn {
-  font-family: var(--ui); font-size: 12.5px; font-weight: 600;
+  font-family: var(--ui); font-size: 14px; font-weight: 600;
   color: var(--accent-ink); background: var(--accent-wash);
   border: 1px solid var(--accent-line); border-radius: 999px; padding: 7px 14px;
   transition: all .13s;
@@ -1007,7 +1007,7 @@
 .pen-doc-single { margin-top: 22px; }
 .pen-doc-body {
   width: 100%; min-height: 62vh; resize: vertical;
-  font-family: var(--mono); font-size: 13px; line-height: 1.72; color: var(--soft);
+  font-family: var(--mono); font-size: 14.5px; line-height: 1.72; color: var(--soft);
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
   padding: 18px; outline: none;
 }
@@ -1036,11 +1036,11 @@
   flex: none; width: 15px; height: 15px; margin-top: 4px; border-radius: 4px;
   border: 1.5px solid #CFC9BC; background: var(--panel);
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 10px; color: var(--accent);
+  font-size: 12px; color: var(--accent);
 }
 
 .pen-save {
-  font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
+  font-family: var(--mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase;
   color: var(--faint); min-width: 58px; text-align: right;
 }
 .pen-save[data-s='failed'] { color: var(--bad); }
@@ -1053,7 +1053,7 @@
 }
 .pen-cats-new:hover { background: var(--sunk); color: var(--ink); }
 .pen-cats-empty {
-  font-size: 12px; line-height: 1.5; color: var(--faint); padding: 0 8px 8px;
+  font-size: 13.5px; line-height: 1.5; color: var(--faint); padding: 0 8px 8px;
 }
 
 /* ---- usage meter ---- */
@@ -1072,25 +1072,25 @@
 .pen-meter[data-tone='over'] .pen-meter-bar span { background: var(--bad); }
 .pen-meter-n {
   display: flex; align-items: baseline; gap: 8px;
-  font-family: var(--mono); font-size: 11px; color: var(--soft);
+  font-family: var(--mono); font-size: 13px; color: var(--soft);
   font-variant-numeric: tabular-nums; margin-top: 7px;
 }
 .pen-meter-n strong { font-size: 17px; }
 .pen-meter-un {
-  font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--good);
+  font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--good);
 }
 .pen-meter-n strong { color: var(--ink); font-weight: 500; }
 .pen-meter[data-tone='over'] .pen-meter-n strong { color: var(--bad); }
-.pen-meter-sub { font-size: 11px; line-height: 1.45; color: var(--faint); margin-top: 2px; }
+.pen-meter-sub { font-size: 13px; line-height: 1.45; color: var(--faint); margin-top: 2px; }
 .pen-meter-cta {
   display: inline-block; margin-top: 9px;
-  font-family: var(--ui); font-size: 11.5px; font-weight: 600;
+  font-family: var(--ui); font-size: 13px; font-weight: 600;
   color: var(--accent-ink); background: var(--accent-wash);
   border: 1px solid var(--accent-line); border-radius: 999px; padding: 5px 11px;
   transition: all .13s;
 }
 .pen-meter-cta:hover { background: #E1EDF2; border-color: var(--accent); }
-.pen-meter-note { display: block; margin-top: 8px; font-size: 10.5px; line-height: 1.45; color: var(--faint); }
+.pen-meter-note { display: block; margin-top: 8px; font-size: 12.5px; line-height: 1.45; color: var(--faint); }
 
 /* `display: contents` keeps nav and rail as direct grid children on desktop, so the
    three-column layout below is completely unaffected by the wrapper. */
@@ -1150,7 +1150,7 @@
 
   .pen-browse {
     display: inline-flex; align-items: center; gap: 7px;
-    font-family: var(--ui); font-size: 12.5px; font-weight: 600; color: var(--ink);
+    font-family: var(--ui); font-size: 14px; font-weight: 600; color: var(--ink);
     background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
     padding: 0 12px; height: 40px;
   }
@@ -1179,7 +1179,7 @@
      implements — and the pen plugs into a laptop anyway. Offering it here is a dead end. */
   .pen-head-right .pen-btn-primary { display: none; }
 
-  .pen-browse, .pen-head-right .pen-btn, .pen-acct-out { padding-inline: 11px; font-size: 12px; }
+  .pen-browse, .pen-head-right .pen-btn, .pen-acct-out { padding-inline: 11px; font-size: 13.5px; }
   .pen-browse svg { width: 15px; height: 15px; }
 }
 
@@ -1210,7 +1210,7 @@
 
 /* ---- briefing recipients ---- */
 .pen-brief-more {
-  font-family: var(--ui); font-size: 12px; font-weight: 600; color: var(--dim);
+  font-family: var(--ui); font-size: 13.5px; font-weight: 600; color: var(--dim);
   min-width: 28px; height: 32px; padding: 0 8px; border-radius: 7px;
   border: 1px solid var(--line); background: var(--panel);
   transition: all .12s;
@@ -1225,27 +1225,27 @@
   padding: 11px; box-shadow: 0 16px 38px -14px rgba(22, 21, 15, .3);
 }
 .pen-brief-self {
-  font-family: var(--mono); font-size: 10.5px; color: var(--soft);
+  font-family: var(--mono); font-size: 12.5px; color: var(--soft);
   margin: 6px 0 8px; overflow-wrap: anywhere;
 }
 .pen-brief-self span { color: var(--faint); }
 .pen-brief-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 7px; }
 .pen-brief-chip {
   display: inline-flex; align-items: center; gap: 5px;
-  font-family: var(--mono); font-size: 10.5px; color: var(--accent-ink);
+  font-family: var(--mono); font-size: 12.5px; color: var(--accent-ink);
   background: var(--accent-wash); border: 1px solid var(--accent-line);
   border-radius: 999px; padding: 3px 5px 3px 9px;
 }
-.pen-brief-chip button { font-size: 13px; line-height: 1; color: var(--accent); opacity: .65; padding: 0 3px; }
+.pen-brief-chip button { font-size: 14.5px; line-height: 1; color: var(--accent); opacity: .65; padding: 0 3px; }
 .pen-brief-chip button:hover { opacity: 1; }
 .pen-brief-input {
-  width: 100%; font-family: var(--ui); font-size: 12.5px; color: var(--ink);
+  width: 100%; font-family: var(--ui); font-size: 14px; color: var(--ink);
   background: var(--sunk); border: 1px solid var(--line); border-radius: 7px;
   padding: 7px 9px; outline: none;
 }
 .pen-brief-input:focus { border-color: var(--accent-line); background: var(--panel); }
 .pen-brief-input:disabled { opacity: .55; }
-.pen-brief-hint { font-size: 11px; line-height: 1.45; color: var(--faint); margin-top: 7px; }
+.pen-brief-hint { font-size: 13px; line-height: 1.45; color: var(--faint); margin-top: 7px; }
 
 /* Anchored popovers do not survive a 390px screen: the briefing panel is 272px wide and hangs
    off a button mid-row, so it rendered 91px off the left edge. On a phone they become bottom
@@ -1327,7 +1327,7 @@
   transition: transform .18s cubic-bezier(.2,.7,.3,1);
 }
 .pen-consent[data-on='true'] .pen-consent-knob { transform: translateX(18px); }
-.pen-consent-text { font-size: 13.5px; line-height: 1.5; color: var(--warn); }
+.pen-consent-text { font-size: 15px; line-height: 1.5; color: var(--warn); }
 .pen-consent[data-on='true'] .pen-consent-text { color: var(--good); }
 
 .pen-imp-foot {
@@ -1335,7 +1335,7 @@
   border-top: 1px solid var(--hair); background: var(--paper);
 }
 .pen-imp-foot .pen-btn { height: 50px; font-size: 15px; }
-.pen-imp-foot-note { margin-top: 9px; text-align: center; font-size: 12px; color: var(--faint); }
+.pen-imp-foot-note { margin-top: 9px; text-align: center; font-size: 13.5px; color: var(--faint); }
 
 .pen-imp-progress { padding: 22px 2px 10px; }
 .pen-imp-pct {
@@ -1345,7 +1345,7 @@
 .pen-imp-warn {
   margin-top: 18px; padding: 11px 13px; border-radius: 10px;
   background: var(--warn-wash); border: 1px solid var(--warn-line);
-  font-size: 12.5px; line-height: 1.5; color: var(--warn);
+  font-size: 14px; line-height: 1.5; color: var(--warn);
 }
 
 .pen-imp-done { padding: 26px 2px 14px; }
@@ -1367,7 +1367,7 @@
 .pen-su-wrap { max-width: 760px; margin: 0 auto; padding: 0 22px 110px; }
 .pen-su-head { padding-top: 46px; }
 .pen-su-back {
-  font-family: var(--ui); font-size: 13px; font-weight: 600; color: var(--dim);
+  font-family: var(--ui); font-size: 14.5px; font-weight: 600; color: var(--dim);
 }
 .pen-su-back:hover { color: var(--ink); }
 /* pen-lp-eyebrow is inline-flex, so it sat on the same line as the back link. */
@@ -1414,7 +1414,7 @@
   transition: border-color .14s ease, background .14s ease;
 }
 .pen-su-opt strong { font-family: var(--ui); font-size: 14.5px; font-weight: 600; color: var(--ink); }
-.pen-su-opt span { font-size: 13px; color: var(--dim); }
+.pen-su-opt span { font-size: 14.5px; color: var(--dim); }
 .pen-su-opt:hover { border-color: #DAD5C9; }
 .pen-su-opt[data-on='true'] {
   background: var(--accent-wash); border-color: var(--accent);
@@ -1434,7 +1434,7 @@
   background: var(--bad-wash); border: 1px solid #EFD6D2; color: var(--bad);
 }
 .pen-su-submit { width: 100%; justify-content: center; height: 52px; font-size: 15px; }
-.pen-su-fine { font-size: 12.5px; line-height: 1.55; color: var(--faint); text-align: center; margin: 0; }
+.pen-su-fine { font-size: 14px; line-height: 1.55; color: var(--faint); text-align: center; margin: 0; }
 
 .pen-su-done { padding-top: 88px; max-width: 46ch; }
 .pen-su-tick {
@@ -1445,7 +1445,7 @@
 
 .pen-lp-pricing-note {
   margin: 26px auto 0; max-width: 46ch; text-align: center;
-  font-size: 13.5px; line-height: 1.6; color: rgba(251, 250, 246, .5);
+  font-size: 15px; line-height: 1.6; color: rgba(251, 250, 246, .5);
 }
 
 /* The Juno mark. The asset is cream on near-black with the background baked in, so it keeps

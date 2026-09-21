@@ -55,7 +55,7 @@ export default async function UsagePage() {
       </header>
 
       {error && (
-        <p className="mt-6 rounded-lg px-4 py-3 text-[13px]" style={{ background: 'var(--bad-wash)', color: 'var(--bad)', border: '1px solid #EFD6D2' }}>
+        <p className="mt-6 rounded-lg px-4 py-3 text-[14.5px]" style={{ background: 'var(--bad-wash)', color: 'var(--bad)', border: '1px solid #EFD6D2' }}>
           {error}
         </p>
       )}
@@ -64,22 +64,22 @@ export default async function UsagePage() {
         <div className="pen-ov-tile">
           <div className="pen-label">Accounts</div>
           <div className="pen-mono mt-2 text-[30px] leading-none">{rows.length}</div>
-          <div className="mt-1.5 text-[12.5px]" style={{ color: 'var(--dim)' }}>have recorded something</div>
+          <div className="mt-1.5 text-[14px]" style={{ color: 'var(--dim)' }}>have recorded something</div>
         </div>
         <div className="pen-ov-tile">
           <div className="pen-label">Recordings</div>
           <div className="pen-mono mt-2 text-[30px] leading-none">{totals.recordings}</div>
-          <div className="mt-1.5 text-[12.5px]" style={{ color: 'var(--dim)' }}>{totals.minutes} minutes total</div>
+          <div className="mt-1.5 text-[14px]" style={{ color: 'var(--dim)' }}>{totals.minutes} minutes total</div>
         </div>
         <div className="pen-ov-tile">
           <div className="pen-label">Notes written</div>
           <div className="pen-mono mt-2 text-[30px] leading-none">{totals.noted}</div>
-          <div className="mt-1.5 text-[12.5px]" style={{ color: 'var(--dim)' }}>reached the note stage</div>
+          <div className="mt-1.5 text-[14px]" style={{ color: 'var(--dim)' }}>reached the note stage</div>
         </div>
         <div className="pen-ov-tile">
           <div className="pen-label">Engaged</div>
           <div className="pen-mono mt-2 text-[30px] leading-none">{totals.chat + totals.briefings}</div>
-          <div className="mt-1.5 text-[12.5px]" style={{ color: 'var(--dim)' }}>chat turns + briefings</div>
+          <div className="mt-1.5 text-[14px]" style={{ color: 'var(--dim)' }}>chat turns + briefings</div>
         </div>
       </div>
 
@@ -113,7 +113,7 @@ export default async function UsagePage() {
                       <td>
                         {r.email}
                         {trial && (
-                          <span className="pen-mono ml-2 text-[9.5px]" style={{ color: 'var(--warn)' }}>
+                          <span className="pen-mono ml-2 text-[11.5px]" style={{ color: 'var(--warn)' }}>
                             TRIED ONCE
                           </span>
                         )}
@@ -134,7 +134,7 @@ export default async function UsagePage() {
             </table>
           </div>
         )}
-        <p className="pen-mono mt-4 text-[10px] leading-relaxed" style={{ color: 'var(--faint)' }}>
+        <p className="pen-mono mt-4 text-[12px] leading-relaxed" style={{ color: 'var(--faint)' }}>
           Derived from pen_sessions, so it counts real work rather than page loads. &ldquo;Days
           used&rdquo; is distinct calendar days with at least one import — the number that
           separates someone who tried it from someone who uses it.

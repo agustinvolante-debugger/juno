@@ -429,7 +429,7 @@ export default function PenApp({
       {loadError && (
         <Banner tone="bad">
           Couldn’t load recordings: {loadError}
-          <div className="mt-1 text-[12.5px]" style={{ color: 'var(--soft)' }}>
+          <div className="mt-1 text-[14px]" style={{ color: 'var(--soft)' }}>
             If a column is missing, run the ALTER at the bottom of <span className="pen-mono">lib/pen/schema.sql</span>.
           </div>
         </Banner>
@@ -594,7 +594,7 @@ export default function PenApp({
                         </span>
                         <span className="pen-pill" data-s={s.status}>{s.status}</span>
                       </div>
-                      <div className="pen-mono mt-1.5 text-[10.5px]" style={{ color: 'var(--faint)' }}>
+                      <div className="pen-mono mt-1.5 text-[12.5px]" style={{ color: 'var(--faint)' }}>
                         {fmtDur(s.duration_sec ?? 0)}
                         {s.meeting_type ? ` · ${displayType(s.meeting_type).toLowerCase()}` : ''}
                       </div>
@@ -928,7 +928,7 @@ function TitleEdit({
           </svg>
         </button>
         {failed && (
-          <div className="pen-mono mt-1 text-[10.5px]" style={{ color: 'var(--bad)' }}>
+          <div className="pen-mono mt-1 text-[12.5px]" style={{ color: 'var(--bad)' }}>
             Rename didn&rsquo;t save — the old name is back.
           </div>
         )}
@@ -1076,7 +1076,7 @@ function ImportTray({
               <div className="pen-imp-pct">{Math.round(progress.pct)}%</div>
               <div className="pen-meter-bar"><span style={{ width: `${progress.pct}%` }} /></div>
               <p className="mt-3 text-[14px]" style={{ color: 'var(--soft)' }}>{progress.phase}</p>
-              <p className="pen-mono mt-1 truncate text-[11px]" style={{ color: 'var(--faint)' }}>{progress.name}</p>
+              <p className="pen-mono mt-1 truncate text-[13px]" style={{ color: 'var(--faint)' }}>{progress.name}</p>
               <p className="pen-imp-warn">Keep this tab open until it finishes &mdash; leaving Safari stops the upload.</p>
             </div>
           ) : (
@@ -1086,7 +1086,7 @@ function ImportTray({
                   <li key={`${p.file.name}-${i}`}>
                     <div className="min-w-0">
                       <div className="truncate text-[15px]">{p.file.name}</div>
-                      <div className="pen-mono text-[11px]" style={{ color: 'var(--dim)' }}>
+                      <div className="pen-mono text-[13px]" style={{ color: 'var(--dim)' }}>
                         {fmtMB(p.file.size)} &middot; {new Date(p.file.lastModified).toLocaleDateString()}
                       </div>
                     </div>
@@ -1145,7 +1145,7 @@ function ImportTray({
           {penName ? `${pending.length} on “${penName}”` : 'Ready to import'}
         </h2>
         {pending.length > 0 && (
-          <button className="pen-mono text-[11px] underline" style={{ color: 'var(--dim)' }} onClick={() => setPending([])}>
+          <button className="pen-mono text-[13px] underline" style={{ color: 'var(--dim)' }} onClick={() => setPending([])}>
             clear
           </button>
         )}
@@ -1157,8 +1157,8 @@ function ImportTray({
             <input type="checkbox" className="pen-act-box" checked={p.picked}
                    onChange={(e) => setPending((prev) => prev.map((x, j) => (j === i ? { ...x, picked: e.target.checked } : x)))} />
             <span className="min-w-0 flex-1 truncate text-[14px]">{p.file.name}</span>
-            <span className="pen-mono text-[11px]" style={{ color: 'var(--dim)' }}>{fmtMB(p.file.size)}</span>
-            <span className="pen-mono text-[11px]" style={{ color: 'var(--faint)' }}>
+            <span className="pen-mono text-[13px]" style={{ color: 'var(--dim)' }}>{fmtMB(p.file.size)}</span>
+            <span className="pen-mono text-[13px]" style={{ color: 'var(--faint)' }}>
               {new Date(p.file.lastModified).toLocaleDateString()}
             </span>
           </li>
@@ -1172,13 +1172,13 @@ function ImportTray({
                  placeholder="e.g. the Hendersons"
                  className="mt-1.5 w-full rounded-lg border px-3 py-2 text-[14px] outline-none"
                  style={{ borderColor: 'var(--line)', background: 'var(--panel)' }} />
-          <span className="mt-1 block text-[11.5px]" style={{ color: 'var(--faint)' }}>
+          <span className="mt-1 block text-[13px]" style={{ color: 'var(--faint)' }}>
             Naming them is what lets meetings build on each other.
           </span>
         </label>
         <label className="flex cursor-pointer items-start gap-3 rounded-lg p-3.5" style={{ background: 'var(--warn-wash)', border: '1px solid #EFE2C4' }}>
           <input type="checkbox" className="pen-act-box mt-0" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-          <span className="text-[12.5px] leading-snug" style={{ color: 'var(--warn)' }}>
+          <span className="text-[14px] leading-snug" style={{ color: 'var(--warn)' }}>
             Everyone recorded agreed to it, and this recording contains no patient or medical information.
           </span>
         </label>
@@ -1186,7 +1186,7 @@ function ImportTray({
 
       {progress ? (
         <div className="mt-5">
-          <div className="pen-mono flex justify-between text-[11px]" style={{ color: 'var(--soft)' }}>
+          <div className="pen-mono flex justify-between text-[13px]" style={{ color: 'var(--soft)' }}>
             <span className="truncate">{progress.name}</span>
             <span>{progress.phase}</span>
           </div>
@@ -1294,7 +1294,7 @@ function Detail({
             title={session.title || n.headline || session.source_name || 'Untitled'}
             onSave={(next) => onPatch({ title: next })}
           />
-          <div className="pen-mono mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px]" style={{ color: 'var(--dim)' }}>
+          <div className="pen-mono mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px]" style={{ color: 'var(--dim)' }}>
             <span>{session.recorded_at ? new Date(session.recorded_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—'}</span>
             <span style={{ color: 'var(--faint)' }}>·</span>
             <span>{fmtDur(session.duration_sec ?? 0)}</span>
@@ -1345,7 +1345,7 @@ function Detail({
       <div className="pen-tabrow mt-5 flex items-center justify-between gap-4 border-b" style={{ borderColor: 'var(--line)' }}>
         <div className="flex gap-1">
           {(['note', 'transcript'] as const).map((t) => (
-            <button key={t} onClick={() => setTab(t)} className="pen-mono px-3 py-2.5 text-[11.5px] uppercase tracking-wider"
+            <button key={t} onClick={() => setTab(t)} className="pen-mono px-3 py-2.5 text-[13px] uppercase tracking-wider"
                     style={{
                       color: tab === t ? 'var(--ink)' : 'var(--dim)',
                       borderBottom: tab === t ? '2px solid var(--ink)' : '2px solid transparent',
@@ -1364,7 +1364,7 @@ function Detail({
               onPick={(v) => regenerate(v)}
             />
             {askCategory && !session.meeting_type && (
-              <span className="pen-mono text-[10.5px]" style={{ color: 'var(--warn)' }}>
+              <span className="pen-mono text-[12.5px]" style={{ color: 'var(--warn)' }}>
                 not sure what this was
                 {askCategory.length > 0 && (
                   <>
@@ -1438,7 +1438,7 @@ function Detail({
                 {n.people.map((p, i) => (
                   <span key={i} className="pen-who" title={p.note}>
                     <span className="pen-avatar">{initials(p.name || p.role)}</span>
-                    <span className="text-[13.5px]">
+                    <span className="text-[15px]">
                       {p.name || <em style={{ color: 'var(--dim)' }}>{p.role || 'unknown'}</em>}
                       {p.name && p.role && <span style={{ color: 'var(--dim)' }}> · {p.role}</span>}
                     </span>
@@ -1452,7 +1452,7 @@ function Detail({
             <div className="pen-sec">
               <div className="mb-1 flex items-baseline justify-between">
                 <span className="pen-label">Next actions</span>
-                <span className="pen-mono text-[10px]" style={{ color: 'var(--faint)' }}>
+                <span className="pen-mono text-[12px]" style={{ color: 'var(--faint)' }}>
                   {done.size}/{n.actions.length} done
                 </span>
               </div>
@@ -1464,7 +1464,7 @@ function Detail({
                       <div className="pen-act-text text-[15px] leading-snug">{a.action}</div>
                       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5">
                         {(a.owner || a.due || a.priority === 'high') && (
-                          <div className="pen-mono flex flex-wrap items-center gap-x-2 text-[10.5px]" style={{ color: 'var(--dim)' }}>
+                          <div className="pen-mono flex flex-wrap items-center gap-x-2 text-[12.5px]" style={{ color: 'var(--dim)' }}>
                             {a.priority === 'high' && <span style={{ color: 'var(--bad)' }}>PRIORITY</span>}
                             {a.owner && <span>{a.owner}</span>}
                             {a.due && <span style={{ color: 'var(--accent-ink)' }}>{a.due}</span>}
@@ -1487,7 +1487,7 @@ function Detail({
                   {n.missed.map((m, i) => (
                     <li key={i} className="pen-doable text-[15px] leading-snug">
                       {m.item}
-                      {m.why && <div className="mt-0.5 text-[13px]" style={{ color: 'var(--warn)' }}>{m.why}</div>}
+                      {m.why && <div className="mt-0.5 text-[14.5px]" style={{ color: 'var(--warn)' }}>{m.why}</div>}
                       <div className="mt-1.5">
                         <DeliverableActions onPick={(kind) => setSheet({ kind, item: m.item })} />
                       </div>
@@ -1505,7 +1505,7 @@ function Detail({
                 {n.decisions.map((d, i) => (
                   <li key={i} className="text-[15px]">
                     {d.decision}
-                    {d.who && <span className="pen-mono ml-2 text-[10.5px]" style={{ color: 'var(--dim)' }}>{d.who}</span>}
+                    {d.who && <span className="pen-mono ml-2 text-[12.5px]" style={{ color: 'var(--dim)' }}>{d.who}</span>}
                   </li>
                 ))}
               </ul>
@@ -1585,7 +1585,7 @@ function ShowingBlock({ showing }: { showing: NonNullable<PenNotes['showing']> }
         <div className="pen-sec">
           <div className="rounded-[10px] p-5" style={{ background: 'var(--accent-wash)', border: '1px solid var(--accent-line)' }}>
             <span className="pen-label" style={{ color: 'var(--accent-ink)' }}>What they actually want</span>
-            <p className="mb-2 mt-1 text-[12.5px]" style={{ color: 'var(--soft)' }}>
+            <p className="mb-2 mt-1 text-[14px]" style={{ color: 'var(--soft)' }}>
               Inferred from what they reacted to, not from what they said.
             </p>
             <ul className="list-disc space-y-1 pl-5 text-[15px]">
@@ -1648,7 +1648,7 @@ function ChatPanel({ session, onChat, onClose }: { session: PenSession; onChat: 
         <span className="pen-label">Ask this meeting</span>
         <div className="flex items-center gap-3">
           {chat.length > 0 && (
-            <button className="pen-mono text-[10px] underline" style={{ color: 'var(--dim)' }} onClick={reset}>clear</button>
+            <button className="pen-mono text-[12px] underline" style={{ color: 'var(--dim)' }} onClick={reset}>clear</button>
           )}
           <button className="pen-mono text-[14px] leading-none xl:hidden" style={{ color: 'var(--dim)' }} onClick={onClose}>×</button>
         </div>
@@ -1656,7 +1656,7 @@ function ChatPanel({ session, onChat, onClose }: { session: PenSession; onChat: 
 
       <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {chat.length === 0 && (
-          <p className="text-[13.5px] leading-relaxed" style={{ color: 'var(--dim)' }}>
+          <p className="text-[15px] leading-relaxed" style={{ color: 'var(--dim)' }}>
             Answers come only from this recording. If it isn’t in there, it’ll say so rather than guess.
           </p>
         )}
@@ -1670,7 +1670,7 @@ function ChatPanel({ session, onChat, onClose }: { session: PenSession; onChat: 
             <span className="pen-dots"><span /><span /><span /></span>
           </div>
         )}
-        {error && <p className="text-[12.5px]" style={{ color: 'var(--bad)' }}>{error}</p>}
+        {error && <p className="text-[14px]" style={{ color: 'var(--bad)' }}>{error}</p>}
         <div ref={endRef} />
       </div>
 
@@ -1706,7 +1706,7 @@ function Muted({ children }: { children: React.ReactNode }) {
 function Banner({ children, tone, onClose }: { children: React.ReactNode; tone: 'bad' | 'warn'; onClose?: () => void }) {
   const bad = tone === 'bad'
   return (
-    <div className="mt-4 flex items-start justify-between gap-3 rounded-lg px-4 py-3 text-[13px]"
+    <div className="mt-4 flex items-start justify-between gap-3 rounded-lg px-4 py-3 text-[14.5px]"
          style={{
            background: bad ? 'var(--bad-wash)' : 'var(--warn-wash)',
            color: bad ? 'var(--bad)' : 'var(--warn)',

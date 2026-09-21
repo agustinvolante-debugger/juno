@@ -38,7 +38,7 @@ export default function Overview({
           </h2>
         </div>
         {stats.lastAt && (
-          <span className="pen-mono text-[10.5px]" style={{ color: 'var(--faint)' }}>
+          <span className="pen-mono text-[12.5px]" style={{ color: 'var(--faint)' }}>
             latest {new Date(stats.lastAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
           </span>
         )}
@@ -57,7 +57,7 @@ export default function Overview({
         <div className="pen-ov-meter-wrap">
           <div className="flex items-baseline justify-between">
             <span className="pen-label">Follow-through</span>
-            <span className="pen-mono text-[11px] tabular-nums" style={{ color: 'var(--soft)' }}>
+            <span className="pen-mono text-[13px] tabular-nums" style={{ color: 'var(--soft)' }}>
               {doneCount}/{stats.actionsTotal} done
             </span>
           </div>
@@ -86,7 +86,7 @@ export default function Overview({
                 <button className="pen-ov-act" onClick={() => onOpen(a.sessionId)}>
                   <span className="pen-ov-act-main">
                     <span className="text-[15px] leading-snug">{a.action}</span>
-                    <span className="pen-mono mt-1 flex flex-wrap items-center gap-x-2 text-[10px]" style={{ color: 'var(--faint)' }}>
+                    <span className="pen-mono mt-1 flex flex-wrap items-center gap-x-2 text-[12px]" style={{ color: 'var(--faint)' }}>
                       {/* Status carries a word, never colour alone. */}
                       {a.priority === 'high' && <span style={{ color: 'var(--bad)' }}>PRIORITY</span>}
                       {a.owner && <span>{a.owner}</span>}
@@ -100,7 +100,7 @@ export default function Overview({
             ))}
           </ul>
           {stats.openActions.length > 12 && (
-            <p className="pen-mono mt-3 text-[10.5px]" style={{ color: 'var(--faint)' }}>
+            <p className="pen-mono mt-3 text-[12.5px]" style={{ color: 'var(--faint)' }}>
               and {stats.openActions.length - 12} more
             </p>
           )}
@@ -111,7 +111,7 @@ export default function Overview({
       {stats.clients.length > 0 && (
         <section className="pen-ov-sec">
           <div className="pen-label mb-1">What Pen has worked out</div>
-          <p className="mb-4 text-[13.5px]" style={{ color: 'var(--dim)' }}>
+          <p className="mb-4 text-[15px]" style={{ color: 'var(--dim)' }}>
             Built up across meetings, not from any single one. It sharpens every time you record.
           </p>
           <div className="grid gap-4 lg:grid-cols-2">
@@ -119,7 +119,7 @@ export default function Overview({
               <article key={c.name} className="pen-ov-client">
                 <header className="flex items-baseline justify-between gap-3">
                   <h3 className="pen-display text-[19px]">{c.name}</h3>
-                  <span className="pen-mono text-[10px]" style={{ color: 'var(--faint)' }}>
+                  <span className="pen-mono text-[12px]" style={{ color: 'var(--faint)' }}>
                     {c.showings} meeting{c.showings === 1 ? '' : 's'}
                   </span>
                 </header>
@@ -147,7 +147,7 @@ function Tile({ label, value, sub, tone }: { label: string; value: string; sub: 
       >
         {value}
       </div>
-      <div className="mt-1.5 text-[12.5px]" style={{ color: 'var(--dim)' }}>{sub}</div>
+      <div className="mt-1.5 text-[14px]" style={{ color: 'var(--dim)' }}>{sub}</div>
     </div>
   )
 }
@@ -157,7 +157,7 @@ function Facet({ label, items, tone }: { label: string; items?: string[]; tone?:
   const color = tone === 'bad' ? 'var(--bad)' : tone === 'accent' ? 'var(--accent-ink)' : 'var(--soft)'
   return (
     <div className="mt-3.5">
-      <div className="pen-mono text-[9.5px] uppercase tracking-[.12em]" style={{ color }}>{label}</div>
+      <div className="pen-mono text-[11.5px] uppercase tracking-[.12em]" style={{ color }}>{label}</div>
       <ul className="mt-1 space-y-1">
         {items.slice(0, 4).map((t) => (
           <li key={t} className="text-[14px] leading-snug">{t}</li>

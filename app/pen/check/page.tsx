@@ -101,7 +101,7 @@ export default function CheckPage() {
 
           {log.length > 0 && (
             <pre
-              className="pen-mono mt-5 whitespace-pre-wrap text-[12px] leading-[1.7]"
+              className="pen-mono mt-5 whitespace-pre-wrap text-[13.5px] leading-[1.7]"
               style={{ color: 'var(--soft)' }}
             >
               {log.join('\n')}
@@ -116,14 +116,14 @@ export default function CheckPage() {
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <span className="text-[14px]">{c.label}</span>
                 <span
-                  className="pen-mono text-[11.5px]"
+                  className="pen-mono text-[13px]"
                   style={{ color: c.ok === false ? 'var(--bad)' : c.ok ? 'var(--good)' : 'var(--dim)' }}
                 >
                   {c.value}
                 </span>
               </div>
               {c.note && (
-                <p className="mt-1 text-[12px] leading-snug" style={{ color: 'var(--faint)' }}>
+                <p className="mt-1 text-[13.5px] leading-snug" style={{ color: 'var(--faint)' }}>
                   {c.note}
                 </p>
               )}
@@ -131,7 +131,7 @@ export default function CheckPage() {
           ))}
         </div>
 
-        <p className="pen-mono mt-6 text-[11px] leading-relaxed" style={{ color: 'var(--faint)' }}>
+        <p className="pen-mono mt-6 text-[13px] leading-relaxed" style={{ color: 'var(--faint)' }}>
           Screenshot this page and send it over.
         </p>
       </main>

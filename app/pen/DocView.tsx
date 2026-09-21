@@ -88,7 +88,7 @@ export default function DocView({
   if (!doc) {
     return (
       <div className="pen-panel px-8 py-14 text-center">
-        <p className="pen-mono text-[11px]" style={{ color: 'var(--dim)' }}>Loading…</p>
+        <p className="pen-mono text-[13px]" style={{ color: 'var(--dim)' }}>Loading…</p>
       </div>
     )
   }
@@ -106,7 +106,7 @@ export default function DocView({
               queue({ title: e.target.value })
             }}
           />
-          <div className="pen-mono mt-2 flex flex-wrap items-center gap-x-2.5 text-[11px]" style={{ color: 'var(--dim)' }}>
+          <div className="pen-mono mt-2 flex flex-wrap items-center gap-x-2.5 text-[13px]" style={{ color: 'var(--dim)' }}>
             <span>{KIND_LABEL[doc.kind] ?? 'Page'}</span>
             <span style={{ color: 'var(--faint)' }}>·</span>
             <span>{new Date(doc.created_at).toLocaleDateString(undefined, { dateStyle: 'medium' })}</span>

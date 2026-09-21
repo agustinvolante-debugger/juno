@@ -150,7 +150,7 @@ export default function ChatView({
     <div className="pen-chatview">
       <div className="pen-chatview-body">
         {loading && (
-          <p className="pen-mono text-[11px]" style={{ color: 'var(--dim)' }}>
+          <p className="pen-mono text-[13px]" style={{ color: 'var(--dim)' }}>
             Loading…
           </p>
         )}
@@ -183,7 +183,7 @@ export default function ChatView({
 
         {thinking && (
           <div className="pen-turn-a">
-            <span className="pen-mono text-[11px]" style={{ color: 'var(--dim)' }}>
+            <span className="pen-mono text-[13px]" style={{ color: 'var(--dim)' }}>
               Reading the archive
             </span>
             <span className="pen-dots" aria-hidden>
