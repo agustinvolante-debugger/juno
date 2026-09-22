@@ -79,27 +79,40 @@ async function runUnattended(sessionId: string, email: string) {
     // thing, so writing a second set here would describe half a meeting as if it were one.
     if (fresh.merge_group && (fresh.merge_index ?? 0) > 0) return
 
-    // Did this recording just complete a meeting the pen split at its file limit? If so the
-    // notes are written over every part at once, and the first part owns them.
+    // This part gets written up on its own FIRST, even when it is about to be joined to the
+    // one before it.
+    //
+    // Those per-part notes are not throwaway — they are the coverage floor that stops the
+    // tail of a long meeting being compressed out of the combined note. Measured on the real
+    // 73-minute pair, going straight to a single pass over the joined transcript kept 1 of
+    // part two's 5 actions and none of its 4 open questions. It costs one extra extraction
+    // per part and buys back the half of the meeting that would otherwise vanish.
+    const own = await writeNotes({ email, session: fresh, claim: true })
+    if (own === 'taken') return
+
+    // Did this recording just complete a meeting the pen split at its file limit? Checked
+    // after the write above, so every part has its own notes to contribute.
     const joined = await autoJoin(email, sessionId).catch(() => null)
-    let target = fresh
+    let noted = own.session
     let parts = 1
+
     if (joined) {
       parts = joined.segments.length
-      target = joined.segments[0]
-      // The earlier part may already have been written up and briefed on its own. Reset it so
-      // the claim below can be taken and one briefing goes out for the finished meeting.
-      await updateSession(target.id, { status: 'transcribed', briefing_sent_at: null })
-      target = (await getSession(email, target.id)) ?? target
+      const primary = joined.segments[0]
+      // The earlier part was written up and very likely briefed on its own before anyone knew
+      // there was more of it. Reset it so the claim can be taken again and one briefing goes
+      // out for the finished meeting.
+      await updateSession(primary.id, { status: 'transcribed', briefing_sent_at: null })
+      const re = await getSession(email, primary.id)
+      if (!re) return
+      const combined = await writeNotes({ email, session: re, claim: true })
+      if (combined === 'taken') return
+      noted = combined.session
     }
 
-    // Takes the claim; returns 'taken' if a browser tab got there first, in which case that
-    // tab owns the notes and sending from here would duplicate the email.
-    const r = await writeNotes({ email, session: target, claim: true })
-    if (r === 'taken') return
-
-    const noted = r.session
     if (!noted || !hasSomethingToSay(noted)) return
+    // A tail part on its own says nothing worth an email — the combined briefing covers it.
+    if (joined && noted.id !== joined.segments[0].id) return
 
     // Belt and braces against a retry that slipped past the claim.
     if (noted.briefing_sent_at) return

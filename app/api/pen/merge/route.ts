@@ -70,6 +70,16 @@ export async function POST(req: Request) {
   }
 
   try {
+    // Every part needs its own notes before the join: they are the coverage floor that stops
+    // the tail of a long meeting being compressed out of the combined write-up. A part that
+    // was never written up on its own — uploaded and left, or joined straight after
+    // transcribing — gets written up here first.
+    for (const s of sessions) {
+      if (s.notes && Object.keys(s.notes).length) continue
+      const r = await writeNotes({ email, session: s, claim: false })
+      if (r === 'taken') return NextResponse.json({ error: 'notes are already being written' }, { status: 409 })
+    }
+
     const group = await joinSegments(email, ids)
     const segments = await groupSessions(email, group)
     const primary = segments[0]
@@ -85,7 +95,7 @@ export async function POST(req: Request) {
     const noted = r.session
     let briefed = false
     if (noted && hasSomethingToSay(noted)) {
-      const sent = await sendBriefing({ session: noted, to: [email], replyTo: email })
+      const sent = await sendBriefing({ session: noted, to: [email], replyTo: email, parts: segments.length })
       if (sent.ok) {
         await updateSession(primary.id, { briefing_sent_at: new Date().toISOString() })
         briefed = true
