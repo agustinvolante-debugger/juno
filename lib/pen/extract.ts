@@ -12,6 +12,7 @@ import { isViewing } from '@/lib/pen/categories'
 export { isViewing }
 import Anthropic from '@anthropic-ai/sdk'
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
+import { mustStream } from './anthropic-limits'
 import type { PenNotes, MeetingType } from './store'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -178,18 +179,30 @@ export async function extractNotes(
       `notes, and flag anything that contradicts it under "missed":\n${JSON.stringify(opts.priorProfile)}`
     : ''
 
-  const res = await anthropic.messages.parse({
+  // STREAMED, and it has to be.
+  //
+  // max_tokens is a budget for thinking AND output, not just output: Opus 5 reasons by default
+  // and spends thousands of tokens doing it on a long transcript — a measured 2,197 against a
+  // 3,000 ceiling — leaving too few to finish the JSON, which then failed to parse mid-string.
+  // Raising the ceiling fixed that and broke something else: the SDK refuses a NON-streaming
+  // request whose ceiling implies a possible ten-minute call, computed as
+  // (60min x max_tokens) / 128000, so anything above 21,333 throws "Streaming is required"
+  // before the request is even sent — regardless of how short the recording is.
+  //
+  // Streaming removes the ceiling from the equation rather than ducking under it, and
+  // finalMessage() still returns a ParsedMessage, so structured output survives.
+  const MAX = 32000
+  // Guards the invariant rather than trusting the comment above it.
+  if (!mustStream(MAX)) throw new Error('extraction expects a streamed ceiling; see anthropic-limits')
+
+  const stream = anthropic.messages.stream({
     model: MODEL,
-    // max_tokens is a budget for thinking AND output, not just output. Opus 5 reasons by
-    // default, and on a long input it happily spends thousands of tokens doing it — a
-    // measured 2,197 of a 3,000 ceiling — leaving too few to finish the JSON, which then
-    // fails to parse mid-string. Ceilings here are sized for both; unused tokens cost
-    // nothing, a truncated answer costs the whole request.
-    max_tokens: 32000,
+    max_tokens: MAX,
     system: SYSTEM,
     messages: [{ role: 'user', content: `Transcript:\n\n${dialogue}${forced}${prior}` }],
     output_config: { format: jsonSchemaOutputFormat(NOTES_SCHEMA) },
   })
+  const res = await stream.finalMessage()
 
   if (!res.parsed_output) throw new Error('extraction returned no parsed output')
   return res.parsed_output as PenNotes
