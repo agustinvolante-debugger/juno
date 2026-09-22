@@ -171,7 +171,7 @@ original conversation belongs to, so carry the minimum that makes them useful.`
 
 export async function extractNotes(
   dialogue: string,
-  opts?: { category?: MeetingType | null; priorProfile?: unknown },
+  opts?: { category?: MeetingType | null; priorProfile?: unknown; partNotes?: PenNotes[] },
 ): Promise<PenNotes> {
   const cat = (opts?.category ?? '').trim()
   const forced = cat
@@ -184,6 +184,29 @@ export async function extractNotes(
   const prior = opts?.priorProfile
     ? `\n\nWhat you already know about these people from earlier meetings — use it to sharpen the ` +
       `notes, and flag anything that contradicts it under "missed":\n${JSON.stringify(opts.priorProfile)}`
+    : ''
+
+  // Coverage floor for a meeting that arrived in parts.
+  //
+  // Without this the last part gets compressed out of existence: measured on a real 73-minute
+  // pair, one pass over the joined transcript kept 1 of part two's 5 actions, 1 of its 7
+  // missed items and 0 of its 4 open questions — including the only safety concern anyone
+  // raised. The model writes a fixed-size note regardless of how long the input is, and the
+  // tail of a long transcript is what loses. Each part was already written up on its own
+  // while it was short enough to be read properly, so those notes go back in as a floor.
+  const floor = opts?.partNotes?.length
+    ? `\n\nEach part was already written up separately, BEFORE they were known to be one meeting. ` +
+      `Those notes are below. Treat them as a FLOOR, not a suggestion: every item in them belongs ` +
+      `in your output unless one of these is true, and then say which —\n` +
+      `  - it duplicates an item from another part (merge them into one, keeping the fuller wording);\n` +
+      `  - a later part resolved it (fold the resolution in; an open question answered later is a ` +
+      `decision or an action, not a dropped line);\n` +
+      `  - it is plainly wrong on the full transcript (a name misheard, a speaker misattributed).\n` +
+      `A part having been at the end of a long recording is NOT a reason to drop its items. ` +
+      `Add anything the per-part notes missed because the reader could not see the whole meeting.\n\n` +
+      opts.partNotes
+        .map((n, i) => `Notes written for PART ${i + 1}:\n${JSON.stringify(n)}`)
+        .join('\n\n')
     : ''
 
   // STREAMED, and it has to be.
@@ -206,7 +229,7 @@ export async function extractNotes(
     model: MODEL,
     max_tokens: MAX,
     system: SYSTEM,
-    messages: [{ role: 'user', content: `Transcript:\n\n${dialogue}${forced}${prior}` }],
+    messages: [{ role: 'user', content: `Transcript:\n\n${dialogue}${forced}${prior}${floor}` }],
     output_config: { format: jsonSchemaOutputFormat(NOTES_SCHEMA) },
   })
   const res = await stream.finalMessage()

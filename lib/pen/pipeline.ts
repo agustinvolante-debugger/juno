@@ -83,7 +83,17 @@ export async function writeNotes(opts: {
       if (c.category && c.confidence >= CONFIDENCE_FLOOR) category = c.category
     }
 
-    const notes = await extractNotes(dialogue, { category: category || null, priorProfile: prior })
+    // A joined meeting hands the model what each part's own notes already found, so the tail
+    // of a 73-minute transcript cannot be quietly compressed away. See extract.ts.
+    const partNotes = session.merge_group
+      ? (await groupSessions(email, session.merge_group)).map((x) => x.notes).filter((x) => x && Object.keys(x).length)
+      : undefined
+
+    const notes = await extractNotes(dialogue, {
+      category: category || null,
+      priorProfile: prior,
+      ...(partNotes && partNotes.length > 1 ? { partNotes } : {}),
+    })
     const clientName = session.client_name || notes.client_name || ''
 
     await updateSession(session.id, {
