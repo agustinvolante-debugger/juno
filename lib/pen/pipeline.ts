@@ -15,6 +15,7 @@ import type { PenSession, MeetingType } from './store'
 import { extractNotes, isViewing, updateClientProfile } from './extract'
 import { categorize, CONFIDENCE_FLOOR } from './categorize'
 import { toDialogue } from './aai'
+import { groupSessions, combinedDialogue } from './merge'
 
 /** Held while extraction runs, so a second caller sees the row is taken. */
 export const STATUS_WORKING = 'noting'
@@ -26,6 +27,20 @@ export type NotesResult = {
 
 export function dialogueOf(session: PenSession): string {
   return toDialogue({ id: session.aai_id ?? '', status: 'completed', ...session.transcript })
+}
+
+/**
+ * The dialogue the notes are written from.
+ *
+ * Normally that is just this recording. When the pen split a meeting across several files it
+ * is all of them, in order, with the seams marked — one set of notes for one meeting, rather
+ * than two halves that each read as if the other never happened.
+ */
+export async function dialogueFor(email: string, session: PenSession): Promise<string> {
+  if (!session.merge_group) return dialogueOf(session)
+  const segments = await groupSessions(email, session.merge_group)
+  if (segments.length < 2) return dialogueOf(session)
+  return combinedDialogue(segments)
 }
 
 /**
@@ -48,7 +63,7 @@ export async function writeNotes(opts: {
     if (!won) return 'taken'
   }
 
-  const dialogue = dialogueOf(session)
+  const dialogue = await dialogueFor(email, session)
   if (!dialogue.trim()) {
     if (opts.claim) await updateSession(session.id, { status: 'transcribed' })
     throw new Error('no transcript yet')

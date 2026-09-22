@@ -20,6 +20,7 @@ import { postJson, getJson, patchJson, del, errMessage, PenHttpError } from '@/l
 import type { ChatSummary } from '@/lib/pen/chats'
 import type { DocSummary } from '@/lib/pen/docs'
 import { monthStart, nextMonthStart, type Usage } from '@/lib/pen/plan'
+import { findRuns } from '@/lib/pen/merge-detect'
 
 /**
  * What the main column is showing. Chat and pages are views, not overlays: the whole point
@@ -387,11 +388,57 @@ export default function PenApp({
 
   /* ------------------------------------------------------------------- view */
 
+  // A meeting the pen split across files shows up once, under its first part. The later
+  // parts still exist and are reachable from it — they are just not separate meetings.
+  const listed = useMemo(() => sessions.filter((s) => (s.merge_index ?? 0) === 0), [sessions])
+
   const visible = useMemo(
-    () => (catFilter ? sessions.filter((x) => bucketOf(displayType(x.meeting_type)) === catFilter) : sessions),
-    [sessions, catFilter],
+    () => (catFilter ? listed.filter((x) => bucketOf(displayType(x.meeting_type)) === catFilter) : listed),
+    [listed, catFilter],
   )
   const grouped = useMemo(() => groupByDay(visible), [visible])
+
+  /** Every part of a joined meeting, in order. One entry for a recording that stands alone. */
+  const partsOf = useCallback(
+    (s: PenSession) =>
+      s.merge_group
+        ? sessions
+            .filter((x) => x.merge_group === s.merge_group)
+            .sort((a, b) => (a.merge_index ?? 0) - (b.merge_index ?? 0))
+        : [s],
+    [sessions],
+  )
+
+  /** Recordings that look like one meeting the pen cut in half but that nobody has joined. */
+  const runs = useMemo(() => findRuns(sessions), [sessions])
+  const [joining, setJoining] = useState(false)
+
+  const joinRun = async (ids: string[]) => {
+    setJoining(true)
+    setErr(null)
+    try {
+      const j = await postJson<{ primaryId: string; briefed: boolean }>('/api/pen/merge', { action: 'join', ids })
+      await refresh()
+      openSession(j.primaryId)
+      setTab('note')
+    } catch (e) {
+      setErr(errMessage(e))
+    } finally {
+      setJoining(false)
+    }
+  }
+
+  const splitGroup = async (group: string) => {
+    setJoining(true)
+    try {
+      await postJson('/api/pen/merge', { action: 'split', group })
+      await refresh()
+    } catch (e) {
+      setErr(errMessage(e))
+    } finally {
+      setJoining(false)
+    }
+  }
 
   return (
     <main className="pen-page">
@@ -600,6 +647,30 @@ export default function PenApp({
         </Banner>
       )}
 
+      {/* The pen stops at 60 minutes and opens a new file, so a long meeting arrives in
+          halves. Normally they are joined the moment the second transcript lands; this is
+          for the ones already sitting in the archive from before, or an upload that arrived
+          days late. */}
+      {runs.map((r) => (
+        <Banner key={r.sessions[0].id} tone="warn">
+          <strong style={{ color: 'var(--ink)' }}>
+            {r.sessions.length} recordings look like one {fmtDur(r.totalSec)} meeting.
+          </strong>{' '}
+          The pen stops at 60 minutes and starts a new file.
+          <div className="pen-mono mt-1 text-[13px]" style={{ color: 'var(--faint)' }}>
+            {r.sessions.map((s) => s.source_name || s.title || 'untitled').join('  →  ')}
+          </div>
+          <button
+            className="pen-btn mt-2.5"
+            disabled={joining}
+            onClick={() => void joinRun(r.sessions.map((s) => s.id))}
+          >
+            <Icon name="link" size={15} />
+            {joining ? 'Joining…' : 'Join into one meeting'}
+          </button>
+        </Banner>
+      ))}
+
       {(pending.length > 0 || progress || importDone) && (
         <>
           {isPhone && <button className="pen-scrim pen-scrim-on" aria-label="Close" onClick={closeSheet} />}
@@ -680,6 +751,9 @@ export default function PenApp({
                 selfEmail={email}
                 onBack={() => setView({ k: 'archive' })}
                 session={active} tab={tab} setTab={setTab}
+                parts={partsOf(active)}
+                splitting={joining}
+                onSplit={() => active.merge_group && void splitGroup(active.merge_group)}
                 chatOpen={chatOpen} onToggleChat={() => setChatOpen((v) => !v)}
                 onNotes={(type) => makeNotes(active.id, type)}
                 askCategory={catAsk[active.id]}
@@ -737,7 +811,8 @@ export default function PenApp({
                         <span className="pen-pill" data-s={s.status}>{s.status}</span>
                       </div>
                       <div className="pen-mono mt-1.5 text-[13px]" style={{ color: 'var(--faint)' }}>
-                        {fmtDur(s.duration_sec ?? 0)}
+                        {fmtDur(partsOf(s).reduce((n, x) => n + (x.duration_sec ?? 0), 0))}
+                        {partsOf(s).length > 1 ? ` · ${partsOf(s).length} parts` : ''}
                         {s.meeting_type ? ` · ${displayType(s.meeting_type).toLowerCase()}` : ''}
                       </div>
                     </div>
@@ -1299,12 +1374,68 @@ function ImportTray({
   )
 }
 
+/**
+ * A later part of a meeting the pen split, shown inline under the first.
+ *
+ * It keeps its own edit state and saves to its own recording: transcript corrections are an
+ * overlay keyed by utterance index, and index 7 of part two is a different line from index 7
+ * of part one. Merging the overlays would quietly rewrite the wrong sentences.
+ */
+function PartTranscript({ part }: { part: PenSession }) {
+  const [edits, setEdits] = useState<Record<string, string>>(part.transcript_edits ?? {})
+  const [state, setState] = useState<'saved' | 'saving' | 'failed'>('saved')
+  const dirty = useRef(false)
+
+  useEffect(() => {
+    setEdits(part.transcript_edits ?? {})
+    setState('saved')
+    dirty.current = false
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [part.id])
+
+  useEffect(() => {
+    if (!dirty.current) return
+    setState('saving')
+    const t = setTimeout(async () => {
+      try {
+        await patchJson(`/api/pen/sessions/${part.id}`, { transcript_edits: edits })
+        setState('saved')
+      } catch {
+        setState('failed')
+      }
+    }, 800)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [edits])
+
+  const utts = part.transcript?.utterances ?? []
+  if (!utts.length) {
+    return part.transcript?.text
+      ? <p className="whitespace-pre-wrap text-[16.5px] leading-relaxed">{part.transcript.text}</p>
+      : <Muted>This part has no transcript yet.</Muted>
+  }
+  return (
+    <TranscriptEditor
+      utterances={utts}
+      edits={edits}
+      saveState={state}
+      onEdit={(i, text) => { dirty.current = true; setEdits((prev) => ({ ...prev, [String(i)]: text })) }}
+    />
+  )
+}
+
 /* =================================================================== detail */
 
 function Detail({
   session, tab, setTab, chatOpen, onToggleChat, onNotes, onDelete, onPatch, askCategory, selfEmail, onBack,
+  parts, onSplit, splitting,
 }: {
   session: PenSession
+  /** Every part of this meeting, in order. Just `[session]` when the pen didn't split it. */
+  parts: PenSession[]
+  /** Unpicks a join. The parts keep their own audio and transcripts, so nothing is lost. */
+  onSplit: () => void
+  splitting: boolean
   tab: 'note' | 'transcript'
   setTab: (t: 'note' | 'transcript') => void
   chatOpen: boolean
@@ -1368,7 +1499,14 @@ function Detail({
 
   const n: PenNotes = session.notes ?? {}
   const utts = session.transcript?.utterances ?? []
-  const speakerCount = useMemo(() => new Set(utts.map((u) => u.speaker)).size, [utts])
+  const joined = parts.length > 1
+  // A joined meeting is measured end to end, not by whichever part you happen to be looking
+  // at — the whole point of the join is that it is one meeting.
+  const totalSec = parts.reduce((t, x) => t + (x.duration_sec ?? 0), 0)
+  const speakerCount = useMemo(
+    () => new Set(parts.flatMap((x) => (x.transcript?.utterances ?? []).map((u) => u.speaker))).size,
+    [parts],
+  )
   const done = new Set(Array.isArray(session.action_done) ? session.action_done : [])
 
   async function toggleAction(i: number) {
@@ -1406,8 +1544,14 @@ function Detail({
             </span>
             <span className="pen-meta-bit">
               <Icon name="clock" size={15} />
-              {fmtDur(session.duration_sec ?? 0)}
+              {fmtDur(totalSec)}
             </span>
+            {joined && (
+              <span className="pen-meta-bit">
+                <Icon name="link" size={15} />
+                {parts.length} parts
+              </span>
+            )}
             {!!displayType(session.meeting_type) && (
               <span className="pen-meta-bit">
                 <Icon name="tag" size={15} />
@@ -1446,6 +1590,21 @@ function Detail({
               <span className="pen-chip" data-tone="bad"><Icon name="alert" size={14} />Something failed</span>
             )}
           </div>
+
+          {joined && (
+            <p className="mt-2.5 text-[14.5px] leading-relaxed" style={{ color: 'var(--dim)' }}>
+              The pen hit its 60-minute file limit, so this meeting arrived in {parts.length} pieces.
+              They are read as one — both recordings are still here.{' '}
+              <button
+                className="underline"
+                disabled={splitting}
+                onClick={onSplit}
+                style={{ color: 'var(--soft)' }}
+              >
+                {splitting ? 'Separating…' : 'Separate them again'}
+              </button>
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {/* Keyed off the transcript, not the status. A session can land in `error` with a
@@ -1543,6 +1702,24 @@ function Detail({
           ) : (
             <Muted>No transcript yet.</Muted>
           )}
+
+          {/* The later parts, in place, so the transcript reads straight through. Each one
+              still saves its corrections to its own recording — the overlay is keyed by
+              utterance index, and the indexes only mean anything within one file. */}
+          {parts.slice(1).map((part, i) => (
+            <div key={part.id} className="mt-8">
+              <div className="pen-seam">
+                <span className="pen-label">
+                  Part {i + 2} · new file at {fmtDur(parts.slice(0, i + 1).reduce((t, x) => t + (x.duration_sec ?? 0), 0))}
+                </span>
+              </div>
+              <p className="mb-4 mt-2 text-[14px]" style={{ color: 'var(--faint)' }}>
+                Speakers are labelled fresh in each file, so “Speaker A” here may be someone else
+                than “Speaker A” above. The notes above already account for that.
+              </p>
+              <PartTranscript part={part} />
+            </div>
+          ))}
         </div>
       ) : (
         <div className="pen-doc pen-reveal mt-7">

@@ -3,6 +3,7 @@ import { getSessionByAai, getSession, updateSession } from '@/lib/pen/store'
 import { fetchTranscript } from '@/lib/pen/aai'
 import { writeNotes, STATUS_WORKING } from '@/lib/pen/pipeline'
 import { sendBriefing, sendFailureNotice, hasSomethingToSay } from '@/lib/pen/briefing'
+import { autoJoin } from '@/lib/pen/merge'
 
 export const dynamic = 'force-dynamic'
 // The response goes back immediately; `after()` keeps the function alive for the slow part.
@@ -74,9 +75,27 @@ async function runUnattended(sessionId: string, email: string) {
     if (!fresh) return
     sourceName = fresh.source_name ?? 'your recording'
 
+    // Already the tail of a joined meeting: the first segment carries the notes for the whole
+    // thing, so writing a second set here would describe half a meeting as if it were one.
+    if (fresh.merge_group && (fresh.merge_index ?? 0) > 0) return
+
+    // Did this recording just complete a meeting the pen split at its file limit? If so the
+    // notes are written over every part at once, and the first part owns them.
+    const joined = await autoJoin(email, sessionId).catch(() => null)
+    let target = fresh
+    let parts = 1
+    if (joined) {
+      parts = joined.segments.length
+      target = joined.segments[0]
+      // The earlier part may already have been written up and briefed on its own. Reset it so
+      // the claim below can be taken and one briefing goes out for the finished meeting.
+      await updateSession(target.id, { status: 'transcribed', briefing_sent_at: null })
+      target = (await getSession(email, target.id)) ?? target
+    }
+
     // Takes the claim; returns 'taken' if a browser tab got there first, in which case that
     // tab owns the notes and sending from here would duplicate the email.
-    const r = await writeNotes({ email, session: fresh, claim: true })
+    const r = await writeNotes({ email, session: target, claim: true })
     if (r === 'taken') return
 
     const noted = r.session
@@ -85,11 +104,11 @@ async function runUnattended(sessionId: string, email: string) {
     // Belt and braces against a retry that slipped past the claim.
     if (noted.briefing_sent_at) return
 
-    const sent = await sendBriefing({ session: noted, to: [email], replyTo: email })
+    const sent = await sendBriefing({ session: noted, to: [email], replyTo: email, parts })
     if (sent.ok) {
-      await updateSession(sessionId, { briefing_sent_at: new Date().toISOString() })
+      await updateSession(noted.id, { briefing_sent_at: new Date().toISOString() })
     } else {
-      console.warn(`pen: briefing not sent for ${sessionId}: ${sent.error}`)
+      console.warn(`pen: briefing not sent for ${noted.id}: ${sent.error}`)
     }
   } catch (e) {
     await sendFailureNotice({ to: email, sourceName, reason: (e as Error).message }).catch(() => {})

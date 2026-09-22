@@ -88,6 +88,10 @@ export type PenSession = {
   client_name: string | null
   error_text: string | null
   recorded_at: string | null
+  /** Set when the pen split one meeting across several files. Shared by every segment. */
+  merge_group: string | null
+  /** Position of this segment within its meeting, 0-based. The 0 carries the meeting's notes. */
+  merge_index: number | null
   created_at: string
   updated_at: string
 }
@@ -216,6 +220,18 @@ export async function updateSession(id: string, patch: Record<string, unknown>) 
 export async function deleteSession(userEmail: string, id: string): Promise<boolean> {
   const session = await getSession(userEmail, id)
   if (!session) return false
+
+  // Deleting one part of a joined meeting unpicks the join first. Otherwise removing the
+  // first part strands the rest: they stay flagged as continuations of a recording that no
+  // longer exists, which means they never appear in the list again.
+  if (session.merge_group) {
+    const { error: ue } = await supabaseAdmin
+      .from('pen_sessions')
+      .update({ merge_group: null, merge_index: null, updated_at: new Date().toISOString() })
+      .eq('user_email', userEmail)
+      .eq('merge_group', session.merge_group)
+    if (ue) throw new Error(ue.message)
+  }
 
   const { error } = await supabaseAdmin
     .from('pen_sessions')

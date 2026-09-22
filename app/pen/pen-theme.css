@@ -1774,3 +1774,11 @@
 
 /* Inherited the 16px root rather than sitting on the scale. */
 .pen-browse-t { font-size: 14.5px; }
+
+/* The join between two halves of a meeting the pen cut at its file limit. A rule with the
+   part number sitting on it, so the transcript reads as one document with a visible seam
+   rather than two documents that happen to be stacked. */
+.pen-seam { display: flex; align-items: center; gap: 12px; }
+.pen-seam::before,
+.pen-seam::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.pen-seam .pen-label { flex: none; color: var(--dim); }

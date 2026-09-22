@@ -34,11 +34,15 @@ export async function sendBriefing(opts: {
   session: PenSession
   to: string[]
   replyTo?: string
+  /** The recorder split this meeting and the parts have since been joined. Says so in the
+   *  subject line, because a briefing for part one may already be sitting in the inbox. */
+  parts?: number
 }): Promise<{ ok: boolean; error?: string }> {
   const title = opts.session.title ?? opts.session.source_name ?? 'Untitled recording'
+  const prefix = opts.parts && opts.parts > 1 ? `Full briefing (${opts.parts} parts) — ` : 'Briefing — '
   return sendEmailResult({
     to: opts.to,
-    subject: `Briefing — ${title}`,
+    subject: `${prefix}${title}`,
     html: renderBriefing(opts.session),
     replyTo: opts.replyTo,
   })

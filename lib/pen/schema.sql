@@ -143,3 +143,17 @@ create index if not exists pen_clients_user on pen_clients(user_email);
 -- create table if not exists public.pen_accounts (id uuid primary key default gen_random_uuid(), email text not null, status text not null default 'pending', plan text, source text, stripe_customer_id text, stripe_subscription_id text, current_period_end timestamptz, activated_at timestamptz, note text, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
 -- create unique index if not exists pen_accounts_email on public.pen_accounts(lower(email));
 -- create index if not exists pen_accounts_stripe_customer on public.pen_accounts(stripe_customer_id);
+
+-- ---------------------------------------------------------------------------
+-- 2026-09-22 — joining split recordings. Run each line separately.
+--
+-- The pen stops at 60 minutes and starts a new file, so a 73-minute meeting arrives as two
+-- recordings. Its filenames encode the start time, so contiguity is exact rather than a
+-- guess: R20260922-213209 + 59m12s ends at 22:31:21, and the next file is R20260922-223121.
+--
+-- Segments keep their own rows and their own transcripts — nothing is destroyed, so a bad
+-- join is undone by clearing these two columns. The lowest index carries the notes for the
+-- whole meeting; the rest are hidden from the list and reachable through it.
+-- ---------------------------------------------------------------------------
+-- alter table public.pen_sessions add column if not exists merge_group uuid, add column if not exists merge_index int;
+-- create index if not exists pen_sessions_merge on public.pen_sessions(merge_group, merge_index);

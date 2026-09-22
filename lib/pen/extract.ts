@@ -155,6 +155,13 @@ Rules that matter more than completeness:
 - The person recording is one of the speakers. Do not log their own enthusiasm as someone else's.
 - If the audio is too garbled to read, say so in summary and leave the arrays empty. That is a
   useful result, not a failure.
+- A transcript may arrive in PARTS, marked "--- PART n of m ---". That is one meeting the
+  recorder split because it hit its file limit, not several meetings. Write ONE set of notes
+  covering all of it. Speaker labels are assigned per part and DO NOT carry across a seam:
+  "Speaker A" in part two is very often a different person from "Speaker A" in part one. Work
+  out who is who from names, roles and what each voice is talking about, and list each real
+  person ONCE. If two labels are plainly the same person, merge them; if you genuinely cannot
+  tell, say so rather than inventing an extra attendee.
 
 On privacy, and this is not optional. Record the ACTION and drop the sensitive detail behind it
 wherever the action still makes sense without it. "Chase the referral for Tuesday's admission"
