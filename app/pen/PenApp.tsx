@@ -555,8 +555,6 @@ export default function PenApp({
           buttons. `justify-between` couldn't do both — it centres the search only when the
           two side groups happen to be the same width. */}
       <header className="pen-head">
-        <div className="pen-head-left" />
-
         <ArchiveSearch
           value={query}
           onChange={setQuery}

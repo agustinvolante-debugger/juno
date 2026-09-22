@@ -854,7 +854,7 @@
 .pen-cat-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---- the search, centre stage ---- */
-.pen-search-wrap { max-width: 620px; min-width: 0; margin: 0 auto; width: 100%; position: relative; }
+.pen-search-wrap { max-width: none; min-width: 0; width: 100%; position: relative; }
 .pen-search {
   display: flex; align-items: center; gap: 11px; min-width: 0;
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
@@ -950,10 +950,10 @@
    and is therefore centred on the page, not merely between two unequal neighbours. */
 .pen-head {
   display: grid;
-  grid-template-columns: minmax(max-content, 1fr) minmax(0, 620px) minmax(max-content, 1fr);
+  grid-template-columns: minmax(0, 1fr) 336px;
   align-items: center;
-  gap: 26px;
-  padding-bottom: 38px;
+  gap: 24px;
+  padding-bottom: 26px;
 }
 .pen-head-left { display: flex; align-items: center; gap: 11px; }
 .pen-head-right { display: flex; align-items: center; justify-content: flex-end; gap: 9px; }
@@ -1137,10 +1137,16 @@
 @media (max-width: 1040px) {
   /* The header's three columns stop fitting: the search drops to its own full-width row
      below the logo and buttons rather than being crushed between them. */
-  .pen-head { grid-template-columns: auto auto; row-gap: 16px; gap: 16px; padding-bottom: 22px; }
-  .pen-head-left { grid-row: 1; }
-  .pen-head-right { grid-row: 1; grid-column: 2; flex-wrap: wrap; }
-  .pen-search-wrap { grid-row: 2; grid-column: 1 / -1; max-width: none; }
+  /* Below a laptop there is no rail to align to, so the search takes the full width and the
+     controls sit above it — sharing a row squeezed the box to 230px, which is not enough for
+     its own placeholder. */
+  .pen-head {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'spacer controls' 'search search';
+    row-gap: 12px; gap: 14px; padding-bottom: 20px;
+  }
+  .pen-head-right { grid-area: controls; flex-wrap: nowrap; }
+  .pen-search-wrap { grid-area: search; }
   .pen-doc-split { grid-template-columns: 1fr; }
   .pen-doc-body { min-height: 40vh; }
   .pen-doc-preview { min-height: 0; }
