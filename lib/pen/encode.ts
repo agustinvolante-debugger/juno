@@ -42,6 +42,16 @@ const VIDEO_EXT = /\.(mp4|m4v|mov|qt)$/i
  *  which is 50 MB on Supabase's free plan. Kept as a soft warning, not a hard block. */
 export const SOFT_SIZE_LIMIT = 45 * 1024 * 1024
 
+// An already-compressed file this big gets re-encoded rather than passed through.
+//
+// Passing compressed audio through untouched is right almost always — re-encoding only loses
+// information. It stops being right at the bucket ceiling, where the choice is not "lose a
+// little fidelity" but "lose the whole recording": a 45 MB voice memo was refused outright
+// with advice to go and split it up, when 24 kbps Opus takes the same audio to about 5 MB and
+// transcribes just as well. Set below SOFT_SIZE_LIMIT so the re-encode happens before the
+// warning can fire.
+const RECOMPRESS_ABOVE = 40 * 1024 * 1024
+
 export type Prepared = {
   blob: Blob
   mime: string
@@ -95,7 +105,8 @@ function bufferToWav(buf: AudioBuffer): Blob {
 export async function prepareAudio(file: File): Promise<Prepared> {
   const originalBytes = file.size
 
-  if (isCompressed(file)) {
+  // Already compressed and small enough to store: untouched is the best answer.
+  if (isCompressed(file) && file.size <= RECOMPRESS_ABOVE) {
     let durationSec = 0
     try {
       durationSec = await probeDuration(file)
@@ -176,6 +187,19 @@ export async function prepareAudio(file: File): Promise<Prepared> {
     } catch {
       // Safari has no AudioEncoder. Fall through to WAV and let the size check speak if it
       // is genuinely too big — a worse-compressed upload beats a failed one.
+    }
+  }
+
+  // No Opus encoder — Safari has no AudioEncoder — and the source was already compressed.
+  // A 16 kHz PCM WAV of a 45-minute recording is larger than the m4a it came from, so
+  // falling through to WAV here would make the problem worse. Send the original.
+  if (isCompressed(file) && wav.size >= originalBytes) {
+    return {
+      blob: file,
+      mime: file.type || 'audio/mpeg',
+      durationSec: decoded.duration,
+      originalBytes,
+      note: `this browser can't compress audio — uploaded as-is at ${fmtMB(originalBytes)}`,
     }
   }
 

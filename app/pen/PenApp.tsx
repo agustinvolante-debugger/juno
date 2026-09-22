@@ -332,10 +332,16 @@ export default function PenApp({
         if (!urlRes.ok) throw new Error((await urlRes.json()).error ?? 'could not get an upload URL')
         const { path, signedUrl } = (await urlRes.json()) as { path: string; signedUrl: string }
 
+        // Anything compressible has already been compressed by now, so reaching this means
+        // either a genuinely enormous recording or a browser with no Opus encoder. Say which,
+        // because "split the recording" is useless advice for the second one.
         if (prep.blob.size > SOFT_SIZE_LIMIT) {
           throw new Error(
-            `${fmtMB(prep.blob.size)} is over the storage limit on this plan. Split the recording, ` +
-              `or lower the segment length on the pen so it saves shorter files.`,
+            prep.mime === 'audio/ogg'
+              ? `${fmtMB(prep.blob.size)} even after compressing — that's several hours of audio. ` +
+                `Split it into shorter files and upload them separately; they'll be joined back up.`
+              : `${fmtMB(prep.blob.size)} is over the 50 MB per-file limit, and this browser can't ` +
+                `compress audio. Try again in Chrome, which can.`,
           )
         }
 
