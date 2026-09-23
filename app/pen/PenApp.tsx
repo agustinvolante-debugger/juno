@@ -20,6 +20,7 @@ import { postJson, getJson, patchJson, del, errMessage, PenHttpError } from '@/l
 import type { ChatSummary } from '@/lib/pen/chats'
 import type { DocSummary } from '@/lib/pen/docs'
 import { monthStart, nextMonthStart, type Usage } from '@/lib/pen/plan'
+import { ACCEPT_DESKTOP, acceptFor } from '@/lib/pen/file-accept'
 import { findRuns } from '@/lib/pen/merge-detect'
 
 /**
@@ -54,13 +55,20 @@ const MEDIA_RE = /\.(wav|wave|mp3|m4a|aac|ogg|opus|webm|amr|3gp|wma|flac|aif|aif
  * them out with no explanation. The WAV types and extensions are therefore listed explicitly.
  * MEDIA_RE remains the real gate — this only controls what the dialog shows.
  */
-const ACCEPT = [
-  'audio/*',
-  'audio/wav', 'audio/wave', 'audio/x-wav', 'audio/x-pn-wav', 'audio/vnd.wave',
-  'video/mp4', 'video/quicktime', 'video/x-m4v',
-  '.wav', '.wave', '.mp3', '.m4a', '.aac', '.ogg', '.opus', '.webm', '.amr', '.3gp', '.wma',
-  '.flac', '.aif', '.aiff', '.mp4', '.m4v', '.mov', '.qt',
-].join(',')
+/**
+ * The accept attribute, which on iOS is the difference between a working picker and one that
+ * opens and closes having selected nothing. See lib/pen/file-accept.
+ *
+ * Starts as the desktop list so the server and the first client render agree, then corrects
+ * itself once the browser can be asked what it is.
+ */
+function useAccept(): string | undefined {
+  const [accept, setAccept] = useState<string | undefined>(ACCEPT_DESKTOP)
+  useEffect(() => {
+    setAccept(acceptFor(navigator.userAgent, navigator.maxTouchPoints, navigator.platform))
+  }, [])
+  return accept
+}
 
 type Pending = { file: File; picked: boolean }
 type Progress = { name: string; phase: string; pct: number }
@@ -81,6 +89,7 @@ export default function PenApp({
   email: string
 }) {
   const [sessions, setSessions] = useState<PenSession[]>(initial)
+  const accept = useAccept()
   const router = useRouter()
 
   const openSession = useCallback((id: string | null) => {
@@ -631,7 +640,7 @@ export default function PenApp({
             </svg>
             <span className="pen-browse-t">Browse</span>
           </button>
-          <input ref={fileInput} type="file" multiple accept={ACCEPT} className="hidden"
+          <input ref={fileInput} type="file" multiple accept={accept} className="hidden"
                  onChange={(e) => e.target.files && addFiles(e.target.files)} />
           <Account email={email} name={name} avatar={avatar} />
         </div>

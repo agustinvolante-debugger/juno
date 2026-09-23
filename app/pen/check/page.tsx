@@ -8,14 +8,32 @@
 
 import { useEffect, useState } from 'react'
 import { prepareAudio, fmtMB, fmtDur, SOFT_SIZE_LIMIT } from '@/lib/pen/encode'
+import { ACCEPT_DESKTOP, acceptFor, isIOS } from '@/lib/pen/file-accept'
 import '../pen-theme.css'
 
 type Cap = { label: string; value: string; ok: boolean | null; note?: string }
+
+/**
+ * The three ways to ask for a file, so the answer comes back as evidence rather than a guess.
+ *
+ * On iOS, Safari passes `accept` to the Files provider, which matches on UTIs rather than the
+ * extensions listed. A USB drive reports the pen's .WAV files with whatever type it feels
+ * like — often none — and they come back greyed out, or the picker closes having chosen
+ * nothing. If "Anything at all" works here and the other two don't, that is the whole bug and
+ * the fix is already shipped. If NONE of them work, the problem is somewhere else entirely
+ * and we stop looking at `accept`.
+ */
+const PICKERS: { key: string; label: string; accept?: string; why: string }[] = [
+  { key: 'none', label: 'Anything at all', accept: undefined, why: 'No filter. What the app now uses on a phone.' },
+  { key: 'audio', label: 'Audio only', accept: 'audio/*', why: 'The usual filter. Can hide files a USB drive reports no type for.' },
+  { key: 'list', label: 'Audio + extensions', accept: ACCEPT_DESKTOP, why: 'What the app used to send to every device.' },
+]
 
 export default function CheckPage() {
   const [caps, setCaps] = useState<Cap[]>([])
   const [busy, setBusy] = useState(false)
   const [log, setLog] = useState<string[]>([])
+  const [picked, setPicked] = useState<Record<string, string>>({})
 
   useEffect(() => {
     const w = window as unknown as Record<string, unknown>
@@ -40,6 +58,17 @@ export default function CheckPage() {
         note: 'Only used by "Connect pen" on a laptop.',
       },
       { label: 'Upload ceiling', value: fmtMB(SOFT_SIZE_LIMIT), ok: null },
+      {
+        label: 'Treated as iOS',
+        value: isIOS(navigator.userAgent, navigator.maxTouchPoints, navigator.platform) ? 'yes' : 'no',
+        ok: null,
+        note: 'On iOS the app sends no file filter at all, because filtering hides the pen\u2019s files.',
+      },
+      {
+        label: 'Filter the app sends here',
+        value: acceptFor(navigator.userAgent, navigator.maxTouchPoints, navigator.platform) ?? '(none \u2014 every file selectable)',
+        ok: null,
+      },
     ]
 
     // isConfigSupported is the honest test — the constructor can exist while opus is refused.
@@ -83,21 +112,59 @@ export default function CheckPage() {
       <main className="mx-auto max-w-[680px] px-5 py-12">
         <h1 className="pen-display text-[34px] leading-tight">Upload check</h1>
         <p className="mt-3 text-[16.5px] leading-relaxed" style={{ color: 'var(--soft)' }}>
-          Pick the file that won&rsquo;t upload. This runs the same preparation the app does and
-          shows exactly where it stops. Nothing is uploaded and nothing leaves your device.
+          Two steps: whether the phone will let you <em>choose</em> a recording off the pen, and
+          whether that recording would upload. Nothing is uploaded and nothing leaves your device.
         </p>
 
-        <div className="pen-panel mt-7 p-5">
-          <label className="pen-btn pen-btn-primary inline-block cursor-pointer">
-            {busy ? 'Working…' : 'Choose the file'}
-            <input
-              type="file"
-              className="hidden"
-              accept="audio/*,.wav,.wave,.m4a,.mp3,.mp4,.mov"
-              disabled={busy}
-              onChange={(e) => e.target.files?.[0] && run(e.target.files[0])}
-            />
-          </label>
+        <h2 className="pen-label mt-9">Step 1 — can you even choose the file?</h2>
+        <p className="mt-2 text-[16.5px] leading-relaxed" style={{ color: 'var(--soft)' }}>
+          Try all three. Plug in the pen, tap a button, and try to pick a recording off it.
+          Some of these may show the file greyed out, or close without choosing anything —
+          that is the result we need, so try each one even after a failure.
+        </p>
+
+        <div className="pen-panel mt-4 p-5">
+          <div className="flex flex-col gap-3">
+            {PICKERS.map((p) => (
+              <div key={p.key}>
+                <label className="pen-btn inline-block w-full cursor-pointer text-center">
+                  {p.label}
+                  <input
+                    type="file"
+                    className="hidden"
+                    {...(p.accept ? { accept: p.accept } : {})}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0]
+                      setPicked((s) => ({
+                        ...s,
+                        [p.key]: f ? `\u2713 chose ${f.name} — ${fmtMB(f.size)}, type "${f.type || '(none reported)'}"` : '\u2717 closed without choosing anything',
+                      }))
+                      if (f) void run(f)
+                    }}
+                  />
+                </label>
+                <p className="mt-1 text-[14px] leading-snug" style={{ color: 'var(--faint)' }}>{p.why}</p>
+                {picked[p.key] && (
+                  <p className="pen-mono mt-1 text-[13px] leading-snug"
+                     style={{ color: picked[p.key].startsWith('\u2713') ? 'var(--good)' : 'var(--bad)' }}>
+                    {picked[p.key]}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <h2 className="pen-label mt-9">Step 2 — would it upload?</h2>
+        <p className="mt-2 text-[16.5px] leading-relaxed" style={{ color: 'var(--soft)' }}>
+          Runs automatically on whatever you managed to choose above.
+        </p>
+
+        <div className="pen-panel mt-4 p-5">
+          {busy && <p className="text-[16.5px]" style={{ color: 'var(--soft)' }}>Working…</p>}
+          {!busy && log.length === 0 && (
+            <p className="text-[16.5px]" style={{ color: 'var(--dim)' }}>Nothing chosen yet.</p>
+          )}
 
           {log.length > 0 && (
             <pre
