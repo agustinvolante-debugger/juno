@@ -9,6 +9,7 @@
 //                     anything, and did they come back", derived from pen_sessions with no
 //                     new tables.
 import { supabaseAdmin } from '@/lib/supabase'
+import { isMissingSchema } from './allowance'
 import { monthStart, nextMonthStart, type Usage } from './plan'
 import { slugType, displayType } from './store'
 import type { PenNotes, MeetingType } from './store'
@@ -21,6 +22,18 @@ export type OpenAction = {
   owner: string
   due: string
   priority: 'high' | 'normal' | 'low'
+  /** Position in the recording's notes.actions, which is what action_done records. */
+  index: number
+}
+
+/** Something the notes flagged as nearly missed, not yet marked handled. */
+export type OpenMissed = {
+  sessionId: string
+  sessionTitle: string
+  when: string
+  index: number
+  item: string
+  why: string
 }
 
 export type ClientCard = {
@@ -45,6 +58,9 @@ export type ArchiveStats = {
   actionsTotal: number
   actionsOpen: number
   missedSurfaced: number
+  /** Nearly-missed items not yet marked handled. */
+  missedOpen: number
+  openMissed: OpenMissed[]
   peopleMet: number
   /** One row per distinct category, newest-first by last use. Drives the left nav. */
   categories: { slug: string; label: string; count: number }[]
@@ -62,22 +78,25 @@ type Row = {
   meeting_type: MeetingType | null
   notes: PenNotes
   action_done: number[] | null
+  missed_done?: number[] | null
   recorded_at: string | null
   created_at: string
 }
 
 export async function archiveStats(userEmail: string): Promise<ArchiveStats> {
-  const { data, error } = await supabaseAdmin
-    .from('pen_sessions')
-    .select('id,title,status,duration_sec,meeting_type,notes,action_done,recorded_at,created_at')
-    .eq('user_email', userEmail)
-    .order('created_at', { ascending: false })
-  if (error) throw new Error(error.message)
-  const rows = (data ?? []) as Row[]
+  const cols = 'id,title,status,duration_sec,meeting_type,notes,action_done,recorded_at,created_at'
+  const query = (select: string) =>
+    supabaseAdmin.from('pen_sessions').select(select).eq('user_email', userEmail).order('created_at', { ascending: false })
+  let res = await query(`${cols},missed_done`)
+  // missed_done needs an ALTER. Before it runs, Home still loads; nothing counts as handled.
+  if (res.error && isMissingSchema(res.error.message)) res = await query(cols)
+  if (res.error) throw new Error(res.error.message)
+  const rows = (res.data ?? []) as unknown as Row[]
 
   const cats = new Map<string, { slug: string; label: string; count: number }>()
   const people = new Set<string>()
   const openActions: OpenAction[] = []
+  const openMissed: OpenMissed[] = []
   let minutes = 0
   let monthMinutes = 0
   let transcribedMinutes = 0
@@ -102,6 +121,11 @@ export async function archiveStats(userEmail: string): Promise<ArchiveStats> {
 
     const n = r.notes ?? {}
     missedSurfaced += n.missed?.length ?? 0
+    const handled = new Set(Array.isArray(r.missed_done) ? r.missed_done : [])
+    ;(n.missed ?? []).forEach((m, i) => {
+      if (handled.has(i) || !m.item) return
+      openMissed.push({ sessionId: r.id, sessionTitle: r.title ?? 'Untitled', when: r.recorded_at ?? r.created_at, index: i, item: m.item, why: m.why ?? '' })
+    })
     for (const p of n.people ?? []) {
       // Names only. A role like "buyer" is not a person and would inflate the count.
       if (p.name?.trim()) people.add(p.name.trim().toLowerCase())
@@ -121,6 +145,7 @@ export async function archiveStats(userEmail: string): Promise<ArchiveStats> {
         owner: a.owner ?? '',
         due: a.due ?? '',
         priority: a.priority ?? 'normal',
+        index: i,
       })
     })
   }
@@ -162,9 +187,14 @@ export async function archiveStats(userEmail: string): Promise<ArchiveStats> {
     actionsTotal,
     actionsOpen,
     missedSurfaced,
+    missedOpen: openMissed.length,
+    // Newest first: a warning from yesterday's meeting is still actionable; one from March
+    // mostly is not.
+    openMissed: openMissed.sort((a, b) => b.when.localeCompare(a.when)).slice(0, 300),
     peopleMet: people.size,
     categories: Array.from(cats.values()).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label)),
-    openActions: openActions.slice(0, 40),
+    // The Home panel lists every open action, so this is a guard, not a page size.
+    openActions: openActions.slice(0, 300),
     clients,
     firstAt: stamps[0] ?? null,
     lastAt: stamps[stamps.length - 1] ?? null,

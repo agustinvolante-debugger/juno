@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import crypto from 'node:crypto'
 import { activate, deactivate } from '@/lib/pen/accounts'
+import { settleHoursCheckout } from '@/lib/pen/hours'
 import { sendEmailResult } from '@/lib/news/email'
 
 export const dynamic = 'force-dynamic'
@@ -95,16 +96,28 @@ export async function POST(req: Request) {
     switch (event.type) {
       // The moment a Payment Link checkout succeeds. This is the one that matters.
       case 'checkout.session.completed': {
+        // Extra hours are a one-off payment, not a subscription. They must never reach
+        // activate(), which would overwrite the account's subscription id with null.
+        if (o.metadata?.kind === 'hours') {
+          await settleHoursCheckout({
+            id: o.id ?? '',
+            payment_status: o.payment_status,
+            amount_total: o.amount_total,
+            metadata: o.metadata,
+          })
+          break
+        }
         if (!email) break
         await activate({
           email,
           stripeCustomerId: typeof o.customer === 'string' ? o.customer : null,
           stripeSubscriptionId: typeof o.subscription === 'string' ? o.subscription : null,
           offer: o.metadata?.offer ?? null,
+          plan: o.metadata?.plan ?? undefined,
         })
         // The subscription.created event that follows carries the trial dates; this one only
         // has to open the door, which it should do immediately rather than wait for it.
-        await welcome(email, o.metadata?.offer ?? null).catch(() => {})
+        await welcome(email, o.metadata?.offer ?? null, o.metadata?.plan ?? null).catch(() => {})
         break
       }
 
@@ -124,6 +137,7 @@ export async function POST(req: Request) {
             currentPeriodEnd: periodEnd(sub),
             trialEndsAt: trialEnd(sub),
             offer: sub.metadata?.offer ?? null,
+            plan: sub.metadata?.plan ?? undefined,
           })
         } else if (!live && sub.id) {
           await deactivate(sub.id)
@@ -135,7 +149,7 @@ export async function POST(req: Request) {
       // ending with a payment method attached, so it is exactly the right moment to say so —
       // and a surprise charge is the fastest way to turn a trial into a chargeback.
       case 'customer.subscription.trial_will_end': {
-        if (email) await trialEnding(email, trialEnd(o)).catch(() => {})
+        if (email) await trialEnding(email, trialEnd(o), o.metadata?.plan ?? null).catch(() => {})
         break
       }
 
@@ -144,6 +158,14 @@ export async function POST(req: Request) {
       // is here to tell them before that happens, while it is still fixable.
       case 'invoice.payment_failed': {
         if (email) await paymentFailed(email).catch(() => {})
+        break
+      }
+
+      // A delayed payment method (a bank debit) settling after checkout already completed.
+      case 'checkout.session.async_payment_succeeded': {
+        if (o.metadata?.kind === 'hours') {
+          await settleHoursCheckout({ id: o.id ?? '', payment_status: o.payment_status, amount_total: o.amount_total, metadata: o.metadata })
+        }
         break
       }
 
@@ -167,17 +189,19 @@ const shell = (body: string) =>
   body +
   `</body></html>`
 
-async function trialEnding(email: string, endsAt: string | null) {
+async function trialEnding(email: string, endsAt: string | null, plan: string | null) {
   const when = endsAt
     ? new Date(endsAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
     : 'in three days'
   await sendEmailResult({
     to: email,
-    subject: 'Your Pen trial ends in three days',
+    subject: 'Your Juno Pen trial ends in three days',
     html: shell(
-      `<p>Your free trial ends on ${when}, and the card on file will be charged $15 for the ` +
-        `first month.</p>` +
-        `<p>If Pen hasn&rsquo;t earned that, cancel in one click and keep the recorder &mdash; ` +
+      // The yearly plan is charged $144 up front, not $15; saying $15 would be a surprise charge.
+      (plan === 'annual'
+        ? `<p>Your free trial ends on ${when}, and the card on file will be charged $144 for the year.</p>`
+        : `<p>Your free trial ends on ${when}, and the card on file will be charged $15 for the first month.</p>`) +
+        `<p>If Juno Pen hasn&rsquo;t earned that, cancel in one click and keep the recorder &mdash; ` +
         `no email, no call, nothing to explain.</p>` +
         `<p style="color:#514E45">Reply to this and it reaches a person.</p>`,
     ),
@@ -190,7 +214,7 @@ async function paymentFailed(email: string) {
     to: email,
     subject: 'Your card was declined',
     html: shell(
-      `<p>We couldn&rsquo;t charge the card on file, so your Pen account is on hold.</p>` +
+      `<p>We couldn&rsquo;t charge the card on file, so your Juno Pen account is on hold.</p>` +
         `<p>Your recordings and notes are untouched &mdash; update the card and everything ` +
         `comes straight back.</p>` +
         `<p><a href="${base}" style="color:#2C5F7C">${base.replace(/^https?:\/\//, '')}</a></p>` +
@@ -199,11 +223,11 @@ async function paymentFailed(email: string) {
   })
 }
 
-async function welcome(email: string, offer: string | null) {
+async function welcome(email: string, offer: string | null, plan: string | null) {
   const base = (process.env.PEN_PUBLIC_URL || 'https://pen.tryjunoapp.com').replace(/\/$/, '')
   await sendEmailResult({
     to: email,
-    subject: 'Your Pen account is open',
+    subject: 'Your Juno Pen account is open',
     html:
       `<!doctype html><html><head><meta charset="utf-8"></head>` +
       `<body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.65;color:#16150F;padding:24px;max-width:560px">` +
@@ -212,9 +236,13 @@ async function welcome(email: string, offer: string | null) {
       (offer === 'own-recorder'
         ? `<p>Upload anything to start &mdash; a voice memo off your phone works, and that is ` +
           `the fastest way to see what the write-up looks like.</p>`
-        : `<p>Your recorder goes in the post shortly. Your trial doesn&rsquo;t start counting ` +
-          `against you while it&rsquo;s in transit &mdash; and in the meantime you can upload ` +
-          `anything you already have, a voice memo works.</p>`) +
+        : plan === 'annual'
+          ? `<p>Your year has started, and your recorder goes in the post shortly. In the ` +
+            `meantime you can upload anything you already have &mdash; a voice memo works.</p>`
+          // The trial counts from sign-up, not delivery, so the email must not say otherwise.
+          : `<p>Your recorder goes in the post shortly, and your 21 free days have started. ` +
+            `Upload anything you already have while it&rsquo;s on its way &mdash; a voice memo ` +
+            `works, and it&rsquo;s the quickest way to see what the write-up looks like.</p>`) +
       `<p style="color:#514E45">Reply to this and it reaches a person.</p>` +
       `</body></html>`,
   })

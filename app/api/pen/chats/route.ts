@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
 import { askArchive } from '@/lib/pen/archive'
+import { briefFor } from '@/lib/pen/profile'
 import { createChat, getChat, listChats, setMessages, titleFromQuestion } from '@/lib/pen/chats'
 import type { ArchiveTurn } from '@/lib/pen/store'
 
@@ -24,7 +25,7 @@ export async function POST(req: Request) {
   const email = await authedEmail()
   if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-  const b = (await req.json().catch(() => ({}))) as { id?: string; question?: string }
+  const b = (await req.json().catch(() => ({}))) as { id?: string; question?: string; mentions?: unknown }
   const question = (b.question ?? '').trim()
   if (!question) return NextResponse.json({ error: 'Type a question first.' }, { status: 400 })
   if (question.length > 2000) {
@@ -36,11 +37,29 @@ export async function POST(req: Request) {
     if (!chat) return NextResponse.json({ error: 'That conversation no longer exists.' }, { status: 404 })
 
     const history = Array.isArray(chat.messages) ? chat.messages : []
-    const { answer, citations } = await askArchive({ userEmail: email, question, history })
+    // Tags arrive as {id, kind, label}. Plain id strings are recordings, from before people.
+    const raw = Array.isArray(b.mentions) ? b.mentions : []
+    const tags = raw.flatMap((x) =>
+      typeof x === 'string'
+        ? [{ id: x, kind: 'recording', label: '' }]
+        : x && typeof x === 'object' && typeof (x as { id?: unknown }).id === 'string'
+          ? [{ id: (x as { id: string }).id, kind: (x as { kind?: unknown }).kind === 'person' ? 'person' : 'recording', label: typeof (x as { label?: unknown }).label === 'string' ? (x as { label: string }).label : '' }]
+          : [],
+    )
+    const labels = Object.fromEntries(tags.filter((t) => t.label).map((t) => [t.id, t.label]))
+    const { answer, citations, mentioned } = await askArchive({
+      userEmail: email,
+      question,
+      history,
+      agent: await briefFor(email),
+      mentions: tags.filter((t) => t.kind === 'recording').map((t) => t.id),
+      people: tags.filter((t) => t.kind === 'person').map((t) => t.id),
+      labels,
+    })
     const now = Date.now()
     const messages: ArchiveTurn[] = [
       ...history,
-      { role: 'user', content: question, ts: now },
+      { role: 'user', content: question, ...(mentioned.length ? { mentions: mentioned } : {}), ts: now },
       { role: 'assistant', content: answer, citations, ts: now + 1 },
     ]
     const saved = await setMessages(email, chat.id, messages)

@@ -3,6 +3,7 @@ import { authedEmail } from '@/lib/news/auth'
 import { getSession, updateSession } from '@/lib/pen/store'
 import type { ChatTurn } from '@/lib/pen/store'
 import { askTranscript } from '@/lib/pen/chat'
+import { briefFor } from '@/lib/pen/profile'
 import { toDialogue } from '@/lib/pen/aai'
 
 export const dynamic = 'force-dynamic'
@@ -33,7 +34,7 @@ export async function POST(req: Request) {
   const history: ChatTurn[] = Array.isArray(session.chat) ? session.chat : []
 
   try {
-    const answer = await askTranscript({ dialogue, notes: session.notes ?? {}, history, question })
+    const answer = await askTranscript({ dialogue, notes: session.notes ?? {}, history, question, agent: await briefFor(email) })
     const now = Date.now()
     // Capped so one long-running conversation can't grow the row unboundedly.
     const chat: ChatTurn[] = [

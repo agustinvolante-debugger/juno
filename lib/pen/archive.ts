@@ -15,7 +15,8 @@ import Anthropic from '@anthropic-ai/sdk'
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
 import { supabaseAdmin } from '@/lib/supabase'
 import { stripMarkdown } from './plaintext'
-import type { ArchiveTurn, PenNotes, MeetingType, Transcript } from './store'
+import type { ArchiveTurn, PenNotes, MeetingType, Transcript, Mention } from './store'
+import { ownedPeople, sessionsWith } from './people'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 // Both stages are retrieval, not synthesis — pick the recordings, then answer from what is in
@@ -168,7 +169,15 @@ export async function askArchive(opts: {
   userEmail: string
   question: string
   history: ArchiveTurn[]
-}): Promise<{ answer: string; citations: { marker: number; session_id: string; title: string; quote: string }[] }> {
+  /** The user's own profile as a prompt paragraph. See lib/pen/profile.ts. */
+  agent?: string
+  /** Recording ids the user tagged with @. Always read, and read first. */
+  mentions?: string[]
+  /** Person ids the user tagged with @. The answer is drawn only from their recordings. */
+  people?: string[]
+  /** What each tag looks like in the question ("@Recruiter…"), by id. */
+  labels?: Record<string, string>
+}): Promise<{ answer: string; citations: { marker: number; session_id: string; title: string; quote: string }[]; mentioned: Mention[] }> {
   const { data, error } = await supabaseAdmin
     .from('pen_sessions')
     .select('id,title,client_name,meeting_type,recorded_at,created_at,notes')
@@ -177,10 +186,43 @@ export async function askArchive(opts: {
     .limit(400)
   if (error) throw new Error(error.message)
 
-  const rows = (data ?? []) as IndexRow[]
+  let rows = (data ?? []) as IndexRow[]
   if (!rows.length) {
-    return { answer: 'There are no recordings in your archive yet.', citations: [] }
+    return { answer: 'There are no recordings in your archive yet.', citations: [], mentioned: [] }
   }
+
+  // @-tagged recordings. Checked against this user's own rows, because the ids come from the
+  // browser and answerFrom reads by id alone. Looked up separately rather than from `rows`,
+  // which stops at the newest 400: tagging an old recording must still work.
+  const label = (id: string, fallback: string) => {
+    const l = opts.labels?.[id]
+    return typeof l === 'string' && l.trim() ? l.trim().slice(0, 60) : fallback
+  }
+  const mentioned: Mention[] = (await ownedMentions(opts.userEmail, opts.mentions ?? [])).map((m) => ({ ...m, label: label(m.id, m.title) }))
+  const tagged = mentioned.map((m) => m.id)
+
+  // @-tagged people narrow the archive to the recordings they were on. "Calls with @Chris
+  // about the Malibu house" is then a question over Chris's calls only, and the model cannot
+  // wander into a Malibu conversation he was never part of.
+  const persons = await ownedPeople(opts.userEmail, opts.people ?? [])
+  const personTags: PersonTag[] = []
+  for (const p of persons) {
+    personTags.push({ id: p.id, label: label(p.id, p.name), name: p.name, email: p.email, role: p.role, company: p.company, sessions: await sessionsWith(opts.userEmail, [p.id]) })
+  }
+  const personMentions: Mention[] = personTags.map((p) => ({ id: p.id, title: p.name, label: p.label, kind: 'person' }))
+  if (personTags.length) {
+    const scope = new Set([...tagged, ...personTags.flatMap((p) => p.sessions)])
+    rows = rows.filter((r) => scope.has(r.id))
+    if (!scope.size) {
+      const names = personTags.map((p) => p.name).join(' and ')
+      return {
+        answer: `No recordings are linked to ${names} yet. Open a recording they were on and add them under People.`,
+        citations: [],
+        mentioned: [...mentioned, ...personMentions],
+      }
+    }
+  }
+  const withMentions = { ...opts, mentioned, personTags, allMentions: [...mentioned, ...personMentions] }
 
   const today = new Date().toISOString().slice(0, 10)
 
@@ -192,7 +234,8 @@ export async function askArchive(opts: {
   // relevant recordings on two of four ordinary questions, including one the per-recording
   // chat answered in detail, and the user saw "nothing in your archive covers that".
   if (rows.length <= MAX_ANSWER_ROWS) {
-    return answerFrom(rows.map((r) => r.id), rows, opts, today)
+    const all = rows.map((r) => r.id)
+    return answerFrom(Array.from(new Set([...tagged, ...all])), rows, withMentions, today)
   }
 
   const sel = await anthropic.messages.parse({
@@ -232,7 +275,8 @@ export async function askArchive(opts: {
   // Union, model first: what it reasoned about leads, and literal transcript hits it could not
   // have seen from the notes get appended rather than displacing them.
   const literal = await transcriptMatches(opts.userEmail, keyTerms(opts.question))
-  const wanted = Array.from(new Set([...picked, ...literal.filter((id) => rows.some((r) => r.id === id))]))
+  // Tagged recordings lead, so the cap below can never cut one the user named.
+  const wanted = Array.from(new Set([...tagged, ...picked, ...literal.filter((id) => rows.some((r) => r.id === id))]))
     .slice(0, MAX_ANSWER_ROWS)
   // An empty selection is not evidence of an empty archive — it is one model reading short
   // summaries and being timid. Telling someone their archive has nothing on a subject it
@@ -241,7 +285,27 @@ export async function askArchive(opts: {
   // grounded and will say "that is not in these recordings" when that is genuinely true.
   const rowsToRead = wanted.length ? wanted : rows.slice(0, MAX_ANSWER_ROWS).map((r) => r.id)
 
-  return answerFrom(rowsToRead, rows, opts, today)
+  return answerFrom(rowsToRead, rows, withMentions, today)
+}
+
+type PersonTag = { id: string; label: string; name: string; email: string | null; role: string | null; company: string | null; sessions: string[] }
+
+/** The tagged ids that really are this user's recordings, with the title the user sees. */
+async function ownedMentions(userEmail: string, ids: string[]): Promise<Mention[]> {
+  const clean = Array.from(new Set(ids.filter((x) => typeof x === 'string' && /^[0-9a-f-]{36}$/i.test(x)))).slice(0, 10)
+  if (!clean.length) return []
+  const { data, error } = await supabaseAdmin
+    .from('pen_sessions')
+    .select('id,title,client_name,source_name')
+    .eq('user_email', userEmail)
+    .in('id', clean)
+  if (error) throw new Error(error.message)
+  const byId = new Map((data ?? []).map((r) => [r.id as string, r]))
+  // Kept in the order the user typed them.
+  return clean.flatMap((id) => {
+    const r = byId.get(id)
+    return r ? [{ id, title: (r.title || r.client_name || r.source_name || 'Untitled') as string }] : []
+  })
 }
 
 /* --------------------------------------------------------- stage 2: answer */
@@ -249,9 +313,9 @@ export async function askArchive(opts: {
 async function answerFrom(
   wanted: string[],
   rows: IndexRow[],
-  opts: { userEmail: string; question: string; history: ArchiveTurn[] },
+  opts: { userEmail: string; question: string; history: ArchiveTurn[]; agent?: string; mentioned?: Mention[]; personTags?: PersonTag[]; allMentions?: Mention[] },
   today: string,
-): Promise<{ answer: string; citations: { marker: number; session_id: string; title: string; quote: string }[] }> {
+): Promise<{ answer: string; citations: { marker: number; session_id: string; title: string; quote: string }[]; mentioned: Mention[] }> {
   wanted = wanted.slice(0, MAX_ANSWER_ROWS)
   const { data: full, error: e2 } = await supabaseAdmin
     .from('pen_sessions')
@@ -261,6 +325,36 @@ async function answerFrom(
 
   const byId = new Map((full ?? []).map((r) => [r.id as string, r]))
   const marked = wanted.map((id, i) => ({ marker: i + 1, id, row: byId.get(id) }))
+
+  // "@Recruiter screen" in the question means one specific recording. Say which marker it is,
+  // so the model does not have to match a title to a recording by guesswork.
+  const tags = (opts.mentioned ?? []).flatMap((m) => {
+    const hit = marked.find((x) => x.id === m.id && x.row)
+    return hit ? [`@${m.label ?? m.title} = the recording titled "${m.title}", recording [${hit.marker}]`] : []
+  })
+  const people = (opts.personTags ?? []).map((p) => {
+    const on = marked.filter((x) => x.row && p.sessions.includes(x.id)).map((x) => `[${x.marker}]`)
+    const who = [p.email && `<${p.email}>`, p.role, p.company].filter(Boolean).join(', ')
+    return (
+      `@${p.label} = the person ${p.name}${who ? ` (${who})` : ''}. ` +
+      (on.length ? `They were on recordings ${on.join(' ')}.` : 'None of the recordings supplied involve them.') +
+      (p.sessions.length > on.length ? ` They are on ${p.sessions.length} recordings in total; only these were supplied.` : '')
+    )
+  })
+  const taggedNote =
+    (tags.length
+      ? `The user tagged these recordings with @. Each tag means exactly that recording; answer ` +
+        `about it specifically and cite it:\n${tags.join('\n')}\n\n`
+      : '') +
+    (people.length
+      ? `The user tagged these people with @. Only the recordings listed for a person involve ` +
+        `them. When asked to show or list someone's conversations, give one short line per ` +
+        `recording, newest first, each with its date and citation:\n${people.join('\n')}\n\n`
+      : '') +
+    (tags.length || people.length
+      ? 'The @ labels are shorthand the user typed. In your answer, call recordings and people by ' +
+        'their real title or name, never by the @ label.\n\n'
+      : '')
 
   const corpus = marked
     .filter((m) => m.row)
@@ -306,10 +400,11 @@ async function answerFrom(
       'without saying which is them. Do not decide who the user was. Say "the interviewer" and ' +
       '"the candidate", or name people the transcript names; never write "you said" or "you ' +
       'interviewed" unless the transcript makes it explicit.\n' +
-      '- Never invent names, numbers, dates or identifiers.',
+      '- Never invent names, numbers, dates or identifiers.' +
+      (opts.agent ?? ''),
     messages: [
       ...opts.history.slice(-6).map((t) => ({ role: t.role, content: t.content })),
-      { role: 'user' as const, content: `Recordings:\n\n${corpus}\n\nQuestion: ${opts.question}` },
+      { role: 'user' as const, content: `Recordings:\n\n${corpus}\n\n${taggedNote}Question: ${opts.question}` },
     ],
     output_config: { format: jsonSchemaOutputFormat(ANSWER_SCHEMA) },
   })
@@ -345,7 +440,7 @@ async function answerFrom(
   }
 
   const citations = Array.from(out.values()).sort((a, b) => a.marker - b.marker)
-  return { answer, citations }
+  return { answer, citations, mentioned: opts.allMentions ?? opts.mentioned ?? [] }
 }
 
 /* ------------------------------------------------------------------ store */

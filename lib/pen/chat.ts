@@ -39,6 +39,8 @@ export async function askTranscript(opts: {
   notes: PenNotes
   history: ChatTurn[]
   question: string
+  /** The user's own profile as a prompt paragraph. See lib/pen/profile.ts. */
+  agent?: string
 }): Promise<string> {
   // The transcript is the stable prefix and the question is volatile, so the transcript sits
   // in `system` behind a cache breakpoint. Every follow-up question on the same recording then
@@ -52,7 +54,7 @@ export async function askTranscript(opts: {
     // nothing, a truncated answer costs the whole request.
     max_tokens: 8000,
     system: [
-      { type: 'text', text: SYSTEM },
+      { type: 'text', text: SYSTEM + (opts.agent ?? '') },
       {
         type: 'text',
         text:

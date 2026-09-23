@@ -15,7 +15,7 @@ import PenSequence from './PenSequence'
 // for contrast without leaving the palette.
 
 const SPRING = { type: 'spring' as const, stiffness: 260, damping: 30, mass: 0.9 }
-import { PLAN_MONTHLY_USD, PLAN_ANNUAL_USD, PEN_USD, INCLUDED_HOURS, TRIAL_DAYS_POSTED } from '@/lib/pen/plan'
+import { PLAN_MONTHLY_USD, PLAN_ANNUAL_USD, PEN_USD, INCLUDED_HOURS, HOUR_USD, TRIAL_DAYS_POSTED } from '@/lib/pen/plan'
 
 /**
  * Stripe Checkout links, one per plan. Payment Links are used rather than a server-side
@@ -67,6 +67,8 @@ const SIGN_UP = '/pen/signup'
  * person to add a CTA cannot invent a fifth.
  */
 const CTA = `Start ${TRIAL_DAYS_POSTED} days free`
+/** The yearly plan is paid up front (no trial), so its button cannot promise free days. */
+const CTA_YEARLY = 'Get the year'
 
 /**
  * CSS-driven, deliberately. A marketing page must not start at opacity 0 and wait for JS:
@@ -109,8 +111,9 @@ function Nav() {
   return (
     <header className="pen-lp-nav">
       <div className="pen-lp-wrap flex items-center justify-between">
-        <Link href="/pen" className="flex items-center" aria-label="Pen by Juno">
-          <Image src="/juno_mark.png" alt="Juno" width={32} height={32} className="pen-mark" priority />
+        <Link href="/pen" className="flex items-center" aria-label="Juno Pen, home">
+          <Image src="/juno_mark.png" alt="" width={32} height={32} className="pen-mark" priority />
+          <span className="pen-display pen-lp-wordmark">Juno Pen</span>
         </Link>
         <nav className="flex items-center gap-1.5">
           <a href="#pricing" className="pen-lp-navlink">Pricing</a>
@@ -145,7 +148,7 @@ function Hero() {
       <div className="mt-12 grid gap-10 sm:mt-14 lg:grid-cols-[1fr_auto] lg:items-end lg:gap-16">
         <Reveal delay={0.1}>
           <p className="max-w-[58ch] pen-t-lede" style={{ color: 'var(--soft)' }}>
-            Record with a pen in your shirt pocket. Plug it into your laptop. Pen writes up what
+            Record with a pen in your shirt pocket. Plug it into your laptop. Juno Pen writes up what
             was said, who said it, what you agreed to, and the thing you nearly missed.
           </p>
         </Reveal>
@@ -175,7 +178,7 @@ function OfferStrip() {
   return (
     <div className="pen-lp-wrap pen-offer">
       <p className="pen-mono pen-t-label">
-        {`${TRIAL_DAYS_POSTED} days free \u00B7 then $${PLAN_MONTHLY_USD} a month, or $${PLAN_ANNUAL_USD} a year with the pen included`}
+        {`$${PLAN_MONTHLY_USD} a month after ${TRIAL_DAYS_POSTED} days free \u00B7 or $${PLAN_ANNUAL_USD} a year with the pen included`}
       </p>
     </div>
   )
@@ -410,7 +413,7 @@ const STEPS = [
   {
     n: '02',
     h: 'Plug it in',
-    p: 'Connect the pen over USB and pick the drive. Pen finds the recordings and takes it from there.',
+    p: 'Connect the pen over USB and pick the drive. Juno Pen finds the recordings and takes it from there.',
   },
   {
     n: '03',
@@ -456,7 +459,7 @@ function TheCatch() {
           </h2>
           <p className="mt-6 max-w-[40ch] pen-t-lede leading-[1.62]" style={{ color: 'var(--soft)' }}>
             The useful part is the commitment somebody made in passing, the constraint mentioned
-            once, the question asked of you that never got answered. Pen goes looking for those.
+            once, the question asked of you that never got answered. Juno Pen goes looking for those.
           </p>
         </Reveal>
 
@@ -583,7 +586,7 @@ function Compounds() {
           <p className="mt-6 max-w-[42ch] pen-t-lede leading-[1.62]" style={{ color: 'var(--soft)' }}>
             One meeting gives you a note. Several give you a picture: what these people keep
             asking for, what they have quietly ruled out, what you still have not found out.
-            Pen keeps that picture and updates it every time you record.
+            Juno Pen keeps that picture and updates it every time you record.
           </p>
           <p className="mt-5 max-w-[42ch] pen-t-lede leading-[1.62]" style={{ color: 'var(--soft)' }}>
             It is also the part no general notetaker can give you. They summarise a meeting.
@@ -652,7 +655,7 @@ function Hardware() {
           {/* The photograph goes here. Shoot the pen on white printer paper in window light,
               one frame from above, and drop it in as public/pen-device.jpg. multiply blending
               removes the white ground against our paper, so no cut-out is needed. */}
-          <div className="pen-hw-shot" role="img" aria-label="The Pen recorder, seen from above">
+          <div className="pen-hw-shot" role="img" aria-label="The Juno Pen recorder, seen from above">
             <div className="pen-hw-slot">
               <span className="pen-mono">public/pen-device.jpg</span>
               <span>Photograph pending. Shoot on white paper, 3:2, from above.</span>
@@ -692,6 +695,7 @@ function Hardware() {
 // reader diff two nine-line lists to find the one line that differed.
 const INCLUDED = [
   `${INCLUDED_HOURS} hours of recording a month`,
+  `Need more? Extra hours are $${HOUR_USD} each`,
   'Full transcript with who said what',
   'Summary, decisions and action items',
   'What you might have missed',
@@ -764,7 +768,7 @@ function Pricing() {
                   </span>
                 </div>
                 <p className="pen-mono pen-od-soft mt-3 pen-t-small">
-                  {`$${Math.round(PLAN_ANNUAL_USD / 12)} a month \u00B7 billed once`}
+                  {`$${Math.round(PLAN_ANNUAL_USD / 12)} a month \u00B7 billed once, today`}
                 </p>
               </header>
 
@@ -773,7 +777,7 @@ function Pricing() {
               </p>
 
               <PlanCta href={`${SIGN_UP}?plan=annual&offer=posted-pen&from=pricing`} variant="accent">
-                {CTA}
+                {CTA_YEARLY}
               </PlanCta>
             </article>
           </Reveal>
@@ -825,7 +829,7 @@ function Footer() {
       <div className="pen-lp-wrap pb-10">
         <p className="pen-mono max-w-[70ch] pen-t-label leading-[1.8]" style={{ color: 'var(--faint)' }}>
           Recording a conversation needs everyone&rsquo;s permission in many places, Florida included.
-          Pen asks you to confirm consent before it processes anything.
+          Juno Pen asks you to confirm consent before it processes anything.
         </p>
       </div>
     </footer>

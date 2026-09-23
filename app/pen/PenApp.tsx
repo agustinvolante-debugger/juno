@@ -5,13 +5,17 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Icon, { type IconName } from './Icon'
 import { COMMON_TYPES, slugType, isViewing, displayType, BUCKETS, BUCKET_ICON, bucketOf, type Bucket } from '@/lib/pen/categories'
-import type { PenSession, MeetingType, ChatTurn, PenNotes, NoteBlock } from '@/lib/pen/store'
+import type { PenSession, MeetingType, ChatTurn, PenNotes, NoteBlock, Mention } from '@/lib/pen/store'
+import type { PersonCard } from '@/lib/pen/people'
+import { useTagPicker, TagMenu, shortLabel, type Taggable } from './TagPicker'
 import NoteEditor, { blocksFrom } from './NoteEditor'
 import TranscriptEditor from './TranscriptEditor'
 import ChatView from './ChatView'
 import DocView from './DocView'
 import Overview from './Overview'
 import SignOut from './SignOut'
+import PeoplePanel from './PeoplePanel'
+import PeoplePicker, { type Picked } from './PeoplePicker'
 import type { ArchiveStats } from '@/lib/pen/stats'
 import DeliverableSheet, { DeliverableActions, type SheetRequest } from './DeliverableSheet'
 import SendBriefing from './SendBriefing'
@@ -19,7 +23,9 @@ import { prepareAudio, fmtMB, fmtDur, SOFT_SIZE_LIMIT } from '@/lib/pen/encode'
 import { postJson, getJson, patchJson, del, errMessage, PenHttpError } from '@/lib/pen/http'
 import type { ChatSummary } from '@/lib/pen/chats'
 import type { DocSummary } from '@/lib/pen/docs'
-import { monthStart, nextMonthStart, INCLUDED_HOURS, type Usage } from '@/lib/pen/plan'
+import type { Allowance } from '@/lib/pen/allowance'
+import UsageBar from './UsageBar'
+import Link from 'next/link'
 import { ACCEPT_DESKTOP, acceptFor } from '@/lib/pen/file-accept'
 import { findRuns } from '@/lib/pen/merge-detect'
 
@@ -80,9 +86,11 @@ export default function PenApp({
   email,
   name,
   avatar,
+  allowance: initialAllowance,
 }: {
   initial: PenSession[]
   stats: ArchiveStats | null
+  allowance: Allowance | null
   loadError: string | null
   name?: string | null
   avatar?: string | null
@@ -99,14 +107,15 @@ export default function PenApp({
   const [pending, setPending] = useState<Pending[]>([])
   const [penName, setPenName] = useState<string | null>(null)
   const [consent, setConsent] = useState(false)
-  const [clientName, setClientName] = useState('')
+  const [callPeople, setCallPeople] = useState<Picked[]>([])
   const [progress, setProgress] = useState<Progress | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  const [heldNotice, setHeldNotice] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [tab, setTab] = useState<'note' | 'transcript'>('note')
   const [chatOpen, setChatOpen] = useState(false)
   const [view, setView] = useState<View>({ k: 'archive' })
-  const [chatSeed, setChatSeed] = useState<string | null>(null)
+  const [chatSeed, setChatSeed] = useState<{ text: string; mentions: Mention[] } | null>(null)
   const [chats, setChats] = useState<ChatSummary[]>([])
   const [docs, setDocs] = useState<DocSummary[]>([])
   const [catFilter, setCatFilter] = useState<string | null>(null)
@@ -150,31 +159,27 @@ export default function PenApp({
       /* same */
     }
   }, [])
+  // Everyone the user has added, for the @ picker. Refreshed when a recording's People change.
+  const [people, setPeople] = useState<PersonCard[]>([])
+  const refreshPeople = useCallback(async () => {
+    try {
+      setPeople((await getJson<{ people: PersonCard[] }>('/api/pen/people')).people)
+    } catch {
+      /* same */
+    }
+  }, [])
   useEffect(() => {
     void refreshChats()
     void refreshDocs()
-  }, [refreshChats, refreshDocs])
+    void refreshPeople()
+  }, [refreshChats, refreshDocs, refreshPeople])
 
   /** Start a thread from the header search. The question is asked once the view mounts. */
-  const askArchive = useCallback((question: string) => {
-    setChatSeed(question)
+  const askArchive = useCallback((question: string, mentions: Mention[] = []) => {
+    setChatSeed({ text: question, mentions })
     setView({ k: 'chat', id: null })
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
-
-  // Same array that feeds the recordings list, so the meter can never disagree with it.
-  // `stats` is a server snapshot taken at page load and is not refetched on import.
-  const usage = useMemo<Usage>(() => {
-    const since = monthStart().getTime()
-    const mins = sessions.reduce((n, x) => {
-      const when = new Date(x.recorded_at ?? x.created_at).getTime()
-      return when >= since ? n + (x.duration_sec ?? 0) / 60 : n
-    }, 0)
-    return {
-      used: Math.round(mins),
-      resetsAt: stats?.usage.resetsAt ?? nextMonthStart().toISOString(),
-    }
-  }, [sessions, stats])
 
   // A category earns a place in the nav by grouping at least this many recordings.
   // Only buckets that actually hold something appear in the nav.
@@ -198,13 +203,32 @@ export default function PenApp({
     setSupportsPicker(typeof window.showDirectoryPicker === 'function')
   }, [])
 
+  const [allowance, setAllowance] = useState<Allowance | null>(initialAllowance)
+  const loadAllowance = useCallback(async () => {
+    const r = await fetch('/api/pen/allowance', { cache: 'no-store' })
+    if (r.ok) setAllowance(((await r.json()) as { allowance: Allowance }).allowance)
+  }, [])
+
   const refresh = useCallback(async () => {
     const r = await fetch('/api/pen/sessions', { cache: 'no-store' })
     if (r.ok) setSessions(((await r.json()) as { sessions: PenSession[] }).sessions)
+    void loadAllowance()
     // `stats` arrives as a server prop; re-running the server component is the only thing
     // that refreshes it. Without this the Overview and categories sit frozen at page load.
     router.refresh()
-  }, [router])
+  }, [router, loadAllowance])
+
+  // Recordings held for lack of time go through on their own once there is time again: after
+  // the 1st, or after hours were bought somewhere the webhook could not reach. Once per load.
+  const resumed = useRef(false)
+  useEffect(() => {
+    if (resumed.current || !allowance?.canProcess || !sessions.some((s) => s.status === 'held')) return
+    resumed.current = true
+    void (async () => {
+      const r = await fetch('/api/pen/resume', { method: 'POST' })
+      if (r.ok && ((await r.json()) as { started: number }).started > 0) void refresh()
+    })()
+  }, [allowance, sessions, refresh])
 
   const patchLocal = useCallback((s: PenSession) => {
     setSessions((prev) => prev.map((x) => (x.id === s.id ? s : x)))
@@ -370,7 +394,9 @@ export default function PenApp({
             duration_sec: prep.durationSec,
             recorded_at: new Date(file.lastModified).toISOString(),
             consent: true,
-            client_name: clientName.trim() || undefined,
+            // The first person also names the call, which older parts of the app read.
+            client_name: callPeople[0]?.name || undefined,
+            ...(callPeople.length ? { people: callPeople.map((p) => (p.id ? { id: p.id } : { name: p.name })) } : {}),
           }),
         })
         if (!sRes.ok) throw new Error((await sRes.json()).error ?? 'could not save the recording')
@@ -386,7 +412,13 @@ export default function PenApp({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: session.id, speakers: 3 }),
           })
-          if (!tRes.ok) setErr((await tRes.json()).error ?? 'transcription failed to start')
+          if (tRes.status === 402) {
+            // Saved and waiting, not failed. The banner says so and the row shows it.
+            const j = (await tRes.json()) as { allowance?: Allowance }
+            if (j.allowance) setAllowance(j.allowance)
+            setSessions((prev) => prev.map((x) => (x.id === session.id ? { ...x, status: 'held' as const } : x)))
+            setHeldNotice(true)
+          } else if (!tRes.ok) setErr((await tRes.json()).error ?? 'transcription failed to start')
           else setSessions((prev) => prev.map((x) => (x.id === session.id ? { ...x, status: 'transcribing' as const } : x)))
         }
       } catch (e) {
@@ -398,7 +430,10 @@ export default function PenApp({
     // On a phone the whole point is that you can now put the phone away, so say so instead of
     // dropping the user back on a screen with nothing on it.
     if (isPhone) setImportDone(true)
+    setCallPeople([])
     void refresh()
+    // New names typed at upload are contacts now.
+    void refreshPeople()
   }
 
   /* ------------------------------------------------------------------- view */
@@ -412,6 +447,25 @@ export default function PenApp({
     [listed, catFilter],
   )
   const grouped = useMemo(() => groupByDay(visible), [visible])
+
+  // What @ can tag: people first, then recordings by the same title the list shows.
+  const taggable = useMemo<Taggable[]>(
+    () => [
+      ...people.map((p) => ({
+        id: p.id,
+        kind: 'person' as const,
+        title: p.name,
+        sub: p.recordings === 1 ? '1 recording' : `${p.recordings} recordings`,
+      })),
+      ...listed.map((s) => ({
+        id: s.id,
+        kind: 'recording' as const,
+        title: s.title || s.client_name || s.source_name || 'Untitled',
+        sub: new Date(s.recorded_at ?? s.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      })),
+    ],
+    [people, listed],
+  )
 
   /** Every part of a joined meeting, in order. One entry for a recording that stands alone. */
   const partsOf = useCallback(
@@ -465,7 +519,7 @@ export default function PenApp({
       <div className="pen-brand">
         <Image src="/juno_mark.png" alt="" width={34} height={34} className="pen-mark" priority />
         <div>
-          <div className="pen-display pen-brand-name">Pen</div>
+          <div className="pen-display pen-brand-name">Juno Pen</div>
           <div className="pen-brand-tag">Capture. Understand. Do.</div>
         </div>
       </div>
@@ -610,6 +664,10 @@ export default function PenApp({
           </>
         )}
       </nav>
+
+      <div className="pen-side-meter">
+        <UsageBar allowance={allowance} />
+      </div>
       </div>
 
       <div className="pen-main-col">
@@ -621,8 +679,9 @@ export default function PenApp({
           value={query}
           onChange={setQuery}
           suggestions={searchSuggestions(stats)}
-          onAsk={(q) => {
-            askArchive(q)
+          options={taggable}
+          onAsk={(q, mentions) => {
+            askArchive(q, mentions)
             setQuery('')
           }}
         />
@@ -656,6 +715,12 @@ export default function PenApp({
         </Banner>
       )}
       {err && <Banner tone="bad" onClose={() => setErr(null)}>{err}</Banner>}
+      {heldNotice && (
+        <Banner tone="warn" onClose={() => setHeldNotice(false)}>
+          {"You're out of recording hours for this month. Your upload is saved and will be transcribed as soon as you add hours or the month resets. "}
+          <Link href="/pen/settings/hours" className="underline">Buy hours</Link>
+        </Banner>
+      )}
       {mounted && !supportsPicker && (
         <Banner tone="warn">
           This browser can’t read a folder directly. Use Chrome or Edge for one-click “Connect pen”, or drag files in below.
@@ -692,7 +757,7 @@ export default function PenApp({
           <ImportTray
             pending={pending} setPending={setPending} penName={penName}
             consent={consent} setConsent={setConsent}
-            clientName={clientName} setClientName={setClientName}
+            people={people} callPeople={callPeople} setCallPeople={setCallPeople}
             progress={progress} onImport={importPicked}
             phone={isPhone} onClose={closeSheet} done={importDone}
           />
@@ -716,6 +781,7 @@ export default function PenApp({
         <section className="pen-shell-main min-w-0">
           {view.k === 'chat' ? (
             <ChatView
+              recordings={taggable}
               chatId={view.id}
               seed={chatSeed}
               onSeedConsumed={() => setChatSeed(null)}
@@ -749,6 +815,12 @@ export default function PenApp({
             stats ? (
               <Overview
                 stats={stats}
+                people={people}
+                onChanged={() => void refresh()}
+                onAskPerson={(p) => {
+                  const label = shortLabel(p.name, new Set())
+                  askArchive(`Show me all the conversations with @${label}`, [{ id: p.id, title: p.name, label, kind: 'person' }])
+                }}
                 onOpen={(id) => {
                   openSession(id)
                   setTab('note')
@@ -764,6 +836,7 @@ export default function PenApp({
             <div className={chatOpen ? 'grid gap-7 xl:grid-cols-[minmax(0,1fr)_352px]' : ''}>
               <Detail
                 selfEmail={email}
+                onPeopleChanged={() => void refreshPeople()}
                 onBack={() => setView({ k: 'archive' })}
                 session={active} tab={tab} setTab={setTab}
                 parts={partsOf(active)}
@@ -823,7 +896,7 @@ export default function PenApp({
                         <span className="pen-row-title min-w-0 flex-1 text-[14.5px] font-medium leading-snug">
                           {s.title || s.client_name || s.source_name || 'Untitled'}
                         </span>
-                        <span className="pen-pill" data-s={s.status}>{s.status}</span>
+                        <span className="pen-pill" data-s={s.status}>{s.status === 'held' ? 'needs hours' : s.status}</span>
                       </div>
                       <div className="pen-mono mt-1.5 text-[13px]" style={{ color: 'var(--faint)' }}>
                         {fmtDur(partsOf(s).reduce((n, x) => n + (x.duration_sec ?? 0), 0))}
@@ -891,44 +964,13 @@ function Account({ email, name, avatar }: { email: string; name?: string | null;
       {open && (
         <div className="pen-acct2-menu">
           <div className="pen-acct2-email">{email}</div>
+          <Link href="/pen/settings" className="pen-acct2-item">
+            <Icon name="settings" size={17} />
+            Settings
+          </Link>
           <SignOut email={email} />
         </div>
       )}
-    </div>
-  )
-}
-
-/* ============================================================ usage meter */
-
-/**
- * Minutes recorded this month, against the twelve hours the plan includes.
- *
- * It said "unlimited" until the plan stopped being unlimited. It is a meter again, but a calm
- * one: going over is not blocked and there is nothing to buy, because breakeven is thirty-four
- * hours and metering a realtor's recording would discourage the one habit the product needs.
- * So the bar reports, and going over says what actually happens — nothing.
- */
-function UsageMeter({ usage }: { usage: Usage }) {
-  const hours = usage.used / 60
-  const pct = Math.min(100, (hours / INCLUDED_HOURS) * 100)
-  const over = hours > INCLUDED_HOURS
-  const resets = new Date(usage.resetsAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })
-
-  return (
-    <div className="pen-meter">
-      <div className="pen-meter-head">
-        <span className="pen-label">Recorded this month</span>
-      </div>
-      <div className="pen-meter-n">
-        <strong>{hours >= 1 ? `${hours.toFixed(1)}h` : `${usage.used}m`}</strong>
-        <span className="pen-meter-un">of {INCLUDED_HOURS}h</span>
-      </div>
-      <div className="pen-meter-bar" aria-hidden>
-        <span style={{ width: `${pct}%` }} data-over={over ? 'true' : 'false'} />
-      </div>
-      <div className="pen-meter-sub">
-        {over ? 'Over your included hours — keep going, nothing is blocked.' : `Resets ${resets}`}
-      </div>
     </div>
   )
 }
@@ -962,16 +1004,19 @@ function ArchiveSearch({
   value,
   onChange,
   suggestions,
+  options,
   onAsk,
 }: {
   value: string
   onChange: (v: string) => void
   suggestions: string[]
-  onAsk: (q: string) => void
+  options: Taggable[]
+  onAsk: (q: string, mentions: Mention[]) => void
 }) {
   const [focused, setFocused] = useState(false)
   const wrap = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLInputElement>(null)
+  const tp = useTagPicker({ value, setValue: onChange, field: input, options })
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1004,7 +1049,7 @@ function ArchiveSearch({
           e.preventDefault()
           if (value.trim()) {
             setFocused(false)
-            onAsk(value.trim())
+            onAsk(value.trim(), tp.take(value))
           }
         }}
       >
@@ -1015,17 +1060,28 @@ function ArchiveSearch({
         <input
           ref={input}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => {
+            onChange(e.target.value)
+            tp.sync(e.target.value, e.target.selectionStart ?? e.target.value.length)
+          }}
           onFocus={() => setFocused(true)}
-          onKeyDown={(e) => e.key === 'Escape' && setFocused(false)}
-          placeholder="Ask anything across every recording…"
+          onBlur={() => setTimeout(tp.close, 120)}
+          onKeyDown={(e) => {
+            if (tp.onKey(e)) return
+            if (e.key === 'Escape') setFocused(false)
+          }}
+          aria-autocomplete="list"
+          aria-expanded={tp.open}
+          placeholder="Ask anything… type @ for a person or recording"
           aria-label="Ask your archive"
           className="pen-search-input"
         />
         <kbd className="pen-kbd pen-search-kbd">&#8984;K</kbd>
       </form>
 
-      {focused && suggestions.length > 0 && (
+      <TagMenu open={tp.open} matches={tp.matches} pick={tp.pick} setPick={tp.setPick} choose={tp.choose} />
+
+      {focused && !tp.open && suggestions.length > 0 && (
         <div className="pen-search-sugg">
           <div className="pen-label px-1 pb-1.5">Try asking</div>
           {suggestions.map((q) => (
@@ -1036,7 +1092,7 @@ function ArchiveSearch({
               onMouseDown={(e) => {
                 e.preventDefault()
                 setFocused(false)
-                onAsk(q)
+                onAsk(q, [])
               }}
             >
               {q}
@@ -1225,15 +1281,16 @@ function CategoryPicker({
 /* ============================================================== import tray */
 
 function ImportTray({
-  pending, setPending, penName, consent, setConsent, clientName, setClientName, progress, onImport, phone, onClose, done,
+  pending, setPending, penName, consent, setConsent, people, callPeople, setCallPeople, progress, onImport, phone, onClose, done,
 }: {
   pending: Pending[]
   setPending: React.Dispatch<React.SetStateAction<Pending[]>>
   penName: string | null
   consent: boolean
   setConsent: (v: boolean) => void
-  clientName: string
-  setClientName: (v: string) => void
+  people: PersonCard[]
+  callPeople: Picked[]
+  setCallPeople: (v: Picked[]) => void
   progress: Progress | null
   onImport: () => void
   phone?: boolean
@@ -1359,16 +1416,15 @@ function ImportTray({
       </ul>
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
-        <label className="block">
-          <span className="pen-label">Who was this with (optional)</span>
-          <input value={clientName} onChange={(e) => setClientName(e.target.value)}
-                 placeholder="e.g. the Hendersons"
-                 className="mt-1.5 w-full rounded-lg border px-3 py-2 text-[14.5px] outline-none"
-                 style={{ borderColor: 'var(--line)', background: 'var(--panel)' }} />
+        <div className="block">
+          <span className="pen-label">Who was on this call (optional)</span>
+          <div className="mt-1.5">
+            <PeoplePicker people={people} value={callPeople} onChange={setCallPeople} />
+          </div>
           <span className="mt-1 block text-[13px]" style={{ color: 'var(--faint)' }}>
-            Naming them is what lets meetings build on each other.
+            Leave it empty and the notes will suggest who they heard.
           </span>
-        </label>
+        </div>
         <label className="flex cursor-pointer items-start gap-3 rounded-lg p-3.5" style={{ background: 'var(--warn-wash)', border: '1px solid #EFE2C4' }}>
           <input type="checkbox" className="pen-act-box mt-0" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
           <span className="text-[14.5px] leading-snug" style={{ color: 'var(--warn)' }}>
@@ -1450,9 +1506,11 @@ function PartTranscript({ part }: { part: PenSession }) {
 
 function Detail({
   session, tab, setTab, chatOpen, onToggleChat, onNotes, onDelete, onPatch, askCategory, selfEmail, onBack,
-  parts, onSplit, splitting,
+  parts, onSplit, splitting, onPeopleChanged,
 }: {
   session: PenSession
+  /** People on this recording changed; the @ picker's list needs refreshing. */
+  onPeopleChanged: () => void
   /** Every part of this meeting, in order. Just `[session]` when the pen didn't split it. */
   parts: PenSession[]
   /** Unpicks a join. The parts keep their own audio and transcripts, so nothing is lost. */
@@ -1611,6 +1669,9 @@ function Detail({
             {session.status === 'error' && (
               <span className="pen-chip" data-tone="bad"><Icon name="alert" size={14} />Something failed</span>
             )}
+            {session.status === 'held' && (
+              <span className="pen-chip" data-tone="warn"><Icon name="clock" size={14} />Waiting for hours</span>
+            )}
           </div>
 
           {joined && (
@@ -1758,6 +1819,14 @@ function Detail({
 
           {session.status === 'transcribing' && <div className="pen-sec"><Muted>Transcribing. This runs on its own — you can close the tab.</Muted></div>}
           {session.status === 'uploaded' && <div className="pen-sec"><Muted>Uploaded, waiting to be sent for transcription.</Muted></div>}
+          {session.status === 'held' && (
+            <div className="pen-sec">
+              <Muted>
+                {"Saved, and waiting for recording time. It will be transcribed automatically once you add hours or the month resets. "}
+                <Link href="/pen/settings/hours" className="underline">Buy hours</Link>
+              </Muted>
+            </div>
+          )}
           {utts.length > 0 && !n.summary && session.status !== 'transcribing' && (
             <div className="pen-sec">
               <Muted>
@@ -1849,24 +1918,7 @@ function Detail({
             </div>
           )}
 
-          {!!n.people?.length && (
-            <div className="pen-sec">
-              <span className="pen-sec-head"><span className="pen-badge"><Icon name="people" size={13} /></span>In the room</span>
-              <div className="mt-2.5 flex flex-wrap gap-2">
-                {n.people.map((p, i) => (
-                  <span key={i} className="pen-who" title={p.note}>
-                    <span className="pen-avatar">{initials(p.name || p.role)}</span>
-                    <span className="text-[16.5px]">
-                      {p.name || <em style={{ color: 'var(--dim)' }}>{p.role || 'unknown'}</em>}
-                      {p.name && p.role && <span style={{ color: 'var(--dim)' }}> · {p.role}</span>}
-                    </span>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          
+          <PeoplePanel sessionId={session.id} notes={n} status={session.status} onChanged={onPeopleChanged} />
 
           {!!n.missed?.length && (
             <div className="pen-sec">

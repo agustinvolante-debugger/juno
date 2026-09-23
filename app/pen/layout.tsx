@@ -37,10 +37,10 @@ const ui = Inter({
 })
 
 export const metadata: Metadata = {
-  title: 'Pen',
+  title: 'Juno Pen',
   description: 'Plug in the recorder, get the meeting written up.',
-  applicationName: 'Pen',
-  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Pen' },
+  applicationName: 'Juno Pen',
+  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Juno Pen' },
 }
 
 export const viewport: Viewport = {

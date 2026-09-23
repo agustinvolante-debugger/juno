@@ -80,6 +80,17 @@ export async function patchJson<T>(url: string, body: unknown): Promise<T> {
   )
 }
 
+export async function putJson<T>(url: string, body: unknown): Promise<T> {
+  return parse<T>(
+    await fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+    url,
+  )
+}
+
 export async function del<T>(url: string): Promise<T> {
   return parse<T>(await fetch(url, { method: 'DELETE' }), url)
 }

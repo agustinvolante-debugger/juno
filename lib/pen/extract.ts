@@ -177,7 +177,7 @@ original conversation belongs to, so carry the minimum that makes them useful.`
 
 export async function extractNotes(
   dialogue: string,
-  opts?: { category?: MeetingType | null; priorProfile?: unknown; partNotes?: PenNotes[] },
+  opts?: { category?: MeetingType | null; priorProfile?: unknown; partNotes?: PenNotes[]; agent?: string },
 ): Promise<PenNotes> {
   const cat = (opts?.category ?? '').trim()
   const forced = cat
@@ -234,7 +234,7 @@ export async function extractNotes(
   const stream = anthropic.messages.stream({
     model: MODEL,
     max_tokens: MAX,
-    system: SYSTEM,
+    system: SYSTEM + (opts?.agent ?? ''),
     messages: [{ role: 'user', content: `Transcript:\n\n${dialogue}${forced}${prior}${floor}` }],
     output_config: { format: jsonSchemaOutputFormat(NOTES_SCHEMA) },
   })

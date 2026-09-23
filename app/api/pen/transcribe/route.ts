@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
-import { getSession, updateSession, createReadUrl } from '@/lib/pen/store'
-import { submit, hasKey } from '@/lib/pen/aai'
+import { getSession, updateSession } from '@/lib/pen/store'
+import { hasKey } from '@/lib/pen/aai'
+import { startTranscription } from '@/lib/pen/transcribe'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -25,16 +26,15 @@ export async function POST(req: Request) {
   if (session.status === 'transcribing') return NextResponse.json({ session })
 
   try {
-    // AssemblyAI fetches the audio itself, so it needs a URL it can reach. Short-lived.
-    const audioUrl = await createReadUrl(session.storage_path)
-
-    const secret = process.env.PEN_WEBHOOK_SECRET
-    const base = process.env.PEN_PUBLIC_URL || process.env.NEXTAUTH_URL
-    const webhookUrl = secret && base ? `${base.replace(/\/$/, '')}/api/pen/webhook?k=${secret}` : undefined
-
-    const t = await submit({ audioUrl, webhookUrl, speakersExpected: b.speakers })
-    await updateSession(session.id, { aai_id: t.id, status: 'transcribing', error_text: null })
-    return NextResponse.json({ ok: true, aai_id: t.id, webhook: Boolean(webhookUrl) })
+    const r = await startTranscription(email, session, b.speakers)
+    if (!r.ok) {
+      // 402 Payment Required is the honest code: the recording is saved, it is waiting on time.
+      return NextResponse.json(
+        { error: 'Out of recording hours. This one is saved and will go through when you add hours or the month resets.', held: true, allowance: r.allowance, session: await getSession(email, session.id) },
+        { status: 402 },
+      )
+    }
+    return NextResponse.json({ ok: true, aai_id: r.aaiId, webhook: r.webhook })
   } catch (e) {
     await updateSession(session.id, { status: 'error', error_text: (e as Error).message })
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
@@ -61,9 +61,11 @@ export async function GET(req: Request) {
         status: 'transcribed',
         transcript: { text: t.text ?? '', utterances: t.utterances ?? [] },
         duration_sec: t.audio_duration ?? session.duration_sec,
+        ...(t.audio_duration ? { metered_sec: Math.round(t.audio_duration) } : {}),
       })
     } else if (t.status === 'error') {
-      await updateSession(session.id, { status: 'error', error_text: t.error ?? 'assemblyai error' })
+      // A recording that could not be transcribed costs the user nothing.
+      await updateSession(session.id, { status: 'error', error_text: t.error ?? 'assemblyai error', metered_sec: 0 })
     }
     return NextResponse.json({ session: await getSession(email, id) })
   } catch (e) {

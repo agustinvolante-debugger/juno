@@ -9,7 +9,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import type { ArchiveTurn, Citation } from '@/lib/pen/store'
+import type { ArchiveTurn, Citation, Mention } from '@/lib/pen/store'
+import { useTagPicker, TagMenu, TaggedText, type Taggable } from './TagPicker'
 import type { DocKind } from '@/lib/pen/docs'
 import { postJson, errMessage } from '@/lib/pen/http'
 
@@ -29,10 +30,13 @@ export default function ChatView({
   onCite,
   onThreadChanged,
   onDocCreated,
+  recordings = [],
 }: {
   chatId: string | null
-  /** A question typed into the header search; asked as soon as the view mounts. */
-  seed?: string | null
+  /** What @ can tag: people, and recordings (joined meetings once, under their first part). */
+  recordings?: Taggable[]
+  /** A question typed into the header search, with its @-tags; asked as soon as the view mounts. */
+  seed?: { text: string; mentions: Mention[] } | null
   onSeedConsumed?: () => void
   onCite: (sessionId: string) => void
   /** A thread was created or its last message changed — refresh the sidebar. */
@@ -51,7 +55,7 @@ export default function ChatView({
   // the seed via a parent setState does not take effect before the effect can run again, and
   // React re-invokes effects in development — which created three identical threads from one
   // click, 35ms apart, each POSTing without a thread id.
-  const askedSeed = useRef<string | null>(null)
+  const askedSeed = useRef<{ text: string } | null>(null)
   const inFlight = useRef(false)
 
   // `id` tracks the thread the answers belong to. A brand-new thread has no id until the
@@ -95,11 +99,13 @@ export default function ChatView({
     if (!seed || askedSeed.current === seed) return
     askedSeed.current = seed
     onSeedConsumed?.()
-    void ask(seed)
+    void ask(seed.text, seed.mentions)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seed])
 
-  async function ask(question: string) {
+  const tp = useTagPicker({ value: q, setValue: setQ, field: inputRef, options: recordings })
+
+  async function ask(question: string, preset?: Mention[]) {
     const text = question.trim()
     // `thinking` is state and lags by a render; the ref closes the window in which two calls
     // can both pass this check and create two threads.
@@ -110,12 +116,15 @@ export default function ChatView({
     setThinking(true)
     // The question shows immediately; the archive pass takes a while and an empty screen
     // during it reads as a dropped request.
-    const optimistic: ArchiveTurn = { role: 'user', content: text, ts: Date.now() }
+    // Only tags still in the text: deleting the words untags it.
+    const mentions = preset ?? tp.take(text)
+    const optimistic: ArchiveTurn = { role: 'user', content: text, ...(mentions.length ? { mentions } : {}), ts: Date.now() }
     setMessages((m) => [...m, optimistic])
     try {
       const j = await postJson<{ chat: { id: string; messages: ArchiveTurn[] } }>('/api/pen/chats', {
         ...(id ? { id } : {}),
         question: text,
+        ...(mentions.length ? { mentions: mentions.map((t) => ({ id: t.id, kind: t.kind ?? 'recording', label: t.label })) } : {}),
       })
       setMessages(j.chat.messages)
       setId(j.chat.id)
@@ -123,6 +132,7 @@ export default function ChatView({
     } catch (e) {
       setMessages((m) => m.filter((x) => x !== optimistic))
       setQ(text) // Give the question back rather than making them retype it.
+      tp.setTags(mentions)
       setError(errMessage(e, 'Could not search the archive.'))
     } finally {
       inFlight.current = false
@@ -174,7 +184,7 @@ export default function ChatView({
             className={m.role === 'user' ? 'pen-turn-q' : 'pen-turn-a'}
           >
             {m.role === 'user' ? (
-              m.content
+              <TaggedText text={m.content} mentions={m.mentions ?? []} onOpen={onCite} />
             ) : (
               <AnswerWithCitations text={m.content} citations={m.citations ?? []} onCite={onCite} />
             )}
@@ -246,13 +256,18 @@ export default function ChatView({
           className="pen-composer-input"
           value={q}
           rows={1}
-          placeholder={messages.length ? 'Ask a follow-up…' : 'Ask anything across every recording…'}
+          placeholder={messages.length ? 'Ask a follow-up… type @ to name a recording' : 'Ask anything across every recording… type @ to name one'}
           onChange={(e) => {
             setQ(e.target.value)
+            tp.sync(e.target.value, e.target.selectionStart ?? e.target.value.length)
             e.target.style.height = 'auto'
             e.target.style.height = `${Math.min(e.target.scrollHeight, 168)}px`
           }}
+          onBlur={() => setTimeout(tp.close, 120)}
+          aria-autocomplete="list"
+          aria-expanded={tp.open}
           onKeyDown={(e) => {
+            if (tp.onKey(e)) return
             // Enter sends, Shift+Enter breaks the line — the convention everywhere else.
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault()
@@ -260,6 +275,7 @@ export default function ChatView({
             }
           }}
         />
+        <TagMenu open={tp.open} matches={tp.matches} pick={tp.pick} setPick={tp.setPick} choose={tp.choose} up />
         <button className="pen-btn pen-btn-primary" disabled={!q.trim() || thinking}>
           {thinking ? 'Asking…' : 'Ask'}
         </button>

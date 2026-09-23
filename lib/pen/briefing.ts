@@ -64,7 +64,7 @@ export async function sendFailureNotice(opts: {
   const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   await sendEmailResult({
     to: opts.to,
-    subject: `Pen couldn't write up ${opts.sourceName}`,
+    subject: `Juno Pen couldn't write up ${opts.sourceName}`,
     html:
       `<!doctype html><html><head><meta charset="utf-8"></head>` +
       `<body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.6;color:#16150F;padding:24px">` +

@@ -12,7 +12,7 @@ export type IconName =
   | 'home' | 'recordings' | 'meetings' | 'personal' | 'shopping' | 'ideas' | 'property'
   | 'archive' | 'search' | 'plus' | 'link' | 'play' | 'check' | 'checklist' | 'question'
   | 'quote' | 'people' | 'clock' | 'calendar' | 'tag' | 'sparkle' | 'alert' | 'chevron'
-  | 'back' | 'mail' | 'trash'
+  | 'back' | 'mail' | 'trash' | 'settings' | 'person' | 'hourglass'
 
 const P: Record<IconName, React.ReactNode> = {
   home:       <path d="M3.5 8.6 10 3.4l6.5 5.2V16a.9.9 0 0 1-.9.9h-3.4v-4.6H7.8v4.6H4.4a.9.9 0 0 1-.9-.9Z" />,
@@ -40,6 +40,9 @@ const P: Record<IconName, React.ReactNode> = {
   chevron:    <path d="M7.6 5.4 12.2 10l-4.6 4.6" />,
   back:       <><path d="M16 10H4.4" /><path d="M8.6 5.6 4.2 10l4.4 4.4" /></>,
   mail:       <><rect x="2.6" y="4.8" width="14.8" height="10.4" rx="2" /><path d="M3.4 6.2 10 11l6.6-4.8" /></>,
+  settings:   <><path d="M3.4 6h7.1M14.6 6h2M3.4 14h2M9.5 14h7.1" /><circle cx="12.5" cy="6" r="2" /><circle cx="7.5" cy="14" r="2" /></>,
+  person:     <><circle cx="10" cy="6.9" r="3" /><path d="M4.2 16.8c.7-3 3-4.6 5.8-4.6s5.1 1.6 5.8 4.6" /></>,
+  hourglass:  <><path d="M5.6 3.2h8.8M5.6 16.8h8.8" /><path d="M6.6 3.2c0 3.2 3.4 4.4 3.4 6.8s-3.4 3.6-3.4 6.8M13.4 3.2c0 3.2-3.4 4.4-3.4 6.8s3.4 3.6 3.4 6.8" /></>,
   trash:      <><path d="M3.8 6.1h12.4" /><path d="M8.1 6.1V4.6h3.8v1.5" /><path d="M5.4 6.1l.8 9.4a1.2 1.2 0 0 0 1.2 1.1h5.2a1.2 1.2 0 0 0 1.2-1.1l.8-9.4" /></>,
 }
 

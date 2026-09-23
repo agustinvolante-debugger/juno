@@ -16,6 +16,7 @@ import { extractNotes, isViewing, updateClientProfile } from './extract'
 import { categorize, CONFIDENCE_FLOOR } from './categorize'
 import { toDialogue } from './aai'
 import { groupSessions, combinedDialogue } from './merge'
+import { briefFor } from './profile'
 
 /** Held while extraction runs, so a second caller sees the row is taken. */
 export const STATUS_WORKING = 'noting'
@@ -92,6 +93,7 @@ export async function writeNotes(opts: {
     const notes = await extractNotes(dialogue, {
       category: category || null,
       priorProfile: prior,
+      agent: await briefFor(email),
       ...(partNotes && partNotes.length > 1 ? { partNotes } : {}),
     })
     const clientName = session.client_name || notes.client_name || ''

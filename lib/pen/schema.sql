@@ -171,3 +171,55 @@ create index if not exists pen_clients_user on pen_clients(user_email);
 -- ---------------------------------------------------------------------------
 -- alter table public.pen_accounts add column if not exists trial_ends_at timestamptz, add column if not exists offer text;
 -- create index if not exists pen_accounts_trial on public.pen_accounts(trial_ends_at);
+
+-- ---------------------------------------------------------------------------
+-- 2026-09-23 — hours cap, bought hours, and the agent profile. Run each line separately.
+--
+-- metered_at / metered_sec  when a recording was sent for transcription and how long it was.
+--   That moment, not the upload, is when it counts against the month: a recording held on the
+--   31st for lack of time and released on the 1st belongs to the new month. metered_sec starts
+--   as the browser's estimate and is replaced by AssemblyAI's real duration, or 0 on failure.
+--   Rows from before this fall back to created_at and duration_sec. See lib/pen/allowance.ts.
+--
+-- pen_hour_purchases  one row per paid hours checkout. The unique Stripe session id is what
+--   lets the webhook and the success page both record it without double-counting.
+--
+-- pen_profiles  what the user told us about themselves, fed to the notes and chat prompts.
+-- ---------------------------------------------------------------------------
+-- alter table public.pen_sessions add column if not exists metered_at timestamptz, add column if not exists metered_sec int;
+-- create table if not exists public.pen_hour_purchases (id uuid primary key default gen_random_uuid(), user_email text not null, hours int not null check (hours > 0), amount_cents int not null default 0, stripe_session_id text not null, created_at timestamptz not null default now());
+-- create unique index if not exists pen_hour_purchases_session on public.pen_hour_purchases(stripe_session_id);
+-- create index if not exists pen_hour_purchases_user on public.pen_hour_purchases(lower(user_email));
+-- create table if not exists public.pen_profiles (user_email text primary key, profile jsonb not null default '{}'::jsonb, updated_at timestamptz not null default now());
+
+-- ---------------------------------------------------------------------------
+-- 2026-09-23 (b) — people. Run each line separately, in order.
+--
+-- pen_people  someone the user talks to. Name and email come from the user; role, company and
+--   summary are written by the model from every recording the person is linked to. One name
+--   per user (case-insensitive), so "Chris Dyas" typed at import and "chris dyas" typed on a
+--   recording page are the same person.
+-- pen_session_people  which recordings each person was on. source: 'user' (added on the
+--   recording page), 'import' (typed at upload, or backfilled from client_name below).
+--
+-- The last two lines backfill people from the "who was this call" name already on existing
+-- recordings. Safe to run twice.
+-- ---------------------------------------------------------------------------
+-- create table if not exists public.pen_people (id uuid primary key default gen_random_uuid(), user_email text not null, name text not null, email text, role text, company text, summary text, enriched_at timestamptz, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+-- create unique index if not exists pen_people_name on public.pen_people(user_email, lower(name));
+-- create table if not exists public.pen_session_people (session_id uuid not null references public.pen_sessions(id) on delete cascade, person_id uuid not null references public.pen_people(id) on delete cascade, user_email text not null, source text not null default 'user', created_at timestamptz not null default now(), primary key (session_id, person_id));
+-- create index if not exists pen_session_people_person on public.pen_session_people(person_id);
+-- insert into public.pen_people (user_email, name) select distinct user_email, trim(client_name) from public.pen_sessions where coalesce(trim(client_name), '') <> '' on conflict (user_email, lower(name)) do nothing;
+-- insert into public.pen_session_people (session_id, person_id, user_email, source) select s.id, p.id, s.user_email, 'import' from public.pen_sessions s join public.pen_people p on p.user_email = s.user_email and lower(p.name) = lower(trim(s.client_name)) on conflict do nothing;
+
+-- ---------------------------------------------------------------------------
+-- 2026-09-23 (c) — Home cards. missed_done holds the indices of notes.missed the user marked
+-- handled, the same shape action_done has for notes.actions.
+-- ---------------------------------------------------------------------------
+-- alter table public.pen_sessions add column if not exists missed_done jsonb default '[]'::jsonb;
+
+-- ---------------------------------------------------------------------------
+-- 2026-09-23 (d) — the user's own line about a person ("my realtor friend, first user").
+-- Never written by the model; given to it as fact when it writes the person's card.
+-- ---------------------------------------------------------------------------
+-- alter table public.pen_people add column if not exists about text;

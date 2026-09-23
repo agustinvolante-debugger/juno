@@ -15,9 +15,9 @@ export default async function UsagePage() {
       <main className="mx-auto max-w-md px-6 py-24">
         <h1 className="pen-display text-[26px]">Not for you</h1>
         <p className="mt-3 text-[16.5px]" style={{ color: 'var(--soft)' }}>
-          This page is only visible to the account that runs Pen.
+          This page is only visible to the account that runs Juno Pen.
         </p>
-        <Link href="/pen" className="pen-btn mt-6 inline-block">Back to Pen</Link>
+        <Link href="/pen" className="pen-btn mt-6 inline-block">Back to Juno Pen</Link>
       </main>
     )
   }
@@ -49,9 +49,9 @@ export default async function UsagePage() {
       <header className="flex items-end justify-between gap-4 border-b pb-5" style={{ borderColor: 'var(--line)' }}>
         <div>
           <div className="pen-label">Owner only</div>
-          <h1 className="pen-display mt-1.5 text-[34px] leading-none">Who is actually using Pen</h1>
+          <h1 className="pen-display mt-1.5 text-[34px] leading-none">Who is actually using Juno Pen</h1>
         </div>
-        <Link href="/pen" className="pen-btn">Back to Pen</Link>
+        <Link href="/pen" className="pen-btn">Back to Juno Pen</Link>
       </header>
 
       {error && (

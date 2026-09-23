@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { validate, saveSignup, type Signup } from '@/lib/pen/signup'
 import { createPending } from '@/lib/pen/accounts'
-import { createCheckoutSession } from '@/lib/pen/stripe'
-import { trialDaysFor, type Offer } from '@/lib/pen/plan'
+import type { Offer, Plan } from '@/lib/pen/plan'
+import { startPlanCheckout } from '@/lib/pen/checkout'
 import { sendEmailResult } from '@/lib/news/email'
 
 export const dynamic = 'force-dynamic'
@@ -70,21 +70,11 @@ export async function POST(req: Request) {
     // fills in a form.
     let checkoutUrl: string | null = null
     try {
-      const plan = b.plan === 'annual' ? 'annual' : 'monthly'
-      const priceId = plan === 'annual' ? process.env.STRIPE_PRICE_ANNUAL : process.env.STRIPE_PRICE_MONTHLY
-      if (priceId) {
-        const base = (process.env.PEN_PUBLIC_URL || 'https://pen.tryjunoapp.com').replace(/\/$/, '')
-        const offer: Offer = b.offer === 'own-recorder' ? 'own-recorder' : 'posted-pen'
-        const session = await createCheckoutSession({
-          priceId,
-          email: v.value.email,
-          trialDays: trialDaysFor(offer),
-          successUrl: `${base}/pen?welcome=1`,
-          cancelUrl: `${base}/pen/signup?cancelled=1`,
-          metadata: { plan, offer },
-        })
-        checkoutUrl = session.url
-      }
+      const plan: Plan = b.plan === 'annual' ? 'annual' : 'monthly'
+      const offer: Offer = b.offer === 'own-recorder' ? 'own-recorder' : 'posted-pen'
+      const r = await startPlanCheckout({ email: v.value.email, plan, offer, origin: new URL(req.url).origin })
+      // Not configured yet: fall through to the confirmation email, as before.
+      if ('url' in r) checkoutUrl = r.url
     } catch {
       // Checkout being down must not lose the signup — we have their details and can send a
       // link by hand. Falling back to the old confirmation email says something true.
@@ -106,12 +96,12 @@ async function sendConfirmation(name: string, email: string) {
   const first = name.split(/\s+/)[0]
   await sendEmailResult({
     to: email,
-    subject: 'You’re on the list for Pen',
+    subject: 'You’re on the list for Juno Pen',
     html:
       `<!doctype html><html><head><meta charset="utf-8"></head>` +
       `<body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.65;color:#16150F;padding:24px;max-width:560px">` +
       `<p>Hi ${esc(first)},</p>` +
-      `<p>You’re on the list. Pen turns a recorded conversation into the write-up — what was said, ` +
+      `<p>You’re on the list. Juno Pen turns a recorded conversation into the write-up — what was said, ` +
       `who said it, what you agreed to, and the thing you nearly missed.</p>` +
       `<p>We have your address and will get the recorder in the post.</p>` +
       `<p>We’ll email you the moment your account is open. Replying to this reaches a person.</p>` +
@@ -133,7 +123,7 @@ async function notifyOwner(s: Signup, created: boolean) {
   ]
   await sendEmailResult({
     to: to.replace(/^.*<|>.*$/g, ''),
-    subject: `${created ? 'New' : 'Updated'} Pen signup — ${s.name}`,
+    subject: `${created ? 'New' : 'Updated'} Juno Pen signup — ${s.name}`,
     html:
       `<!doctype html><html><head><meta charset="utf-8"></head><body style="font-family:ui-monospace,Menlo,monospace;font-size:13px;padding:20px">` +
       rows.map(([k, val]) => `<div><strong>${k}:</strong> ${esc(String(val))}</div>`).join('') +

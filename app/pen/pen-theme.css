@@ -2128,3 +2128,561 @@ body:has(.pen-root) {
 .pen-seq-tag[data-tone='warn'] {
   color: #6B5012; background: #F4EDD9; border-color: #DCC994;
 }
+
+/* ============================================================ settings ==== */
+/* Profile and recording hours. Same ground, type scale and accent as the app; the side
+   column reuses .pen-cat so the nav looks like the app's own nav, not a new component. */
+.pen-set { min-height: 100vh; background: var(--paper); }
+.pen-set-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  max-width: 1080px; margin: 0 auto; padding: 22px 24px 0;
+}
+.pen-set-brand { display: flex; align-items: center; gap: 10px; }
+.pen-set-body {
+  display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 40px;
+  max-width: 1080px; margin: 0 auto; padding: 34px 24px 110px;
+}
+.pen-set-title { font-size: var(--t-h3); line-height: var(--t-h3-lh); margin: 0; }
+.pen-set-email {
+  font-family: var(--mono); font-size: var(--t-micro); line-height: var(--t-micro-lh);
+  color: var(--dim); margin: 6px 0 18px; overflow-wrap: anywhere;
+}
+.pen-set-nav { display: flex; flex-direction: column; gap: 2px; }
+.pen-set-main { min-width: 0; }
+.pen-set-stack { display: flex; flex-direction: column; gap: 22px; }
+
+.pen-set-card {
+  display: flex; flex-direction: column; gap: 22px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+  padding: 28px; box-shadow: var(--lift-1);
+}
+.pen-set-card-head { display: flex; flex-direction: column; gap: 6px; }
+.pen-set-h2 {
+  font-family: var(--display); font-weight: 400; margin: 0;
+  font-size: var(--t-h3); line-height: var(--t-h3-lh); color: var(--ink);
+}
+.pen-set-lede {
+  margin: 0; max-width: 60ch; color: var(--soft);
+  font-size: var(--t-small); line-height: var(--t-small-lh);
+}
+.pen-set-card .pen-label em { font-style: normal; color: var(--faint); text-transform: none; letter-spacing: 0; margin-left: 6px; }
+.pen-set-card legend.pen-label { margin-bottom: 0; }
+
+.pen-set-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
+.pen-set-chip {
+  font-family: var(--ui); font-size: var(--t-small); font-weight: 600; color: var(--soft);
+  padding: 8px 14px; border-radius: 999px;
+  background: var(--panel); border: 1px solid var(--line);
+  transition: border-color .14s ease, background .14s ease, color .14s ease;
+}
+.pen-set-chip:hover { border-color: var(--accent-line); color: var(--ink); }
+.pen-set-chip[data-on='true'] { background: var(--accent-wash); border-color: var(--accent); color: var(--accent-ink); }
+
+.pen-set-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; }
+.pen-set-saved { font-size: var(--t-small); color: var(--good); }
+.pen-set-ok {
+  padding: 12px 14px; border-radius: 12px; font-size: var(--t-small); line-height: var(--t-small-lh);
+  background: var(--good-wash); border: 1px solid var(--accent-line); color: var(--good);
+}
+.pen-set-fine { margin: -8px 0 0; font-size: var(--t-label); line-height: var(--t-label-lh); color: var(--faint); }
+
+/* The meter keeps its sidebar padding elsewhere; on a card it sits flush. */
+.pen-set-meter .pen-meter { padding: 0; max-width: 460px; }
+
+.pen-set-buy { display: flex; flex-direction: column; gap: 4px; }
+.pen-stepper {
+  display: inline-flex; align-items: stretch; align-self: flex-start;
+  border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--panel);
+}
+.pen-stepper-btn {
+  width: 52px; font-family: var(--ui); font-size: 22px; color: var(--soft);
+  background: var(--paper); transition: background .13s ease, color .13s ease;
+}
+.pen-stepper-btn:hover:not(:disabled) { background: var(--sunk); color: var(--ink); }
+.pen-stepper-btn:disabled { opacity: .4; cursor: not-allowed; }
+.pen-stepper-val {
+  display: flex; align-items: baseline; gap: 8px; padding: 10px 18px;
+  border-inline: 1px solid var(--line);
+}
+.pen-stepper-val input {
+  width: 3ch; border: 0; outline: none; background: transparent; text-align: right;
+  font-family: var(--mono); font-size: 28px; color: var(--ink); font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield; appearance: textfield;
+}
+.pen-stepper-val input::-webkit-outer-spin-button,
+.pen-stepper-val input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.pen-stepper-val span { font-family: var(--ui); font-size: var(--t-small); color: var(--dim); }
+.pen-stepper:focus-within { border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-wash); }
+
+.pen-set-total {
+  display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: 14px; row-gap: 2px;
+  padding-top: 18px; border-top: 1px solid var(--hair);
+}
+.pen-set-total .pen-label { grid-column: 1 / -1; }
+.pen-set-total-n { font-family: var(--mono); font-size: 34px; line-height: 1.1; color: var(--ink); font-variant-numeric: tabular-nums; }
+.pen-set-total-sub { font-size: var(--t-small); color: var(--dim); }
+.pen-set-pay { min-width: 200px; justify-content: center; }
+
+.pen-set-history { list-style: none; margin: 0; padding: 0; }
+.pen-set-history li {
+  display: grid; grid-template-columns: 1fr auto auto; gap: 18px;
+  padding: 11px 0; border-top: 1px solid var(--hair);
+  font-size: var(--t-small); color: var(--soft);
+}
+.pen-set-history li:first-child { border-top: 0; }
+
+/* Account menu entry, sized like Sign out beneath it. */
+.pen-acct2-item {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  font-family: var(--ui); font-size: var(--t-small); font-weight: 600; color: var(--soft);
+  padding: 8px 10px; margin-bottom: 4px; border-radius: 8px;
+  transition: color .14s ease, background .14s ease;
+}
+.pen-acct2-item:hover { color: var(--ink); background: var(--sunk); }
+
+/* The usage bar at the foot of the sidebar. */
+.pen-side-meter { margin-top: 14px; padding-top: 6px; border-top: 1px solid var(--line); }
+.pen-meter-held { color: var(--warn); }
+.pen-meter-cta:hover { background: var(--accent-wash); border-color: var(--accent); }
+.pen-pill[data-s='held'] { background: var(--warn-wash); color: var(--warn); border-color: var(--warn-line); }
+
+@media (max-width: 900px) {
+  .pen-set-body { grid-template-columns: 1fr; gap: 22px; padding-top: 22px; }
+  .pen-set-nav { flex-direction: row; flex-wrap: wrap; }
+  .pen-set-email { margin-bottom: 10px; }
+  .pen-set-card { padding: 20px; }
+}
+/* Inside the menu the address is already printed at the top; Sign out needs no second copy. */
+.pen-acct2-menu .pen-acct { display: block; padding-left: 0; margin-left: 0; border-left: none; }
+.pen-acct2-menu .pen-acct-email { display: none; }
+.pen-acct2-menu .pen-acct-out { width: 100%; text-align: left; font-size: var(--t-small); padding: 8px 10px; }
+
+/* Profile: the role picker, then that role's own questions set apart on a sunk panel so it
+   reads as a follow-up to the choice rather than more of the same form. */
+.pen-set-roles {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+  gap: 10px; margin-top: 9px;
+}
+.pen-set-follow {
+  display: flex; flex-direction: column; gap: 20px;
+  padding: 20px; border-radius: 14px;
+  background: var(--paper); border: 1px solid var(--line);
+}
+.pen-set-follow-head {
+  font-family: var(--display); font-size: 22px; line-height: 1.2; color: var(--ink);
+}
+
+/* ---- @ tags in the archive chat ---- */
+/* The picker rises out of the composer, which is sticky and so already a positioning box. */
+.pen-tagpick {
+  position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 40;
+  list-style: none; margin: 0; padding: 6px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: var(--lift-3); max-height: 290px; overflow-y: auto;
+}
+.pen-tagpick[data-up='true'] { top: auto; bottom: calc(100% - 4px); }
+.pen-tagpick-head {
+  font-family: var(--mono); font-size: var(--t-micro); letter-spacing: .12em; text-transform: uppercase;
+  color: var(--dim); padding: 8px 11px 4px;
+}
+.pen-tagpick-icon { flex: none; color: var(--dim); align-self: center; }
+.pen-tagpick-row[data-active='true'] .pen-tagpick-icon { color: var(--accent); }
+.pen-tagpick-row {
+  display: flex; align-items: baseline; gap: 10px;
+  width: 100%; padding: 9px 11px; border-radius: 8px; text-align: left;
+}
+.pen-tagpick-row[data-active='true'] { background: var(--accent-wash); }
+.pen-tagpick-title {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--ui); font-size: var(--t-small); font-weight: 600; color: var(--ink);
+}
+.pen-tagpick-row[data-active='true'] .pen-tagpick-title { color: var(--accent-ink); }
+.pen-tagpick-when { flex: none; margin-left: auto; font-family: var(--mono); font-size: var(--t-micro); color: var(--dim); }
+
+/* A tag inside the user's own question, which sits on the accent. Clicking opens it. */
+.pen-tag {
+  display: inline; padding: 1px 7px; margin: 0 1px; border-radius: 6px;
+  font: inherit; font-weight: 600; color: #fff;
+  background: rgba(255, 255, 255, .18); border: 1px solid rgba(255, 255, 255, .32);
+  transition: background .13s ease;
+}
+.pen-tag:hover { background: rgba(255, 255, 255, .28); }
+
+/* A person tag reads as a name, not a link. */
+.pen-tag[data-kind='person'] { cursor: default; }
+
+/* ---- people on a recording ---- */
+.pen-people { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.pen-person {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 14px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line);
+}
+.pen-person .pen-avatar {
+  flex: none; display: flex; align-items: center; justify-content: center;
+  background: var(--accent-wash); color: var(--accent-ink);
+  font-family: var(--ui); font-size: 12px; font-weight: 600;
+}
+.pen-person-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pen-person-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.pen-person-line strong { font-family: var(--ui); font-size: var(--t-body); font-weight: 600; color: var(--ink); }
+.pen-person-meta { font-size: var(--t-small); color: var(--dim); }
+.pen-person-email { font-family: var(--mono); font-size: var(--t-label); color: var(--soft); overflow-wrap: anywhere; }
+.pen-person-add-email {
+  align-self: flex-start; font-family: var(--ui); font-size: var(--t-label); font-weight: 600;
+  color: var(--accent-ink); text-decoration: underline; text-decoration-color: var(--accent-line); text-underline-offset: 3px;
+}
+.pen-person-summary { margin: 4px 0 0; font-size: var(--t-small); line-height: var(--t-small-lh); color: var(--soft); }
+.pen-person-actions { flex: none; display: flex; align-items: center; gap: 2px; }
+.pen-person-actions button {
+  font-family: var(--ui); font-size: var(--t-label); font-weight: 600; color: var(--dim);
+  padding: 6px 8px; border-radius: 8px; transition: color .13s ease, background .13s ease;
+}
+.pen-person-actions button:hover { color: var(--ink); background: var(--sunk); }
+.pen-people-empty { margin: 0; font-size: var(--t-small); color: var(--dim); }
+.pen-people-err { margin: 10px 0 0; font-size: var(--t-small); color: var(--bad); }
+.pen-people-sugg { margin-top: 14px; }
+.pen-people-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.pen-people-unnamed {
+  font-family: var(--ui); font-size: var(--t-small); color: var(--dim);
+  padding: 8px 12px; border-radius: 999px; border: 1px dashed var(--line);
+}
+.pen-people-add {
+  display: inline-flex; align-items: center; gap: 7px; margin-top: 12px;
+  font-family: var(--ui); font-size: var(--t-small); font-weight: 600; color: var(--accent-ink);
+  padding: 8px 12px; border-radius: 10px; border: 1px dashed var(--accent-line);
+  transition: background .13s ease;
+}
+.pen-people-add:hover { background: var(--accent-wash); }
+.pen-people-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.pen-people-form input {
+  flex: 1 1 180px; min-width: 0; font-family: var(--serif); font-size: var(--t-body); color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; outline: none;
+}
+.pen-people-form input:focus { border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-wash); }
+
+/* The name beside the mark on the landing nav, so the product is named before the hero. */
+.pen-lp-wordmark { margin-left: 10px; font-size: 24px; line-height: 1; color: var(--ink); }
+
+/* ============================================================ home cards == */
+/* Three working cards. Items are the content, so the figure sits beside the title rather than
+   above it, and each row reads in the note face with its source under it in the mono. */
+.pen-home { display: flex; flex-direction: column; gap: 22px; }
+.pen-home-head { display: flex; flex-direction: column; gap: 6px; }
+.pen-home-title { font-size: var(--t-h3); line-height: var(--t-h3-lh); margin: 0; color: var(--ink); text-wrap: balance; }
+.pen-home-meta { margin: 0; font-family: var(--mono); font-size: var(--t-label); color: var(--dim); font-variant-numeric: tabular-nums; }
+
+.pen-home-cards {
+  display: grid; gap: 14px; align-items: stretch;
+  grid-template-columns: repeat(auto-fit, minmax(min(228px, 100%), 1fr));
+}
+.pen-card-slot { display: flex; min-width: 0; min-height: 300px; }
+.pen-card {
+  flex: 1; min-width: 0; display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+  box-shadow: var(--lift-1); overflow: visible;
+}
+.pen-card-head { padding: 16px 16px 12px; border-bottom: 1px solid var(--hair); }
+.pen-card-title-row { display: flex; align-items: center; gap: 9px; }
+.pen-card-icon {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 8px;
+  background: var(--accent-wash); color: var(--accent-ink);
+}
+.pen-card-icon[data-kind='missed'] { background: var(--warn-wash); color: var(--warn); }
+.pen-card-icon[data-kind='people'] { background: var(--sunk); color: var(--soft); }
+.pen-card-title { margin: 0; font-family: var(--ui); font-size: 15px; font-weight: 600; color: var(--ink); }
+.pen-card-count {
+  margin-left: auto; font-family: var(--mono); font-size: 22px; line-height: 1; color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.pen-card-sub { margin-top: 9px; font-size: var(--t-label); line-height: var(--t-label-lh); color: var(--dim); min-height: 18px; }
+
+.pen-follow { display: flex; align-items: center; gap: 10px; }
+.pen-follow-bar { flex: 1; height: 4px; border-radius: 999px; background: var(--sunk); overflow: hidden; }
+.pen-follow-bar > span { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+.pen-follow-n { flex: none; font-family: var(--mono); font-size: var(--t-micro); color: var(--dim); font-variant-numeric: tabular-nums; }
+
+.pen-card-list, .pen-bigpanel-list { list-style: none; margin: 0; padding: 4px 6px; }
+.pen-card-list { flex: 1; }
+.pen-card-empty { margin: 0; padding: 18px 16px; font-size: var(--t-small); line-height: var(--t-small-lh); color: var(--dim); }
+
+.pen-row2 { position: relative; }
+.pen-row2-inner { display: flex; align-items: flex-start; gap: 10px; padding: 9px 10px; border-radius: 10px; transition: background .15s ease; }
+.pen-row2:hover > .pen-row2-inner, .pen-row2:focus-within > .pen-row2-inner { background: var(--paper); }
+.pen-row2-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; text-align: left; }
+.pen-row2-main:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 3px; border-radius: 6px; }
+.pen-row2-text {
+  font-family: var(--serif); font-size: 15px; line-height: 1.42; color: var(--ink);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  transition: color .2s ease;
+}
+.pen-row2[data-full='true'] .pen-row2-text { -webkit-line-clamp: unset; display: block; font-size: 16px; }
+.pen-row2-text[data-done='true'] { color: var(--faint); text-decoration: line-through; text-decoration-color: var(--line); }
+.pen-row2-name { font-family: var(--ui); font-weight: 600; font-size: 14.5px; -webkit-line-clamp: 1; }
+.pen-row2-why { font-size: var(--t-small); line-height: var(--t-small-lh); color: var(--soft); }
+.pen-row2-meta {
+  display: flex; flex-wrap: wrap; gap: 2px 8px;
+  font-family: var(--mono); font-size: var(--t-micro); line-height: 1.45; color: var(--dim);
+}
+.pen-row2-flag { color: var(--bad); text-transform: uppercase; letter-spacing: .08em; }
+.pen-row2-due { color: var(--accent-ink); }
+.pen-row2-when { flex: none; font-family: var(--mono); font-size: var(--t-micro); color: var(--dim); padding-top: 3px; }
+.pen-row2-avatar {
+  flex: none; display: flex; align-items: center; justify-content: center; width: 30px; height: 30px;
+  background: var(--accent-wash); color: var(--accent-ink); font-family: var(--ui); font-size: 11.5px; font-weight: 600;
+}
+.pen-row2-mark {
+  flex: none; width: 7px; height: 7px; margin: 7px 5px 0 6px; border-radius: 999px; background: var(--warn);
+}
+.pen-row2-expand { overflow: hidden; padding: 0 10px 12px 50px; }
+
+/* The done control: a ring that fills and draws its check before the row leaves. */
+.pen-tick {
+  flex: none; width: 20px; height: 20px; margin-top: 1px; border-radius: 999px;
+  border: 1.5px solid var(--line); color: #fff; background: var(--panel);
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: border-color .15s ease, background .2s ease;
+}
+.pen-tick svg { width: 16px; height: 16px; }
+.pen-tick:hover { border-color: var(--accent); }
+.pen-tick:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 2px; }
+.pen-tick[data-on='true'] { background: var(--accent); border-color: var(--accent); }
+
+/* Handled and To-do on a nearly-missed row: present on hover and focus, always on touch. */
+.pen-row2-tools { flex: none; display: flex; gap: 2px; opacity: 0; transition: opacity .15s ease; }
+.pen-row2:hover .pen-row2-tools, .pen-row2:focus-within .pen-row2-tools, .pen-row2[data-full='true'] .pen-row2-tools { opacity: 1; }
+@media (hover: none) { .pen-row2-tools { opacity: 1; } }
+.pen-tool {
+  width: 28px; height: 28px; border-radius: 8px; color: var(--dim);
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: color .13s ease, background .13s ease;
+}
+.pen-tool:hover { color: var(--accent-ink); background: var(--accent-wash); }
+.pen-tool:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 1px; }
+
+.pen-card-more {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin: 0 6px 6px; padding: 10px 12px; border-radius: 10px;
+  font-family: var(--ui); font-size: var(--t-small); font-weight: 600; color: var(--accent-ink);
+  border-top: 1px solid var(--hair); transition: background .15s ease;
+}
+.pen-card-more[data-quiet] { color: var(--dim); }
+.pen-card-more:hover { background: var(--accent-wash); color: var(--accent-ink); }
+.pen-card-more:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 1px; }
+
+/* ---- hover detail ---- */
+.pen-peek {
+  position: absolute; z-index: 30; left: 8px; right: 8px; top: calc(100% - 2px);
+  padding: 13px 14px; border-radius: 12px;
+  background: var(--panel); border: 1px solid var(--line); box-shadow: var(--lift-3);
+  pointer-events: auto;
+}
+.pen-peek-text { margin: 0; font-family: var(--serif); font-size: 15px; line-height: 1.45; color: var(--ink); }
+.pen-peek-why { margin: 6px 0 0; font-size: var(--t-small); line-height: var(--t-small-lh); color: var(--soft); }
+.pen-peek-facts {
+  display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 10px 0 0;
+  font-size: var(--t-label); line-height: 1.4;
+}
+.pen-peek-facts dt { font-family: var(--mono); font-size: var(--t-micro); color: var(--dim); text-transform: uppercase; letter-spacing: .08em; padding-top: 1px; }
+.pen-peek-facts dd { margin: 0; color: var(--soft); }
+.pen-person-detail { display: flex; flex-direction: column; gap: 3px; }
+.pen-person-detail-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.pen-person-detail-head strong { font-family: var(--ui); font-size: 15px; color: var(--ink); }
+.pen-person-detail-head span { font-size: var(--t-label); color: var(--dim); }
+.pen-peek-ask {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; margin-top: 10px;
+  font-family: var(--ui); font-size: var(--t-label); font-weight: 600; color: var(--accent-ink);
+  padding: 6px 10px; border-radius: 8px; background: var(--accent-wash); border: 1px solid var(--accent-line);
+}
+.pen-peek-ask:hover { border-color: var(--accent); }
+.pen-facets { display: grid; gap: 8px; margin-top: 10px; }
+.pen-facet-label { font-family: var(--mono); font-size: var(--t-micro); letter-spacing: .1em; text-transform: uppercase; color: var(--soft); }
+.pen-facet-label[data-tone='bad'] { color: var(--bad); }
+.pen-facet-label[data-tone='accent'] { color: var(--accent-ink); }
+.pen-facets ul { margin: 2px 0 0; padding-left: 16px; font-size: var(--t-label); line-height: 1.45; color: var(--ink); }
+
+/* ---- the panel a card grows into ---- */
+.pen-panel-layer {
+  position: fixed; inset: 0; z-index: 80;
+  display: flex; align-items: center; justify-content: center;
+  padding: max(24px, env(safe-area-inset-top, 0px)) 20px max(24px, env(safe-area-inset-bottom, 0px));
+}
+.pen-panel-scrim { position: absolute; inset: 0; background: rgba(22, 21, 15, .32); backdrop-filter: blur(2px); }
+.pen-bigpanel {
+  position: relative; width: min(780px, 100%); height: min(84vh, 900px);
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--lift-3);
+}
+.pen-bigpanel-head { display: flex; align-items: center; gap: 11px; padding: 18px 20px 14px; border-bottom: 1px solid var(--hair); }
+.pen-bigpanel-title { margin: 0; font-family: var(--display); font-weight: 400; font-size: var(--t-h3); line-height: 1; color: var(--ink); }
+.pen-bigpanel-close {
+  margin-left: auto; width: 36px; height: 36px; border-radius: 10px; color: var(--dim);
+  display: inline-flex; align-items: center; justify-content: center; transition: background .13s ease, color .13s ease;
+}
+.pen-bigpanel-close svg { width: 18px; height: 18px; }
+.pen-bigpanel-close:hover { background: var(--sunk); color: var(--ink); }
+.pen-bigpanel-close:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 1px; }
+.pen-bigpanel-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.pen-bigpanel-tools {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: 12px 20px; border-bottom: 1px solid var(--hair);
+}
+.pen-bigpanel-search {
+  flex: 1 1 240px; display: flex; align-items: center; gap: 8px; min-width: 0;
+  padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; color: var(--dim); background: var(--paper);
+}
+.pen-bigpanel-search:focus-within { border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-wash); }
+.pen-bigpanel-search input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; font-family: var(--ui); font-size: var(--t-small); color: var(--ink); }
+.pen-bigpanel-search input::placeholder { color: var(--faint); }
+.pen-bigpanel-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.pen-bigpanel-filters .pen-set-chip { padding: 6px 12px; font-size: var(--t-label); }
+.pen-bigpanel-n { margin-left: auto; font-family: var(--mono); font-size: var(--t-micro); color: var(--dim); }
+.pen-bigpanel-list { flex: 1; overflow-y: auto; padding: 8px 12px 16px; overscroll-behavior: contain; }
+.pen-bigpanel-list .pen-row2 + .pen-row2 { border-top: 1px solid var(--hair); }
+.pen-bigpanel-orphans { padding: 12px 22px 20px; border-top: 1px solid var(--line); max-height: 36%; overflow-y: auto; }
+.pen-bigpanel-subhead { margin: 0 0 10px; font-family: var(--ui); font-size: var(--t-small); font-weight: 600; color: var(--soft); }
+.pen-orphan + .pen-orphan { margin-top: 14px; }
+.pen-orphan strong { font-family: var(--ui); font-size: 15px; color: var(--ink); }
+
+/* ---- toast ---- */
+.pen-toast-wrap {
+  position: fixed; z-index: 90; left: 50%; transform: translateX(-50%);
+  bottom: calc(22px + env(safe-area-inset-bottom, 0px)); pointer-events: none;
+}
+.pen-toast {
+  pointer-events: auto; display: flex; align-items: center; gap: 14px;
+  padding: 10px 10px 10px 16px; border-radius: 12px;
+  background: var(--ink); color: var(--paper); box-shadow: var(--lift-3);
+  font-family: var(--ui); font-size: var(--t-small);
+}
+.pen-toast[data-tone='bad'] { background: var(--bad); }
+.pen-toast button { font-weight: 600; color: #BFE3CF; padding: 4px 6px; border-radius: 6px; }
+.pen-toast button:hover { background: rgba(255, 255, 255, .1); }
+.pen-toast .pen-toast-x { color: rgba(242, 239, 229, .7); display: inline-flex; }
+.pen-toast .pen-toast-x svg { width: 16px; height: 16px; }
+
+@media (max-width: 680px) {
+  .pen-card-slot { min-height: 0; }
+  .pen-bigpanel { height: 100%; border-radius: 16px; }
+  .pen-panel-layer { padding: 10px; }
+  .pen-row2-expand { padding-left: 10px; }
+}
+
+/* Inspection fixes, Home cards. */
+/* In a card, the row tools float over the row's right edge instead of reserving width. In the
+   full panel there is room, so they stay in the flow. */
+.pen-card .pen-row2-tools {
+  position: absolute; right: 8px; top: 7px; padding: 2px; border-radius: 10px;
+  background: var(--paper); box-shadow: -10px 0 10px -4px var(--paper);
+}
+/* The source is one line, cut with an ellipsis: it is a pointer, not content. */
+.pen-row2-meta { flex-wrap: nowrap; min-width: 0; overflow: hidden; }
+.pen-row2-meta > span { white-space: nowrap; }
+.pen-row2-meta > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pen-card-title { white-space: nowrap; }
+.pen-card-count { font-size: 20px; }
+/* A <button> sizes to its content unless told otherwise, which defeated the ellipsis above. */
+.pen-row2-main { width: 100%; overflow: hidden; }
+.pen-row2-meta { width: 100%; }
+
+/* container-type: inline-size gives an element no intrinsic width, so in the phone layout's
+   flex column (which does not stretch it) the main column collapsed to a sliver. */
+.pen-shell-main { width: 100%; }
+
+/* Larger card heads, for readers with weaker eyesight. The figure is the headline: a big,
+   high-contrast number on its own line, the title above it at a comfortable reading size. */
+.pen-card-head { padding: 20px 20px 16px; }
+.pen-card-title-row { gap: 11px; }
+.pen-card-icon { width: 36px; height: 36px; border-radius: 10px; }
+.pen-card-title { font-size: 21px; line-height: 1.2; letter-spacing: -0.005em; }
+.pen-card-count {
+  display: block; margin: 14px 0 0; font-size: 56px; line-height: 1; letter-spacing: -0.02em; font-weight: 500;
+}
+.pen-card[data-kind='todo'] .pen-card-count { color: var(--warn); }
+.pen-card-sub { margin-top: 10px; font-size: var(--t-small); }
+.pen-follow-n { font-size: var(--t-label); }
+/* The title has its own row now; on a narrow laptop it may take two lines rather than overflow. */
+.pen-card-title { white-space: normal; text-wrap: balance; }
+
+/* Larger list text, same readers. Three items per card instead of four buys the room. */
+.pen-row2-inner { gap: 12px; padding: 11px 12px; }
+.pen-row2-text { font-size: 17px; line-height: 1.4; }
+.pen-row2[data-full='true'] .pen-row2-text { font-size: 18px; }
+.pen-row2-name { font-size: 17px; }
+.pen-row2-meta, .pen-row2-when { font-size: 13px; }
+.pen-row2-why { font-size: 16px; }
+.pen-tick { width: 24px; height: 24px; margin-top: 1px; border-width: 2px; }
+.pen-tick svg { width: 18px; height: 18px; }
+.pen-row2-mark { width: 9px; height: 9px; margin: 8px 6px 0 7px; }
+.pen-row2-avatar { width: 36px; height: 36px; font-size: 13px; }
+.pen-tool { width: 34px; height: 34px; }
+.pen-card-more { font-size: 16.5px; padding: 12px 14px; }
+.pen-peek-text { font-size: 17px; }
+.pen-peek-why, .pen-peek-facts { font-size: 15px; }
+.pen-peek-facts dt { font-size: 12px; }
+.pen-card-empty { font-size: 16.5px; }
+/* A card only ~245px wide (laptop with the recordings rail beside it) keeps every title on one
+   line, so the three big figures sit level. */
+.pen-card { container-type: inline-size; container-name: homecard; }
+@container homecard (max-width: 280px) {
+  /* Measured: "Nearly missed" at 21px needs 146px and the icon left 130. The title is what
+     these readers need, so the icon goes rather than the type shrinking. */
+  .pen-card-icon { display: none; }
+}
+
+/* ---- people picker at upload (same family as the briefing recipients box) ---- */
+.pen-pick { display: flex; flex-direction: column; gap: 8px; }
+.pen-pick-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.pen-pick-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 6px 5px 11px; border-radius: 999px;
+  font-family: var(--ui); font-size: var(--t-small); font-weight: 600; color: var(--accent-ink);
+  background: var(--accent-wash); border: 1px solid var(--accent-line);
+}
+.pen-pick-chip button { display: inline-flex; width: 20px; height: 20px; align-items: center; justify-content: center; border-radius: 999px; color: var(--accent-ink); }
+.pen-pick-chip button:hover { background: rgba(11, 107, 68, .12); }
+.pen-pick-chip svg { width: 14px; height: 14px; }
+.pen-pick-new { font-family: var(--mono); font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); }
+.pen-pick-field { position: relative; display: flex; gap: 8px; }
+.pen-pick-input {
+  flex: 1; min-width: 0; padding: 9px 12px; border-radius: 10px; outline: none;
+  font-family: var(--ui); font-size: var(--t-small); color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line);
+}
+.pen-pick-input:focus { border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-wash); }
+.pen-pick-add { flex: none; }
+.pen-pick-menu {
+  position: absolute; z-index: 40; left: 0; right: 0; top: calc(100% + 6px);
+  list-style: none; margin: 0; padding: 6px; max-height: 280px; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--lift-3);
+}
+.pen-pick-menu button { display: flex; flex-direction: column; gap: 1px; width: 100%; padding: 8px 10px; border-radius: 8px; text-align: left; }
+.pen-pick-menu button[data-active='true'] { background: var(--accent-wash); }
+.pen-pick-name { font-family: var(--ui); font-size: var(--t-small); font-weight: 600; color: var(--ink); }
+.pen-pick-sub { font-size: var(--t-label); color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- the user's own line about a person, and the AI's, told apart ---- */
+.pen-person-about { margin: 2px 0 2px; font-size: var(--t-small); line-height: var(--t-small-lh); color: var(--ink); }
+.pen-person-ai {
+  display: block; margin-bottom: 2px;
+  font-family: var(--mono); font-size: var(--t-micro); letter-spacing: .08em; text-transform: uppercase; color: var(--dim);
+}
+.pen-people-about-in { flex-basis: 100% !important; }
+.pen-people-edit { padding: 14px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line); }
+.pen-people-edit-head { flex-basis: 100%; margin: 0 0 2px; font-family: var(--ui); font-size: var(--t-small); font-weight: 600; color: var(--ink); }
+
+/* ---- open a drafted email in the user's own mail app ---- */
+.pen-mailopen {
+  display: flex; flex-direction: column; gap: 10px; margin-top: 14px; padding: 14px;
+  border-radius: 12px; background: var(--paper); border: 1px solid var(--line);
+}
+.pen-mailopen-to { display: flex; align-items: center; gap: 10px; }
+.pen-mailopen-to .pen-label { flex: none; width: 28px; }
+.pen-mailopen-to input {
+  flex: 1; min-width: 0; padding: 10px 12px; border-radius: 10px; outline: none;
+  font-family: var(--ui); font-size: var(--t-body); color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line);
+}
+.pen-mailopen-to input:focus { border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-wash); }
+.pen-mailopen-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.pen-mailopen-btns .pen-btn { font-size: var(--t-body); padding-block: 10px; }
+.pen-mailopen-hint { margin: 0; font-size: var(--t-label); line-height: 1.45; color: var(--dim); }

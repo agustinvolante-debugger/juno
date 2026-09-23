@@ -4,6 +4,7 @@ import { fetchTranscript } from '@/lib/pen/aai'
 import { writeNotes, STATUS_WORKING } from '@/lib/pen/pipeline'
 import { sendBriefing, sendFailureNotice, hasSomethingToSay } from '@/lib/pen/briefing'
 import { autoJoin } from '@/lib/pen/merge'
+import { enrichPerson, peopleOnSession } from '@/lib/pen/people'
 
 export const dynamic = 'force-dynamic'
 // The response goes back immediately; `after()` keeps the function alive for the slow part.
@@ -38,7 +39,8 @@ export async function POST(req: Request) {
   try {
     const t = await fetchTranscript(b.transcript_id)
     if (t.status !== 'completed') {
-      await updateSession(session.id, { status: 'error', error_text: t.error ?? `assemblyai status ${t.status}` })
+      // A recording that could not be transcribed costs the user nothing.
+      await updateSession(session.id, { status: 'error', error_text: t.error ?? `assemblyai status ${t.status}`, metered_sec: 0 })
       await sendFailureNotice({
         to: session.user_email,
         sourceName: session.source_name ?? 'your recording',
@@ -51,6 +53,8 @@ export async function POST(req: Request) {
       status: 'transcribed',
       transcript: { text: t.text ?? '', utterances: t.utterances ?? [] },
       duration_sec: t.audio_duration ?? session.duration_sec,
+      // The real length replaces the browser's estimate on the meter.
+      ...(t.audio_duration ? { metered_sec: Math.round(t.audio_duration) } : {}),
       error_text: null,
     })
 
@@ -108,6 +112,12 @@ async function runUnattended(sessionId: string, email: string) {
       const combined = await writeNotes({ email, session: re, claim: true })
       if (combined === 'taken') return
       noted = combined.session
+    }
+
+    // New notes mean something new about whoever was on the call. Refresh their cards.
+    if (noted) {
+      const people = await peopleOnSession(email, noted.id).catch(() => [])
+      await Promise.all(people.map((p) => enrichPerson(email, p.id).catch(() => {})))
     }
 
     if (!noted || !hasSomethingToSay(noted)) return

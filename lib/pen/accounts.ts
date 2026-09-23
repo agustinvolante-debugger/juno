@@ -78,7 +78,6 @@ export async function activate(opts: {
   const patch = {
     email,
     status: 'active' as const,
-    plan: opts.plan ?? 'pen',
     stripe_customer_id: opts.stripeCustomerId ?? null,
     stripe_subscription_id: opts.stripeSubscriptionId ?? null,
     current_period_end: opts.currentPeriodEnd ?? null,
@@ -89,6 +88,9 @@ export async function activate(opts: {
   // Only write the trial fields when Stripe actually told us about them. A later event that
   // omits them must not erase the record of how this customer arrived.
   const extras = {
+    // Plan follows the same rule: 'monthly' or 'annual' when Stripe says, never overwritten
+    // by a later event that does not. A brand-new row with no plan yet gets 'pen'.
+    ...(opts.plan ? { plan: opts.plan } : existing ? {} : { plan: 'pen' }),
     ...(opts.trialEndsAt !== undefined ? { trial_ends_at: opts.trialEndsAt } : {}),
     ...(opts.offer ? { offer: opts.offer } : {}),
   }

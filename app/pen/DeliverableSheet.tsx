@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { postJson, errMessage } from '@/lib/pen/http'
 import { AnimatePresence, motion } from 'motion/react'
 import type { Deliverable } from '@/lib/pen/store'
+import EmailOpen from './EmailOpen'
 
 // Apple-sheet presentation: rises from the bottom, backdrop blurs, Escape or a tap outside
 // dismisses. Anchored low rather than centred because it is a response to something you
@@ -152,6 +153,10 @@ export default function DeliverableSheet({
                     spellCheck
                     onChange={(e) => setDraft(e.target.value)}
                   />
+                )}
+
+                {request.kind === 'email' && deliverable && !loading && (
+                  <EmailOpen draft={draft} sessionId={sessionId} onCopy={writeClipboard} />
                 )}
               </div>
 

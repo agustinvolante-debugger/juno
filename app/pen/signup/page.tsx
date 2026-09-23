@@ -82,7 +82,7 @@ export default function SignupPage() {
     <div className="pen-root">
       <main className="pen-su-wrap">
         <header className="pen-su-head">
-          <Link href="/pen" className="pen-su-back" aria-label="Back to Pen">
+          <Link href="/pen" className="pen-su-back" aria-label="Back to Juno Pen">
             <Image src="/juno_mark.png" alt="Juno" width={24} height={24} className="pen-mark" />
             <span aria-hidden>&larr;</span>
           </Link>

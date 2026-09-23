@@ -4,7 +4,9 @@ import type { MeetingType } from '@/lib/pen/categories'
 export const BUCKET = 'pen-audio'
 
 // `noting` is held while extraction runs, so a second caller can see the row is claimed.
-export type PenStatus = 'uploaded' | 'transcribing' | 'transcribed' | 'noting' | 'noted' | 'error'
+// 'held' is an upload waiting for recording time: the month's hours and any bought ones are
+// used up. It goes through on its own once there is time. See lib/pen/allowance.ts.
+export type PenStatus = 'uploaded' | 'held' | 'transcribing' | 'transcribed' | 'noting' | 'noted' | 'error'
 
 export type Utterance = { speaker: string; text: string; start: number; end: number }
 export type Transcript = { text?: string; utterances?: Utterance[] }
@@ -60,8 +62,16 @@ export type ArchiveTurn = {
   role: 'user' | 'assistant'
   content: string
   citations?: Citation[]
+  /** Recordings the user tagged with @ in this question, so the chip survives a reload. */
+  mentions?: Mention[]
   ts: number
 }
+
+/**
+ * An @-tag. `label` is how it reads in the question ("@Recruiter…"), kept short so a long
+ * title does not swamp the message; `title` is the full name the model is told.
+ */
+export type Mention = { id: string; title: string; label?: string; kind?: 'recording' | 'person' }
 
 export type PenSession = {
   id: string
@@ -199,10 +209,21 @@ export async function claimStatus(id: string, from: string, to: string): Promise
 }
 
 export async function updateSession(id: string, patch: Record<string, unknown>) {
-  const { error } = await supabaseAdmin
-    .from('pen_sessions')
-    .update({ ...patch, updated_at: new Date().toISOString() })
-    .eq('id', id)
+  const write = (body: Record<string, unknown>) =>
+    supabaseAdmin
+      .from('pen_sessions')
+      .update({ ...body, updated_at: new Date().toISOString() })
+      .eq('id', id)
+  let { error } = await write(patch)
+  // metered_at / metered_sec need an ALTER to exist. If the deploy lands before it, losing the
+  // meter for a few recordings is far better than failing the transcription they belong to.
+  if (error && ('metered_at' in patch || 'metered_sec' in patch) && /column .* does not exist|schema cache/i.test(error.message)) {
+    const { metered_at: _a, metered_sec: _s, ...rest } = patch
+    void _a
+    void _s
+    console.warn(`pen: pen_sessions is missing the metering columns. Run the 2026-09-23 ALTER in lib/pen/schema.sql. (${error.message})`)
+    ;({ error } = await write(rest))
+  }
   if (error) throw new Error(error.message)
 }
 
