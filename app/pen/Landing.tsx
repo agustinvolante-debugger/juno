@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import type { CSSProperties } from 'react'
+import PenSequence from './PenSequence'
 
 // The signed-out face of pen.tryjunoapp.com.
 //
@@ -87,6 +88,9 @@ export default function Landing() {
       <Nav />
       <Hero />
       <OfferStrip />
+      <div className="pen-lp-wrap pen-seq-wrap">
+        <PenSequence />
+      </div>
       <MultiUse />
       <HowItWorks />
       <TheCatch />
