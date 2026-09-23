@@ -14,7 +14,7 @@ import type { CSSProperties } from 'react'
 // for contrast without leaving the palette.
 
 const SPRING = { type: 'spring' as const, stiffness: 260, damping: 30, mass: 0.9 }
-import { UPFRONT_USD, UPFRONT_MONTHS, MONTHLY_USD } from '@/lib/pen/plan'
+import { PLAN_MONTHLY_USD, PLAN_ANNUAL_USD, PEN_USD, INCLUDED_HOURS, TRIAL_DAYS_POSTED } from '@/lib/pen/plan'
 
 /**
  * Stripe Checkout links, one per plan. Payment Links are used rather than a server-side
@@ -39,7 +39,7 @@ function PlanCta({ href, children, variant }: { href: string; children: React.Re
         <Link href={`${SIGN_UP}?from=pricing`} className={cls.replace('mt-auto ', '')}>
           {children}
         </Link>
-        <p className="pen-mono mt-2.5 text-center text-[13px]" style={{ color: 'rgba(251,250,246,.42)' }}>
+        <p className="pen-mono mt-2.5 text-center pen-t-label" style={{ color: 'rgba(251,250,246,.42)' }}>
           Card payments open at launch
         </p>
       </div>
@@ -80,6 +80,7 @@ export default function Landing() {
       <TheCatch />
       <WhatYouGet />
       <Compounds />
+      <Hardware />
       <Pricing />
       <Footer />
     </div>
@@ -127,7 +128,7 @@ function Hero() {
 
       <div className="mt-12 grid gap-10 sm:mt-14 lg:grid-cols-[1fr_auto] lg:items-end lg:gap-16">
         <Reveal delay={0.1}>
-          <p className="max-w-[58ch] text-[21px] leading-[1.58]" style={{ color: 'var(--soft)' }}>
+          <p className="max-w-[58ch] pen-t-lede" style={{ color: 'var(--soft)' }}>
             Record with a pen in your shirt pocket. Plug it into your laptop. Pen writes up what
             was said, who said it, what you agreed to, and the thing you nearly missed.
           </p>
@@ -138,8 +139,8 @@ function Hero() {
             <Link href={`${SIGN_UP}?from=hero`} className="pen-lp-btn pen-lp-btn-primary">Get started</Link>
             <a href="#how" className="pen-lp-btn">See how it works</a>
           </div>
-          <p className="pen-mono mt-4 text-[13px]" style={{ color: 'var(--faint)' }}>
-            {`$${UPFRONT_USD} for your first ${UPFRONT_MONTHS} months, pen included \u00B7 then $${MONTHLY_USD} a month`}
+          <p className="pen-mono mt-4 pen-t-label" style={{ color: 'var(--faint)' }}>
+            {`${TRIAL_DAYS_POSTED} days free \u00B7 then $${PLAN_MONTHLY_USD} a month, or $${PLAN_ANNUAL_USD} a year with the pen included`}
           </p>
         </Reveal>
       </div>
@@ -238,12 +239,11 @@ function MultiUse() {
   return (
     <section className="pen-lp-wrap pt-24 sm:pt-32">
       <Reveal>
-        <div className="pen-lp-eyebrow">Same pen, same pocket</div>
         <h2 className="pen-lp-h2">
           A viewing, a quarterly review, a coffee with someone whose favour you&rsquo;ll want in
           six months.
         </h2>
-        <p className="mt-7 max-w-[62ch] text-[21px] leading-[1.55]" style={{ color: 'var(--soft)' }}>
+        <p className="mt-7 max-w-[62ch] pen-t-lede leading-[1.55]" style={{ color: 'var(--soft)' }}>
           It doesn&rsquo;t know which of those matters most.
           <span className="pen-lp-strong"> Neither do you, at the time.</span>
         </p>
@@ -260,7 +260,7 @@ function MultiUse() {
       <Reveal delay={0.14}>
         <figure className="pen-lp-specimen">
           <div className="pen-lp-specimen-bar">
-            <span className="pen-mono text-[13px]" style={{ color: 'var(--faint)' }}>{ex.meta}</span>
+            <span className="pen-mono pen-t-label" style={{ color: 'var(--faint)' }}>{ex.meta}</span>
             <span className="pen-lp-dot" />
           </div>
 
@@ -391,7 +391,7 @@ function HowItWorks() {
     <section id="how" className="pen-lp-wrap pt-28 sm:pt-36">
       <Reveal>
         <div className="pen-lp-eyebrow">How it works</div>
-        <h2 className="pen-display mt-4 max-w-[24ch] text-[clamp(28px,4vw,40px)] leading-[1.12] tracking-[-0.015em]">
+        <h2 className="pen-display mt-4 max-w-[24ch] pen-t-h2 leading-[1.12] tracking-[-0.015em]">
           Three steps, and two of them are plugging in a cable.
         </h2>
       </Reveal>
@@ -400,9 +400,9 @@ function HowItWorks() {
         {STEPS.map((s, i) => (
           <Reveal key={s.n} delay={i * 0.07}>
             <div className="pen-lp-step">
-              <span className="pen-mono text-[13px]" style={{ color: 'var(--accent)' }}>{s.n}</span>
-              <h3 className="pen-display mt-3 text-[26px]">{s.h}</h3>
-              <p className="mt-2.5 text-[16.5px] leading-[1.6]" style={{ color: 'var(--soft)' }}>{s.p}</p>
+              <span className="pen-mono pen-t-label" style={{ color: 'var(--accent)' }}>{s.n}</span>
+              <h3 className="pen-display mt-3 pen-t-h3">{s.h}</h3>
+              <p className="mt-2.5 pen-t-body" style={{ color: 'var(--soft)' }}>{s.p}</p>
             </div>
           </Reveal>
         ))}
@@ -418,11 +418,10 @@ function TheCatch() {
     <section className="pen-lp-wrap pt-28 sm:pt-36">
       <div className="grid gap-12 lg:grid-cols-[0.85fr_1fr] lg:gap-20">
         <Reveal>
-          <div className="pen-lp-eyebrow">The part that earns its keep</div>
-          <h2 className="pen-display mt-4 text-[clamp(28px,4vw,40px)] leading-[1.12] tracking-[-0.015em]">
+          <h2 className="pen-display mt-4 pen-t-h2 leading-[1.12] tracking-[-0.015em]">
             A summary tells you what you already remember.
           </h2>
-          <p className="mt-6 max-w-[40ch] text-[21px] leading-[1.62]" style={{ color: 'var(--soft)' }}>
+          <p className="mt-6 max-w-[40ch] pen-t-lede leading-[1.62]" style={{ color: 'var(--soft)' }}>
             The useful part is the commitment somebody made in passing, the constraint mentioned
             once, the question asked of you that never got answered. Pen goes looking for those.
           </p>
@@ -441,8 +440,8 @@ function TheCatch() {
                  'The strongest buying signal in the recording, and it arrived in the last thirty seconds.'],
               ].map(([item, why]) => (
                 <li key={item}>
-                  <div className="text-[16.5px] leading-[1.45]">{item}</div>
-                  <div className="mt-1 text-[14.5px] leading-[1.45]" style={{ color: 'var(--warn)' }}>{why}</div>
+                  <div className="pen-t-body leading-[1.45]">{item}</div>
+                  <div className="mt-1 pen-t-small leading-[1.45]" style={{ color: 'var(--warn)' }}>{why}</div>
                 </li>
               ))}
             </ul>
@@ -459,8 +458,7 @@ function WhatYouGet() {
   return (
     <section className="pen-lp-wrap pt-28 sm:pt-36">
       <Reveal>
-        <div className="pen-lp-eyebrow">Out of one meeting</div>
-        <h2 className="pen-display mt-4 max-w-[26ch] text-[clamp(28px,4vw,40px)] leading-[1.12] tracking-[-0.015em]">
+        <h2 className="pen-display mt-4 max-w-[26ch] pen-t-h2 leading-[1.12] tracking-[-0.015em]">
           A summary you can send, a list you can work from, an email already written.
         </h2>
       </Reveal>
@@ -470,7 +468,7 @@ function WhatYouGet() {
         <Reveal delay={0.06}>
           <div className="pen-lp-card h-full">
             <div className="pen-label">Summary</div>
-            <p className="mt-2.5 text-[16.5px] leading-[1.62]">
+            <p className="mt-2.5 pen-t-body leading-[1.62]">
               Third viewing with the Hendersons. Sarah led on the renovated kitchen; Tom went
               straight to price and flagged it as above their ceiling. No garage came up again,
               now three properties running. They asked to return at the weekend with her mother.
@@ -486,9 +484,9 @@ function WhatYouGet() {
                 <li key={task}>
                   <span className="pen-lp-check" aria-hidden />
                   <span>
-                    <span className="text-[16.5px] leading-snug">{task}</span>
+                    <span className="pen-t-body leading-snug">{task}</span>
                     {meta && (
-                      <span className="pen-mono mt-1 block text-[13px]" style={{ color: 'var(--bad)' }}>{meta}</span>
+                      <span className="pen-mono mt-1 block pen-t-label" style={{ color: 'var(--bad)' }}>{meta}</span>
                     )}
                   </span>
                 </li>
@@ -508,7 +506,7 @@ function WhatYouGet() {
               <pre className="pen-lp-pre">{`To: the listing agent
 Subject: Carport / HOA before Saturday
 
-Quick one before the second viewing — can you confirm
+Quick one before the second viewing. Can you confirm
 whether the HOA allows the carport to be enclosed? The
 buyers have asked about a garage at all three properties,
 so it will decide whether they bid.`}</pre>
@@ -521,13 +519,13 @@ so it will decide whether they bid.`}</pre>
                 <div className="pen-label">In your inbox after</div>
                 <span className="pen-lp-tag">Briefing</span>
               </div>
-              <p className="mt-3 text-[14.5px] leading-[1.6]" style={{ color: 'var(--soft)' }}>
+              <p className="mt-3 pen-t-small leading-[1.6]" style={{ color: 'var(--soft)' }}>
                 One email with the summary, the three things you nearly missed, what is still
                 open, and every action with its owner. Sent to you, not to anyone else.
               </p>
               <div className="pen-lp-mailrow">
-                <span className="pen-mono text-[13px]" style={{ color: 'var(--faint)' }}>
-                  Briefing &mdash; Ridgewood walk-through
+                <span className="pen-mono pen-t-label" style={{ color: 'var(--faint)' }}>
+                  Briefing: Ridgewood walk-through
                 </span>
                 <span className="pen-lp-dot" />
               </div>
@@ -546,16 +544,15 @@ function Compounds() {
     <section className="pen-lp-wrap pt-28 sm:pt-36">
       <div className="grid gap-12 lg:grid-cols-[1fr_0.92fr] lg:gap-20">
         <Reveal>
-          <div className="pen-lp-eyebrow">Why the tenth is better than the first</div>
-          <h2 className="pen-display mt-4 text-[clamp(28px,4vw,40px)] leading-[1.12] tracking-[-0.015em]">
+          <h2 className="pen-display mt-4 pen-t-h2 leading-[1.12] tracking-[-0.015em]">
             Every recording makes the next one sharper.
           </h2>
-          <p className="mt-6 max-w-[42ch] text-[21px] leading-[1.62]" style={{ color: 'var(--soft)' }}>
+          <p className="mt-6 max-w-[42ch] pen-t-lede leading-[1.62]" style={{ color: 'var(--soft)' }}>
             One meeting gives you a note. Several give you a picture: what these people keep
             asking for, what they have quietly ruled out, what you still have not found out.
             Pen keeps that picture and updates it every time you record.
           </p>
-          <p className="mt-5 max-w-[42ch] text-[21px] leading-[1.62]" style={{ color: 'var(--soft)' }}>
+          <p className="mt-5 max-w-[42ch] pen-t-lede leading-[1.62]" style={{ color: 'var(--soft)' }}>
             It is also the part no general notetaker can give you. They summarise a meeting.
             This remembers a relationship.
           </p>
@@ -564,11 +561,11 @@ function Compounds() {
         <Reveal delay={0.1}>
           <div className="pen-lp-card">
             <header className="flex items-baseline justify-between">
-              <h3 className="pen-display text-[21px]">The Hendersons</h3>
-              <span className="pen-mono text-[13px]" style={{ color: 'var(--faint)' }}>3 meetings</span>
+              <h3 className="pen-display pen-t-lede">The Hendersons</h3>
+              <span className="pen-mono pen-t-label" style={{ color: 'var(--faint)' }}>3 meetings</span>
             </header>
 
-            <Facet label="Must have" items={['Covered parking — raised at all three viewings', 'A kitchen that has already been done']} />
+            <Facet label="Must have" items={['Covered parking, raised at all three viewings', 'A kitchen that has already been done']} />
             <Facet label="Ruled out" items={['Anything over their stated ceiling', 'Busy through-roads']} tone="bad" />
             <Facet label="Never said outright" items={['The kitchen decides it for her; the number decides it for him']} tone="accent" />
             <Facet label="Still unknown" items={['The actual ceiling. He has referred to it twice without naming it.']} />
@@ -583,19 +580,85 @@ function Facet({ label, items, tone }: { label: string; items: string[]; tone?: 
   const color = tone === 'bad' ? 'var(--bad)' : tone === 'accent' ? 'var(--accent-ink)' : 'var(--dim)'
   return (
     <div className="mt-5">
-      <div className="pen-mono text-[11.5px] uppercase tracking-[.12em]" style={{ color }}>{label}</div>
+      <div className="pen-mono pen-t-micro uppercase tracking-[.12em]" style={{ color }}>{label}</div>
       <ul className="mt-1.5 space-y-1.5">
-        {items.map((t) => <li key={t} className="text-[14.5px] leading-snug">{t}</li>)}
+        {items.map((t) => <li key={t} className="pen-t-small leading-snug">{t}</li>)}
       </ul>
     </div>
   )
 }
 
+/* ---------------------------------------------------------------- hardware */
+
+/**
+ * The product section, built the way Apple and Pocket build theirs: one object, a great deal
+ * of air around it, and quiet type. No card, no frame, no border around the photograph. The
+ * pen sits directly on the page's own paper so there is no visible photo edge, which is the
+ * whole trick of a product shot that reads as expensive.
+ *
+ * The four facts below are ones this codebase has actually observed in the recordings it
+ * processes, not numbers lifted off a listing. 48 kHz 4-bit ADPCM mono comes from the decoder
+ * in lib/pen/wav.ts; the 60-minute file limit comes from real filenames. Nothing here claims
+ * a spec we cannot stand behind.
+ */
+const FACTS = [
+  { k: 'Plugs in as a drive', v: 'No app, no pairing, no account on the device.' },
+  { k: '48 kHz, mono', v: 'Enough to separate three voices in a bare room.' },
+  { k: '60 minutes a file', v: 'Longer meetings arrive in parts and are joined for you.' },
+  { k: 'Clips like a pen', v: 'Shirt pocket. Nobody asks what it is.' },
+]
+
+function Hardware() {
+  return (
+    <section id="hardware" className="pen-lp-wrap pen-hw">
+      {/* An explicit two-column block rather than relying on which element happens to be the
+          grid item. Reveal renders its own div, so styling .pen-hw-art for grid placement
+          never applied and the facts list ended up trapped in one column. */}
+      <div className="pen-hw-top">
+        <Reveal className="pen-hw-art">
+          {/* The photograph goes here. Shoot the pen on white printer paper in window light,
+              one frame from above, and drop it in as public/pen-device.jpg. multiply blending
+              removes the white ground against our paper, so no cut-out is needed. */}
+          <div className="pen-hw-shot" role="img" aria-label="The Pen recorder, seen from above">
+            <div className="pen-hw-slot">
+              <span className="pen-mono">public/pen-device.jpg</span>
+              <span>Photograph pending. Shoot on white paper, 3:2, from above.</span>
+            </div>
+          </div>
+          <div className="pen-hw-ground" aria-hidden />
+        </Reveal>
+
+        <Reveal delay={0.08} className="pen-hw-say">
+          <h2 className="pen-lp-h2 pen-lp-h2-tight">It clips in your shirt pocket.</h2>
+          <p className="pen-hw-lede">
+            Plug it into your laptop and it shows up as a drive, like a memory stick. The
+            recordings are just files. There is nothing to install and nothing to log into.
+          </p>
+        </Reveal>
+      </div>
+
+      <Reveal delay={0.16}>
+        {/* Two by two, not a row of equal cards, and one rule above each pair rather than a
+            hairline under every line. */}
+        <dl className="pen-hw-facts">
+          {FACTS.map((f) => (
+            <div key={f.k}>
+              <dt>{f.k}</dt>
+              <dd>{f.v}</dd>
+            </div>
+          ))}
+        </dl>
+      </Reveal>
+    </section>
+  )
+}
+
 /* ----------------------------------------------------------------- pricing */
 
+// Listed once, under both cards, because it IS the same on both. Printing it twice made the
+// reader diff two nine-line lists to find the one line that differed.
 const INCLUDED = [
-  'A recorder, posted to you',
-  'Unlimited minutes, unlimited recordings',
+  `${INCLUDED_HOURS} hours of recording a month`,
   'Full transcript with who said what',
   'Summary, decisions and action items',
   'What you might have missed',
@@ -611,63 +674,97 @@ function Pricing() {
       <div className="pen-lp-wrap py-24 sm:py-28">
         <Reveal>
           <div className="pen-lp-eyebrow pen-lp-eyebrow-dark">Pricing</div>
-          <h2 className="pen-lp-h2 pen-lp-h2-tight" style={{ color: 'var(--paper)' }}>
-            One plan. The recorder comes with it.
+          <h2 className="pen-lp-h2 pen-lp-h2-tight pen-od-paper">
+            Two ways in. Same product.
           </h2>
+          {/* No max-width cap and no nowrap: at the section's 880px the sentence fits on one line,
+              and on a narrow screen it still wraps instead of forcing a sideways scroll. */}
+          <p className="pen-od-soft mt-5 pen-t-lede-sm text-balance">
+            {`${INCLUDED_HOURS} hours of recording a month on either one. The only thing that changes is how you get the pen.`}
+          </p>
         </Reveal>
 
-        <div className="mt-14 flex justify-center">
-          <Reveal delay={0.08} className="w-full max-w-[520px]">
-            <article className="pen-lp-plan pen-lp-plan-pro">
+        {/* Each card carries only what differs. Everything shared is listed once, below. */}
+        <div className="pen-lp-plans mt-14">
+          <Reveal delay={0.08}>
+            <article className="pen-lp-plan">
               <header>
-                <h3 className="pen-mono text-[13px] uppercase tracking-[.14em]" style={{ color: 'var(--accent-line)' }}>
-                  Everything, one price
+                <h3 className="pen-mono pen-od-dim pen-t-label uppercase tracking-[.14em]">
+                  Monthly
                 </h3>
                 <div className="mt-4 flex items-baseline gap-2">
-                  <span className="pen-display text-[52px] leading-none" style={{ color: 'var(--paper)' }}>
-                    ${UPFRONT_USD}
+                  <span className="pen-display pen-od-paper pen-t-price">
+                    ${PLAN_MONTHLY_USD}
                   </span>
-                  <span className="pen-mono text-[14.5px]" style={{ color: 'rgba(251,250,246,.55)' }}>
-                    first {UPFRONT_MONTHS} months
+                  <span className="pen-mono pen-od-dim pen-t-small">
+                    a month
                   </span>
                 </div>
-                <p className="mt-3 text-[16.5px] leading-[1.55]" style={{ color: 'rgba(251,250,246,.72)' }}>
-                  Three months and a recorder, posted to you. After that it&rsquo;s ${MONTHLY_USD} a
-                  month, and you can stop whenever you like.
+                <p className="pen-mono pen-od-mid mt-3 pen-t-small">
+                  {`Pen $${PEN_USD} once \u00B7 billed monthly`}
                 </p>
               </header>
 
-              <ul className="pen-lp-feats">
-                {INCLUDED.map((f) => <Feat key={f} pro>{f}</Feat>)}
-              </ul>
+              <p className="pen-lp-plan-trade">
+                You buy the recorder, and you can stop any month you like.
+              </p>
 
-              <PlanCta href={STRIPE_URL} variant="accent">Get started</PlanCta>
+              <PlanCta href={`${SIGN_UP}?plan=monthly&offer=posted-pen&from=pricing`} variant="ghost">
+                {`Start ${TRIAL_DAYS_POSTED} days free`}
+              </PlanCta>
+            </article>
+          </Reveal>
+
+          <Reveal delay={0.16}>
+            <article className="pen-lp-plan pen-lp-plan-pro">
+              <span className="pen-lp-ribbon">Pen included</span>
+              <header>
+                <h3 className="pen-mono pen-t-label uppercase tracking-[.14em]" style={{ color: 'var(--accent-line)' }}>
+                  Yearly
+                </h3>
+                <div className="mt-4 flex items-baseline gap-2">
+                  <span className="pen-display pen-od-paper pen-t-price">
+                    ${PLAN_ANNUAL_USD}
+                  </span>
+                  <span className="pen-mono pen-od-dim pen-t-small">
+                    a year
+                  </span>
+                </div>
+                <p className="pen-mono pen-od-soft mt-3 pen-t-small">
+                  {`$${Math.round(PLAN_ANNUAL_USD / 12)} a month \u00B7 billed once`}
+                </p>
+              </header>
+
+              <p className="pen-lp-plan-trade">
+                The recorder is on us, and it works out two months cheaper.
+              </p>
+
+              <PlanCta href={`${SIGN_UP}?plan=annual&offer=posted-pen&from=pricing`} variant="accent">
+                {`Start ${TRIAL_DAYS_POSTED} days free`}
+              </PlanCta>
             </article>
           </Reveal>
         </div>
 
-        <Reveal delay={0.16}>
-          {/* $45 over 3 months is exactly the $15 monthly rate, so there is no discount to
-              claim and pretending otherwise would be noticed. What you actually get for paying
-              up front is the recorder, which is the thing worth saying. */}
-          <p className="pen-lp-pricing-note">
-            That&rsquo;s three months at the usual rate, with the recorder thrown in.
-            No card details beyond the first payment, and nothing to cancel if you stop.
-          </p>
+        <Reveal delay={0.24}>
+          <div className="pen-lp-both">
+            <p className="pen-t-small pen-od-dim">Both plans include</p>
+            <ul className="pen-lp-bothlist">
+              {INCLUDED.map((f) => (
+                <li key={f}>
+                  <svg viewBox="0 0 16 16" aria-hidden>
+                    <path d="M3 8.4 L6.2 11.6 L13 4.8" fill="none" stroke="currentColor"
+                          strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <span>{f}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </Reveal>
+
       </div>
     </section>
-  )
-}
-
-function Feat({ children, pro }: { children: React.ReactNode; pro?: boolean }) {
-  return (
-    <li>
-      <svg viewBox="0 0 16 16" aria-hidden style={{ color: pro ? 'var(--accent-line)' : 'rgba(251,250,246,.4)' }}>
-        <path d="M3 8.4 L6.2 11.6 L13 4.8" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-      <span>{children}</span>
-    </li>
   )
 }
 
@@ -679,7 +776,7 @@ function Footer() {
       <div className="pen-lp-wrap flex flex-wrap items-center justify-between gap-5 py-9">
         <div className="flex items-baseline gap-3">
           <Image src="/juno_mark.png" alt="Juno" width={24} height={24} className="pen-mark" />
-          <span className="pen-mono text-[13px]" style={{ color: 'var(--faint)' }}>
+          <span className="pen-mono pen-t-label" style={{ color: 'var(--faint)' }}>
             &copy; {new Date().getFullYear()}
           </span>
         </div>
@@ -693,7 +790,7 @@ function Footer() {
         </nav>
       </div>
       <div className="pen-lp-wrap pb-10">
-        <p className="pen-mono max-w-[70ch] text-[13px] leading-[1.8]" style={{ color: 'var(--faint)' }}>
+        <p className="pen-mono max-w-[70ch] pen-t-label leading-[1.8]" style={{ color: 'var(--faint)' }}>
           Recording a conversation needs everyone&rsquo;s permission in many places, Florida included.
           Pen asks you to confirm consent before it processes anything.
         </p>

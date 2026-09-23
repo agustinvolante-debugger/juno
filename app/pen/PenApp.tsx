@@ -19,7 +19,7 @@ import { prepareAudio, fmtMB, fmtDur, SOFT_SIZE_LIMIT } from '@/lib/pen/encode'
 import { postJson, getJson, patchJson, del, errMessage, PenHttpError } from '@/lib/pen/http'
 import type { ChatSummary } from '@/lib/pen/chats'
 import type { DocSummary } from '@/lib/pen/docs'
-import { monthStart, nextMonthStart, type Usage } from '@/lib/pen/plan'
+import { monthStart, nextMonthStart, INCLUDED_HOURS, type Usage } from '@/lib/pen/plan'
 import { ACCEPT_DESKTOP, acceptFor } from '@/lib/pen/file-accept'
 import { findRuns } from '@/lib/pen/merge-detect'
 
@@ -901,15 +901,17 @@ function Account({ email, name, avatar }: { email: string; name?: string | null;
 /* ============================================================ usage meter */
 
 /**
- * Minutes recorded this month.
+ * Minutes recorded this month, against the twelve hours the plan includes.
  *
- * It used to be a gauge against a 120-minute allowance, with an upgrade prompt as it filled.
- * The plan is unlimited now, so a bar with no ceiling would be decoration and an upgrade CTA
- * would be a lie. What is left is the number itself, which is still worth showing: it is the
- * evidence that the archive is accumulating, which is the whole reason to keep recording.
+ * It said "unlimited" until the plan stopped being unlimited. It is a meter again, but a calm
+ * one: going over is not blocked and there is nothing to buy, because breakeven is thirty-four
+ * hours and metering a realtor's recording would discourage the one habit the product needs.
+ * So the bar reports, and going over says what actually happens — nothing.
  */
 function UsageMeter({ usage }: { usage: Usage }) {
   const hours = usage.used / 60
+  const pct = Math.min(100, (hours / INCLUDED_HOURS) * 100)
+  const over = hours > INCLUDED_HOURS
   const resets = new Date(usage.resetsAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })
 
   return (
@@ -919,9 +921,14 @@ function UsageMeter({ usage }: { usage: Usage }) {
       </div>
       <div className="pen-meter-n">
         <strong>{hours >= 1 ? `${hours.toFixed(1)}h` : `${usage.used}m`}</strong>
-        <span className="pen-meter-un">unlimited</span>
+        <span className="pen-meter-un">of {INCLUDED_HOURS}h</span>
       </div>
-      <div className="pen-meter-sub">Resets {resets}</div>
+      <div className="pen-meter-bar" aria-hidden>
+        <span style={{ width: `${pct}%` }} data-over={over ? 'true' : 'false'} />
+      </div>
+      <div className="pen-meter-sub">
+        {over ? 'Over your included hours — keep going, nothing is blocked.' : `Resets ${resets}`}
+      </div>
     </div>
   )
 }

@@ -24,8 +24,15 @@ export const PLAN_MONTHLY_USD = 15
 export const PLAN_ANNUAL_USD = 144
 /** One-time, on the monthly plan only. Costs us $40 plus $8 to post. */
 export const PEN_USD = 50
-/** Recording included each month on both plans. We stop making money at 34. */
-export const INCLUDED_HOURS = 10
+/**
+ * Recording included each month, on both plans.
+ *
+ * Not a cost limit — we keep $9.25 of every $15 at twelve hours and only stop making money at
+ * thirty-four. Twelve clears three showings a week with room, and across a realistic spread of
+ * users the difference between capping at six and capping at twelve is 44 cents a month,
+ * because most people sit at two to four hours whatever the number says.
+ */
+export const INCLUDED_HOURS = 12
 
 /**
  * Free trial length, in days.
