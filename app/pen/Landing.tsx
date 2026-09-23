@@ -57,6 +57,17 @@ const SIGN_IN = '/auth/signin?callbackUrl=/pen'
 const SIGN_UP = '/pen/signup'
 
 /**
+ * One label for one intent, in one place.
+ *
+ * There were five ways onto the sign-up page wearing four different labels: "Sign up" in the
+ * nav, "Get started" in the hero, "Start 21 days free" on both pricing cards, "Sign up" again
+ * in the footer. Naming the same action four ways makes the page read as four products, and
+ * it splits the analytics on the only conversion that matters. Defined here so the next
+ * person to add a CTA cannot invent a fifth.
+ */
+const CTA = `Start ${TRIAL_DAYS_POSTED} days free`
+
+/**
  * CSS-driven, deliberately. A marketing page must not start at opacity 0 and wait for JS:
  * a slow connection, a hydration error or a crawler that doesn't run scripts would all see a
  * blank page. A keyframe animation always completes, and `prefers-reduced-motion` is honoured
@@ -75,6 +86,7 @@ export default function Landing() {
     <div className="pen-lp">
       <Nav />
       <Hero />
+      <OfferStrip />
       <MultiUse />
       <HowItWorks />
       <TheCatch />
@@ -99,7 +111,7 @@ function Nav() {
         <nav className="flex items-center gap-1.5">
           <a href="#pricing" className="pen-lp-navlink">Pricing</a>
           <Link href={SIGN_IN} className="pen-lp-navlink">Sign in</Link>
-          <Link href={`${SIGN_UP}?from=nav`} className="pen-lp-btn pen-lp-btn-sm pen-lp-btn-primary">Sign up</Link>
+          <Link href={`${SIGN_UP}?from=nav`} className="pen-lp-btn pen-lp-btn-sm pen-lp-btn-primary">{CTA}</Link>
         </nav>
       </div>
     </header>
@@ -134,17 +146,34 @@ function Hero() {
           </p>
         </Reveal>
 
+        {/* Two CTAs and nothing else. The offer line that used to sit under these buttons is
+            its own strip below the hero now: a fifth text element in a hero is the point at
+            which it stops being one moment and starts being a feature list. */}
         <Reveal delay={0.15}>
           <div className="flex flex-wrap items-center gap-3">
-            <Link href={`${SIGN_UP}?from=hero`} className="pen-lp-btn pen-lp-btn-primary">Get started</Link>
+            <Link href={`${SIGN_UP}?from=hero`} className="pen-lp-btn pen-lp-btn-primary">{CTA}</Link>
             <a href="#how" className="pen-lp-btn">See how it works</a>
           </div>
-          <p className="pen-mono mt-4 pen-t-label" style={{ color: 'var(--faint)' }}>
-            {`${TRIAL_DAYS_POSTED} days free \u00B7 then $${PLAN_MONTHLY_USD} a month, or $${PLAN_ANNUAL_USD} a year with the pen included`}
-          </p>
         </Reveal>
       </div>
     </section>
+  )
+}
+
+/**
+ * The offer, on its own line directly under the hero.
+ *
+ * It says the three things a buyer wants before they scroll: how long it is free, what it
+ * costs after, and that the recorder is included on the year. One hairline above it, because
+ * it belongs to the hero without being inside it.
+ */
+function OfferStrip() {
+  return (
+    <div className="pen-lp-wrap pen-offer">
+      <p className="pen-mono pen-t-label">
+        {`${TRIAL_DAYS_POSTED} days free \u00B7 then $${PLAN_MONTHLY_USD} a month, or $${PLAN_ANNUAL_USD} a year with the pen included`}
+      </p>
+    </div>
   )
 }
 
@@ -710,7 +739,7 @@ function Pricing() {
               </p>
 
               <PlanCta href={`${SIGN_UP}?plan=monthly&offer=posted-pen&from=pricing`} variant="ghost">
-                {`Start ${TRIAL_DAYS_POSTED} days free`}
+                {CTA}
               </PlanCta>
             </article>
           </Reveal>
@@ -740,7 +769,7 @@ function Pricing() {
               </p>
 
               <PlanCta href={`${SIGN_UP}?plan=annual&offer=posted-pen&from=pricing`} variant="accent">
-                {`Start ${TRIAL_DAYS_POSTED} days free`}
+                {CTA}
               </PlanCta>
             </article>
           </Reveal>
@@ -785,7 +814,7 @@ function Footer() {
           <a href="#pricing" className="pen-lp-footlink">Pricing</a>
           <Link href="/privacy" className="pen-lp-footlink">Privacy</Link>
           <Link href="/terms" className="pen-lp-footlink">Terms</Link>
-          <Link href={`${SIGN_UP}?from=footer`} className="pen-lp-footlink">Sign up</Link>
+          <Link href={`${SIGN_UP}?from=footer`} className="pen-lp-footlink">{CTA}</Link>
           <Link href={SIGN_IN} className="pen-lp-footlink">Sign in</Link>
         </nav>
       </div>

@@ -2053,3 +2053,12 @@ body:has(.pen-root) {
 .pen-t-small   { font-size: var(--t-small);   line-height: var(--t-small-lh); }
 .pen-t-label   { font-size: var(--t-label);   line-height: var(--t-label-lh); }
 .pen-t-micro   { font-size: var(--t-micro);   line-height: var(--t-micro-lh); }
+
+/* The offer line, evicted from the hero. One hairline above so it reads as belonging to the
+   hero rather than as a section of its own. */
+.pen-offer {
+  padding-block: 18px 0;
+  border-top: 1px solid var(--line);
+  margin-top: clamp(40px, 6vw, 68px);
+}
+.pen-offer p { color: var(--dim); margin: 0; }
