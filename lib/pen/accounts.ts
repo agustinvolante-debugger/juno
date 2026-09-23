@@ -92,10 +92,22 @@ export async function activate(opts: {
     ...(opts.trialEndsAt !== undefined ? { trial_ends_at: opts.trialEndsAt } : {}),
     ...(opts.offer ? { offer: opts.offer } : {}),
   }
-  Object.assign(patch, extras)
-  const { error } = existing
-    ? await supabaseAdmin.from('pen_accounts').update(patch).eq('id', existing.id)
-    : await supabaseAdmin.from('pen_accounts').insert({ ...patch, source: 'stripe' })
+
+  const write = async (body: Record<string, unknown>) =>
+    existing
+      ? await supabaseAdmin.from('pen_accounts').update(body).eq('id', existing.id)
+      : await supabaseAdmin.from('pen_accounts').insert({ ...body, source: 'stripe' })
+
+  let { error } = await write({ ...patch, ...extras })
+
+  // trial_ends_at and offer arrived with the card-on-file trial and need an ALTER to exist.
+  // If the deploy lands before the migration, the write fails, the webhook returns 500, and
+  // Stripe retries forever while a paying customer sits locked out. Access matters more than
+  // the two columns that describe how they got here, so drop them and write the rest.
+  if (error && /column .* does not exist|schema cache/i.test(error.message)) {
+    console.warn(`pen: pen_accounts is missing trial_ends_at/offer, activating without them. Run the ALTER in lib/pen/schema.sql. (${error.message})`)
+    ;({ error } = await write(patch))
+  }
   if (error) throw new Error(error.message)
 }
 
