@@ -1757,17 +1757,29 @@ body:has(.pen-root) {
 }
 .pen-main-col { min-width: 0; display: flex; flex-direction: column; }
 
-/* Fill the height rather than stopping partway down and leaving the ground showing. */
-.pen-page > .pen-side {
-  position: sticky; top: 20px;
-  max-height: calc(100vh - 48px);
-}
 .pen-shell { flex: 1 1 auto; }
-.pen-rail { top: 20px; max-height: calc(100vh - 48px); }
+
+/* Fill the height rather than stopping partway down and leaving the ground showing.
+   DESKTOP ONLY, and the guard is the whole point. These two rules used to sit unguarded at
+   the bottom of the file, where they re-applied max-height AFTER the phone block above had
+   cleared it — so on a phone the recordings list was a 796px box holding 2,412px of content
+   with overflow:visible. It spilled straight over the overview, which began right after the
+   BOX rather than after the content. That is the two-layers-on-top-of-each-other bug, and
+   nothing in the phone block could have fixed it, because the phone block came first. */
+@media (min-width: 901px) {
+  .pen-page > .pen-side {
+    position: sticky; top: 20px;
+    max-height: calc(100dvh - 48px);
+  }
+  .pen-rail { top: 20px; max-height: calc(100dvh - 48px); }
+}
 
 @media (max-width: 900px) {
   .pen-page { display: block; padding: 14px 16px 28px; min-height: 0; }
   .pen-page > .pen-side { position: fixed; max-height: none; }
+  /* Belt and braces: whatever else sets these, on a phone the rail is a plain block that is
+     as tall as its contents. A capped box with visible overflow is how the layers collided. */
+  .pen-rail { position: static; max-height: none; overflow: visible; }
 }
 
 
