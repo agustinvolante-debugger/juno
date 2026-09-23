@@ -35,6 +35,26 @@ function verify(raw: string, header: string | null, secret: string): boolean {
   return a.length === b.length && crypto.timingSafeEqual(a, b)
 }
 
+/**
+ * When the current billing period ends.
+ *
+ * `current_period_end` was removed from the Subscription object and moved onto each
+ * subscription item (API 2025-03-31 onwards). We were reading the old top-level field, which
+ * has been quietly returning undefined — every account row has a null period end. Reads the
+ * item first and keeps the legacy path for anything signed by an older API version.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function periodEnd(sub: Record<string, any>): string | null {
+  const secs = sub?.items?.data?.[0]?.current_period_end ?? sub?.current_period_end
+  return typeof secs === 'number' ? new Date(secs * 1000).toISOString() : null
+}
+
+/** Trial end, in ISO, or null when there is no trial. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function trialEnd(sub: Record<string, any>): string | null {
+  return typeof sub?.trial_end === 'number' ? new Date(sub.trial_end * 1000).toISOString() : null
+}
+
 type StripeEvent = {
   type: string
   data: {
@@ -80,8 +100,11 @@ export async function POST(req: Request) {
           email,
           stripeCustomerId: typeof o.customer === 'string' ? o.customer : null,
           stripeSubscriptionId: typeof o.subscription === 'string' ? o.subscription : null,
+          offer: o.metadata?.offer ?? null,
         })
-        await welcome(email).catch(() => {})
+        // The subscription.created event that follows carries the trial dates; this one only
+        // has to open the door, which it should do immediately rather than wait for it.
+        await welcome(email, o.metadata?.offer ?? null).catch(() => {})
         break
       }
 
@@ -89,19 +112,38 @@ export async function POST(req: Request) {
       case 'customer.subscription.created':
       case 'customer.subscription.updated': {
         const sub = o
+        // `trialing` counts as live: the card is on file and the product is theirs to use.
+        // `past_due` does NOT — the card failed at the end of the trial, which is exactly the
+        // case this whole mechanic exists to catch.
         const live = sub.status === 'active' || sub.status === 'trialing'
         if (live && email) {
           await activate({
             email,
             stripeCustomerId: typeof sub.customer === 'string' ? sub.customer : null,
             stripeSubscriptionId: sub.id ?? null,
-            currentPeriodEnd: sub.current_period_end
-              ? new Date(sub.current_period_end * 1000).toISOString()
-              : null,
+            currentPeriodEnd: periodEnd(sub),
+            trialEndsAt: trialEnd(sub),
+            offer: sub.metadata?.offer ?? null,
           })
         } else if (!live && sub.id) {
           await deactivate(sub.id)
         }
+        break
+      }
+
+      // Three days before the card gets charged. Stripe only sends this when a trial is
+      // ending with a payment method attached, so it is exactly the right moment to say so —
+      // and a surprise charge is the fastest way to turn a trial into a chargeback.
+      case 'customer.subscription.trial_will_end': {
+        if (email) await trialEnding(email, trialEnd(o)).catch(() => {})
+        break
+      }
+
+      // The card declined when the trial ended. Stripe will retry, and the subscription goes
+      // past_due, then canceled — the subscription.updated handler above closes the door. This
+      // is here to tell them before that happens, while it is still fixable.
+      case 'invoice.payment_failed': {
+        if (email) await paymentFailed(email).catch(() => {})
         break
       }
 
@@ -119,7 +161,45 @@ export async function POST(req: Request) {
   return NextResponse.json({ received: true })
 }
 
-async function welcome(email: string) {
+const shell = (body: string) =>
+  `<!doctype html><html><head><meta charset="utf-8"></head>` +
+  `<body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.65;color:#16150F;padding:24px;max-width:560px">` +
+  body +
+  `</body></html>`
+
+async function trialEnding(email: string, endsAt: string | null) {
+  const when = endsAt
+    ? new Date(endsAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
+    : 'in three days'
+  await sendEmailResult({
+    to: email,
+    subject: 'Your Pen trial ends in three days',
+    html: shell(
+      `<p>Your free trial ends on ${when}, and the card on file will be charged $15 for the ` +
+        `first month.</p>` +
+        `<p>If Pen hasn&rsquo;t earned that, cancel in one click and keep the recorder &mdash; ` +
+        `no email, no call, nothing to explain.</p>` +
+        `<p style="color:#514E45">Reply to this and it reaches a person.</p>`,
+    ),
+  })
+}
+
+async function paymentFailed(email: string) {
+  const base = (process.env.PEN_PUBLIC_URL || 'https://pen.tryjunoapp.com').replace(/\/$/, '')
+  await sendEmailResult({
+    to: email,
+    subject: 'Your card was declined',
+    html: shell(
+      `<p>We couldn&rsquo;t charge the card on file, so your Pen account is on hold.</p>` +
+        `<p>Your recordings and notes are untouched &mdash; update the card and everything ` +
+        `comes straight back.</p>` +
+        `<p><a href="${base}" style="color:#2C5F7C">${base.replace(/^https?:\/\//, '')}</a></p>` +
+        `<p style="color:#514E45">If you meant to cancel, ignore this. Nothing else happens.</p>`,
+    ),
+  })
+}
+
+async function welcome(email: string, offer: string | null) {
   const base = (process.env.PEN_PUBLIC_URL || 'https://pen.tryjunoapp.com').replace(/\/$/, '')
   await sendEmailResult({
     to: email,
@@ -129,8 +209,12 @@ async function welcome(email: string) {
       `<body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.65;color:#16150F;padding:24px;max-width:560px">` +
       `<p>You&rsquo;re all set. Sign in with this email address and everything is there.</p>` +
       `<p><a href="${base}" style="color:#2C5F7C">${base.replace(/^https?:\/\//, '')}</a></p>` +
-      `<p>Your recorder goes in the post shortly. In the meantime you can upload anything you ` +
-      `already have &mdash; a voice memo works.</p>` +
+      (offer === 'own-recorder'
+        ? `<p>Upload anything to start &mdash; a voice memo off your phone works, and that is ` +
+          `the fastest way to see what the write-up looks like.</p>`
+        : `<p>Your recorder goes in the post shortly. Your trial doesn&rsquo;t start counting ` +
+          `against you while it&rsquo;s in transit &mdash; and in the meantime you can upload ` +
+          `anything you already have, a voice memo works.</p>`) +
       `<p style="color:#514E45">Reply to this and it reaches a person.</p>` +
       `</body></html>`,
   })

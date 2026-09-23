@@ -13,6 +13,35 @@ export const MONTHLY_USD = 15
 /** No cap. Kept as a named export so the meter reads as a decision rather than a missing check. */
 export const MINUTES_UNLIMITED = true
 
+// ---------------------------------------------------------------------------
+// Agreed 22 Sep. The landing page still shows the numbers above; these are what
+// checkout actually charges, and the page is the next thing to bring into line.
+// ---------------------------------------------------------------------------
+
+/** Paid monthly. The recorder is bought separately at PEN_USD. */
+export const PLAN_MONTHLY_USD = 15
+/** Paid once a year — $12/month — and the recorder is included. */
+export const PLAN_ANNUAL_USD = 144
+/** One-time, on the monthly plan only. Costs us $40 plus $8 to post. */
+export const PEN_USD = 50
+/** Recording included each month on both plans. We stop making money at 34. */
+export const INCLUDED_HOURS = 10
+
+/**
+ * Free trial length, in days.
+ *
+ * Two weeks for someone who can start today with a phone recording. Three for someone waiting
+ * on a posted recorder, because despatch eats three to five days of a fourteen-day trial and
+ * a trial that expires before the product arrives is not a trial.
+ */
+export const TRIAL_DAYS = 14
+export const TRIAL_DAYS_POSTED = 21
+
+export type Offer = 'own-recorder' | 'posted-pen'
+export function trialDaysFor(offer: Offer): number {
+  return offer === 'posted-pen' ? TRIAL_DAYS_POSTED : TRIAL_DAYS
+}
+
 export type Usage = {
   /** Minutes recorded in the current calendar month. */
   used: number

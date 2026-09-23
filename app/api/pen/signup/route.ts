@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { validate, saveSignup, type Signup } from '@/lib/pen/signup'
 import { createPending } from '@/lib/pen/accounts'
+import { createCheckoutSession } from '@/lib/pen/stripe'
+import { trialDaysFor, type Offer } from '@/lib/pen/plan'
 import { sendEmailResult } from '@/lib/news/email'
 
 export const dynamic = 'force-dynamic'
@@ -58,12 +60,41 @@ export async function POST(req: Request) {
     // to active; without this the webhook would be creating strangers from scratch.
     await createPending(v.value.email, v.value.source ?? 'signup').catch(() => {})
 
-    // Confirmation to them, and a heads-up to us. Neither is allowed to fail the signup —
-    // the record is already saved, and an email problem is ours, not theirs.
-    void sendConfirmation(v.value.name, v.value.email).catch(() => {})
     void notifyOwner(v.value, created).catch(() => {})
 
-    return NextResponse.json({ ok: true, created })
+    // Hand straight to checkout so the card is taken in the same sitting.
+    //
+    // The old flow ended on a confirmation email and a promise to be in touch, which meant
+    // every signup needed a second act of willingness days later. Taking the card now is what
+    // makes the free recorder affordable: without it we are posting hardware to anyone who
+    // fills in a form.
+    let checkoutUrl: string | null = null
+    try {
+      const plan = b.plan === 'annual' ? 'annual' : 'monthly'
+      const priceId = plan === 'annual' ? process.env.STRIPE_PRICE_ANNUAL : process.env.STRIPE_PRICE_MONTHLY
+      if (priceId) {
+        const base = (process.env.PEN_PUBLIC_URL || 'https://pen.tryjunoapp.com').replace(/\/$/, '')
+        const offer: Offer = b.offer === 'own-recorder' ? 'own-recorder' : 'posted-pen'
+        const session = await createCheckoutSession({
+          priceId,
+          email: v.value.email,
+          trialDays: trialDaysFor(offer),
+          successUrl: `${base}/pen?welcome=1`,
+          cancelUrl: `${base}/pen/signup?cancelled=1`,
+          metadata: { plan, offer },
+        })
+        checkoutUrl = session.url
+      }
+    } catch {
+      // Checkout being down must not lose the signup — we have their details and can send a
+      // link by hand. Falling back to the old confirmation email says something true.
+    }
+
+    // Only when there is no card to take. Otherwise the welcome email from the Stripe webhook
+    // is the one that should land, and two emails about the same signup is a bug.
+    if (!checkoutUrl) void sendConfirmation(v.value.name, v.value.email).catch(() => {})
+
+    return NextResponse.json({ ok: true, created, checkoutUrl })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }

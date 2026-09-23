@@ -24,7 +24,13 @@ export default function SignupPage() {
     setState('sending')
     const f = new FormData(e.currentTarget)
     try {
-      await postJson('/api/pen/signup', {
+      const url = new URLSearchParams(window.location.search)
+      const r = await postJson<{ checkoutUrl?: string | null }>('/api/pen/signup', {
+        // Which plan and which offer, both carried in the link. A cold-email recipient arrives
+        // on ?offer=posted-pen and gets the longer trial; someone who already owns a recorder
+        // starts today and gets fourteen days.
+        plan: url.get('plan') === 'annual' ? 'annual' : 'monthly',
+        offer: url.get('offer') === 'own-recorder' ? 'own-recorder' : 'posted-pen',
         name: f.get('name'),
         email: f.get('email'),
         phone: f.get('phone'),
@@ -38,8 +44,15 @@ export default function SignupPage() {
         note: f.get('note'),
         company: f.get('company'), // honeypot
         elapsed: Date.now() - startedAt.current,
-        source: new URLSearchParams(window.location.search).get('from') ?? 'landing',
+        source: url.get('from') ?? 'landing',
       })
+
+      // Straight to Stripe, in the same sitting, while they are still willing. Taking the card
+      // now is what makes a free recorder affordable — see lib/pen/stripe.
+      if (r.checkoutUrl) {
+        window.location.href = r.checkoutUrl
+        return
+      }
       setState('done')
     } catch (err) {
       setError(errMessage(err, 'Something went wrong. Try again.'))
@@ -55,8 +68,8 @@ export default function SignupPage() {
             <div className="pen-su-tick" aria-hidden>&#10003;</div>
             <h1 className="pen-display text-[34px] leading-tight">You&rsquo;re on the list.</h1>
             <p className="mt-4 text-[16.5px] leading-relaxed" style={{ color: 'var(--soft)' }}>
-              There&rsquo;s a confirmation in your inbox. We&rsquo;ll email you the moment your
-              account is open, and get the recorder in the post.
+              There&rsquo;s a confirmation in your inbox. We&rsquo;ll send a link to start your
+              free trial, and get the recorder in the post.
             </p>
             <Link href="/pen" className="pen-lp-btn pen-lp-btn-ghost mt-8 inline-flex">Back to the site</Link>
           </div>

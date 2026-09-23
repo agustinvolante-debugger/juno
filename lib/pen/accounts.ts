@@ -17,6 +17,10 @@ export type PenAccount = {
   stripe_customer_id: string | null
   stripe_subscription_id: string | null
   current_period_end: string | null
+  /** Set while a card-on-file trial is running. In the past means they converted. */
+  trial_ends_at: string | null
+  /** Which offer brought them in — 'posted-pen' or 'own-recorder'. */
+  offer: string | null
   activated_at: string | null
   note: string | null
   created_at: string
@@ -33,9 +37,14 @@ export async function getAccount(email: string): Promise<PenAccount | null> {
   return (data as PenAccount) ?? null
 }
 
-/** True only for a paying (or hand-granted) account. */
+/** True only for a paying, trialing, or hand-granted account. */
 export async function isActive(email: string): Promise<boolean> {
   return (await getAccount(email))?.status === 'active'
+}
+
+/** In a trial right now — access is the same, but they have not paid us anything yet. */
+export function isTrialing(a: PenAccount | null): boolean {
+  return !!a && a.status === 'active' && !!a.trial_ends_at && new Date(a.trial_ends_at) > new Date()
 }
 
 /** Created at sign-up, before any money has changed hands. */
@@ -62,6 +71,8 @@ export async function activate(opts: {
   stripeCustomerId?: string | null
   stripeSubscriptionId?: string | null
   currentPeriodEnd?: string | null
+  trialEndsAt?: string | null
+  offer?: string | null
 }): Promise<void> {
   const email = opts.email.toLowerCase()
   const patch = {
@@ -75,6 +86,13 @@ export async function activate(opts: {
     updated_at: new Date().toISOString(),
   }
   const existing = await getAccount(email)
+  // Only write the trial fields when Stripe actually told us about them. A later event that
+  // omits them must not erase the record of how this customer arrived.
+  const extras = {
+    ...(opts.trialEndsAt !== undefined ? { trial_ends_at: opts.trialEndsAt } : {}),
+    ...(opts.offer ? { offer: opts.offer } : {}),
+  }
+  Object.assign(patch, extras)
   const { error } = existing
     ? await supabaseAdmin.from('pen_accounts').update(patch).eq('id', existing.id)
     : await supabaseAdmin.from('pen_accounts').insert({ ...patch, source: 'stripe' })

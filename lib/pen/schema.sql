@@ -157,3 +157,17 @@ create index if not exists pen_clients_user on pen_clients(user_email);
 -- ---------------------------------------------------------------------------
 -- alter table public.pen_sessions add column if not exists merge_group uuid, add column if not exists merge_index int;
 -- create index if not exists pen_sessions_merge on public.pen_sessions(merge_group, merge_index);
+
+-- ---------------------------------------------------------------------------
+-- 2026-09-22 — card-on-file trial. Run each line separately.
+--
+-- The free recorder only pays for itself if roughly half the people who accept one go on to
+-- subscribe. A card taken at sign-up is the difference between selecting for people who
+-- accept free hardware and people who mean to use it, so the trial needs to be a state we can
+-- see rather than something we infer.
+--
+-- trial_ends_at in the future = trialing, nothing paid yet. In the past = they converted.
+-- offer records which promise brought them in, so the first twenty pens can be counted.
+-- ---------------------------------------------------------------------------
+-- alter table public.pen_accounts add column if not exists trial_ends_at timestamptz, add column if not exists offer text;
+-- create index if not exists pen_accounts_trial on public.pen_accounts(trial_ends_at);

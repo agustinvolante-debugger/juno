@@ -1,0 +1,398 @@
+<title>The Ten-Hour Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Literata:opsz,wght@7..72,400;7..72,500;7..72,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  /* The host skeleton's reset doesn't set box-sizing, and every padded block here
+     (plan cards, callouts, the chart frame) would otherwise compute 40px wider than its
+     grid track — measured blowing a 352px column out to 415px. min-width:0 stops a grid
+     item's automatic minimum size doing the same thing from the inside. */
+  *, *::before, *::after { box-sizing:border-box; }
+  .plans > *, .open-grid > * { min-width:0; }
+
+  :root {
+    --paper:#F2EFE5; --panel:#FFFFFF; --sunk:#EAE6DB;
+    --ink:#16150F; --soft:#514E45; --dim:#646158; --faint:#77746B;
+    --rule:#DCD5C4; --hair:#E8E3D6;
+    --good:#0B6B44; --good-wash:#DCEDE3; --good-line:#A9D2BC;
+    --open:#8A6A1F; --open-wash:#F3EBD6; --open-line:#DCC994;
+    --bad:#9B3A2E;  --bad-wash:#F5E3DF;
+    --display:"Instrument Serif",Georgia,serif;
+    --body:Literata,Georgia,"Times New Roman",serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#14130E; --panel:#1E1C15; --sunk:#191811;
+      --ink:#F1EEE3; --soft:#C3BEAF; --dim:#A19C8E; --faint:#8B8779;
+      --rule:#35322A; --hair:#2A2820;
+      --good:#5CBE90; --good-wash:#16301F; --good-line:#2C5A3F;
+      --open:#D3AA51; --open-wash:#2E2614; --open-line:#57492A;
+      --bad:#E08878;  --bad-wash:#33201B;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#14130E; --panel:#1E1C15; --sunk:#191811;
+    --ink:#F1EEE3; --soft:#C3BEAF; --dim:#A19C8E; --faint:#8B8779;
+    --rule:#35322A; --hair:#2A2820;
+    --good:#5CBE90; --good-wash:#16301F; --good-line:#2C5A3F;
+    --open:#D3AA51; --open-wash:#2E2614; --open-line:#57492A;
+    --bad:#E08878;  --bad-wash:#33201B;
+  }
+
+  body { background:var(--paper); color:var(--ink); font-family:var(--body);
+         font-size:17px; line-height:1.62; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:860px; margin:0 auto; padding:56px 24px 110px; }
+  @media (max-width:640px){ .wrap{ padding:34px 18px 76px; } body{ font-size:16px; } }
+
+  h1 { font-family:var(--display); font-weight:400; font-size:clamp(38px,7vw,60px);
+       line-height:1.02; letter-spacing:-.018em; margin:0; text-wrap:balance; }
+  h2 { font-family:var(--display); font-weight:400; font-size:clamp(25px,4vw,33px);
+       line-height:1.12; letter-spacing:-.012em; margin:0 0 6px; text-wrap:balance; }
+  h3 { font-family:var(--body); font-weight:600; font-size:17px; margin:0 0 6px; }
+  p { margin:0 0 15px; max-width:66ch; }
+  strong { font-weight:600; }
+  em { font-style:italic; }
+
+  .eyebrow { font-family:var(--mono); font-size:11.5px; font-weight:500;
+             letter-spacing:.13em; text-transform:uppercase; color:var(--dim); }
+  .lede { font-size:19px; line-height:1.58; color:var(--soft); margin-top:16px; max-width:60ch; }
+  @media (max-width:640px){ .lede{ font-size:17.5px; } }
+
+  section { margin-top:54px; }
+  .sec-head { border-top:1px solid var(--ink); padding-top:13px; margin-bottom:22px; }
+
+  /* ---- the two plans -------------------------------------------------- */
+  /* auto-fit rather than a viewport media query: the cards collapse when the space they
+     actually have runs out, which is the honest condition and survives being embedded. */
+  .plans { display:grid; grid-template-columns:repeat(auto-fit,minmax(248px,1fr));
+           gap:18px; margin-top:26px; }
+  .plan { background:var(--panel); border:1px solid var(--rule); border-radius:3px;
+          padding:24px 22px 20px; position:relative; }
+  .plan::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px;
+                  background:var(--good); border-radius:3px 0 0 3px; }
+  .plan-name { font-family:var(--mono); font-size:11.5px; font-weight:600; letter-spacing:.12em;
+               text-transform:uppercase; color:var(--good); }
+  .price { font-family:var(--display); font-size:52px; line-height:1; letter-spacing:-.02em;
+           margin:12px 0 2px; font-variant-numeric:tabular-nums; }
+  .price small { font-family:var(--mono); font-size:14px; letter-spacing:0; color:var(--dim); }
+  .plan-sub { font-family:var(--mono); font-size:13px; color:var(--dim); margin-bottom:16px; }
+  .plan ul { list-style:none; margin:0; padding:0; border-top:1px solid var(--hair); }
+  .plan li { display:flex; justify-content:space-between; gap:14px; align-items:baseline;
+             padding:9px 0; border-bottom:1px solid var(--hair); font-size:15px; }
+  .plan li span:last-child { font-family:var(--mono); font-size:13.5px; color:var(--soft);
+                             font-variant-numeric:tabular-nums; text-align:right; }
+  .plan li b { font-weight:600; color:var(--good); }
+
+  /* ---- ledger tables --------------------------------------------------- */
+  .scroll { overflow-x:auto; margin:22px 0 8px; }
+  table { border-collapse:collapse; width:100%; min-width:460px; font-size:15px; }
+  th { font-family:var(--mono); font-size:11px; font-weight:500; letter-spacing:.1em;
+       text-transform:uppercase; color:var(--dim); text-align:right; padding:0 0 9px 16px;
+       border-bottom:1px solid var(--ink); white-space:nowrap; }
+  th:first-child { text-align:left; padding-left:0; }
+  td { padding:11px 0 11px 16px; border-bottom:1px solid var(--hair); text-align:right;
+       font-family:var(--mono); font-size:13.5px; font-variant-numeric:tabular-nums;
+       color:var(--soft); white-space:nowrap; }
+  td:first-child { text-align:left; padding-left:0; font-family:var(--body); font-size:15px;
+                   color:var(--ink); white-space:normal; }
+  tr[data-pick="yes"] td { background:var(--good-wash); }
+  tr[data-pick="yes"] td:first-child { box-shadow:inset 3px 0 0 var(--good); padding-left:11px; }
+  tr[data-pick="no"] td:first-child { color:var(--dim); }
+  .pos { color:var(--good); font-weight:500; }
+  .neg { color:var(--bad); font-weight:500; }
+
+  /* ---- chart ----------------------------------------------------------- */
+  figure { margin:28px 0 10px; }
+  .chart { background:var(--panel); border:1px solid var(--rule); border-radius:3px; padding:18px 12px 10px; }
+  .chart svg { display:block; width:100%; height:auto; }
+  .chart text { font-family:var(--mono); font-variant-numeric:tabular-nums; }
+  figcaption { font-family:var(--mono); font-size:12px; line-height:1.55; color:var(--faint);
+               margin-top:10px; max-width:62ch; }
+
+  /* ---- callouts -------------------------------------------------------- */
+  .note { border-left:3px solid var(--good); background:var(--good-wash);
+          padding:16px 18px; margin:24px 0; border-radius:0 3px 3px 0; }
+  .note.open { border-left-color:var(--open); background:var(--open-wash); }
+  .note p:last-child { margin-bottom:0; }
+  .note .tag { font-family:var(--mono); font-size:11px; font-weight:600; letter-spacing:.1em;
+               text-transform:uppercase; color:var(--good); display:block; margin-bottom:5px; }
+  .note.open .tag { color:var(--open); }
+
+  .pull { font-family:var(--display); font-size:clamp(23px,3.4vw,30px); line-height:1.22;
+          letter-spacing:-.01em; color:var(--ink); margin:26px 0; max-width:24ch; }
+
+  .email { background:var(--sunk); border:1px solid var(--rule); border-radius:3px;
+           padding:20px 22px; margin:22px 0; font-size:16px; line-height:1.66; }
+  .email p { max-width:58ch; }
+  .email p:last-child { margin-bottom:0; }
+
+  .open-grid { display:grid; gap:14px; margin-top:20px; }
+  .open-item { border:1px solid var(--open-line); background:var(--panel);
+               border-radius:3px; padding:17px 19px; }
+  .open-item h3 { color:var(--open); }
+  .open-item p:last-child { margin-bottom:0; }
+
+  footer { margin-top:58px; border-top:1px solid var(--rule); padding-top:18px;
+           font-family:var(--mono); font-size:12px; line-height:1.68; color:var(--faint); }
+  footer p { max-width:70ch; margin-bottom:9px; }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Pen &middot; pricing &middot; 22 September 2026</div>
+    <h1>The Ten-Hour Plan</h1>
+    <p class="lede">What we charge, why, and the two things we still haven&rsquo;t decided.
+      Every figure below is measured off our own recordings on Opus&nbsp;5.5 &mdash; not estimated.</p>
+  </header>
+
+  <section>
+    <div class="sec-head"><div class="eyebrow">The decision</div></div>
+    <h2>Two plans, same product</h2>
+    <p>Ten hours of recording a month on both. The difference is how the pen gets paid for &mdash;
+      which is the only thing the two plans actually trade.</p>
+
+    <div class="plans">
+      <div class="plan">
+        <div class="plan-name">Monthly</div>
+        <div class="price">$15<small> /mo</small></div>
+        <div class="plan-sub">Pen $50 once &middot; cancel anytime</div>
+        <ul>
+          <li><span>Recording included</span><span>10 hrs / month</span></li>
+          <li><span>The pen</span><span>$50 one-time</span></li>
+          <li><span>Our cost at the cap</span><span>$4.91</span></li>
+          <li><span>Gross margin</span><span><b>67%</b></span></li>
+          <li><span>Hardware paid back</span><span>day one</span></li>
+          <li><span>Year one per customer</span><span><b>$151</b></span></li>
+        </ul>
+      </div>
+      <div class="plan">
+        <div class="plan-name">Yearly</div>
+        <div class="price">$144<small> /yr</small></div>
+        <div class="plan-sub">$12 a month &middot; pen included free</div>
+        <ul>
+          <li><span>Recording included</span><span>10 hrs / month</span></li>
+          <li><span>The pen</span><span><b>free</b></span></li>
+          <li><span>Our cost at the cap</span><span>$4.55</span></li>
+          <li><span>Gross margin</span><span><b>62%</b></span></li>
+          <li><span>Hardware paid back</span><span>day one, +$92</span></li>
+          <li><span>Year one per customer</span><span><b>$71</b></span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="note">
+      <span class="tag">Why it splits this way</span>
+      <p>The pen costs us <strong>$48 landed</strong> &mdash; $40 for the recorder, $8 to post it.
+        On the yearly plan the $144 covers that on day one and leaves $92 in the bank, so we never
+        finance hardware out of pocket. On monthly the customer buys it outright, so we don&rsquo;t
+        either. <strong>Neither plan has us lending anyone $48 and hoping.</strong></p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><div class="eyebrow">Question one</div></div>
+    <h2>Why ten hours</h2>
+    <p>Not because ten is where the money runs out. <strong>We don&rsquo;t lose money on a
+      $15 subscriber until 34 hours a month.</strong> Ten is a choice about what the number says
+      to a realtor, not a limit the cost structure imposes.</p>
+
+    <figure>
+      <div class="chart">
+        <svg viewBox="0 0 720 286" role="img" aria-label="Profit on a $15 subscriber falls from $13.43 at 2 hours recorded to zero at 34 hours, and goes negative beyond that. Ten hours sits at $10.09.">
+          <!-- grid -->
+          <g stroke="var(--hair)" stroke-width="1">
+            <line x1="54" y1="49.1"  x2="700" y2="49.1"/>
+            <line x1="54" y1="99.3"  x2="700" y2="99.3"/>
+            <line x1="54" y1="149.6" x2="700" y2="149.6"/>
+          </g>
+          <!-- areas -->
+          <path d="M83.4,31.2 L112.7,41.7 L142.1,52.1 L171.5,62.7 L200.8,73.1 L230.2,83.6 L274.2,99.3 L347.6,125.6 L421,151.8 L494.5,178.1 L553.2,199 L553.2,199.8 L83.4,199.8 Z"
+                fill="var(--good)" opacity=".1"/>
+          <path d="M553.2,199.8 L611.9,220 L670.6,241 L670.6,199.8 Z" fill="var(--bad)" opacity=".16"/>
+          <!-- zero line -->
+          <line x1="54" y1="199.8" x2="700" y2="199.8" stroke="var(--ink)" stroke-width="1" opacity=".45"/>
+          <!-- the curve -->
+          <path d="M83.4,31.2 L112.7,41.7 L142.1,52.1 L171.5,62.7 L200.8,73.1 L230.2,83.6 L274.2,99.3 L347.6,125.6 L421,151.8 L494.5,178.1 L553.2,199"
+                fill="none" stroke="var(--good)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M553.2,199 L611.9,220 L670.6,241"
+                fill="none" stroke="var(--bad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <!-- y labels -->
+          <g fill="var(--faint)" font-size="11" text-anchor="end">
+            <text x="45" y="53">$12</text>
+            <text x="45" y="103">$8</text>
+            <text x="45" y="153">$4</text>
+            <text x="45" y="204">$0</text>
+          </g>
+          <!-- x labels -->
+          <g fill="var(--faint)" font-size="11" text-anchor="middle">
+            <text x="200.8" y="272">10</text>
+            <text x="347.6" y="272">20</text>
+            <text x="494.5" y="272">30</text>
+            <text x="641.2" y="272">40</text>
+            <text x="377" y="286" font-size="10.5" letter-spacing="1.4">HOURS RECORDED PER MONTH</text>
+          </g>
+          <!-- marker: the plan -->
+          <line x1="200.8" y1="73.1" x2="200.8" y2="199.8" stroke="var(--good)" stroke-width="1" stroke-dasharray="3 3" opacity=".55"/>
+          <circle cx="200.8" cy="73.1" r="5" fill="var(--good)" stroke="var(--panel)" stroke-width="2"/>
+          <text x="213" y="48" font-size="12" font-weight="600" fill="var(--good)">10 hrs &mdash; $10.09 kept</text>
+          <text x="213" y="63" font-size="11" fill="var(--dim)">what we&rsquo;re including</text>
+          <!-- marker: breakeven -->
+          <circle cx="553.2" cy="199.4" r="5" fill="var(--bad)" stroke="var(--panel)" stroke-width="2"/>
+          <text x="545" y="223" font-size="12" font-weight="600" fill="var(--bad)" text-anchor="end">34 hrs &mdash; breakeven</text>
+          <text x="545" y="237" font-size="11" fill="var(--dim)" text-anchor="end">1.6 hrs every working day</text>
+        </svg>
+      </div>
+      <figcaption>What we keep from one $15 subscriber, by how much they actually record.
+        Assumes 30-minute recordings; shorter ones cost more per minute, because the write-up is
+        a fixed-size job whatever the length.</figcaption>
+    </figure>
+
+    <h3>Six hours would have been too tight</h3>
+    <p>Six hours is ninety minutes a week. Against what a working agent records:</p>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Usage pattern</th><th>Hours / month</th><th>Against a 6-hr cap</th><th>Against 10</th></tr></thead>
+        <tbody>
+          <tr><td>5 showings a week, 40 min</td><td>14.4</td><td class="neg">over by 8.4</td><td class="neg">over by 4.4</td></tr>
+          <tr><td>3 showings a week, 40 min</td><td>8.7</td><td class="neg">over by 2.7</td><td class="pos">fits</td></tr>
+          <tr><td>4 client calls a week, 30 min</td><td>8.7</td><td class="neg">over by 2.7</td><td class="pos">fits</td></tr>
+          <tr><td>2 showings a week, 40 min</td><td>5.8</td><td class="pos">just fits</td><td class="pos">fits</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>And the cap barely pays for itself. Across a realistic spread of users &mdash; most sit at two
+      to four hours whatever the cap says &mdash; the difference between capping at six and capping
+      at twelve is <strong>44&nbsp;cents per user per month</strong>:</p>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Cap</th><th>Expected cost</th><th>We keep</th><th>Margin</th></tr></thead>
+        <tbody>
+          <tr data-pick="no"><td>6 hours</td><td>$1.41</td><td>$12.86</td><td>86%</td></tr>
+          <tr data-pick="yes"><td>10 hours</td><td>$1.76</td><td>$12.50</td><td>83%</td></tr>
+          <tr data-pick="no"><td>12 hours</td><td>$1.85</td><td>$12.42</td><td>83%</td></tr>
+          <tr data-pick="no"><td>No cap at all</td><td>$2.19</td><td>$12.07</td><td>80%</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="pull">Six hours buys 44&nbsp;cents of protection and a wall our best customers hit in week three.</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><div class="eyebrow">Question two</div></div>
+    <h2>Why the pen is free on yearly and $50 on monthly</h2>
+    <p>We looked at four ways to charge for hardware. The one currently live on the site &mdash;
+      $45 covering the pen and the first three months &mdash; is the weakest of them.</p>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Structure</th><th>Day one</th><th>Paid back</th><th>Year one</th></tr></thead>
+        <tbody>
+          <tr data-pick="yes"><td>$50 pen + $15/mo</td><td class="pos">+$0.25</td><td>immediately</td><td class="pos">$151</td></tr>
+          <tr data-pick="yes"><td>Free pen + $144/yr</td><td class="pos">+$91.52</td><td>immediately</td><td class="pos">$71</td></tr>
+          <tr data-pick="no"><td>Free pen + $15/mo</td><td class="neg">&minus;$48.00</td><td>month 4</td><td>$103</td></tr>
+          <tr data-pick="no"><td>$45 + 3 months free <em>(live today)</em></td><td class="neg">&minus;$4.60</td><td>month 4</td><td>$104</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>The $45 bundle earns <strong>sixty cents more over a year than simply giving the pen away</strong>
+      &mdash; and for those sixty cents it puts a $45 payment in front of the hardest step in the
+      funnel, and makes it impossible for a customer to tell what the pen costs and what the
+      software costs.</p>
+
+    <div class="note">
+      <span class="tag">The thing we hadn&rsquo;t considered</span>
+      <p>Agents work in offices of thirty to two hundred people. The old plan gave the
+        cold-email recipient a free pen and charged the colleague they referred $45. That
+        conversation happens in the office kitchen. <strong>A referral scheme should reward the
+        referrer, not tax the referred</strong> &mdash; and that structure would suppress exactly
+        the referrals we&rsquo;re counting on. Free-on-yearly is fair to everyone, because it&rsquo;s
+        earned the same way by anybody.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><div class="eyebrow">The campaign</div></div>
+    <h2>Don&rsquo;t post free pens to strangers</h2>
+    <p>A free pen to a cold-email lead is the most expensive customer acquisition available to us
+      and the least qualified lead it buys.</p>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Out of 1,000 emails</th><th>Pens shipped</th><th>Paying</th><th>CAC</th><th>vs $103 year one</th></tr></thead>
+        <tbody>
+          <tr><td>20 reply, 30% convert</td><td>$960</td><td>6</td><td>$160</td><td class="neg">loses $57 each</td></tr>
+          <tr><td>10 reply, 40% convert</td><td>$480</td><td>4</td><td>$120</td><td class="neg">loses $17 each</td></tr>
+          <tr><td>20 reply, 50% convert</td><td>$960</td><td>10</td><td>$96</td><td class="pos">barely works</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><strong>Free pens only pay off if more than 47% of the people who accept one go on to pay for
+      a full year.</strong> Nobody converts 47% of people who took free hardware from a stranger.
+      We&rsquo;d be selecting for people who like free pens, not people who have the problem.</p>
+
+    <h3>Lead with the software. They already own a recorder.</h3>
+    <p>The 92-minute meeting that produced these numbers was an <span style="font-family:var(--mono);font-size:13.5px">.m4a</span>
+      off a phone. The pen is a convenience, not a requirement &mdash; so the trial costs us nothing
+      to run, and it tests the question that actually matters.</p>
+
+    <div class="email">
+      <p><strong>Two weeks free. Record your next showing on your phone, we&rsquo;ll write it up.</strong></p>
+      <p>No pen, no card, no call. Reply and I&rsquo;ll send you a link.</p>
+      <p>If it&rsquo;s useful, the pen&rsquo;s $50 &mdash; or free if you pay for the year.</p>
+    </div>
+
+    <p>Hardware cost per lead: <strong>zero</strong>. We can email ten thousand instead of one
+      thousand. The pen becomes the upsell rather than the bait &mdash; someone who has had two weeks
+      of good notes buys a $50 pen without thinking, while someone who has had a free pen for two
+      weeks has no decision left to make, so makes none.</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><div class="eyebrow">Unresolved</div></div>
+    <h2>Two things we still haven&rsquo;t decided</h2>
+
+    <div class="open-grid">
+      <div class="open-item">
+        <h3>What happens at hour eleven</h3>
+        <p>Breakeven is 34 hours and we&rsquo;re including 10, so there is no margin to defend here
+          &mdash; which is the argument for <em>not</em> metering. Charging to record teaches an agent
+          to record less, and recording is the whole habit. Recommendation: soft-cap at 10, ship
+          nothing, watch a quarter of real usage. If a bundle is needed later, make it a purchase
+          rather than a meter &mdash; <strong>+5 hours for $9</strong>, per hour, never per minute.
+          A 10-minute recording costs us more <em>per minute</em> than an hour-long one, so
+          per-minute pricing undercharges the expensive shape.</p>
+      </div>
+      <div class="open-item">
+        <h3>The referral reward</h3>
+        <p>Raised on the call and never settled: a free year for five referrals was floated,
+          then the question &ldquo;what do we charge the person being referred?&rdquo; went
+          unanswered. Now that the pen is free on yearly, the obvious shape is a free month per
+          paying referral &mdash; but nobody has agreed it, and it should not go on the page until
+          somebody does.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p><strong>Where these numbers come from.</strong> Cost is measured, not estimated: 303 dialogue
+      tokens per minute and 3,540 output tokens, counted on the real 92-minute recording from
+      22&nbsp;September. Transcription is AssemblyAI at $0.21/hr plus $0.02/hr diarization. Notes run
+      on Claude Opus&nbsp;5.5 at $4/$20 per million tokens &mdash; 30% cheaper and 40% faster than
+      Opus&nbsp;5, swapped the same day after testing all four models on that transcript.</p>
+    <p>Stripe is 2.9% + $0.30 per charge. The pen is $40 retail plus $8 postage. &ldquo;Typical use&rdquo;
+      is 4 hours a month; the realistic spread is 45% at 1.5&nbsp;hrs, 30% at 4, 15% at 9, 7% at 16,
+      3% at 30. Year-one figures assume the customer stays twelve months and exclude shared
+      infrastructure, which is about $80/month in total and falls below a dollar per user past a
+      hundred customers.</p>
+  </footer>
+
+</div>
