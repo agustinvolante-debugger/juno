@@ -17,7 +17,10 @@ import { useState } from 'react'
 function landingUrl(): string {
   if (typeof window === 'undefined') return '/pen'
   const { origin, hostname } = window.location
-  return hostname.startsWith('pen.') ? `${origin}/` : `${origin}/pen`
+  // The root domain (and the old pen. subdomain, which redirects to it) serve the landing
+  // page at /. Anywhere else, localhost included, it is at /pen.
+  const root = hostname === 'tryjunoapp.com' || hostname === 'www.tryjunoapp.com' || hostname.startsWith('pen.')
+  return root ? `${origin}/` : `${origin}/pen`
 }
 
 export default function SignOut({ email }: { email: string }) {

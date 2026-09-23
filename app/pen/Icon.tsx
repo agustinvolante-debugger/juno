@@ -13,6 +13,7 @@ export type IconName =
   | 'archive' | 'search' | 'plus' | 'link' | 'play' | 'check' | 'checklist' | 'question'
   | 'quote' | 'people' | 'clock' | 'calendar' | 'tag' | 'sparkle' | 'alert' | 'chevron'
   | 'back' | 'mail' | 'trash' | 'settings' | 'person' | 'hourglass'
+  | 'lock' | 'battery' | 'mic' | 'usb' | 'pen' | 'save' | 'folder' | 'wave' | 'chat'
 
 const P: Record<IconName, React.ReactNode> = {
   home:       <path d="M3.5 8.6 10 3.4l6.5 5.2V16a.9.9 0 0 1-.9.9h-3.4v-4.6H7.8v4.6H4.4a.9.9 0 0 1-.9-.9Z" />,
@@ -43,6 +44,15 @@ const P: Record<IconName, React.ReactNode> = {
   settings:   <><path d="M3.4 6h7.1M14.6 6h2M3.4 14h2M9.5 14h7.1" /><circle cx="12.5" cy="6" r="2" /><circle cx="7.5" cy="14" r="2" /></>,
   person:     <><circle cx="10" cy="6.9" r="3" /><path d="M4.2 16.8c.7-3 3-4.6 5.8-4.6s5.1 1.6 5.8 4.6" /></>,
   hourglass:  <><path d="M5.6 3.2h8.8M5.6 16.8h8.8" /><path d="M6.6 3.2c0 3.2 3.4 4.4 3.4 6.8s-3.4 3.6-3.4 6.8M13.4 3.2c0 3.2-3.4 4.4-3.4 6.8s3.4 3.6 3.4 6.8" /></>,
+  lock:       <><rect x="4.4" y="8.8" width="11.2" height="8.2" rx="1.8" /><path d="M6.9 8.8V6.6a3.1 3.1 0 0 1 6.2 0v2.2" /><path d="M10 12.2v1.6" /></>,
+  battery:    <><rect x="2.8" y="6.4" width="12.8" height="7.2" rx="1.8" /><path d="M17.2 8.8v2.4" /><path d="M5.2 8.8v2.4M7.6 8.8v2.4M10 8.8v2.4" /></>,
+  mic:        <><rect x="7.4" y="2.9" width="5.2" height="9.2" rx="2.6" /><path d="M4.8 9.8a5.2 5.2 0 0 0 10.4 0" /><path d="M10 15v2.3" /></>,
+  usb:        <><rect x="5.2" y="7.4" width="9.6" height="5.2" rx="2.6" /><path d="M7.8 10h4.4" /></>,
+  pen:        <><path d="M13.6 3.4 16.6 6.4 7.2 15.8 3.6 16.4 4.2 12.8Z" /><path d="M11.8 5.2l3 3" /></>,
+  save:       <><path d="M4.2 3.6h9.4l2.2 2.2v10.6H4.2Z" /><path d="M7 3.6v4h5.6v-4" /><rect x="6.6" y="11" width="6.8" height="5.4" rx=".6" /></>,
+  folder:     <><path d="M2.9 6.1a1.3 1.3 0 0 1 1.3-1.3h3.6l1.7 1.9h6.3a1.3 1.3 0 0 1 1.3 1.3v7.2a1.3 1.3 0 0 1-1.3 1.3H4.2a1.3 1.3 0 0 1-1.3-1.3Z" /></>,
+  wave:       <path d="M2.8 10h1.6M6 7v6M8.8 4.6v10.8M11.6 7.4v5.2M14.4 5.8v8.4M17.2 10h0" />,
+  chat:       <><path d="M3.6 5.2a1.6 1.6 0 0 1 1.6-1.6h9.6a1.6 1.6 0 0 1 1.6 1.6v6.6a1.6 1.6 0 0 1-1.6 1.6H9l-3.6 3v-3H5.2a1.6 1.6 0 0 1-1.6-1.6Z" /></>,
   trash:      <><path d="M3.8 6.1h12.4" /><path d="M8.1 6.1V4.6h3.8v1.5" /><path d="M5.4 6.1l.8 9.4a1.2 1.2 0 0 0 1.2 1.1h5.2a1.2 1.2 0 0 0 1.2-1.1l.8-9.4" /></>,
 }
 

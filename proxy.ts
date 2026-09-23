@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 
-// Subdomain roots: news.* → /news (the reader), pen.* → /pen (recorder notes),
-// gym.* → /gym.html (static plan).
+// Subdomain roots: news.* → /news (the reader), gym.* → /gym.html (static plan).
+// Juno Pen is the root domain itself; pen.* redirects there.
 // Only rewrites the root path; auth (/api/auth/*) and everything else pass through untouched,
 // and the main domain (tryjunoapp.com) is unaffected.
 export async function proxy(req: NextRequest) {
@@ -13,21 +13,27 @@ export async function proxy(req: NextRequest) {
     url.pathname = '/news'
     return NextResponse.rewrite(url)
   }
-  // pen.tryjunoapp.com → the recorder → AI notes app. /pen is a real route that gates
-  // itself via authedEmail(), and /api/pen/* passes straight through, so only the root
-  // needs rewriting.
-  // The landing page links to /pen/signup, which is the real route. On the subdomain a bare
-  // /signup is what people will type or paste, so map it.
-  if (host.startsWith('pen.') && req.nextUrl.pathname === '/signup') {
-    const url = req.nextUrl.clone()
-    url.pathname = '/pen/signup'
-    return NextResponse.rewrite(url)
+  // Juno Pen lives at the root domain. tryjunoapp.com/ is the landing page (signed out) or the
+  // app (signed in), served by the real /pen route so it keeps its own layout and fonts.
+  const isRoot = host === 'tryjunoapp.com' || host === 'www.tryjunoapp.com'
+  if (isRoot) {
+    const map: Record<string, string> = { '/': '/pen', '/signup': '/pen/signup', '/settings': '/pen/settings', '/settings/hours': '/pen/settings/hours' }
+    // One address per page: /pen itself redirects to the clean root.
+    if (pathname === '/pen') return NextResponse.redirect(new URL('/', req.url), 308)
+    if (map[pathname]) {
+      const url = req.nextUrl.clone()
+      url.pathname = map[pathname]
+      return NextResponse.rewrite(url)
+    }
   }
 
-  if (host.startsWith('pen.') && req.nextUrl.pathname === '/') {
-    const url = req.nextUrl.clone()
-    url.pathname = '/pen'
-    return NextResponse.rewrite(url)
+  // pen.tryjunoapp.com was the old address. Pages redirect to the same place on the root, so
+  // old links and emails keep working. /api is left alone: Stripe and AssemblyAI post to
+  // webhooks here, and a webhook does not follow a redirect.
+  if (host.startsWith('pen.') && !pathname.startsWith('/api/') && !pathname.startsWith('/_next/')) {
+    const path = pathname === '/pen' ? '/' : pathname
+    const target = new URL(`https://tryjunoapp.com${path}${req.nextUrl.search}`)
+    return NextResponse.redirect(target, 308)
   }
 
   // gym.tryjunoapp.com → the static training/nutrition plan in public/.

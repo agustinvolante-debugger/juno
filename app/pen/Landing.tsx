@@ -3,78 +3,36 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { motion } from 'motion/react'
 import type { CSSProperties } from 'react'
 import PenSequence from './PenSequence'
-
-// The signed-out face of pen.tryjunoapp.com.
-//
-// It deliberately reuses the app's own typography and palette — Instrument Serif, Literata,
-// IBM Plex Mono, warm paper, one slate accent. A landing page that looks nothing like the
-// product it sells is a promise the product then breaks. The pricing block inverts to ink
-// for contrast without leaving the palette.
-
-const SPRING = { type: 'spring' as const, stiffness: 260, damping: 30, mass: 0.9 }
+import PenArt from './PenArt'
+import Icon, { type IconName } from './Icon'
 import { PLAN_MONTHLY_USD, PLAN_ANNUAL_USD, PEN_USD, INCLUDED_HOURS, HOUR_USD, TRIAL_DAYS_POSTED } from '@/lib/pen/plan'
 
-/**
- * Stripe Checkout links, one per plan. Payment Links are used rather than a server-side
- * session so nothing here needs a secret — these are publishable URLs.
- *
- * Until they are set the buttons fall back to sign-in and say so. A button that looks like it
- * takes payment but does not is worse than one that admits the till is not open yet.
- */
-// One plan, so one link. The older per-tier vars are still read as a fallback so an
-// out-of-date environment keeps working rather than silently showing a dead button.
-const STRIPE_URL =
-  process.env.NEXT_PUBLIC_STRIPE_URL ||
-  process.env.NEXT_PUBLIC_STRIPE_STARTER_URL ||
-  process.env.NEXT_PUBLIC_STRIPE_PRO_URL ||
-  ''
+// The signed-out face of tryjunoapp.com.
+//
+// Same typography and palette as the app (Instrument Serif, Literata, IBM Plex Mono, warm
+// paper, one emerald accent): a landing page that looks nothing like the product it sells is
+// a promise the product then breaks. What it sells is two things at once, the software and
+// the pen, so the hero shows both in one picture and the page then gives each its own act.
+//
+// Copy rules kept from the previous page: one label per call to action, no em dashes in
+// anything a reader sees, and no claim the product cannot stand behind. The security card
+// says only what is true today: encrypted in transit and at rest, private to the account,
+// deletable, never sold. It does not say end-to-end, because the AI has to read the audio.
 
-function PlanCta({ href, children, variant }: { href: string; children: React.ReactNode; variant: 'ghost' | 'accent' }) {
-  const cls = `pen-lp-btn ${variant === 'accent' ? 'pen-lp-btn-accent' : 'pen-lp-btn-ghost'} mt-auto w-full justify-center`
-  if (!href) {
-    return (
-      <div className="mt-auto w-full">
-        <Link href={`${SIGN_UP}?from=pricing`} className={cls.replace('mt-auto ', '')}>
-          {children}
-        </Link>
-        <p className="pen-mono mt-2.5 text-center pen-t-label" style={{ color: 'rgba(251,250,246,.42)' }}>
-          Card payments open at launch
-        </p>
-      </div>
-    )
-  }
-  return (
-    <a href={href} className={cls} rel="noopener">
-      {children}
-    </a>
-  )
-}
 const SIGN_IN = '/auth/signin?callbackUrl=/pen'
-// Everything that means "I want to try this" goes here. Sign-in is for people who already
-// have an account, which on a launch page is almost nobody.
+// Everything that means "I want to try this" goes here.
 const SIGN_UP = '/pen/signup'
-
-/**
- * One label for one intent, in one place.
- *
- * There were five ways onto the sign-up page wearing four different labels: "Sign up" in the
- * nav, "Get started" in the hero, "Start 21 days free" on both pricing cards, "Sign up" again
- * in the footer. Naming the same action four ways makes the page read as four products, and
- * it splits the analytics on the only conversion that matters. Defined here so the next
- * person to add a CTA cannot invent a fifth.
- */
+/** One label for one intent, in one place. */
 const CTA = `Start ${TRIAL_DAYS_POSTED} days free`
 /** The yearly plan is paid up front (no trial), so its button cannot promise free days. */
 const CTA_YEARLY = 'Get the year'
 
 /**
- * CSS-driven, deliberately. A marketing page must not start at opacity 0 and wait for JS:
- * a slow connection, a hydration error or a crawler that doesn't run scripts would all see a
- * blank page. A keyframe animation always completes, and `prefers-reduced-motion` is honoured
- * in the stylesheet.
+ * CSS-driven reveal. A marketing page must not start at opacity 0 and wait for JS: a slow
+ * connection, a hydration error or a crawler would all see a blank page.
  */
 function Reveal({ children, delay = 0, className }: { children: React.ReactNode; delay?: number; className?: string }) {
   return (
@@ -86,20 +44,15 @@ function Reveal({ children, delay = 0, className }: { children: React.ReactNode;
 
 export default function Landing() {
   return (
-    <div className="pen-lp">
+    <div className="pen-lp pen-lp2">
       <Nav />
       <Hero />
-      <OfferStrip />
-      <div className="pen-lp-wrap pen-seq-wrap">
-        <PenSequence />
-      </div>
-      <MultiUse />
+      <Audience />
+      <Features />
       <HowItWorks />
-      <TheCatch />
-      <WhatYouGet />
-      <Compounds />
-      <Hardware />
+      <ThePen />
       <Pricing />
+      <Closing />
       <Footer />
     </div>
   )
@@ -110,13 +63,15 @@ export default function Landing() {
 function Nav() {
   return (
     <header className="pen-lp-nav">
-      <div className="pen-lp-wrap flex items-center justify-between">
-        <Link href="/pen" className="flex items-center" aria-label="Juno Pen, home">
+      <div className="pen-lp-wrap flex items-center justify-between gap-3">
+        <Link href="/" className="flex items-center" aria-label="Juno Pen, home">
           <Image src="/juno_mark.png" alt="" width={32} height={32} className="pen-mark" priority />
           <span className="pen-display pen-lp-wordmark">Juno Pen</span>
         </Link>
-        <nav className="flex items-center gap-1.5">
-          <a href="#pricing" className="pen-lp-navlink">Pricing</a>
+        <nav className="flex items-center gap-1">
+          <a href="#features" className="pen-lp-navlink pen-lp2-hide-sm">What it does</a>
+          <a href="#pen" className="pen-lp-navlink pen-lp2-hide-sm">The pen</a>
+          <a href="#pricing" className="pen-lp-navlink pen-lp2-hide-sm">Pricing</a>
           <Link href={SIGN_IN} className="pen-lp-navlink">Sign in</Link>
           <Link href={`${SIGN_UP}?from=nav`} className="pen-lp-btn pen-lp-btn-sm pen-lp-btn-primary">{CTA}</Link>
         </nav>
@@ -129,225 +84,295 @@ function Nav() {
 
 function Hero() {
   return (
-    <section className="pen-lp-wrap pt-20 pb-4 sm:pt-28">
-      <Reveal>
-        <div className="pen-lp-eyebrow">Any conversation, written up</div>
-      </Reveal>
-
-      {/* Full container width, no measure cap: the headline is the page's biggest asset and
-          the right third was sitting empty. Sized to hold both sentences on one line on a
-          desktop, with text-wrap:balance so the fallback is two even lines rather than one
-          long and one orphaned word. */}
-      <Reveal delay={0.05}>
-        <h1 className="pen-lp-h1">
-          Focus on the conversation.{' '}
-          <span className="pen-lp-em">We&rsquo;ll capture the details.</span>
-        </h1>
-      </Reveal>
-
-      <div className="mt-12 grid gap-10 sm:mt-14 lg:grid-cols-[1fr_auto] lg:items-end lg:gap-16">
-        <Reveal delay={0.1}>
-          <p className="max-w-[58ch] pen-t-lede" style={{ color: 'var(--soft)' }}>
-            Record with a pen in your shirt pocket. Plug it into your laptop. Juno Pen writes up what
-            was said, who said it, what you agreed to, and the thing you nearly missed.
+    <section className="pen-lp-wrap pen-lp2-hero">
+      <div className="pen-lp2-hero-copy">
+        <Reveal>
+          <h1 className="pen-lp-h1 pen-lp2-h1">
+            Focus on the conversation. <span className="pen-lp-em">We&rsquo;ll remember every word.</span>
+          </h1>
+        </Reveal>
+        <Reveal delay={0.08}>
+          <p className="pen-lp2-lede">
+            A real pen that records. Plug it in and Juno Pen writes up who was there, what was
+            decided, what you owe people, and the thing you nearly missed. Then it drafts the
+            follow-up email.
           </p>
         </Reveal>
-
-        {/* Two CTAs and nothing else. The offer line that used to sit under these buttons is
-            its own strip below the hero now: a fifth text element in a hero is the point at
-            which it stops being one moment and starts being a feature list. */}
-        <Reveal delay={0.15}>
-          <div className="flex flex-wrap items-center gap-3">
-            <Link href={`${SIGN_UP}?from=hero`} className="pen-lp-btn pen-lp-btn-primary">{CTA}</Link>
-            <a href="#how" className="pen-lp-btn">See how it works</a>
+        <Reveal delay={0.14}>
+          <div className="pen-lp2-ctas">
+            <Link href={`${SIGN_UP}?from=hero`} className="pen-lp-btn pen-lp-btn-accent pen-lp2-btn-lg">{CTA}</Link>
+            <a href="#features" className="pen-lp-btn pen-lp2-btn-lg">See what it does</a>
           </div>
         </Reveal>
+        <Reveal delay={0.2}>
+          <p className="pen-lp2-offer">
+            {`$${PLAN_MONTHLY_USD} a month after ${TRIAL_DAYS_POSTED} days free, or $${PLAN_ANNUAL_USD} a year with the pen included.`}
+          </p>
+        </Reveal>
       </div>
+
+      <Reveal delay={0.1} className="pen-lp2-stage">
+        <div className="pen-lp2-stage-inner" aria-hidden>
+          <div className="pen-lp2-halo" />
+          <PenArt id="hero-pen" className="pen-lp2-hero-pen" />
+
+          {/* What comes out of it, as the app draws it. Three small cards, each one feature. */}
+          <div className="pen-lp2-float pen-lp2-float-a">
+            <span className="pen-lp2-float-label">Detected on this call</span>
+            <span className="pen-lp2-chip"><span className="pen-lp2-av">CD</span>Chris Dyas <em>buyer</em></span>
+          </div>
+          <div className="pen-lp2-float pen-lp2-float-b">
+            <span className="pen-lp2-tick" />
+            <span>
+              <span className="pen-lp2-float-strong">Send comps for Ridgewood</span>
+              <span className="pen-lp2-float-meta">Due Friday</span>
+            </span>
+          </div>
+          <div className="pen-lp2-float pen-lp2-float-c">
+            <span className="pen-lp2-float-label"><Icon name="mail" size={13} /> Draft ready</span>
+            <span className="pen-lp2-float-strong">Re: carport before Saturday</span>
+            <span className="pen-lp2-mini-btn">Open in Gmail</span>
+          </div>
+        </div>
+      </Reveal>
     </section>
   )
 }
 
-/**
- * The offer, on its own line directly under the hero.
- *
- * It says the three things a buyer wants before they scroll: how long it is free, what it
- * costs after, and that the recorder is included on the year. One hairline above it, because
- * it belongs to the hero without being inside it.
- */
-function OfferStrip() {
-  return (
-    <div className="pen-lp-wrap pen-offer">
-      <p className="pen-mono pen-t-label">
-        {`$${PLAN_MONTHLY_USD} a month after ${TRIAL_DAYS_POSTED} days free \u00B7 or $${PLAN_ANNUAL_USD} a year with the pen included`}
-      </p>
-    </div>
-  )
-}
+/* ------------------------------------------------------------- audience */
 
-/* -------------------------------------------------- the multi-use section */
-
-/**
- * The multi-use argument, given the room it needs. This used to be a grey footnote at the
- * bottom of a half-width card and was the single most-missed thing on the page: it is the
- * reason this is not a work tool, so it is now the section title.
- *
- * The card is full width because a note is prose — at half width the lines were too short to
- * read as a document, which is the whole impression it exists to create.
- */
-
-type Example = {
-  id: string
+type Role = {
   tab: string
-  /** Narrow-screen label. Three full labels do not fit 390px and "Coffee" got clipped. */
   short: string
-  meta: string
-  lines: { black: string; grey: string }[]
+  /** The question, with @-tags written as {Name}. */
+  q: string
+  /** The answer, with [n] citation markers. */
+  a: string
+  sources: { title: string; date: string }[]
 }
 
-const EXAMPLES: Example[] = [
+// One question per kind of work, answered across several calls with the sources linked.
+// Everything shown is what the real archive chat does: @-tags, answers drawn from more than
+// one recording, and numbered citations that open the call they came from.
+const ROLES: Role[] = [
   {
-    id: 'property',
-    tab: 'Property viewing',
-    short: 'Viewing',
-    meta: 'Ridgewood walk-through \u00B7 38 min',
-    lines: [
-      {
-        black: 'kitchen big win, price still an issue',
-        grey:
-          'Sarah went straight to the island and called it lovely. Tom\u2019s first question was ' +
-          'the asking price, which he said was above what they had agreed between themselves.',
-      },
-      {
-        black: 'no garage again',
-        grey:
-          'Third property in a row without one. Sarah raised it in passing rather than as an ' +
-          'objection, which makes it a filter rather than a preference.',
-      },
+    tab: 'Realtors',
+    short: 'Realtors',
+    q: 'What has {Sarah} said about parking across all the viewings?',
+    a: 'She has raised it at all three viewings [1][2][3]. At Oak Street she said they would not bid without covered parking [2], and at Ridgewood she called it the thing that decides it [3]. Tom has never objected to paying more for it [1].',
+    sources: [
+      { title: 'Maple Avenue viewing', date: 'Sep 9' },
+      { title: 'Oak Street viewing', date: 'Sep 14' },
+      { title: 'Ridgewood walk-through', date: 'Sep 21' },
     ],
   },
   {
-    id: 'client',
-    tab: 'Client meeting',
-    short: 'Client',
-    meta: 'Quarterly review, Head of Treasury \u00B7 52 min',
-    lines: [
-      {
-        black: 'covenant headroom is the real blocker',
-        grey:
-          'She said the board will not approve new facilities until the leverage test has two ' +
-          'quarters of clearance. Her CFO put that at March at the earliest, and she did not ' +
-          'contradict him.',
-      },
-      {
-        black: 'wants the pricing grid before legal',
-        grey:
-          'Asked twice for indicative pricing ahead of documentation, which is the reverse of ' +
-          'last year\u2019s process. She wants something to take to the board, not a signed deal.',
-      },
+    tab: 'Students',
+    short: 'Students',
+    q: 'What did Professor Ruiz say will be on the midterm?',
+    a: 'One WACC question with a changing capital structure [2] and a bond pricing problem like problem set 3 [1]. She said most people lose marks on the tax shield, not the formula [2], and that a formula sheet is allowed [3].',
+    sources: [
+      { title: 'Corporate Finance, lecture 4', date: 'Sep 10' },
+      { title: 'Corporate Finance, lecture 6', date: 'Sep 17' },
+      { title: 'Office hours', date: 'Sep 19' },
     ],
   },
   {
-    id: 'coffee',
-    tab: 'Coffee',
-    short: 'Coffee',
-    meta: 'Coffee with Dani \u00B7 24 min',
-    lines: [
-      {
-        black: 'she offered to intro me to her old cto',
-        grey:
-          'Said she would send it this week and asked you to remind her if it went quiet. She ' +
-          'has worked with him twice and rates him on hiring rather than architecture.',
-      },
-      {
-        black: 'they killed the marketplace thing',
-        grey:
-          'Two years in, shut it down over supply, not demand. She mentioned it once and moved ' +
-          'on, but it is the reason she left.',
-      },
+    tab: 'Bankers',
+    short: 'Bankers',
+    q: 'Which clients raised covenant issues this quarter?',
+    a: 'Two. Harbor Logistics said the board will not approve new facilities until leverage clears for two quarters [1]. Delta Foods asked to reset the interest cover test before renewal [3]. Meridian mentioned covenants but said it has headroom [2].',
+    sources: [
+      { title: 'Harbor Logistics review', date: 'Aug 4' },
+      { title: 'Meridian quarterly', date: 'Aug 19' },
+      { title: 'Delta Foods renewal call', date: 'Sep 2' },
+    ],
+  },
+  {
+    tab: 'Founders & CEOs',
+    short: 'Founders',
+    q: 'What did investors push back on most?',
+    a: 'Market size, in three of four calls [1][2][4]. Northbeam wanted month-6 retention by channel instead [3], and two funds asked who else is in the round before taking it to a partner meeting [2][4].',
+    sources: [
+      { title: 'Harbor VC intro', date: 'Aug 28' },
+      { title: 'Lattice Capital', date: 'Sep 3' },
+      { title: 'Northbeam Ventures', date: 'Sep 11' },
+      { title: 'Fieldstone seed call', date: 'Sep 16' },
+    ],
+  },
+  {
+    tab: 'Consultants',
+    short: 'Consult',
+    q: 'What did {Dana} commit to, and by when?',
+    a: 'Three things. Discount data by rep before the workshop [1], the Q3 margin bridge by Friday [2], and bringing the CFO to the board-pack review on the 14th [3].',
+    sources: [
+      { title: 'Kickoff with the COO', date: 'Sep 1' },
+      { title: 'Pricing workshop', date: 'Sep 12' },
+      { title: 'Steering call', date: 'Sep 18' },
     ],
   },
 ]
 
-function MultiUse() {
+function Audience() {
   const [active, setActive] = useState(0)
-  const ex = EXAMPLES[active]
-
   return (
-    <section className="pen-lp-wrap pt-24 sm:pt-32">
+    <section className="pen-lp-wrap pen-lp2-sec">
       <Reveal>
-        <h2 className="pen-lp-h2">
-          A viewing, a quarterly review, a coffee with someone whose favour you&rsquo;ll want in
-          six months.
-        </h2>
-        <p className="mt-7 max-w-[62ch] pen-t-lede leading-[1.55]" style={{ color: 'var(--soft)' }}>
-          It doesn&rsquo;t know which of those matters most.
-          <span className="pen-lp-strong"> Neither do you, at the time.</span>
+        <h2 className="pen-lp-h2 pen-lp2-h2">For anyone who talks for a living.</h2>
+        <p className="pen-lp2-sub">
+          Ask anything across every call you have ever recorded. Every answer shows exactly where
+          it was said.
         </p>
       </Reveal>
-
       <Reveal delay={0.08}>
-        <Segmented
-          items={EXAMPLES.map((e) => ({ long: e.tab, short: e.short }))}
-          active={active}
-          onChange={setActive}
-        />
+        <Segmented items={ROLES.map((r) => ({ long: r.tab, short: r.short }))} active={active} onChange={setActive} />
       </Reveal>
-
       <Reveal delay={0.14}>
-        <figure className="pen-lp-specimen">
-          <div className="pen-lp-specimen-bar">
-            <span className="pen-mono pen-t-label" style={{ color: 'var(--faint)' }}>{ex.meta}</span>
-            <span className="pen-lp-dot" />
-          </div>
-
-          <div className="pen-lp-specimen-body">
-            <div className="pen-label mb-4">Your notes</div>
-
-            {/* Keyed plain div: remounting restarts a CSS animation, so this content is never
-                invisible waiting for a script. */}
-            <div key={ex.id} className="pen-lp-swap">
-              {ex.lines.map((l, i) => (
-                <div key={l.black} style={{ marginTop: i === 0 ? 0 : 26 }}>
-                  <p className="pen-lp-black">{l.black}</p>
-                  <p className="pen-lp-grey">{l.grey}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="pen-lp-legend">
-              <span><i className="pen-lp-swatch-ink" /> you wrote this</span>
-              <span><i className="pen-lp-swatch-grey" /> written from the recording</span>
-            </div>
-          </div>
-        </figure>
+        <ChatDemo role={ROLES[active]} />
       </Reveal>
     </section>
   )
 }
 
+/** Splits "text [1][2] more" into text and citation numbers, like the real answer renderer. */
+function parts(text: string): (string | number)[] {
+  return text.split(/(\[\d+\])/g).filter(Boolean).map((p) => (/^\[\d+\]$/.test(p) ? Number(p.slice(1, -1)) : p))
+}
+
 /**
- * Segmented control, iOS-style: an inset track with a single elevated pill whose position and
- * width are measured from the active segment and animated.
- *
- * The obvious implementation is motion's `layoutId` on a conditionally-rendered pill, and it
- * does not animate here — measured it jumping straight to the target on the first frame
- * (178px to 521px in 16ms). One pill whose x and width are animated is deterministic, works
- * without shared-layout semantics, and is what the real control does. Labels are plain text
- * above it, so the control is fully usable if the animation never runs at all.
+ * Renders an answer with citation pills. Punctuation straight after a pill is kept on the
+ * same line as it; otherwise a sentence can end with its full stop alone on the next line.
  */
-function Segmented({
-  items,
-  active,
-  onChange,
-}: {
-  items: { long: string; short: string }[]
-  active: number
-  onChange: (i: number) => void
-}) {
+function Cited({ text }: { text: string }) {
+  const ps = parts(text)
+  const out: React.ReactNode[] = []
+  for (let i = 0; i < ps.length; i++) {
+    const p = ps[i]
+    if (typeof p !== 'number') {
+      out.push(<span key={i}>{p}</span>)
+      continue
+    }
+    const next = ps[i + 1]
+    const punct = typeof next === 'string' ? /^[.,;:]/.exec(next)?.[0] ?? '' : ''
+    out.push(
+      <span key={i} className="pen-lp2-nowrap">
+        <span className="pen-lp2-cite">{p}</span>
+        {punct}
+      </span>,
+    )
+    if (punct) ps[i + 1] = (next as string).slice(punct.length)
+  }
+  return <>{out}</>
+}
+
+/**
+ * The archive chat, playing one exchange: the question types itself, the answer arrives a
+ * few words at a time, the sources follow. It starts fully drawn so the page is never blank
+ * without JS; the animation runs when it scrolls into view and on every tab change, and not
+ * at all for anyone who prefers reduced motion.
+ */
+function ChatDemo({ role }: { role: Role }) {
+  const q = role.q.replace(/\{([^}]+)\}/g, '@$1')
+  const words = role.a.split(' ')
+  const [step, setStep] = useState<{ q: number; a: number }>({ q: q.length, a: words.length })
+  const box = useRef<HTMLDivElement>(null)
+  const seen = useRef(false)
+  const first = useRef(true)
+
+  const play = useCallback(() => {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+    let qi = 0
+    let ai = 0
+    setStep({ q: 0, a: 0 })
+    const t = window.setInterval(() => {
+      if (qi < q.length) {
+        qi = Math.min(q.length, qi + 2)
+        setStep({ q: qi, a: 0 })
+      } else if (ai < words.length) {
+        ai += 1
+        setStep({ q: q.length, a: ai })
+      } else window.clearInterval(t)
+    }, 34)
+    return () => window.clearInterval(t)
+  }, [q, words.length])
+
+  // Replay on tab change (not on first render).
+  useEffect(() => {
+    if (first.current) {
+      first.current = false
+      return
+    }
+    return play()
+  }, [role, play])
+
+  // Play once when it first scrolls into view.
+  useEffect(() => {
+    const el = box.current
+    if (!el || !('IntersectionObserver' in window)) return
+    let stop: (() => void) | undefined
+    const io = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting && !seen.current) {
+        seen.current = true
+        stop = play()
+        io.disconnect()
+      }
+    }, { threshold: 0.4 })
+    io.observe(el)
+    return () => {
+      io.disconnect()
+      stop?.()
+    }
+  }, [play])
+
+  const typedQ = q.slice(0, step.q)
+  const answer = words.slice(0, step.a).join(' ')
+  const done = step.a >= words.length
+  const asking = step.q < q.length
+
+  return (
+    <div className="pen-lp2-chatdemo" ref={box}>
+      <div className="pen-lp2-chatbar">
+        <Icon name="search" size={16} />
+        <span>Ask across every recording</span>
+        <span className="pen-lp2-chatbar-n">{`${role.sources.length} calls found`}</span>
+      </div>
+      <div className="pen-lp2-chatbody">
+        <p className="pen-lp2-chatq">
+          {typedQ.split(/(@[A-Z][a-z]+)/g).map((p, i) =>
+            p.startsWith('@') ? <span key={i} className="pen-lp2-tag">{p}</span> : <span key={i}>{p}</span>,
+          )}
+          {asking && <span className="pen-lp2-caret" />}
+        </p>
+        <div className="pen-lp2-chata" aria-live="polite">
+          {!asking && (
+            <p>
+              <Cited text={answer} />
+            </p>
+          )}
+        </div>
+        <div className="pen-lp2-sources" data-on={done}>
+          {role.sources.map((s, i) => (
+            <span key={s.title} className="pen-lp2-source" style={{ transitionDelay: `${i * 70}ms` }}>
+              <span className="pen-lp2-cite">{i + 1}</span>
+              <span className="pen-lp2-source-t">{s.title}</span>
+              <span className="pen-lp2-source-d">{s.date}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Segmented control: an inset track with one elevated pill whose position and width are
+ * measured from the active segment and animated. Labels are plain text above it, so the
+ * control works even if the animation never runs.
+ */
+function Segmented({ items, active, onChange }: { items: { long: string; short: string }[]; active: number; onChange: (i: number) => void }) {
   const trackRef = useRef<HTMLDivElement>(null)
   const btnRefs = useRef<(HTMLButtonElement | null)[]>([])
   const [pill, setPill] = useState<{ x: number; w: number } | null>(null)
-
   const measure = useCallback(() => {
     const track = trackRef.current
     const btn = btnRefs.current[active]
@@ -356,20 +381,15 @@ function Segmented({
     const b = btn.getBoundingClientRect()
     setPill({ x: b.left - t.left, w: b.width })
   }, [active])
-
-  // Before paint, so the pill is never briefly in the wrong place.
   useLayoutEffect(measure, [measure])
-
   useEffect(() => {
-    // Fonts land after first paint and change the segment widths, so remeasure then too.
     const onResize = () => measure()
     window.addEventListener('resize', onResize)
     document.fonts?.ready.then(measure).catch(() => {})
     return () => window.removeEventListener('resize', onResize)
   }, [measure])
-
   return (
-    <div className="pen-seg" role="tablist" aria-label="Example recordings" ref={trackRef}>
+    <div className="pen-seg pen-lp2-seg" role="tablist" aria-label="Who it is for" ref={trackRef}>
       {pill && (
         <motion.span
           className="pen-seg-pill"
@@ -392,8 +412,6 @@ function Segmented({
           className="pen-seg-btn"
           onClick={() => onChange(i)}
         >
-          {/* Both rendered, one hidden by CSS. No resize listener needed for the swap, and
-              the pill remeasures on resize anyway. aria-label always carries the full name. */}
           <span className="pen-seg-long">{it.long}</span>
           <span className="pen-seg-short">{it.short}</span>
         </button>
@@ -402,353 +420,333 @@ function Segmented({
   )
 }
 
-/* ------------------------------------------------------------ how it works */
+/* -------------------------------------------------------------- features */
 
-const STEPS = [
-  {
-    n: '01',
-    h: 'Record',
-    p: 'A pen in your shirt pocket, running the whole time. Nothing to open, nothing to remember to start.',
-  },
-  {
-    n: '02',
-    h: 'Plug it in',
-    p: 'Connect the pen over USB and pick the drive. Juno Pen finds the recordings and takes it from there.',
-  },
-  {
-    n: '03',
-    h: 'Read the note',
-    p: 'Who was there, what was decided, what you owe people, and what you nearly let slide.',
-  },
-]
-
-function HowItWorks() {
+function FeatureHead({ icon, title, tone }: { icon: IconName; title: string; tone?: 'warn' | 'ink' }) {
   return (
-    <section id="how" className="pen-lp-wrap pt-28 sm:pt-36">
-      <Reveal>
-        <div className="pen-lp-eyebrow">How it works</div>
-        <h2 className="pen-display mt-4 max-w-[24ch] pen-t-h2 leading-[1.12] tracking-[-0.015em]">
-          Three steps, and two of them are plugging in a cable.
-        </h2>
-      </Reveal>
-
-      <div className="mt-14 grid gap-px overflow-hidden rounded-xl border sm:grid-cols-3" style={{ borderColor: 'var(--line)', background: 'var(--line)' }}>
-        {STEPS.map((s, i) => (
-          <Reveal key={s.n} delay={i * 0.07}>
-            <div className="pen-lp-step">
-              <span className="pen-mono pen-t-label" style={{ color: 'var(--accent)' }}>{s.n}</span>
-              <h3 className="pen-display mt-3 pen-t-h3">{s.h}</h3>
-              <p className="mt-2.5 pen-t-body" style={{ color: 'var(--soft)' }}>{s.p}</p>
-            </div>
-          </Reveal>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-/* --------------------------------------------------------------- the catch */
-
-function TheCatch() {
-  return (
-    <section className="pen-lp-wrap pt-28 sm:pt-36">
-      <div className="grid gap-12 lg:grid-cols-[0.85fr_1fr] lg:gap-20">
-        <Reveal>
-          <h2 className="pen-display mt-4 pen-t-h2 leading-[1.12] tracking-[-0.015em]">
-            A summary tells you what you already remember.
-          </h2>
-          <p className="mt-6 max-w-[40ch] pen-t-lede leading-[1.62]" style={{ color: 'var(--soft)' }}>
-            The useful part is the commitment somebody made in passing, the constraint mentioned
-            once, the question asked of you that never got answered. Juno Pen goes looking for those.
-          </p>
-        </Reveal>
-
-        <Reveal delay={0.1}>
-          <div className="pen-lp-missed">
-            <div className="pen-label" style={{ color: 'var(--warn)' }}>You might have missed</div>
-            <ul className="mt-4 space-y-5">
-              {[
-                ['Tom said the price is above what they had agreed between themselves',
-                 'He never named the number, and you did not ask. That number is the whole negotiation.'],
-                ['You committed to checking the HOA on the carport',
-                 'Promised aloud, and easy to forget before a weekend viewing.'],
-                ['They asked to come back with her mother',
-                 'The strongest buying signal in the recording, and it arrived in the last thirty seconds.'],
-              ].map(([item, why]) => (
-                <li key={item}>
-                  <div className="pen-t-body leading-[1.45]">{item}</div>
-                  <div className="mt-1 pen-t-small leading-[1.45]" style={{ color: 'var(--warn)' }}>{why}</div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </Reveal>
-      </div>
-    </section>
-  )
-}
-
-/* ---------------------------------------------------------- what you get */
-
-function WhatYouGet() {
-  return (
-    <section className="pen-lp-wrap pt-28 sm:pt-36">
-      <Reveal>
-        <h2 className="pen-display mt-4 max-w-[26ch] pen-t-h2 leading-[1.12] tracking-[-0.015em]">
-          A summary you can send, a list you can work from, an email already written.
-        </h2>
-      </Reveal>
-
-      <div className="mt-14 grid gap-5 lg:grid-cols-[1.05fr_1fr]">
-        {/* Left: the note, as it actually renders */}
-        <Reveal delay={0.06}>
-          <div className="pen-lp-card h-full">
-            <div className="pen-label">Summary</div>
-            <p className="mt-2.5 pen-t-body leading-[1.62]">
-              Third viewing with the Hendersons. Sarah led on the renovated kitchen; Tom went
-              straight to price and flagged it as above their ceiling. No garage came up again,
-              now three properties running. They asked to return at the weekend with her mother.
-            </p>
-
-            <div className="pen-label mt-8">Next actions</div>
-            <ul className="pen-lp-todo">
-              {[
-                ['Check whether the HOA permits enclosing the carport', 'PRIORITY \u00B7 before the weekend'],
-                ['Send comps for the street to justify the asking price', ''],
-                ['Confirm the weekend time and that her mother is coming', ''],
-              ].map(([task, meta]) => (
-                <li key={task}>
-                  <span className="pen-lp-check" aria-hidden />
-                  <span>
-                    <span className="pen-t-body leading-snug">{task}</span>
-                    {meta && (
-                      <span className="pen-mono mt-1 block pen-t-label" style={{ color: 'var(--bad)' }}>{meta}</span>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </Reveal>
-
-        {/* Right: the two things that leave the app */}
-        <div className="grid gap-5">
-          <Reveal delay={0.12}>
-            <div className="pen-lp-card">
-              <div className="flex items-center justify-between">
-                <div className="pen-label">Drafted from one line</div>
-                <span className="pen-lp-tag">Draft email</span>
-              </div>
-              <pre className="pen-lp-pre">{`To: the listing agent
-Subject: Carport / HOA before Saturday
-
-Quick one before the second viewing. Can you confirm
-whether the HOA allows the carport to be enclosed? The
-buyers have asked about a garage at all three properties,
-so it will decide whether they bid.`}</pre>
-            </div>
-          </Reveal>
-
-          <Reveal delay={0.18}>
-            <div className="pen-lp-card">
-              <div className="flex items-center justify-between">
-                <div className="pen-label">In your inbox after</div>
-                <span className="pen-lp-tag">Briefing</span>
-              </div>
-              <p className="mt-3 pen-t-small leading-[1.6]" style={{ color: 'var(--soft)' }}>
-                One email with the summary, the three things you nearly missed, what is still
-                open, and every action with its owner. Sent to you, not to anyone else.
-              </p>
-              <div className="pen-lp-mailrow">
-                <span className="pen-mono pen-t-label" style={{ color: 'var(--faint)' }}>
-                  Briefing: Ridgewood walk-through
-                </span>
-                <span className="pen-lp-dot" />
-              </div>
-            </div>
-          </Reveal>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-/* ------------------------------------------------------------- compounding */
-
-function Compounds() {
-  return (
-    <section className="pen-lp-wrap pt-28 sm:pt-36">
-      <div className="grid gap-12 lg:grid-cols-[1fr_0.92fr] lg:gap-20">
-        <Reveal>
-          <h2 className="pen-display mt-4 pen-t-h2 leading-[1.12] tracking-[-0.015em]">
-            Every recording makes the next one sharper.
-          </h2>
-          <p className="mt-6 max-w-[42ch] pen-t-lede leading-[1.62]" style={{ color: 'var(--soft)' }}>
-            One meeting gives you a note. Several give you a picture: what these people keep
-            asking for, what they have quietly ruled out, what you still have not found out.
-            Juno Pen keeps that picture and updates it every time you record.
-          </p>
-          <p className="mt-5 max-w-[42ch] pen-t-lede leading-[1.62]" style={{ color: 'var(--soft)' }}>
-            It is also the part no general notetaker can give you. They summarise a meeting.
-            This remembers a relationship.
-          </p>
-        </Reveal>
-
-        <Reveal delay={0.1}>
-          <div className="pen-lp-card">
-            <header className="flex items-baseline justify-between">
-              <h3 className="pen-display pen-t-lede">The Hendersons</h3>
-              <span className="pen-mono pen-t-label" style={{ color: 'var(--faint)' }}>3 meetings</span>
-            </header>
-
-            <Facet label="Must have" items={['Covered parking, raised at all three viewings', 'A kitchen that has already been done']} />
-            <Facet label="Ruled out" items={['Anything over their stated ceiling', 'Busy through-roads']} tone="bad" />
-            <Facet label="Never said outright" items={['The kitchen decides it for her; the number decides it for him']} tone="accent" />
-            <Facet label="Still unknown" items={['The actual ceiling. He has referred to it twice without naming it.']} />
-          </div>
-        </Reveal>
-      </div>
-    </section>
-  )
-}
-
-function Facet({ label, items, tone }: { label: string; items: string[]; tone?: 'bad' | 'accent' }) {
-  const color = tone === 'bad' ? 'var(--bad)' : tone === 'accent' ? 'var(--accent-ink)' : 'var(--dim)'
-  return (
-    <div className="mt-5">
-      <div className="pen-mono pen-t-micro uppercase tracking-[.12em]" style={{ color }}>{label}</div>
-      <ul className="mt-1.5 space-y-1.5">
-        {items.map((t) => <li key={t} className="pen-t-small leading-snug">{t}</li>)}
-      </ul>
+    <div className="pen-lp2-fhead">
+      <span className="pen-lp2-ficon" data-tone={tone}><Icon name={icon} size={18} /></span>
+      <h3 className="pen-lp2-ftitle">{title}</h3>
     </div>
   )
 }
 
-/* ---------------------------------------------------------------- hardware */
-
-/**
- * The product section, built the way Apple and Pocket build theirs: one object, a great deal
- * of air around it, and quiet type. No card, no frame, no border around the photograph. The
- * pen sits directly on the page's own paper so there is no visible photo edge, which is the
- * whole trick of a product shot that reads as expensive.
- *
- * The four facts below are ones this codebase has actually observed in the recordings it
- * processes, not numbers lifted off a listing. 48 kHz 4-bit ADPCM mono comes from the decoder
- * in lib/pen/wav.ts; the 60-minute file limit comes from real filenames. Nothing here claims
- * a spec we cannot stand behind.
- */
-const FACTS = [
-  { k: 'Plugs in as a drive', v: 'No app, no pairing, no account on the device.' },
-  { k: '48 kHz, mono', v: 'Enough to separate three voices in a bare room.' },
-  { k: '60 minutes a file', v: 'Longer meetings arrive in parts and are joined for you.' },
-  { k: 'Clips like a pen', v: 'Shirt pocket. Nobody asks what it is.' },
-]
-
-function Hardware() {
+function Features() {
   return (
-    <section id="hardware" className="pen-lp-wrap pen-hw">
-      {/* An explicit two-column block rather than relying on which element happens to be the
-          grid item. Reveal renders its own div, so styling .pen-hw-art for grid placement
-          never applied and the facts list ended up trapped in one column. */}
-      <div className="pen-hw-top">
-        <Reveal className="pen-hw-art">
-          {/* The photograph goes here. Shoot the pen on white printer paper in window light,
-              one frame from above, and drop it in as public/pen-device.jpg. multiply blending
-              removes the white ground against our paper, so no cut-out is needed. */}
-          <div className="pen-hw-shot" role="img" aria-label="The Juno Pen recorder, seen from above">
-            <div className="pen-hw-slot">
-              <span className="pen-mono">public/pen-device.jpg</span>
-              <span>Photograph pending. Shoot on white paper, 3:2, from above.</span>
+    <section id="features" className="pen-lp-wrap pen-lp2-sec">
+      <Reveal>
+        <h2 className="pen-lp-h2 pen-lp2-h2">Everything after the meeting, already done.</h2>
+        <p className="pen-lp2-sub">
+          The note, the people, the to-dos, the email, and an assistant that has read every
+          conversation you have ever recorded.
+        </p>
+      </Reveal>
+
+      <div className="pen-lp2-bento">
+        {/* 1. The note */}
+        <Reveal delay={0.04} className="pen-lp2-b pen-lp2-b-note">
+          <article className="pen-lp2-card">
+            <FeatureHead icon="sparkle" title="Written up for you" />
+            <p className="pen-lp2-fcopy">Who said what, what was decided, and what happens next.</p>
+            <div className="pen-lp2-demo">
+              <div className="pen-lp2-demo-label">Summary</div>
+              <p className="pen-lp2-demo-text">
+                Third viewing with the Hendersons. Sarah led on the renovated kitchen; Tom went
+                straight to price and flagged it as above their ceiling. They asked to return at the
+                weekend with her mother.
+              </p>
+              <div className="pen-lp2-demo-label" style={{ marginTop: 16 }}>Next actions</div>
+              <ul className="pen-lp2-todos">
+                <li><span className="pen-lp2-tick pen-lp2-tick-on" /><s>Send comps for the street</s></li>
+                <li><span className="pen-lp2-tick" />Check the HOA on the carport <em>Priority</em></li>
+                <li><span className="pen-lp2-tick" />Confirm Saturday with her mother</li>
+              </ul>
+              <div className="pen-lp2-demo-label" style={{ marginTop: 18 }}>Decided</div>
+              <p className="pen-lp2-demo-small">They will make an offer this week if the covered parking checks out.</p>
+              <div className="pen-lp2-demo-label" style={{ marginTop: 18 }}>Transcript</div>
+              <div className="pen-lp2-turns">
+                <p><span className="pen-lp2-who">Sarah</span>We love the kitchen. The parking is the thing.</p>
+                <p><span className="pen-lp2-who">You</span>There is a covered spot with the unit, round the back.</p>
+                <p><span className="pen-lp2-who">Tom</span>Then we would want to move on it this week.</p>
+              </div>
             </div>
-          </div>
-          <div className="pen-hw-ground" aria-hidden />
+          </article>
         </Reveal>
 
-        <Reveal delay={0.08} className="pen-hw-say">
-          <h2 className="pen-lp-h2 pen-lp-h2-tight">It clips in your shirt pocket.</h2>
-          <p className="pen-hw-lede">
-            Plug it into your laptop and it shows up as a drive, like a memory stick. The
-            recordings are just files. There is nothing to install and nothing to log into.
+        {/* 2. People */}
+        <Reveal delay={0.08} className="pen-lp2-b pen-lp2-b-people">
+          <article className="pen-lp2-card">
+            <FeatureHead icon="people" title="Knows who was there" />
+            <p className="pen-lp2-fcopy">It picks out the people it heard. One click saves them, with what they care about.</p>
+            <div className="pen-lp2-demo">
+              <div className="pen-lp2-person">
+                <span className="pen-lp2-av pen-lp2-av-lg">SH</span>
+                <span>
+                  <span className="pen-lp2-demo-strong">Sarah Henderson</span>
+                  <span className="pen-lp2-demo-meta">Buyer · 3 calls</span>
+                </span>
+              </div>
+              <p className="pen-lp2-demo-small">Wants covered parking and a finished kitchen. Leads on design; defers to Tom on price.</p>
+              <div className="pen-lp2-detected">
+                <span className="pen-lp2-demo-meta">Detected on this call</span>
+                <span className="pen-lp2-pill">+ Tom · husband</span>
+                <span className="pen-lp2-pill">+ Maria · lender</span>
+              </div>
+            </div>
+          </article>
+        </Reveal>
+
+        {/* 3. Jot and enhance */}
+        <Reveal delay={0.12} className="pen-lp2-b pen-lp2-b-ask">
+          <article className="pen-lp2-card">
+            <FeatureHead icon="pen" title="Jot three words, get the whole story" />
+            <p className="pen-lp2-fcopy">Type a quick note during the meeting. Press Enhance and it fills in what was actually said.</p>
+            <div className="pen-lp2-demo">
+              <p className="pen-lp2-jot">no garage again</p>
+              <p className="pen-lp2-enh">
+                Third property in a row without one. Sarah raised it in passing, which makes it a filter,
+                not a preference.
+              </p>
+              <span className="pen-lp2-mini-btn pen-lp2-mini-btn-on"><Icon name="sparkle" size={13} />Enhance</span>
+            </div>
+          </article>
+        </Reveal>
+
+        {/* 4. Email */}
+        <Reveal delay={0.06} className="pen-lp2-b pen-lp2-b-email">
+          <article className="pen-lp2-card">
+            <FeatureHead icon="mail" title="The follow-up, already written" />
+            <p className="pen-lp2-fcopy">Pick any action and get the email. Open it in Gmail or Outlook, edit, send.</p>
+            <div className="pen-lp2-demo">
+              <div className="pen-lp2-mail-row"><span>To</span>tom.henderson@gmail.com</div>
+              <div className="pen-lp2-mail-row"><span>Subject</span>Carport before Saturday</div>
+              <p className="pen-lp2-demo-small" style={{ marginTop: 10 }}>
+                Quick one before the second viewing: the HOA does allow the carport to be enclosed, so the
+                garage question has an answer.
+              </p>
+              <div className="pen-lp2-mail-btns">
+                <span className="pen-lp2-mini-btn pen-lp2-mini-btn-on">Open in Gmail</span>
+                <span className="pen-lp2-mini-btn">Outlook</span>
+              </div>
+            </div>
+          </article>
+        </Reveal>
+
+        {/* 5. Nearly missed */}
+        <Reveal delay={0.1} className="pen-lp2-b pen-lp2-b-missed">
+          <article className="pen-lp2-card">
+            <FeatureHead icon="alert" title="What you nearly missed" tone="warn" />
+            <p className="pen-lp2-fcopy">The promise made in passing, the number nobody named.</p>
+            <ul className="pen-lp2-missed">
+              <li>
+                <span className="pen-lp2-dot" />
+                <span>
+                  <span className="pen-lp2-demo-strong">They asked to come back with her mother</span>
+                  <span className="pen-lp2-demo-meta">The strongest buying signal, in the last thirty seconds.</span>
+                </span>
+              </li>
+              <li>
+                <span className="pen-lp2-dot" />
+                <span>
+                  <span className="pen-lp2-demo-strong">You promised to check the HOA</span>
+                  <span className="pen-lp2-demo-meta">Said aloud, easy to forget by the weekend.</span>
+                </span>
+              </li>
+            </ul>
+          </article>
+        </Reveal>
+
+        {/* 6. On top of it */}
+        <Reveal delay={0.14} className="pen-lp2-b pen-lp2-b-home">
+          <article className="pen-lp2-card">
+            <FeatureHead icon="checklist" title="On top of everything" />
+            <p className="pen-lp2-fcopy">Every open action across every call, in one place.</p>
+            <div className="pen-lp2-stats">
+              <div><span className="pen-lp2-stat pen-lp2-stat-warn">12</span><span>still to do</span></div>
+              <div><span className="pen-lp2-stat">4</span><span>nearly missed</span></div>
+              <div><span className="pen-lp2-stat">27</span><span>people</span></div>
+            </div>
+            <ul className="pen-lp2-todos pen-lp2-todos-sm">
+              <li><span className="pen-lp2-tick" />Send Priya the retention numbers</li>
+              <li><span className="pen-lp2-tick" />Email office hours by Wednesday</li>
+            </ul>
+          </article>
+        </Reveal>
+
+        {/* 7. Private */}
+        <Reveal delay={0.08} className="pen-lp2-b pen-lp2-b-private">
+          <article className="pen-lp2-card pen-lp2-card-ink">
+            <FeatureHead icon="lock" title="Private by design" tone="ink" />
+            <ul className="pen-lp2-private">
+              <li><Icon name="check" size={16} />Encrypted in transit and at rest</li>
+              <li><Icon name="check" size={16} />Private to your account</li>
+              <li><Icon name="check" size={16} />Delete anything, anytime</li>
+              <li><Icon name="check" size={16} />Never sold</li>
+            </ul>
+          </article>
+        </Reveal>
+      </div>
+    </section>
+  )
+}
+
+/* ------------------------------------------------------------ how it works */
+
+const STEPS: { h: string; p: string; icon: IconName }[] = [
+  { h: 'Record', p: 'Press once and put it in your pocket. In voice mode it skips the silences.', icon: 'mic' },
+  { h: 'Plug it in', p: 'USB-C, straight into your laptop or phone. Juno Pen finds the new recordings.', icon: 'usb' },
+  { h: 'Read the note', p: 'Minutes later: the summary, the people, the actions, and the email to send.', icon: 'sparkle' },
+]
+
+function HowItWorks() {
+  return (
+    <section id="how" className="pen-lp-wrap pen-lp2-sec">
+      <Reveal>
+        <h2 className="pen-lp-h2 pen-lp2-h2">Three steps. Two of them are plugging in a cable.</h2>
+      </Reveal>
+      <div className="pen-lp2-how">
+        <div className="pen-lp2-steps">
+          {STEPS.map((s, i) => (
+            <Reveal key={s.h} delay={i * 0.07}>
+              <div className="pen-lp2-step">
+                <span className="pen-lp2-step-n">{i + 1}</span>
+                <span className="pen-lp2-ficon"><Icon name={s.icon} size={18} /></span>
+                <span>
+                  <h3 className="pen-lp2-ftitle">{s.h}</h3>
+                  <p className="pen-lp2-fcopy">{s.p}</p>
+                </span>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+        <Reveal delay={0.1} className="pen-lp2-seq">
+          <div className="pen-seq-wrap">
+            <PenSequence />
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  )
+}
+
+/* ---------------------------------------------------------------- the pen */
+
+const SPECS: { icon: IconName; k: string; v: string }[] = [
+  { icon: 'mic', k: '360° microphone', v: 'Picks up every side of the table, with noise reduction built in so voices come through clean.' },
+  { icon: 'usb', k: 'USB-C built in', v: 'Plugs straight into a laptop, phone or tablet. No cable to lose, nothing to install.' },
+  { icon: 'wave', k: 'One touch, voice activated', v: 'Press once to record. Voice mode pauses in the silences, so long meetings stay short to review.' },
+  { icon: 'clock', k: 'Timestamped files', v: 'Every recording is named by when it started. Long ones split cleanly and rejoin in Juno Pen.' },
+  { icon: 'save', k: 'Never loses a take', v: 'If the battery runs low it saves the recording before it powers down.' },
+  { icon: 'pen', k: 'It writes, too', v: 'A real ballpoint, refills in the box. Nobody asks what it is.' },
+]
+
+function ThePen() {
+  return (
+    <section id="pen" className="pen-lp2-pen">
+      <div className="pen-lp-wrap">
+        <div className="pen-lp2-pen-top">
+          <Reveal>
+            <h2 className="pen-lp-h2 pen-lp2-h2">A pen that hears the whole room.</h2>
+            <p className="pen-lp2-sub">
+              Clip it in a shirt pocket or leave it on the table. Clear audio, a battery that lasts the
+              week, and room for years of meetings.
+            </p>
+          </Reveal>
+          <Reveal delay={0.08} className="pen-lp2-pen-art">
+            <div className="pen-lp2-halo pen-lp2-halo-wide" />
+            <PenArt id="spec-pen" className="pen-lp2-spec-pen" />
+            <figure className="pen-lp2-open">
+              <PenArt id="open-pen" variant="open" className="pen-lp2-open-pen" />
+              <figcaption>Open it at the ring and the USB-C plug is right there.</figcaption>
+            </figure>
+          </Reveal>
+        </div>
+
+        <div className="pen-lp2-bignums">
+          <Reveal delay={0.04}>
+            <div className="pen-lp2-card pen-lp2-bignum">
+              <span className="pen-lp2-num">72<small>GB</small></span>
+              <span className="pen-lp2-num-k">of storage</span>
+              <span className="pen-lp2-num-v">Over 7,000 hours of audio at the lowest bitrate. Years of meetings before it fills.</span>
+            </div>
+          </Reveal>
+          <Reveal delay={0.1}>
+            <div className="pen-lp2-card pen-lp2-bignum">
+              <span className="pen-lp2-num">35<small>hrs</small></span>
+              <span className="pen-lp2-num-k">of recording per charge</span>
+              <span className="pen-lp2-num-v">A full working week of meetings between charges.</span>
+            </div>
+          </Reveal>
+        </div>
+
+        <div className="pen-lp2-specs">
+          {SPECS.map((s, i) => (
+            <Reveal key={s.k} delay={0.04 + i * 0.04}>
+              <div className="pen-lp2-card pen-lp2-spec">
+                <span className="pen-lp2-ficon"><Icon name={s.icon} size={18} /></span>
+                <h3 className="pen-lp2-ftitle">{s.k}</h3>
+                <p className="pen-lp2-fcopy">{s.v}</p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+
+        <Reveal delay={0.1}>
+          <p className="pen-lp2-inbox">
+            In the box: the pen, a USB-C to USB-A cable, earphones, spare ink refills and a small screwdriver.
           </p>
         </Reveal>
       </div>
-
-      <Reveal delay={0.16}>
-        {/* Two by two, not a row of equal cards, and one rule above each pair rather than a
-            hairline under every line. */}
-        <dl className="pen-hw-facts">
-          {FACTS.map((f) => (
-            <div key={f.k}>
-              <dt>{f.k}</dt>
-              <dd>{f.v}</dd>
-            </div>
-          ))}
-        </dl>
-      </Reveal>
     </section>
   )
 }
 
 /* ----------------------------------------------------------------- pricing */
 
-// Listed once, under both cards, because it IS the same on both. Printing it twice made the
-// reader diff two nine-line lists to find the one line that differed.
+// Listed once, under both cards, because it IS the same on both.
 const INCLUDED = [
   `${INCLUDED_HOURS} hours of recording a month`,
   `Need more? Extra hours are $${HOUR_USD} each`,
   'Full transcript with who said what',
   'Summary, decisions and action items',
-  'What you might have missed',
-  'Ask across every recording you own',
-  'Draft emails, memos and tracker rows',
+  'People detected and remembered',
+  'Ask across every recording with @',
+  'Follow-up emails drafted for you',
   'A briefing in your inbox after each meeting',
-  'What each client wants, learned over time',
 ]
+
+function PlanCta({ href, children, variant }: { href: string; children: React.ReactNode; variant: 'ghost' | 'accent' }) {
+  return (
+    <Link href={href} className={`pen-lp-btn ${variant === 'accent' ? 'pen-lp-btn-accent' : 'pen-lp-btn-ghost'} mt-auto w-full justify-center`}>
+      {children}
+    </Link>
+  )
+}
 
 function Pricing() {
   return (
-    <section id="pricing" className="pen-lp-dark mt-28 sm:mt-36">
+    <section id="pricing" className="pen-lp-dark pen-lp2-pricing">
       <div className="pen-lp-wrap py-24 sm:py-28">
         <Reveal>
-          <div className="pen-lp-eyebrow pen-lp-eyebrow-dark">Pricing</div>
-          <h2 className="pen-lp-h2 pen-lp-h2-tight pen-od-paper">
-            Two ways in. Same product.
-          </h2>
-          {/* No max-width cap and no nowrap: at the section's 880px the sentence fits on one line,
-              and on a narrow screen it still wraps instead of forcing a sideways scroll. */}
+          <h2 className="pen-lp-h2 pen-lp-h2-tight pen-od-paper">Two ways in. Same product.</h2>
           <p className="pen-od-soft mt-5 pen-t-lede-sm text-balance">
-            {`${INCLUDED_HOURS} hours of recording a month on either one. The only thing that changes is how you get the pen.`}
+            {`${INCLUDED_HOURS} hours of recording a month on either one. The only difference is how you get the pen.`}
           </p>
         </Reveal>
 
-        {/* Each card carries only what differs. Everything shared is listed once, below. */}
         <div className="pen-lp-plans mt-14">
           <Reveal delay={0.08}>
             <article className="pen-lp-plan">
               <header>
-                <h3 className="pen-mono pen-od-dim pen-t-label uppercase tracking-[.14em]">
-                  Monthly
-                </h3>
+                <h3 className="pen-mono pen-od-dim pen-t-label uppercase tracking-[.14em]">Monthly</h3>
                 <div className="mt-4 flex items-baseline gap-2">
-                  <span className="pen-display pen-od-paper pen-t-price">
-                    ${PLAN_MONTHLY_USD}
-                  </span>
-                  <span className="pen-mono pen-od-dim pen-t-small">
-                    a month
-                  </span>
+                  <span className="pen-display pen-od-paper pen-t-price">${PLAN_MONTHLY_USD}</span>
+                  <span className="pen-mono pen-od-dim pen-t-small">a month</span>
                 </div>
-                <p className="pen-mono pen-od-mid mt-3 pen-t-small">
-                  {`Pen $${PEN_USD} once \u00B7 billed monthly`}
-                </p>
+                <p className="pen-mono pen-od-mid mt-3 pen-t-small">{`${TRIAL_DAYS_POSTED} days free · pen $${PEN_USD} once`}</p>
               </header>
-
-              <p className="pen-lp-plan-trade">
-                You buy the recorder, and you can stop any month you like.
-              </p>
-
-              <PlanCta href={`${SIGN_UP}?plan=monthly&offer=posted-pen&from=pricing`} variant="ghost">
-                {CTA}
-              </PlanCta>
+              <p className="pen-lp-plan-trade">You buy the pen, and you can stop any month you like.</p>
+              <PlanCta href={`${SIGN_UP}?plan=monthly&offer=posted-pen&from=pricing`} variant="ghost">{CTA}</PlanCta>
             </article>
           </Reveal>
 
@@ -756,29 +754,15 @@ function Pricing() {
             <article className="pen-lp-plan pen-lp-plan-pro">
               <span className="pen-lp-ribbon">Pen included</span>
               <header>
-                <h3 className="pen-mono pen-t-label uppercase tracking-[.14em]" style={{ color: 'var(--accent-line)' }}>
-                  Yearly
-                </h3>
+                <h3 className="pen-mono pen-t-label uppercase tracking-[.14em]" style={{ color: 'var(--accent-line)' }}>Yearly</h3>
                 <div className="mt-4 flex items-baseline gap-2">
-                  <span className="pen-display pen-od-paper pen-t-price">
-                    ${PLAN_ANNUAL_USD}
-                  </span>
-                  <span className="pen-mono pen-od-dim pen-t-small">
-                    a year
-                  </span>
+                  <span className="pen-display pen-od-paper pen-t-price">${PLAN_ANNUAL_USD}</span>
+                  <span className="pen-mono pen-od-dim pen-t-small">a year</span>
                 </div>
-                <p className="pen-mono pen-od-soft mt-3 pen-t-small">
-                  {`$${Math.round(PLAN_ANNUAL_USD / 12)} a month \u00B7 billed once, today`}
-                </p>
+                <p className="pen-mono pen-od-soft mt-3 pen-t-small">{`$${Math.round(PLAN_ANNUAL_USD / 12)} a month · billed once, today`}</p>
               </header>
-
-              <p className="pen-lp-plan-trade">
-                The recorder is on us, and it works out two months cheaper.
-              </p>
-
-              <PlanCta href={`${SIGN_UP}?plan=annual&offer=posted-pen&from=pricing`} variant="accent">
-                {CTA_YEARLY}
-              </PlanCta>
+              <p className="pen-lp-plan-trade">The pen is on us, and it works out two months cheaper.</p>
+              <PlanCta href={`${SIGN_UP}?plan=annual&offer=posted-pen&from=pricing`} variant="accent">{CTA_YEARLY}</PlanCta>
             </article>
           </Reveal>
         </div>
@@ -790,8 +774,7 @@ function Pricing() {
               {INCLUDED.map((f) => (
                 <li key={f}>
                   <svg viewBox="0 0 16 16" aria-hidden>
-                    <path d="M3 8.4 L6.2 11.6 L13 4.8" fill="none" stroke="currentColor"
-                          strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M3 8.4 L6.2 11.6 L13 4.8" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                   <span>{f}</span>
                 </li>
@@ -799,8 +782,24 @@ function Pricing() {
             </ul>
           </div>
         </Reveal>
-
       </div>
+    </section>
+  )
+}
+
+/* ---------------------------------------------------------------- closing */
+
+function Closing() {
+  return (
+    <section className="pen-lp-wrap pen-lp2-close">
+      <Reveal>
+        <div className="pen-lp2-close-card">
+          <PenArt id="close-pen" className="pen-lp2-close-pen" />
+          <h2 className="pen-lp-h2 pen-lp2-h2">Your next meeting, remembered.</h2>
+          <p className="pen-lp2-sub">{`Try it free for ${TRIAL_DAYS_POSTED} days. The pen ships in the post.`}</p>
+          <Link href={`${SIGN_UP}?from=closing`} className="pen-lp-btn pen-lp-btn-accent pen-lp2-btn-lg">{CTA}</Link>
+        </div>
+      </Reveal>
     </section>
   )
 }
@@ -811,18 +810,16 @@ function Footer() {
   return (
     <footer className="pen-lp-foot">
       <div className="pen-lp-wrap flex flex-wrap items-center justify-between gap-5 py-9">
-        <div className="flex items-baseline gap-3">
+        <div className="flex items-center gap-3">
           <Image src="/juno_mark.png" alt="Juno" width={24} height={24} className="pen-mark" />
-          <span className="pen-mono pen-t-label" style={{ color: 'var(--faint)' }}>
-            &copy; {new Date().getFullYear()}
-          </span>
+          <span className="pen-mono pen-t-label" style={{ color: 'var(--faint)' }}>&copy; {new Date().getFullYear()} Juno Pen</span>
         </div>
         <nav className="flex flex-wrap items-center gap-x-6 gap-y-2">
-          <a href="#how" className="pen-lp-footlink">How it works</a>
+          <a href="#features" className="pen-lp-footlink">What it does</a>
+          <a href="#pen" className="pen-lp-footlink">The pen</a>
           <a href="#pricing" className="pen-lp-footlink">Pricing</a>
           <Link href="/privacy" className="pen-lp-footlink">Privacy</Link>
           <Link href="/terms" className="pen-lp-footlink">Terms</Link>
-          <Link href={`${SIGN_UP}?from=footer`} className="pen-lp-footlink">{CTA}</Link>
           <Link href={SIGN_IN} className="pen-lp-footlink">Sign in</Link>
         </nav>
       </div>
