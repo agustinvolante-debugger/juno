@@ -1,6 +1,33 @@
 /* Pen — refined editorial. The note is a document, not a dashboard: one column of prose at a
    readable measure, quiet chrome, one accent. Scoped under .pen-root so the app's dark root
    theme in globals.css doesn't bleed in. */
+
+/* ...except that scoping the VARIABLES was never enough, and on a phone in dark mode it
+   showed. globals.css paints `body` with --background/--foreground, which its own
+   prefers-color-scheme block flips to #0a0a0a on #ededed. Pen never repainted the element,
+   so with the phone set to dark: the ground behind the page went black (iOS rubber-band
+   scrolling shows the body, which is why it appeared "when scrolling"), and any text that
+   inherited rather than setting its own colour came out near-white on paper — invisible.
+   Pen is a single committed light design, so it says so and paints the whole surface. */
+html:has(.pen-root),
+body:has(.pen-root) {
+  color-scheme: light;
+  background: #F2EFE5;   /* --paper, literal: the variables live on .pen-root, below this */
+  color: #16150F;        /* --ink */
+}
+
+.pen-root {
+  color-scheme: light;
+  background: var(--paper);
+  color: var(--ink);
+  /* dvh, not vh: iOS measures 100vh against the viewport WITHOUT the URL bar, so the page is
+     taller than the screen and the extra is body background — black, before the rule above. */
+  min-height: 100dvh;
+  /* Nothing here is meant to scroll sideways. clip rather than hidden so it cannot
+     accidentally create a scroll container for position:sticky children. */
+  overflow-x: clip;
+}
+
 .pen-root {
   /* Surfaces. The old stack had paper #FBFAF6 against panel #FFFFFF — a measured 1.044:1,
      which is invisible, so nothing read as a card and the whole interface looked flat and
@@ -1726,7 +1753,7 @@
   max-width: 1720px;
   margin: 0 auto;
   padding: 20px 22px 28px;
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 .pen-main-col { min-width: 0; display: flex; flex-direction: column; }
 

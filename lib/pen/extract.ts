@@ -18,7 +18,7 @@ import type { PenNotes, MeetingType } from './store'
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const MODEL = 'claude-opus-5'
 
-const NOTES_SCHEMA = {
+export const NOTES_SCHEMA = {
   type: 'object',
   properties: {
     headline: { type: 'string', description: 'A short title for this meeting, under 60 characters.' },
@@ -143,7 +143,7 @@ const NOTES_SCHEMA = {
   additionalProperties: false,
 } as const
 
-const SYSTEM = `You turn a recording of a real meeting into notes the person who was there can act on.
+export const SYSTEM = `You turn a recording of a real meeting into notes the person who was there can act on.
 
 The audio came from a recorder in someone's pocket, so expect crosstalk, room noise, footsteps,
 and speaker labels that are sometimes wrong. Read through that.

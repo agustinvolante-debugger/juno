@@ -11,7 +11,12 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#fbfaf8',
+  // The paper ground, so the iOS status bar and the browser chrome match the page instead of
+  // sitting as a pale band above it. Was #fbfaf8, left over from the lighter palette.
+  themeColor: '#F2EFE5',
+  // Pen is a committed light design. Saying so stops the phone's dark setting from recolouring
+  // form controls and scrollbars underneath it.
+  colorScheme: 'light',
 }
 
 export default function PenLayout({ children }: { children: React.ReactNode }) {
