@@ -8,7 +8,7 @@ import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
 import type { NoteBlock, PenNotes } from './store'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-const MODEL = 'claude-opus-5'
+const MODEL = 'claude-opus-5-5'
 
 const SCHEMA = {
   type: 'object',

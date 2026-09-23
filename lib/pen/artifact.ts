@@ -11,7 +11,7 @@ import type { ArchiveTurn } from './store'
 import type { DocKind } from './docs'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-const MODEL = 'claude-opus-5'
+const MODEL = 'claude-opus-5-5'
 
 const SCHEMA = {
   type: 'object',

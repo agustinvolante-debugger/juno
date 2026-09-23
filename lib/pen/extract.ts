@@ -16,7 +16,13 @@ import { mustStream } from './anthropic-limits'
 import type { PenNotes, MeetingType } from './store'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-const MODEL = 'claude-opus-5'
+// Opus 5.5, measured against Opus 5 on a real 92-minute transcript rather than assumed:
+// 30% cheaper ($4/$20 against $5/$25, and it wrote 26% fewer output tokens), 40% faster
+// (36s against 61s), and the notes were at least as good — it was the only model of four that
+// noticed a figure had been contradicted mid-meeting rather than silently recording one of the
+// two versions as fact. Sonnet 5 and Haiku 4.5 both lost ~60% of the "you might have missed"
+// section, which is the part of the note worth paying for, so cheaper than this is a downgrade.
+const MODEL = 'claude-opus-5-5'
 
 export const NOTES_SCHEMA = {
   type: 'object',
