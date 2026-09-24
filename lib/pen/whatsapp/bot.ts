@@ -60,7 +60,9 @@ export async function handleInbound(msg: Inbound): Promise<void> {
   if (!fresh) return
 
   // Blue ticks the moment it lands, before the slow part, so the sender sees it was seen.
-  void markRead(msg.id)
+  // "typing…" too for a question or a file, which always get a reply; a button tap may not
+  // (a second tap on "Everyone agreed" is ignored), so it gets the ticks only.
+  void markRead(msg.id, msg.kind === 'text' || msg.kind === 'media')
 
   const code = /^\s*link\s+(\d{6})\s*$/i.exec(msg.text)
   if (msg.kind === 'text' && code) return linkPhone(msg, code[1])

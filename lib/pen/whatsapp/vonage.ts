@@ -113,15 +113,20 @@ export function splitText(text: string, max: number): string[] {
  * Blue ticks: tells WhatsApp the message was read. Message objects live in one Vonage region
  * and the update must go there; our media URLs come from api-eu, so EU is tried first and US
  * second. Sandbox messages can't be marked. Never throws: ticks are a courtesy.
+ *
+ * `typing` also shows "typing…" until our reply lands or 25 seconds pass, whichever is first.
+ * WhatsApp asks that it only be shown when a reply is coming. The field isn't in Vonage's
+ * docs. Their SDK's type says typing_indicator but its code sends replying_indicator, which is
+ * the one the API accepts (typing_indicator gets a 422).
  */
-export async function markRead(messageUuid: string): Promise<boolean> {
+export async function markRead(messageUuid: string, typing = false): Promise<boolean> {
   if (isSandbox()) return false
   for (const host of ['https://api-eu.vonage.com', 'https://api-us.vonage.com']) {
     try {
       const res = await fetch(`${host}/v1/messages/${messageUuid}`, {
         method: 'PATCH',
         headers: { Authorization: authHeader(), 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ status: 'read' }),
+        body: JSON.stringify({ status: 'read', ...(typing ? { replying_indicator: { show: true, type: 'text' } } : {}) }),
       })
       if (res.ok) return true
       if (res.status !== 404) {
