@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { authedEmail } from '@/lib/news/auth'
 import SettingsNav from './SettingsNav'
+import { configured as whatsappReady } from '@/lib/pen/whatsapp/vonage'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,7 +26,7 @@ export default async function SettingsLayout({ children }: { children: React.Rea
         <aside className="pen-set-side">
           <h1 className="pen-display pen-set-title">Settings</h1>
           <div className="pen-set-email">{email}</div>
-          <SettingsNav />
+          <SettingsNav whatsapp={whatsappReady()} />
         </aside>
         <section className="pen-set-main">{children}</section>
       </div>

@@ -229,3 +229,23 @@ create index if not exists pen_clients_user on pen_clients(user_email);
 -- "Mark posted" button. Empty means not posted yet (or not owed).
 -- ---------------------------------------------------------------------------
 -- alter table public.pen_accounts add column if not exists pen_shipped_at timestamptz;
+
+-- ---------------------------------------------------------------------------
+-- 2026-09-24 (a) — WhatsApp. Run each line separately.
+--
+-- pen_whatsapp_links     one row per account: linked phone (digits only), the pending LINK
+--                        code, and the WhatsApp chat history.
+-- pen_whatsapp_messages  every inbound message by Vonage's message_uuid. The primary key is
+--                        the dedupe against Vonage retries; a file waiting for its consent tap
+--                        sits here with state 'consent'.
+-- pen_sessions.source_channel  'whatsapp' when the file came in that way, so the briefing
+--                        goes back to the chat.
+-- ---------------------------------------------------------------------------
+-- create table if not exists public.pen_whatsapp_links (email text primary key, phone text, code text, code_expires_at timestamptz, linked_at timestamptz, chat jsonb not null default '[]'::jsonb, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+-- create unique index if not exists pen_whatsapp_links_phone on public.pen_whatsapp_links(phone);
+-- create unique index if not exists pen_whatsapp_links_code on public.pen_whatsapp_links(code);
+-- create table if not exists public.pen_whatsapp_messages (id text primary key, phone text not null, email text, kind text not null, state text not null default 'received', payload jsonb not null default '{}'::jsonb, session_id uuid, created_at timestamptz not null default now());
+-- create index if not exists pen_whatsapp_messages_phone on public.pen_whatsapp_messages(phone, created_at desc);
+-- alter table public.pen_sessions add column if not exists source_channel text;
+-- alter table public.pen_whatsapp_links enable row level security;
+-- alter table public.pen_whatsapp_messages enable row level security;

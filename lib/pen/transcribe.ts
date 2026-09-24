@@ -12,6 +12,12 @@ export type StartResult =
   | { ok: true; aaiId: string; webhook: boolean }
   | { ok: false; held: true; allowance: Allowance }
 
+/**
+ * storage_path for audio that lives in AssemblyAI's storage rather than our bucket. What
+ * follows the prefix is the upload URL. Nothing to delete on our side for these.
+ */
+export const AAI_PREFIX = 'aai:'
+
 /** Speakers to expect when nobody said. A showing is usually an agent and one or two buyers. */
 const DEFAULT_SPEAKERS = 3
 
@@ -31,7 +37,10 @@ export async function startTranscription(
   }
 
   // AssemblyAI fetches the audio itself, so it needs a URL it can reach. Short-lived.
-  const audioUrl = await createReadUrl(session.storage_path)
+  // A WhatsApp file was streamed into AssemblyAI's storage instead of ours; see AAI_PREFIX.
+  const audioUrl = session.storage_path.startsWith(AAI_PREFIX)
+    ? session.storage_path.slice(AAI_PREFIX.length)
+    : await createReadUrl(session.storage_path)
   const secret = process.env.PEN_WEBHOOK_SECRET
   const base = process.env.PEN_PUBLIC_URL || process.env.NEXTAUTH_URL
   const webhookUrl = secret && base ? `${base.replace(/\/$/, '')}/api/pen/webhook?k=${secret}` : undefined

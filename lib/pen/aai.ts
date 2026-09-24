@@ -58,6 +58,27 @@ export async function submit(opts: {
   return res.json()
 }
 
+/**
+ * Streams audio into AssemblyAI's own storage and returns the URL to transcribe from.
+ *
+ * Used where the file never touched our bucket: a WhatsApp file comes from Vonage and goes
+ * straight here, which keeps it clear of Supabase's 50 MB per-file limit. The URL only works
+ * with our API key.
+ */
+export async function uploadStream(body: ReadableStream<Uint8Array>): Promise<string> {
+  const res = await fetch(`${BASE}/upload`, {
+    method: 'POST',
+    headers: { Authorization: key(), 'Content-Type': 'application/octet-stream' },
+    body,
+    // Node's fetch needs this to send a streamed body.
+    duplex: 'half',
+  } as RequestInit & { duplex: 'half' })
+  if (!res.ok) throw new Error(`assemblyai upload ${res.status}: ${(await res.text()).slice(0, 300)}`)
+  const j = (await res.json()) as { upload_url?: string }
+  if (!j.upload_url) throw new Error('assemblyai upload returned no url')
+  return j.upload_url
+}
+
 export async function fetchTranscript(id: string): Promise<AaiTranscript> {
   const res = await fetch(`${BASE}/transcript/${id}`, { headers: { Authorization: key() } })
   if (!res.ok) throw new Error(`assemblyai fetch ${res.status}: ${(await res.text()).slice(0, 300)}`)

@@ -102,6 +102,8 @@ export type PenSession = {
   merge_group: string | null
   /** Position of this segment within its meeting, 0-based. The 0 carries the meeting's notes. */
   merge_index: number | null
+  /** 'whatsapp' when the file came in over WhatsApp, so the briefing goes back there too. */
+  source_channel?: string | null
   created_at: string
   updated_at: string
 }
@@ -165,6 +167,7 @@ export async function createSession(row: {
   consent: boolean
   title?: string | null
   client_name?: string | null
+  source_channel?: string | null
 }) {
   const { data, error } = await supabaseAdmin
     .from('pen_sessions')
@@ -261,7 +264,8 @@ export async function deleteSession(userEmail: string, id: string): Promise<bool
     .eq('id', id)
   if (error) throw new Error(error.message)
 
-  if (session.storage_path) {
+  // 'aai:' paths live in AssemblyAI's storage (WhatsApp files), not our bucket.
+  if (session.storage_path && !session.storage_path.startsWith('aai:')) {
     // Best effort, and deliberately after the row: failing here costs storage, not correctness.
     const { error: se } = await supabaseAdmin.storage.from(BUCKET).remove([session.storage_path])
     if (se) console.warn(`pen: orphaned object ${session.storage_path}: ${se.message}`)

@@ -5,6 +5,7 @@ import { writeNotes, STATUS_WORKING } from '@/lib/pen/pipeline'
 import { sendBriefing, sendFailureNotice, hasSomethingToSay } from '@/lib/pen/briefing'
 import { autoJoin } from '@/lib/pen/merge'
 import { enrichPerson, peopleOnSession } from '@/lib/pen/people'
+import { sendWhatsAppBriefing, sendWhatsAppFailure } from '@/lib/pen/whatsapp/bot'
 
 export const dynamic = 'force-dynamic'
 // The response goes back immediately; `after()` keeps the function alive for the slow part.
@@ -46,6 +47,7 @@ export async function POST(req: Request) {
         sourceName: session.source_name ?? 'your recording',
         reason: t.error ?? 'The transcription service could not process this recording.',
       }).catch(() => {})
+      if (session.source_channel === 'whatsapp') await sendWhatsAppFailure(session.user_email, session.source_name ?? 'your recording')
       return NextResponse.json({ ok: true })
     }
 
@@ -74,10 +76,12 @@ export async function POST(req: Request) {
 /** Notes, then the briefing. Runs with nobody watching, so every failure has to say so. */
 async function runUnattended(sessionId: string, email: string) {
   let sourceName = 'your recording'
+  let whatsapp = false
   try {
     const fresh = await getSession(email, sessionId)
     if (!fresh) return
     sourceName = fresh.source_name ?? 'your recording'
+    whatsapp = fresh.source_channel === 'whatsapp'
 
     // Already the tail of a joined meeting: the first segment carries the notes for the whole
     // thing, so writing a second set here would describe half a meeting as if it were one.
@@ -127,6 +131,11 @@ async function runUnattended(sessionId: string, email: string) {
     // Belt and braces against a retry that slipped past the claim.
     if (noted.briefing_sent_at) return
 
+    // Sent from WhatsApp: the short briefing goes back to that chat as well as the email.
+    // Checked on this part OR the joined meeting's first part, since either may have come in
+    // that way.
+    if (whatsapp || noted.source_channel === 'whatsapp') await sendWhatsAppBriefing(noted)
+
     const sent = await sendBriefing({ session: noted, to: [email], replyTo: email, parts })
     if (sent.ok) {
       await updateSession(noted.id, { briefing_sent_at: new Date().toISOString() })
@@ -135,5 +144,6 @@ async function runUnattended(sessionId: string, email: string) {
     }
   } catch (e) {
     await sendFailureNotice({ to: email, sourceName, reason: (e as Error).message }).catch(() => {})
+    if (whatsapp) await sendWhatsAppFailure(email, sourceName)
   }
 }
