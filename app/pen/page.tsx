@@ -6,6 +6,8 @@ import { archiveStats } from '@/lib/pen/stats'
 import { adoptLegacyChat } from '@/lib/pen/chats'
 import { getAllowance, type Allowance } from '@/lib/pen/allowance'
 import PenApp from './PenApp'
+import { getLinkByEmail } from '@/lib/pen/whatsapp/store'
+import { botNumber, configured as whatsappReady } from '@/lib/pen/whatsapp/vonage'
 import Landing from './Landing'
 
 export const dynamic = 'force-dynamic'
@@ -24,6 +26,7 @@ export default async function PenPage() {
   let stats: Awaited<ReturnType<typeof archiveStats>> | null = null
   let allowance: Allowance | null = null
   let loadError: string | null = null
+  let whatsapp: { number: string; linked: boolean } | null = null
   try {
     // Sequential on purpose: if the tables are missing, the first call already tells us
     // and there is no point paying for the second.
@@ -34,6 +37,10 @@ export default async function PenPage() {
     // Moves any pre-threads conversation into pen_chats once, so the overhaul doesn't
     // silently eat someone's existing chat history.
     await adoptLegacyChat(email).catch(() => {})
+    if (whatsappReady()) {
+      const link = await getLinkByEmail(email).catch(() => null)
+      whatsapp = { number: botNumber(), linked: Boolean(link?.linked_at) }
+    }
   } catch (e) {
     // Almost always "table does not exist" before lib/pen/schema.sql has been run.
     loadError = (e as Error).message
@@ -44,6 +51,7 @@ export default async function PenPage() {
       initial={sessions}
       stats={stats}
       allowance={allowance}
+      whatsapp={whatsapp}
       loadError={loadError}
       email={email}
       name={session?.user?.name ?? null}

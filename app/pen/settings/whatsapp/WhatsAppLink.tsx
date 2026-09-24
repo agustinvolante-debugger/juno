@@ -94,11 +94,11 @@ export default function WhatsAppLink({
           <div className="pen-wa-link">
             <div className="pen-wa-qr" aria-label="QR code that opens WhatsApp" dangerouslySetInnerHTML={{ __html: link.qr }} />
             <div className="pen-wa-steps">
-              <p className="pen-set-fine">Scan with your phone&rsquo;s camera. WhatsApp opens with the message ready: just tap Send.</p>
-              <p className="pen-set-fine">{`Or send LINK ${link.code} to ${pretty(number)} on WhatsApp. The code lasts 30 minutes.`}</p>
+              <p className="pen-set-fine pen-wa-desk">Scan with your phone&rsquo;s camera. WhatsApp opens with the message ready: just tap Send.</p>
+              <p className="pen-set-fine">{`The message is LINK ${link.code}, to ${pretty(number)}. The code lasts 30 minutes.`}</p>
               <p className="pen-set-fine">This page updates by itself once you&rsquo;re linked.</p>
               <div className="pen-set-actions">
-                <a className="pen-btn" href={link.waLink} target="_blank" rel="noreferrer">Open WhatsApp on this computer</a>
+                <a className="pen-btn pen-wa-open" href={link.waLink} target="_blank" rel="noreferrer">Open WhatsApp with the message</a>
               </div>
             </div>
           </div>
@@ -113,13 +113,13 @@ export default function WhatsAppLink({
         <div className="pen-set-card-head">
           <h2 className="pen-set-h2">How to send a recording</h2>
         </div>
-        <ol className="pen-set-fine" style={{ paddingLeft: 18, lineHeight: 1.7 }}>
+        <ol className="pen-set-fine" style={{ paddingLeft: 20, lineHeight: 1.7, listStyle: 'decimal' }}>
           <li>Plug the pen into your phone&rsquo;s USB-C port.</li>
           <li>In the Juno Pen chat, tap + (Android: the paperclip), then Document, and pick the recording from the pen.</li>
           <li>Tap &ldquo;Everyone agreed&rdquo; to confirm everyone on the call agreed to be recorded. The briefing comes back in the chat.</li>
         </ol>
         <p className="pen-set-fine">
-          Files up to about 50 minutes fit. Longer ones: upload on the website. Recordings sent this way pass through Vonage and WhatsApp on their way to us.
+          Any audio file works. A pen WAV fits up to about 50 minutes; MP3 or M4A, much longer. For longer recordings, upload on the website. Recordings sent this way pass through Vonage and WhatsApp on their way to us.
         </p>
       </div>
     </div>

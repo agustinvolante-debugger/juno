@@ -40,7 +40,7 @@ const AUDIO_EXT = /\.(wav|wave|mp3|m4a|aac|ogg|opus|oga|webm|amr|3gp|flac|aif|ai
 
 const HELP =
   'I\'m Juno Pen.\n\n' +
-  '• Send me a recording from your pen (the WAV file) and I\'ll send the briefing back here.\n' +
+  '• Send me a recording (the WAV from your pen, or any audio file) and I\'ll send the briefing back here.\n' +
   '• Ask me anything about your calls, like "what did Chris say about the Malibu house?"\n' +
   '• Send "new" to start a fresh conversation.'
 

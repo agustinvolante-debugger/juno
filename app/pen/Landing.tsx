@@ -573,7 +573,29 @@ function Features() {
           </article>
         </Reveal>
 
-        {/* 7. Private */}
+        {/* 7. WhatsApp */}
+        <Reveal delay={0.06} className="pen-lp2-b pen-lp2-b-wa">
+          <article className="pen-lp2-card pen-lp2-wa">
+            <div className="pen-lp2-wa-copy">
+              <FeatureHead icon="chat" title="Or just send it on WhatsApp" />
+              <p className="pen-lp2-fcopy">
+                Plug the pen into your phone and send the recording to Juno Pen. The briefing comes back in the chat,
+                and you can ask about any call from there.
+              </p>
+            </div>
+            <div className="pen-lp2-wa-chat" aria-hidden="true">
+              <div className="pen-lp2-bub pen-lp2-bub-me"><Icon name="wave" size={14} />R20260922-213209.WAV</div>
+              <div className="pen-lp2-bub">
+                <strong>Maple Avenue viewing</strong> (38 min)
+                <br />
+                Sarah loved the kitchen; Tom balked at the price. Second viewing Saturday.
+              </div>
+              <div className="pen-lp2-bub pen-lp2-bub-me">What did Tom say about the garage?</div>
+            </div>
+          </article>
+        </Reveal>
+
+        {/* 8. Private */}
         <Reveal delay={0.08} className="pen-lp2-b pen-lp2-b-private">
           <article className="pen-lp2-card pen-lp2-card-ink">
             <FeatureHead icon="lock" title="Private by design" tone="ink" />
@@ -594,8 +616,8 @@ function Features() {
 
 const STEPS: { h: string; p: string; icon: IconName }[] = [
   { h: 'Record', p: 'Press once and put it in your pocket. In voice mode it skips the silences.', icon: 'mic' },
-  { h: 'Plug it in', p: 'USB-C, straight into your laptop or phone. Juno Pen finds the new recordings.', icon: 'usb' },
-  { h: 'Read the note', p: 'Minutes later: the summary, the people, the actions, and the email to send.', icon: 'sparkle' },
+  { h: 'Plug it in', p: 'USB-C, straight into your laptop or phone. Juno Pen finds the new recordings, or send them on WhatsApp.', icon: 'usb' },
+  { h: 'Read the note', p: 'Minutes later: the summary, the people, the actions, and the email to send. In the app or in the chat.', icon: 'sparkle' },
 ]
 
 function HowItWorks() {

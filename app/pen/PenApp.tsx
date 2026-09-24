@@ -88,7 +88,10 @@ export default function PenApp({
   name,
   avatar,
   allowance: initialAllowance,
+  whatsapp,
 }: {
+  /** Juno Pen's WhatsApp number and whether this account has linked a phone. Null when off. */
+  whatsapp?: { number: string; linked: boolean } | null
   initial: PenSession[]
   stats: ArchiveStats | null
   allowance: Allowance | null
@@ -556,6 +559,22 @@ export default function PenApp({
         </span>
       </button>
 
+      {/* The third way in: from the phone, over WhatsApp. Opens the chat once linked,
+          otherwise the page that links it. */}
+      {whatsapp && (
+        <a
+          className="pen-drop pen-drop-side pen-wa-side"
+          href={whatsapp.linked ? `https://wa.me/${whatsapp.number}` : '/pen/settings/whatsapp'}
+          {...(whatsapp.linked ? { target: '_blank', rel: 'noreferrer' } : {})}
+        >
+          <Icon name="chat" size={17} />
+          <span>
+            <strong>{whatsapp.linked ? 'Open WhatsApp' : 'Use WhatsApp'}</strong>
+            <em>{whatsapp.linked ? 'Send recordings, ask questions' : 'Send recordings from your phone'}</em>
+          </span>
+        </a>
+      )}
+
       <nav className="pen-cats">
         <div className="pen-cats-list">
           <button
@@ -705,6 +724,22 @@ export default function PenApp({
           <Account email={email} name={name} avatar={avatar} />
         </div>
       </header>
+
+      {/* On a phone the sidebar hides behind the menu, but a phone is exactly where WhatsApp
+          is the easy way in. Phone-only; the desktop has the sidebar entry. */}
+      {whatsapp && (
+        <a
+          className="pen-wa-phone"
+          href={whatsapp.linked ? `https://wa.me/${whatsapp.number}` : '/pen/settings/whatsapp'}
+        >
+          <Icon name="chat" size={18} />
+          <span>
+            <strong>{whatsapp.linked ? 'Send a recording on WhatsApp' : 'Use Juno Pen on WhatsApp'}</strong>
+            <em>{whatsapp.linked ? 'Plug the pen in, then share the file to the chat' : 'Send recordings and ask questions from your phone'}</em>
+          </span>
+          <Icon name="chevron" size={16} className="pen-wa-phone-go" />
+        </a>
+      )}
 
 
       {loadError && (

@@ -3093,3 +3093,46 @@ body:has(.pen-root) {
 .pen-wa-qr { width: 180px; height: 180px; flex: none; padding: 10px; background: #fff; border-radius: 12px; border: 1px solid var(--line); }
 .pen-wa-qr svg { width: 100%; height: 100%; display: block; }
 .pen-wa-steps { flex: 1 1 240px; min-width: 0; }
+/* Sidebar WhatsApp entry: same shape as "Add audio files", solid rather than dashed because it
+   is a link, not a drop target. Sits close under it as the third way in. */
+.pen-wa-side { border-style: solid; margin-top: -10px; color: inherit; text-decoration: none; }
+
+/* Landing: the WhatsApp card. Copy on the left, a three-bubble chat on the right; stacks on a
+   phone. Bubbles use the paper/emerald palette, not WhatsApp's green, so it reads as ours. */
+.pen-lp2-b-wa { grid-column: span 12; }
+.pen-lp2-wa { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 22px 40px; }
+.pen-lp2-wa-copy { flex: 1 1 300px; min-width: 0; }
+.pen-lp2-wa-chat { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.pen-lp2-bub {
+  align-self: flex-start; max-width: 88%; padding: 9px 13px; border-radius: 14px 14px 14px 4px;
+  background: var(--panel); border: 1px solid var(--hair);
+  font-size: var(--t-small); line-height: 1.45; color: var(--ink);
+}
+.pen-lp2-bub-me {
+  align-self: flex-end; border-radius: 14px 14px 4px 14px;
+  background: var(--accent); border-color: var(--accent); color: #fff;
+  display: inline-flex; align-items: center; gap: 7px;
+}
+.pen-lp2-bub-me svg { flex: none; }
+/* .pen-set-fine tucks up under a button with a negative margin; stacked lines here need room. */
+.pen-wa-steps .pen-set-fine { margin: 0 0 10px; font-size: var(--t-small); line-height: var(--t-small-lh); color: var(--soft); }
+.pen-wa-steps .pen-set-actions { margin-top: 6px; }
+/* On a phone the QR can't be scanned (it is on the phone), so the button carries the step. */
+@media (max-width: 680px) {
+  .pen-wa-qr, .pen-wa-desk { display: none; }
+  .pen-wa-open { background: var(--accent); border-color: var(--accent); color: #fff; }
+}
+/* Phone-only WhatsApp strip under the header (see PenApp). */
+.pen-wa-phone { display: none; }
+@media (max-width: 900px) {
+  .pen-wa-phone {
+    display: flex; align-items: center; gap: 12px; margin: 0 0 16px; padding: 13px 14px;
+    border-radius: 14px; background: var(--panel); border: 1px solid var(--line);
+    color: var(--ink); text-decoration: none;
+  }
+  .pen-wa-phone > svg:first-child { flex: none; color: var(--accent); }
+  .pen-wa-phone span { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+  .pen-wa-phone strong { font-size: var(--t-body); font-weight: 600; }
+  .pen-wa-phone em { font-style: normal; font-size: var(--t-small); color: var(--soft); }
+  .pen-wa-phone-go { flex: none; color: var(--dim); }
+}
