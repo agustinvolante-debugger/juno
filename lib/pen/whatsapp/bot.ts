@@ -296,7 +296,17 @@ async function onText(msg: Inbound, link: Link): Promise<void> {
     { role: 'user', content: q, ts: now },
     { role: 'assistant', content: answer, citations, ts: now + 1 },
   ])
-  const sources = citations.length ? '\n\n' + citations.map((c) => `[${c.marker}] ${c.title}`).join('\n') : ''
+  // The model sometimes gives one recording two markers. One line per recording, all its
+  // markers on it, so the list never shows the same title twice.
+  const byRecording = new Map<string, { markers: number[]; title: string }>()
+  for (const c of citations) {
+    const row = byRecording.get(c.session_id) ?? { markers: [], title: c.title }
+    row.markers.push(c.marker)
+    byRecording.set(c.session_id, row)
+  }
+  const sources = byRecording.size
+    ? '\n\n' + [...byRecording.values()].map((r) => `${r.markers.map((m) => `[${m}]`).join('')} ${r.title}`).join('\n')
+    : ''
   await sendText(msg.from, answer + sources)
 }
 
