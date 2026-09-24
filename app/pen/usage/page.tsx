@@ -1,16 +1,16 @@
 import Link from 'next/link'
 import { authedEmail } from '@/lib/news/auth'
 import { ownerRollup } from '@/lib/pen/stats'
+import { isOwner } from '@/lib/pen/owner'
 
 export const dynamic = 'force-dynamic'
 
 // Owner-only. page_views already answers "did someone load the page"; this answers the only
 // question that matters at two users — did they actually record anything, and did they return.
-const OWNER = ['agustinvolantesilva@gmail.com', 'avolantesilva@gmail.com']
 
 export default async function UsagePage() {
   const email = await authedEmail()
-  if (!email || !OWNER.includes(email.toLowerCase())) {
+  if (!isOwner(email)) {
     return (
       <main className="mx-auto max-w-md px-6 py-24">
         <h1 className="pen-display text-[26px]">Not for you</h1>
@@ -51,7 +51,10 @@ export default async function UsagePage() {
           <div className="pen-label">Owner only</div>
           <h1 className="pen-display mt-1.5 text-[34px] leading-none">Who is actually using Juno Pen</h1>
         </div>
-        <Link href="/pen" className="pen-btn">Back to Juno Pen</Link>
+        <nav className="flex gap-2">
+          <Link href="/pen/customers" className="pen-btn">Customers</Link>
+          <Link href="/pen" className="pen-btn">Back to Juno Pen</Link>
+        </nav>
       </header>
 
       {error && (

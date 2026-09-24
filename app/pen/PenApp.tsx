@@ -15,6 +15,7 @@ import DocView from './DocView'
 import Overview from './Overview'
 import SignOut from './SignOut'
 import PeoplePanel from './PeoplePanel'
+import { isOwner } from '@/lib/pen/owner'
 import PeoplePicker, { type Picked } from './PeoplePicker'
 import type { ArchiveStats } from '@/lib/pen/stats'
 import DeliverableSheet, { DeliverableActions, type SheetRequest } from './DeliverableSheet'
@@ -968,6 +969,12 @@ function Account({ email, name, avatar }: { email: string; name?: string | null;
             <Icon name="settings" size={17} />
             Settings
           </Link>
+          {isOwner(email) && (
+            <Link href="/pen/customers" className="pen-acct2-item">
+              <Icon name="people" size={17} />
+              Customers
+            </Link>
+          )}
           <SignOut email={email} />
         </div>
       )}

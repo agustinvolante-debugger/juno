@@ -223,3 +223,9 @@ create index if not exists pen_clients_user on pen_clients(user_email);
 -- Never written by the model; given to it as fact when it writes the person's card.
 -- ---------------------------------------------------------------------------
 -- alter table public.pen_people add column if not exists about text;
+
+-- ---------------------------------------------------------------------------
+-- 2026-09-23 (e) — owner customers page. When a customer's pen was posted, set from the
+-- "Mark posted" button. Empty means not posted yet (or not owed).
+-- ---------------------------------------------------------------------------
+-- alter table public.pen_accounts add column if not exists pen_shipped_at timestamptz;
