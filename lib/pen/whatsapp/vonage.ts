@@ -109,6 +109,30 @@ export function splitText(text: string, max: number): string[] {
   return out
 }
 
+/**
+ * Blue ticks: tells WhatsApp the message was read. Message objects live in one Vonage region
+ * and the update must go there; our media URLs come from api-eu, so EU is tried first and US
+ * second. Sandbox messages can't be marked. Never throws: ticks are a courtesy.
+ */
+export async function markRead(messageUuid: string): Promise<boolean> {
+  if (isSandbox()) return false
+  for (const host of ['https://api-eu.vonage.com', 'https://api-us.vonage.com']) {
+    try {
+      const res = await fetch(`${host}/v1/messages/${messageUuid}`, {
+        method: 'PATCH',
+        headers: { Authorization: authHeader(), 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ status: 'read' }),
+      })
+      if (res.ok) return true
+      if (res.status !== 404) {
+        console.warn(`pen whatsapp: markRead ${res.status} at ${host}: ${(await res.text()).slice(0, 200)}`)
+        return false
+      }
+    } catch {}
+  }
+  return false
+}
+
 /* ---------------------------------------------------------------- inbound */
 
 export type Inbound = {

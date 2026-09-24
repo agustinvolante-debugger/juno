@@ -19,7 +19,7 @@ import { briefFor } from '../profile'
 import { createSession, updateSession, type PenSession } from '../store'
 import { startTranscription, AAI_PREFIX } from '../transcribe'
 import { fmtHours } from '../plan'
-import { sendText, sendButtons, openMedia, type Inbound } from './vonage'
+import { sendText, sendButtons, openMedia, markRead, type Inbound } from './vonage'
 import {
   claimCode,
   getLinkByEmail,
@@ -58,6 +58,9 @@ export async function handleInbound(msg: Inbound): Promise<void> {
     payload: { mediaUrl: msg.mediaUrl, fileName: msg.fileName, raw: msg.raw },
   })
   if (!fresh) return
+
+  // Blue ticks the moment it lands, before the slow part, so the sender sees it was seen.
+  void markRead(msg.id)
 
   const code = /^\s*link\s+(\d{6})\s*$/i.exec(msg.text)
   if (msg.kind === 'text' && code) return linkPhone(msg, code[1])
