@@ -99,9 +99,7 @@ export async function writeNotes(opts: {
   // The clean-up pass, once per recording, before the first notes: fixes plain mishearings
   // into the edit overlay. Skipped when anything is already in the overlay (the user has been
   // correcting it) and on manual re-runs. Never blocks the notes if it fails.
-  // Imported text is someone else's transcript, not ours to second-guess, and skipping the
-  // pass keeps an import at the cost of the notes alone.
-  if (opts.claim && session.source_channel !== 'import' && !Object.keys(session.transcript_edits ?? {}).length && session.transcript?.utterances?.length) {
+  if (opts.claim && !Object.keys(session.transcript_edits ?? {}).length && session.transcript?.utterances?.length) {
     try {
       const h = await hintsFor(email, session.id)
       const edits = await cleanupTranscript(session.transcript.utterances, { vocabulary: h.keyterms ?? [], context: h.context })

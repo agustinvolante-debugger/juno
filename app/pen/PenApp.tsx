@@ -11,7 +11,6 @@ import { useTagPicker, TagMenu, shortLabel, type Taggable } from './TagPicker'
 import NoteEditor, { blocksFrom } from './NoteEditor'
 import TranscriptEditor from './TranscriptEditor'
 import SpeakerNames from './SpeakerNames'
-import TranscriptImport from './TranscriptImport'
 import { speakersIn, type SpeakerMap } from '@/lib/pen/speakers'
 import ChatView from './ChatView'
 import DocView from './DocView'
@@ -168,7 +167,6 @@ export default function PenApp({
   }, [])
   // Everyone the user has added, for the @ picker. Refreshed when a recording's People change.
   const [people, setPeople] = useState<PersonCard[]>([])
-  const [txImport, setTxImport] = useState(false)
   const refreshPeople = useCallback(async () => {
     try {
       setPeople((await getJson<{ people: PersonCard[] }>('/api/pen/people')).people)
@@ -562,18 +560,6 @@ export default function PenApp({
           <em>or drag them here</em>
         </span>
       </button>
-
-      <button type="button" className="pen-tximp-open" onClick={() => setTxImport(true)}>
-        <Icon name="quote" size={15} />
-        Import a transcript
-      </button>
-      {txImport && (
-        <TranscriptImport
-          people={people}
-          onClose={() => setTxImport(false)}
-          onImported={(id) => { setTxImport(false); void refresh(); openSession(id) }}
-        />
-      )}
 
       {/* The third way in: from the phone, over WhatsApp. Opens the chat once linked,
           otherwise the page that links it. */}
@@ -1749,7 +1735,7 @@ function Detail({
               <span className="pen-chip" data-tone="accent"><Icon name="sparkle" size={14} filled />AI summarised</span>
             )}
             {utts.length > 0 && (
-              <span className="pen-chip"><Icon name="check" size={14} />{session.source_channel === 'import' ? 'Imported' : 'Transcribed'}</span>
+              <span className="pen-chip"><Icon name="check" size={14} />Transcribed</span>
             )}
             {session.status === 'transcribing' && (
               <span className="pen-chip" data-tone="warn"><Icon name="clock" size={14} />Transcribing</span>
