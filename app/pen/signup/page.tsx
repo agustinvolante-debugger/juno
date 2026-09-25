@@ -14,8 +14,14 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null)
   const startedAt = useRef(Date.now())
   const firstField = useRef<HTMLInputElement>(null)
+  // Only pen plans ship anything. Read after mount (the URL isn't known on the server), so a
+  // software-only signup never asks for a street address.
+  const [shipsPen, setShipsPen] = useState(true)
 
-  useEffect(() => firstField.current?.focus(), [])
+  useEffect(() => {
+    firstField.current?.focus()
+    setShipsPen(new URLSearchParams(window.location.search).get('offer') !== 'own-recorder')
+  }, [])
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -89,7 +95,9 @@ export default function SignupPage() {
           <div className="pen-lp-eyebrow pen-su-eyebrow">Get started</div>
           <h1 className="pen-display pen-su-h1">Record the meeting. Read the write-up.</h1>
           <p className="mt-4 max-w-[52ch] text-[16.5px] leading-relaxed" style={{ color: 'var(--soft)' }}>
-            Your plan includes a recorder, so we need somewhere to post it. Takes a minute.
+            {shipsPen
+              ? 'Your plan includes a recorder, so we need somewhere to post it. Takes a minute.'
+              : 'Use the recorder you already have. Takes a minute, then your free week starts.'}
           </p>
         </header>
 
@@ -129,6 +137,7 @@ export default function SignupPage() {
             </label>
           </div>
 
+          {shipsPen && (
           <div className="pen-su-ship">
               <div className="pen-label pen-su-ship-head">Where to send the recorder</div>
               <div className="pen-su-grid">
@@ -158,6 +167,7 @@ export default function SignupPage() {
                 </label>
               </div>
           </div>
+          )}
 
           <label className="pen-su-field pen-su-wide">
             <span className="pen-label">Anything we should know <em>optional</em></span>
@@ -171,7 +181,7 @@ export default function SignupPage() {
           </button>
 
           <p className="pen-su-fine">
-            We use this to set up your account and post your recorder. Nothing else.
+            {shipsPen ? 'We use this to set up your account and post your recorder. Nothing else.' : 'We use this to set up your account. Nothing else.'}
           </p>
         </form>
       </main>

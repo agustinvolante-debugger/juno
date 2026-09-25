@@ -51,7 +51,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Too many attempts. Try again in a few minutes.' }, { status: 429 })
   }
 
-  const v = validate(b)
+  const v = validate(b, { needsAddress: parseOffer(b.offer) === 'posted-pen' })
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
 
   try {

@@ -26,7 +26,8 @@ const EMAIL_RE = /^[^\s@,;:<>()[\]\\]+@[^\s@.,;:<>()[\]\\]+\.[a-z]{2,}$/i
 
 export { ROLES } from './signup-fields'
 
-export function validate(b: Record<string, unknown>): { ok: true; value: Signup } | { ok: false; error: string } {
+export function validate(b: Record<string, unknown>, opts: { needsAddress?: boolean } = {}): { ok: true; value: Signup } | { ok: false; error: string } {
+  const needsAddress = opts.needsAddress ?? true
   const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
 
   const name = str(b.name, 120)
@@ -35,13 +36,15 @@ export function validate(b: Record<string, unknown>): { ok: true; value: Signup 
   const email = str(b.email, 200)
   if (!EMAIL_RE.test(email)) return { ok: false, error: 'That email address doesn’t look right.' }
 
-  // Every plan includes a recorder, so there is always something to post.
+  // Pen plans post a recorder; software-only plans (own recorder) have nothing to ship.
   const line1 = str(b.ship_line1, 200)
   const city = str(b.ship_city, 120)
   const postcode = str(b.ship_postcode, 32)
-  if (!line1) return { ok: false, error: 'We need a street address to send the recorder.' }
-  if (!city) return { ok: false, error: 'We need a city to send the recorder.' }
-  if (!postcode) return { ok: false, error: 'We need a ZIP or postcode to send the recorder.' }
+  if (needsAddress) {
+    if (!line1) return { ok: false, error: 'We need a street address to send the recorder.' }
+    if (!city) return { ok: false, error: 'We need a city to send the recorder.' }
+    if (!postcode) return { ok: false, error: 'We need a ZIP or postcode to send the recorder.' }
+  }
 
 
   return {
