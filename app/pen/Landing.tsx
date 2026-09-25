@@ -834,6 +834,7 @@ const OWN_RECORDER: PlanCard[] = [
 ]
 
 function Pricing() {
+  const [group, setGroup] = useState<'pen' | 'own'>('pen')
   return (
     <section id="pricing" className="pen-lp-dark pen-lp2-pricing">
       <div className="pen-lp-wrap py-24 sm:py-28">
@@ -844,18 +845,23 @@ function Pricing() {
           </p>
         </Reveal>
 
-        <div className="pen-lp-plangroup mt-14">
-          <p className="pen-lp-plangroup-h pen-od-paper">With the Juno pen</p>
-          <div className="pen-lp-plans pen-lp-plans-3">
-            {WITH_PEN.map((p, i) => <PlanCardView key={p.name} p={p} delay={0.06 + i * 0.06} />)}
-          </div>
+        {/* One group at a time: five cards at once read as a menu. The pen tab leads because
+            it is the US offer; a market page can open on the other. */}
+        <div className="pen-lp-tabs" role="tablist" aria-label="Choose how you record">
+          <button type="button" role="tab" id="plans-tab-pen" aria-controls="plans-panel" aria-selected={group === 'pen'} className="pen-lp-tab" data-on={group === 'pen'} onClick={() => setGroup('pen')}>
+            With the Juno pen
+          </button>
+          <button type="button" role="tab" id="plans-tab-own" aria-controls="plans-panel" aria-selected={group === 'own'} className="pen-lp-tab" data-on={group === 'own'} onClick={() => setGroup('own')}>
+            Your own recorder
+          </button>
         </div>
 
-        <div className="pen-lp-plangroup mt-12">
-          <p className="pen-lp-plangroup-h pen-od-paper">With your own recorder</p>
-          <p className="pen-lp-plangroup-sub pen-od-dim">Your phone, WhatsApp voice notes, Plaud, or any recorder that gives you an audio file.</p>
-          <div className="pen-lp-plans pen-lp-plans-2">
-            {OWN_RECORDER.map((p, i) => <PlanCardView key={p.name} p={p} delay={0.06 + i * 0.06} />)}
+        <div id="plans-panel" role="tabpanel" aria-labelledby={group === 'pen' ? 'plans-tab-pen' : 'plans-tab-own'} className="pen-lp-plangroup mt-8">
+          {group === 'own' && (
+            <p className="pen-lp-plangroup-sub pen-od-dim">Your phone, WhatsApp voice notes, Plaud, or any recorder that gives you an audio file.</p>
+          )}
+          <div className={`pen-lp-plans ${group === 'pen' ? 'pen-lp-plans-3' : 'pen-lp-plans-2'}`}>
+            {(group === 'pen' ? WITH_PEN : OWN_RECORDER).map((p, i) => <PlanCardView key={`${group}-${p.name}`} p={p} delay={i * 0.05} />)}
           </div>
         </div>
 
