@@ -3157,3 +3157,21 @@ body:has(.pen-root) {
 .pen-utt-tr { grid-column: 2; margin: 2px 0 0; font-size: var(--t-small); line-height: 1.5; color: var(--soft); font-style: italic; }
 .pen-spk-tag { overflow-wrap: anywhere; }
 @media (max-width: 900px) { .pen-utt-tr { grid-column: auto; } }
+
+/* People: detected (not yet saved) rows. Same shape as a saved person, dashed and muted. */
+.pen-people-sugg-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.pen-people-sugg-all { font-size: var(--t-small); font-weight: 600; color: var(--accent); background: none; border: 0; cursor: pointer; padding: 0; }
+.pen-people-sugg-lede { margin: 4px 0 8px; font-size: var(--t-label); line-height: var(--t-label-lh); color: var(--dim); }
+.pen-person-sugg { border-style: dashed; background: transparent; }
+.pen-person-sugg .pen-avatar { background: var(--sunk); color: var(--dim); border-color: var(--line); }
+.pen-person-sugg-add {
+  display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+  font-size: var(--t-small); font-weight: 600; color: var(--accent);
+  padding: 6px 10px; border-radius: 9px; border: 1px solid var(--accent-line, var(--line)); background: var(--panel); cursor: pointer;
+}
+.pen-person-sugg-add:disabled { opacity: .5; cursor: default; }
+@media (max-width: 680px) {
+  .pen-person-sugg { flex-wrap: wrap; }
+  .pen-person-sugg .pen-person-body { flex: 1 1 calc(100% - 46px); }
+  .pen-person-sugg .pen-person-actions { width: 100%; padding-left: 34px; }
+}

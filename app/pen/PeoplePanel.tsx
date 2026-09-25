@@ -52,6 +52,23 @@ export default function PeoplePanel({
     void load()
   }, [load, status])
 
+  /** Every detected name at once. One request each; the list refreshes at the end. */
+  async function addAll(names: string[]) {
+    setBusy(true)
+    setErr(null)
+    try {
+      let next: Loaded | null = null
+      for (const n of names) next = await postJson<Loaded>('/api/pen/people', { sessionId, name: n })
+      if (next) setData(next)
+      onChanged()
+      setTimeout(() => void load(), 6000)
+    } catch (x) {
+      setErr(errMessage(x, 'Could not add everyone.'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   /** `ask` opens the new person's details straight away, for an AI suggestion just accepted. */
   async function add(n: string, e?: string, about?: string, ask = false) {
     setBusy(true)
@@ -103,7 +120,10 @@ export default function PeoplePanel({
 
   // Role-only entries ("the inspector") cannot be added as contacts, but they were in the
   // room, so they are still shown.
-  const unnamed = (notes.people ?? []).filter((p) => !p.name?.trim() && p.role)
+  // Not the user (marked by the notes), and not a placeholder for noise.
+  const unnamed = (notes.people ?? []).filter(
+    (p) => !p.name?.trim() && p.role && !/\(the user\)/i.test(p.speaker ?? '') && !/unclear|crosstalk|unknown/i.test(p.role),
+  )
 
   return (
     <div className="pen-sec">
@@ -152,19 +172,48 @@ export default function PeoplePanel({
         )}
       </div>
 
+      {/* Names the notes heard, not yet saved. Same row shape as People so the difference is
+          one thing: these are not on the recording until you add them. */}
       {!!data?.suggestions.length && (
         <div className="pen-people-sugg">
-          <span className="pen-label">Detected on this call</span>
-          <div className="pen-people-chips">
-            {data.suggestions.map((s) => (
-              <button key={s.name} type="button" className="pen-set-chip" disabled={busy} onClick={() => add(s.name, undefined, undefined, true)} title={s.note ?? `Add ${s.name}`}>
-                {`+ ${s.name}${s.role ? ` · ${s.role}` : ''}`}
+          <div className="pen-people-sugg-head">
+            <span className="pen-label">Detected on this call · not saved yet</span>
+            {data.suggestions.length > 1 && (
+              <button type="button" className="pen-people-sugg-all" disabled={busy} onClick={() => void addAll(data.suggestions.map((s) => s.name))}>
+                Add all
               </button>
-            ))}
-            {unnamed.map((p, i) => (
-              <span key={`u${i}`} className="pen-people-unnamed" title={p.note}>{p.role}</span>
+            )}
+          </div>
+          <p className="pen-people-sugg-lede">
+            Juno Pen heard these names. Add the ones who were on the call and they become People: searchable with @, and used for names in the transcript.
+          </p>
+          <div className="pen-people">
+            {data.suggestions.map((s) => (
+              <div key={s.name} className="pen-person pen-person-sugg">
+                <span className="pen-avatar">{initials(s.name)}</span>
+                <div className="pen-person-body">
+                  <div className="pen-person-line">
+                    <strong>{s.name}</strong>
+                    {s.role && <span className="pen-person-meta">{s.role}</span>}
+                  </div>
+                  {s.note && <p className="pen-person-about">{s.note}</p>}
+                </div>
+                <div className="pen-person-actions">
+                  <button type="button" className="pen-person-sugg-add" disabled={busy} onClick={() => add(s.name, undefined, undefined, true)}>
+                    <Icon name="plus" size={14} />
+                    Add to People
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
+          {!!unnamed.length && (
+            <div className="pen-people-chips">
+              {unnamed.map((p, i) => (
+                <span key={`u${i}`} className="pen-people-unnamed" title={p.note}>{p.role}</span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

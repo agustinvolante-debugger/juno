@@ -2,7 +2,7 @@
 
 import { getProfile } from './profile'
 import { peopleOnSession } from './people'
-import type { SpeakerMap } from './speakers'
+import { isSelfName, type SpeakerMap } from './speakers'
 
 export async function autoSpeakerMap(email: string, sessionId: string, names: Record<string, string>): Promise<SpeakerMap | null> {
   if (!Object.keys(names).length) return null
@@ -10,12 +10,11 @@ export async function autoSpeakerMap(email: string, sessionId: string, names: Re
     getProfile(email).catch(() => ({ name: undefined })),
     peopleOnSession(email, sessionId).catch(() => []),
   ])
-  const me = (profile.name ?? '').trim().toLowerCase()
   const map: SpeakerMap = {}
   for (const [label, name] of Object.entries(names)) {
     const n = name.trim().toLowerCase()
     // 'The user' is what hints.ts sends when the profile has no name.
-    if (n === 'the user' || (me && n === me)) {
+    if (n === 'the user' || isSelfName(name, profile.name)) {
       map[label] = { name: profile.name?.trim() || 'You', me: true, source: 'auto' }
       continue
     }

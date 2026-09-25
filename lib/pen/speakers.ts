@@ -76,3 +76,26 @@ export function speakersIn(utterances: Utterance[], map?: SpeakerMap | null): st
   }
   return seen
 }
+
+/** Lowercase, accents stripped: "Agustín" and "agustin" are the same name. */
+export function foldName(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
+}
+
+/**
+ * Whether a name heard on a call is the user. Profile names carry nicknames and accents
+ * ("Agustin (Chaska)"), and calls use first names, so any part of the profile name counts:
+ * the full name, the first name, or a nickname in brackets.
+ */
+export function isSelfName(heard: string, profileName: string | null | undefined): boolean {
+  if (!profileName?.trim()) return false
+  const h = foldName(heard)
+  if (!h) return false
+  const full = foldName(profileName)
+  const plain = full.replace(/\(.*?\)/g, ' ').replace(/\s+/g, ' ').trim()
+  const names = new Set<string>([full, plain])
+  const first = plain.split(' ')[0]
+  if (first && first.length > 2) names.add(first)
+  for (const m of full.matchAll(/\(([^)]+)\)/g)) names.add(m[1].trim())
+  return names.has(h)
+}

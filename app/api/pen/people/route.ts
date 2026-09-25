@@ -12,9 +12,10 @@ async function forSession(email: string, sessionId: string) {
   const session = await getSession(email, sessionId)
   if (!session) return null
   const people = await peopleOnSession(email, sessionId)
-  // The user's own name, for the transcript's "Who's who" menu ("You (Agustín)").
+  // The user's own name, for the transcript's "Who's who" menu ("You (Agustín)"), and so the
+  // user is never suggested as their own contact.
   const me = (await getProfile(email).catch(() => ({ name: undefined }))).name ?? null
-  return { people, suggestions: suggestionsFrom(session.notes, people), me }
+  return { people, suggestions: suggestionsFrom(session.notes, people, me), me }
 }
 
 // GET ?session=<id>  the recording page's People section

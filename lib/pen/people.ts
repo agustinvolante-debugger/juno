@@ -10,6 +10,7 @@
 // list nobody trusts.
 
 import Anthropic from '@anthropic-ai/sdk'
+import { isSelfName } from './speakers'
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
 import { supabaseAdmin } from '@/lib/supabase'
 import { isMissingSchema } from './allowance'
@@ -198,13 +199,21 @@ export async function ownedPeople(userEmail: string, ids: string[]): Promise<Pen
  * People the notes heard on this recording who are not linked yet. Only named people: a role
  * on its own ("the inspector") is not someone you can add to a contact list.
  */
-export function suggestionsFrom(notes: PenNotes | null | undefined, linked: { name: string }[]) {
+/**
+ * Names the notes heard that are not on the recording's People yet. Leaves out the user (their
+ * own name is heard on every call and they are not their own contact) and the notes'
+ * placeholder for a voice nobody could name.
+ */
+export function suggestionsFrom(notes: PenNotes | null | undefined, linked: { name: string }[], me?: string | null) {
   const have = new Set(linked.map((p) => p.name.toLowerCase()))
+
   const seen = new Set<string>()
   return (notes?.people ?? []).flatMap((p) => {
     const name = cleanName(p.name)
     const key = name.toLowerCase()
     if (!name || have.has(key) || seen.has(key)) return []
+    if (/^unknown speaker/i.test(name) || /\(the user\)/i.test(p.speaker ?? '')) return []
+    if (isSelfName(name, me)) return []
     seen.add(key)
     return [{ name, role: p.role || null, note: p.note || null }]
   })
