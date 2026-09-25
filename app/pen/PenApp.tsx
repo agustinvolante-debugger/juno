@@ -563,7 +563,7 @@ export default function PenApp({
         </span>
       </button>
 
-      <button type="button" className="pen-tximp-open" onClick={() => setTxImport(true)}>
+      <button type="button" className="pen-tximp-open" onClick={() => { setNavOpen(false); setTxImport(true) }}>
         <Icon name="quote" size={15} />
         Import a transcript
       </button>

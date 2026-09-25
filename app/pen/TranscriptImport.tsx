@@ -7,7 +7,8 @@
 // nothing is transcribed. A live preview shows how the text was read (turns, speakers) before
 // anything is saved, so a paste that came out as one wall of text is visible up front.
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { PersonCard } from '@/lib/pen/people'
 import { parseTranscript } from '@/lib/pen/transcript-import'
 import { postJson, errMessage } from '@/lib/pen/http'
@@ -29,6 +30,13 @@ export default function TranscriptImport({
   const [consent, setConsent] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+
+  // Portalled into .pen-root (where the fonts and tokens live), never rendered in place. The
+  // button that opens this sits in the sidebar, which on a phone is a transformed drawer: a
+  // fixed-position dialog inside it is trapped in the drawer's 320px box, half drawn, with
+  // its backdrop swallowing every tap on the page. That shipped once and was rolled back.
+  const [host, setHost] = useState<Element | null>(null)
+  useEffect(() => setHost(document.querySelector('.pen-root') ?? document.body), [])
 
   const preview = useMemo(() => (text.trim() ? parseTranscript(text) : null), [text])
   const speakers = preview ? Object.values(preview.names) : []
@@ -61,7 +69,8 @@ export default function TranscriptImport({
     }
   }
 
-  return (
+  if (!host) return null
+  return createPortal(
     <div className="pen-tximp-back" onClick={onClose}>
       <div className="pen-tximp" role="dialog" aria-modal="true" aria-label="Import a transcript" onClick={(e) => e.stopPropagation()}>
         <div className="pen-tximp-head">
@@ -118,6 +127,7 @@ export default function TranscriptImport({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    host,
   )
 }
