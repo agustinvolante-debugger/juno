@@ -2,13 +2,32 @@
 // the recording and says so plainly when the recording does not contain the answer. The whole
 // point of asking your own meeting a question is that the answer is trustworthy.
 import Anthropic from '@anthropic-ai/sdk'
+import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
 import { stripMarkdown } from './plaintext'
 import type { ChatTurn, PenNotes } from './store'
+import { REPLY_LANGUAGE, inQuestionLanguage } from './reply-language'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 // The transcript is already in context; the job is to read it and answer accurately, which is
 // Haiku's shape. See lib/pen/archive.ts for the same reasoning.
 const MODEL = 'claude-haiku-4-5'
+
+// The language is named before the answer is written: without it a Portuguese question after a
+// Spanish one was answered in Spanish (the two are close). Same pattern as archive.ts.
+const ANSWER_SCHEMA = {
+  type: 'object',
+  properties: {
+    language: {
+      type: 'string',
+      description:
+        'The language the LATEST question is written in, e.g. "Portuguese". Look at its words: ' +
+        '"e", "de risco", "você", "não" are Portuguese; "y", "de riesgo", "tú" are Spanish. Ignore earlier turns and the transcript.',
+    },
+    answer: { type: 'string', description: 'The answer, written in the language named in "language".' },
+  },
+  required: ['language', 'answer'],
+  additionalProperties: false,
+} as const
 
 const SYSTEM = `You answer questions about one specific meeting, using only its transcript.
 
@@ -45,7 +64,7 @@ export async function askTranscript(opts: {
   // The transcript is the stable prefix and the question is volatile, so the transcript sits
   // in `system` behind a cache breakpoint. Every follow-up question on the same recording then
   // reads the transcript from cache instead of paying for it again.
-  const res = await anthropic.messages.create({
+  const res = await anthropic.messages.parse({
     model: MODEL,
     // max_tokens is a budget for thinking AND output, not just output. Opus 5 reasons by
     // default, and on a long input it happily spends thousands of tokens doing it — a
@@ -54,7 +73,7 @@ export async function askTranscript(opts: {
     // nothing, a truncated answer costs the whole request.
     max_tokens: 8000,
     system: [
-      { type: 'text', text: SYSTEM + (opts.agent ?? '') },
+      { type: 'text', text: SYSTEM + (opts.agent ?? '') + REPLY_LANGUAGE },
       {
         type: 'text',
         text:
@@ -65,14 +84,17 @@ export async function askTranscript(opts: {
     ],
     messages: [
       ...opts.history.slice(-8).map((t) => ({ role: t.role, content: t.content })),
-      { role: 'user' as const, content: opts.question },
+      { role: 'user' as const, content: inQuestionLanguage(opts.question) },
     ],
+    output_config: { format: jsonSchemaOutputFormat(ANSWER_SCHEMA) },
   })
 
+  const parsed = res.parsed_output as { language: string; answer: string } | null
   return stripMarkdown(
-    res.content
-      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-      .map((b) => b.text)
-      .join(''),
+    parsed?.answer ??
+      res.content
+        .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+        .map((b) => b.text)
+        .join(''),
   )
 }

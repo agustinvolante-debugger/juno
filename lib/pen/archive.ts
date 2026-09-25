@@ -18,6 +18,7 @@ import { stripMarkdown } from './plaintext'
 import type { ArchiveTurn, PenNotes, MeetingType, Transcript, Mention } from './store'
 import { ownedPeople, sessionsWith } from './people'
 import { namedDialogue, type SpeakerMap } from './speakers'
+import { REPLY_LANGUAGE, inQuestionLanguage } from './reply-language'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 // Both stages are retrieval, not synthesis — pick the recordings, then answer from what is in
@@ -53,10 +54,20 @@ const SELECT_SCHEMA = {
 const ANSWER_SCHEMA = {
   type: 'object',
   properties: {
+    // First, so it is decided before a word of the answer is written. Spanish and Portuguese
+    // are close enough that "E sobre levantar capital de risco?" was answered in Spanish until
+    // the model had to name the language.
+    language: {
+      type: 'string',
+      description:
+        'The language the LATEST question is written in, e.g. "Portuguese". Look at its words: ' +
+        '"e", "sobre", "de risco", "você", "não" are Portuguese; "y", "sobre", "de riesgo", "tú" are Spanish. ' +
+        'Ignore the language of earlier turns and of the recordings.',
+    },
     answer: {
       type: 'string',
       description:
-        'The answer, in plain prose. Cite recordings inline with [1], [2] markers that ' +
+        'The answer, written in the language named in "language", in plain prose. Cite recordings inline with [1], [2] markers that ' +
         'correspond to the citations array. Every factual claim carries a marker.',
     },
     citations: {
@@ -77,7 +88,7 @@ const ANSWER_SCHEMA = {
       },
     },
   },
-  required: ['answer', 'citations'],
+  required: ['language', 'answer', 'citations'],
   additionalProperties: false,
 } as const
 
@@ -401,10 +412,11 @@ async function answerFrom(
       '"the candidate", or name people the transcript names; never write "you said" or "you ' +
       'interviewed" unless the transcript makes it explicit.\n' +
       '- Never invent names, numbers, dates or identifiers.' +
-      (opts.agent ?? ''),
+      (opts.agent ?? '') +
+      REPLY_LANGUAGE,
     messages: [
       ...opts.history.slice(-6).map((t) => ({ role: t.role, content: t.content })),
-      { role: 'user' as const, content: `Recordings:\n\n${corpus}\n\n${taggedNote}Question: ${opts.question}` },
+      { role: 'user' as const, content: `Recordings:\n\n${corpus}\n\n${taggedNote}Question: ${inQuestionLanguage(opts.question)}` },
     ],
     output_config: { format: jsonSchemaOutputFormat(ANSWER_SCHEMA) },
   })
