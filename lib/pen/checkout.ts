@@ -5,7 +5,7 @@
 // $50 recorder was charged by neither, and a change to the yearly trial landed in only one.
 
 import { createCheckoutSession } from './stripe'
-import { trialDaysFor, type Offer, type Plan } from './plan'
+import { planPrice, trialDaysFor, type Offer, type Plan } from './plan'
 
 export type PlanCheckout = { url: string } | { error: string }
 
@@ -17,12 +17,14 @@ export async function startPlanCheckout(opts: {
   origin: string
   reference?: string
 }): Promise<PlanCheckout> {
-  const priceId = opts.plan === 'annual' ? process.env.STRIPE_PRICE_ANNUAL : process.env.STRIPE_PRICE_MONTHLY
+  const price = planPrice(opts.offer, opts.plan)
+  if (!price) return { error: 'That plan is not available. Software only comes monthly or every 6 months.' }
+  const priceId = process.env[price.env]
   // Named precisely, because the failure otherwise looks like a Stripe outage.
-  if (!priceId) return { error: `Checkout isn't configured yet — STRIPE_PRICE_${opts.plan.toUpperCase()} is not set.` }
+  if (!priceId) return { error: `Checkout isn't configured yet: ${price.env} is not set.` }
 
-  // The recorder is $50 on the monthly plan and included in the yearly one. Someone who
-  // brings their own recorder pays for no pen at all.
+  // The recorder is $50 on the monthly pen plan and included in the 6-month and yearly ones.
+  // Software only pays for no pen at all.
   const chargePen = opts.plan === 'monthly' && opts.offer === 'posted-pen'
   const penPrice = process.env.STRIPE_PRICE_PEN
   if (chargePen && !penPrice) return { error: "Checkout isn't configured yet — STRIPE_PRICE_PEN is not set." }

@@ -5,7 +5,8 @@
 // counter to drift, no decrement to race, and a refund or a correction is just editing a row.
 //
 // The rules, agreed 23 Sep:
-//   · 12 hours a month on both plans, reset at midnight on the 1st, Pacific.
+//   · Unlimited with a fair-use ceiling (INCLUDED_HOURS, 100 h) on every plan, reset at
+//     midnight on the 1st, Pacific.
 //   · Included hours are used first; bought hours only once those are gone.
 //   · Bought hours never expire.
 //   · A recording may start while there is ANY time left, and is always finished. Cutting a

@@ -769,8 +769,7 @@ export default function PenApp({
       {err && <Banner tone="bad" onClose={() => setErr(null)}>{err}</Banner>}
       {heldNotice && (
         <Banner tone="warn" onClose={() => setHeldNotice(false)}>
-          {"You're out of recording hours for this month. Your upload is saved and will be transcribed as soon as you add hours or the month resets. "}
-          <Link href="/pen/settings/hours" className="underline">Buy hours</Link>
+          {"You've passed this month's fair-use limit. Your upload is saved and will be transcribed when the month resets. Reply to any Juno Pen email if you need more."}
         </Banner>
       )}
       {mounted && !supportsPicker && (
@@ -1929,8 +1928,7 @@ function Detail({
           {session.status === 'held' && (
             <div className="pen-sec">
               <Muted>
-                {"Saved, and waiting for recording time. It will be transcribed automatically once you add hours or the month resets. "}
-                <Link href="/pen/settings/hours" className="underline">Buy hours</Link>
+                {"Saved, and waiting: this month's fair-use limit is used up. It will be transcribed automatically when the month resets."}
               </Muted>
             </div>
           )}

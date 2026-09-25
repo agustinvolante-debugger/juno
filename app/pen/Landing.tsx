@@ -8,7 +8,7 @@ import type { CSSProperties } from 'react'
 import PenSequence from './PenSequence'
 import PenArt from './PenArt'
 import Icon, { type IconName } from './Icon'
-import { PLAN_MONTHLY_USD, PLAN_ANNUAL_USD, PEN_USD, INCLUDED_HOURS, HOUR_USD, TRIAL_DAYS_POSTED } from '@/lib/pen/plan'
+import { PLAN_MONTHLY_USD, PLAN_HALFYEAR_USD, PLAN_ANNUAL_USD, PEN_USD, SOFTWARE_MONTHLY_USD, SOFTWARE_HALFYEAR_USD, TRIAL_DAYS, TRIAL_DAYS_POSTED } from '@/lib/pen/plan'
 
 // The signed-out face of tryjunoapp.com.
 //
@@ -106,7 +106,7 @@ function Hero() {
         </Reveal>
         <Reveal delay={0.2}>
           <p className="pen-lp2-offer">
-            {`$${PLAN_MONTHLY_USD} a month after ${TRIAL_DAYS_POSTED} days free, or $${PLAN_ANNUAL_USD} a year with the pen included.`}
+            {`Unlimited recording. $${PLAN_ANNUAL_USD} a year with the pen included, or $${SOFTWARE_MONTHLY_USD} a month with your own recorder.`}
           </p>
         </Reveal>
       </div>
@@ -725,16 +725,16 @@ function ThePen() {
 
 /* ----------------------------------------------------------------- pricing */
 
-// Listed once, under both cards, because it IS the same on both.
+// Listed once, under every card, because it IS the same on every plan.
 const INCLUDED = [
-  `${INCLUDED_HOURS} hours of recording a month`,
-  `Need more? Extra hours are $${HOUR_USD} each`,
+  'Unlimited recording (fair use: 100 hours a month)',
   'Full transcript with who said what',
   'Summary, decisions and action items',
   'People detected and remembered',
   'Ask across every recording with @',
   'Follow-up emails drafted for you',
   'A briefing in your inbox after each meeting',
+  'Notes in the language you spoke',
 ]
 
 function PlanCta({ href, children, variant }: { href: string; children: React.ReactNode; variant: 'ghost' | 'accent' }) {
@@ -745,53 +745,123 @@ function PlanCta({ href, children, variant }: { href: string; children: React.Re
   )
 }
 
+type PlanCard = {
+  name: string
+  price: number
+  per: string
+  line: string
+  trade: string
+  href: string
+  cta: string
+  ribbon?: string
+  pro?: boolean
+}
+
+function PlanCardView({ p, delay }: { p: PlanCard; delay: number }) {
+  return (
+    <Reveal delay={delay}>
+      <article className={`pen-lp-plan${p.pro ? ' pen-lp-plan-pro' : ''}`}>
+        {p.ribbon && <span className="pen-lp-ribbon">{p.ribbon}</span>}
+        <header>
+          <h3 className="pen-mono pen-t-label uppercase tracking-[.14em]" style={{ color: p.pro ? 'var(--accent-line)' : undefined }}>
+            <span className={p.pro ? '' : 'pen-od-dim'}>{p.name}</span>
+          </h3>
+          <div className="mt-4 flex items-baseline gap-2">
+            <span className="pen-display pen-od-paper pen-t-price">{`$${p.price}`}</span>
+            <span className="pen-mono pen-od-dim pen-t-small">{p.per}</span>
+          </div>
+          <p className="pen-mono pen-od-mid mt-3 pen-t-small">{p.line}</p>
+        </header>
+        <p className="pen-lp-plan-trade">{p.trade}</p>
+        <PlanCta href={p.href} variant={p.pro ? 'accent' : 'ghost'}>{p.cta}</PlanCta>
+      </article>
+    </Reveal>
+  )
+}
+
+const WITH_PEN: PlanCard[] = [
+  {
+    name: 'Monthly',
+    price: PLAN_MONTHLY_USD,
+    per: 'a month',
+    line: `${TRIAL_DAYS_POSTED} days free · pen $${PEN_USD} once`,
+    trade: 'You buy the pen, and you can stop any month you like.',
+    href: `${SIGN_UP}?plan=monthly&offer=posted-pen&from=pricing`,
+    cta: CTA,
+  },
+  {
+    name: '6 months',
+    price: PLAN_HALFYEAR_USD,
+    per: 'every 6 months',
+    line: `$${PLAN_HALFYEAR_USD / 6} a month · pen included`,
+    trade: 'The pen is on us, paid up front for half a year.',
+    href: `${SIGN_UP}?plan=halfyear&offer=posted-pen&from=pricing`,
+    cta: 'Get 6 months',
+    ribbon: 'Pen included',
+  },
+  {
+    name: 'Yearly',
+    price: PLAN_ANNUAL_USD,
+    per: 'a year',
+    line: `$${Math.round(PLAN_ANNUAL_USD / 12)} a month · pen included`,
+    trade: 'The pen is on us, and it works out cheapest.',
+    href: `${SIGN_UP}?plan=annual&offer=posted-pen&from=pricing`,
+    cta: CTA_YEARLY,
+    ribbon: 'Best value',
+    pro: true,
+  },
+]
+
+const OWN_RECORDER: PlanCard[] = [
+  {
+    name: 'Monthly',
+    price: SOFTWARE_MONTHLY_USD,
+    per: 'a month',
+    line: `${TRIAL_DAYS} days free`,
+    trade: 'Record on your phone or any recorder and upload the file.',
+    href: `${SIGN_UP}?plan=monthly&offer=own-recorder&from=pricing`,
+    cta: `Start ${TRIAL_DAYS} days free`,
+  },
+  {
+    name: '6 months',
+    price: SOFTWARE_HALFYEAR_USD,
+    per: 'every 6 months',
+    line: `$${SOFTWARE_HALFYEAR_USD / 6} a month · billed today`,
+    trade: 'The same, paid up front for half a year.',
+    href: `${SIGN_UP}?plan=halfyear&offer=own-recorder&from=pricing`,
+    cta: 'Get 6 months',
+  },
+]
+
 function Pricing() {
   return (
     <section id="pricing" className="pen-lp-dark pen-lp2-pricing">
       <div className="pen-lp-wrap py-24 sm:py-28">
         <Reveal>
-          <h2 className="pen-lp-h2 pen-lp-h2-tight pen-od-paper">Two ways in. Same product.</h2>
+          <h2 className="pen-lp-h2 pen-lp-h2-tight pen-od-paper">Unlimited recording on every plan.</h2>
           <p className="pen-od-soft mt-5 pen-t-lede-sm text-balance">
-            {`${INCLUDED_HOURS} hours of recording a month on either one. The only difference is how you get the pen.`}
+            With the Juno pen, or with the recorder you already have. Same notes, same search, same everything.
           </p>
         </Reveal>
 
-        <div className="pen-lp-plans mt-14">
-          <Reveal delay={0.08}>
-            <article className="pen-lp-plan">
-              <header>
-                <h3 className="pen-mono pen-od-dim pen-t-label uppercase tracking-[.14em]">Monthly</h3>
-                <div className="mt-4 flex items-baseline gap-2">
-                  <span className="pen-display pen-od-paper pen-t-price">${PLAN_MONTHLY_USD}</span>
-                  <span className="pen-mono pen-od-dim pen-t-small">a month</span>
-                </div>
-                <p className="pen-mono pen-od-mid mt-3 pen-t-small">{`${TRIAL_DAYS_POSTED} days free · pen $${PEN_USD} once`}</p>
-              </header>
-              <p className="pen-lp-plan-trade">You buy the pen, and you can stop any month you like.</p>
-              <PlanCta href={`${SIGN_UP}?plan=monthly&offer=posted-pen&from=pricing`} variant="ghost">{CTA}</PlanCta>
-            </article>
-          </Reveal>
+        <div className="pen-lp-plangroup mt-14">
+          <p className="pen-lp-plangroup-h pen-od-paper">With the Juno pen</p>
+          <div className="pen-lp-plans pen-lp-plans-3">
+            {WITH_PEN.map((p, i) => <PlanCardView key={p.name} p={p} delay={0.06 + i * 0.06} />)}
+          </div>
+        </div>
 
-          <Reveal delay={0.16}>
-            <article className="pen-lp-plan pen-lp-plan-pro">
-              <span className="pen-lp-ribbon">Pen included</span>
-              <header>
-                <h3 className="pen-mono pen-t-label uppercase tracking-[.14em]" style={{ color: 'var(--accent-line)' }}>Yearly</h3>
-                <div className="mt-4 flex items-baseline gap-2">
-                  <span className="pen-display pen-od-paper pen-t-price">${PLAN_ANNUAL_USD}</span>
-                  <span className="pen-mono pen-od-dim pen-t-small">a year</span>
-                </div>
-                <p className="pen-mono pen-od-soft mt-3 pen-t-small">{`$${Math.round(PLAN_ANNUAL_USD / 12)} a month · billed once, today`}</p>
-              </header>
-              <p className="pen-lp-plan-trade">The pen is on us, and it works out two months cheaper.</p>
-              <PlanCta href={`${SIGN_UP}?plan=annual&offer=posted-pen&from=pricing`} variant="accent">{CTA_YEARLY}</PlanCta>
-            </article>
-          </Reveal>
+        <div className="pen-lp-plangroup mt-12">
+          <p className="pen-lp-plangroup-h pen-od-paper">With your own recorder</p>
+          <p className="pen-lp-plangroup-sub pen-od-dim">Your phone, WhatsApp voice notes, Plaud, or any recorder that gives you an audio file.</p>
+          <div className="pen-lp-plans pen-lp-plans-2">
+            {OWN_RECORDER.map((p, i) => <PlanCardView key={p.name} p={p} delay={0.06 + i * 0.06} />)}
+          </div>
         </div>
 
         <Reveal delay={0.24}>
           <div className="pen-lp-both">
-            <p className="pen-t-small pen-od-dim">Both plans include</p>
+            <p className="pen-t-small pen-od-dim">Every plan includes</p>
             <ul className="pen-lp-bothlist">
               {INCLUDED.map((f) => (
                 <li key={f}>

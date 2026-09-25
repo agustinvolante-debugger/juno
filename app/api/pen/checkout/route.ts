@@ -1,3 +1,4 @@
+import { parsePlan, parseOffer } from '@/lib/pen/plan'
 import { NextResponse } from 'next/server'
 import { startPlanCheckout } from '@/lib/pen/checkout'
 import type { Offer, Plan } from '@/lib/pen/plan'
@@ -25,8 +26,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'A valid email address is required.' }, { status: 400 })
   }
 
-  const plan: Plan = b.plan === 'annual' ? 'annual' : 'monthly'
-  const offer: Offer = b.offer === 'own-recorder' ? 'own-recorder' : 'posted-pen'
+  const plan: Plan = parsePlan(b.plan)
+  const offer: Offer = parseOffer(b.offer)
 
   try {
     // The row exists before the card does, so a customer who abandons checkout is still

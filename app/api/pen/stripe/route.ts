@@ -3,6 +3,7 @@ import crypto from 'node:crypto'
 import { activate, deactivate } from '@/lib/pen/accounts'
 import { settleHoursCheckout } from '@/lib/pen/hours'
 import { sendEmailResult } from '@/lib/news/email'
+import { planPrice, parsePlan, parseOffer } from '@/lib/pen/plan'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -149,7 +150,7 @@ export async function POST(req: Request) {
       // ending with a payment method attached, so it is exactly the right moment to say so —
       // and a surprise charge is the fastest way to turn a trial into a chargeback.
       case 'customer.subscription.trial_will_end': {
-        if (email) await trialEnding(email, trialEnd(o), o.metadata?.plan ?? null).catch(() => {})
+        if (email) await trialEnding(email, trialEnd(o), o.metadata?.plan ?? null, o.metadata?.offer ?? null).catch(() => {})
         break
       }
 
@@ -189,7 +190,13 @@ const shell = (body: string) =>
   body +
   `</body></html>`
 
-async function trialEnding(email: string, endsAt: string | null, plan: string | null) {
+function trialCharge(plan: string | null, offer: string | null): string {
+  const p = planPrice(parseOffer(offer), parsePlan(plan))
+  if (!p) return 'for your plan'
+  return p.months === 1 ? `$${p.usd} for the first month` : `$${p.usd} for the first ${p.months} months`
+}
+
+async function trialEnding(email: string, endsAt: string | null, plan: string | null, offer: string | null = null) {
   const when = endsAt
     ? new Date(endsAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
     : 'in three days'
@@ -198,9 +205,9 @@ async function trialEnding(email: string, endsAt: string | null, plan: string | 
     subject: 'Your Juno Pen trial ends in three days',
     html: shell(
       // The yearly plan is charged $144 up front, not $15; saying $15 would be a surprise charge.
-      (plan === 'annual'
-        ? `<p>Your free trial ends on ${when}, and the card on file will be charged $144 for the year.</p>`
-        : `<p>Your free trial ends on ${when}, and the card on file will be charged $15 for the first month.</p>`) +
+      // The amount comes from the plan they are on; saying $15 to a $10 or $144 customer would
+      // be a surprise charge.
+      `<p>Your free trial ends on ${when}, and the card on file will be charged ${trialCharge(plan, offer)}.</p>` +
         `<p>If Juno Pen hasn&rsquo;t earned that, cancel in one click and keep the recorder &mdash; ` +
         `no email, no call, nothing to explain.</p>` +
         `<p style="color:#514E45">Reply to this and it reaches a person.</p>`,
@@ -236,8 +243,8 @@ async function welcome(email: string, offer: string | null, plan: string | null)
       (offer === 'own-recorder'
         ? `<p>Upload anything to start &mdash; a voice memo off your phone works, and that is ` +
           `the fastest way to see what the write-up looks like.</p>`
-        : plan === 'annual'
-          ? `<p>Your year has started, and your recorder goes in the post shortly. In the ` +
+        : plan === 'annual' || plan === 'halfyear'
+          ? `<p>Your ${plan === 'annual' ? 'year' : 'six months'} ${plan === 'annual' ? 'has' : 'have'} started, and your recorder goes in the post shortly. In the ` +
             `meantime you can upload anything you already have &mdash; a voice memo works.</p>`
           // The trial counts from sign-up, not delivery, so the email must not say otherwise.
           : `<p>Your recorder goes in the post shortly, and your 21 free days have started. ` +

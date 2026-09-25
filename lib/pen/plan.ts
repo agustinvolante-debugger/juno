@@ -17,42 +17,68 @@ export const MONTHLY_USD = 15
 
 /** Paid monthly. The recorder is bought separately at PEN_USD. */
 export const PLAN_MONTHLY_USD = 15
-/** Paid once a year — $12/month — and the recorder is included. */
+/** Agreed 25 Sep: paid every six months, the recorder included the first time. */
+export const PLAN_HALFYEAR_USD = 90
+/** Paid once a year, $12/month, and the recorder is included. */
 export const PLAN_ANNUAL_USD = 144
-/** One-time, on the monthly plan only. Costs us $40 plus $8 to post. */
+/** One-time, on the monthly pen plan only. Costs us $40. */
 export const PEN_USD = 50
+
 /**
- * Recording included each month, on both plans. Resets on the 1st, Pacific, whatever day
- * someone joined.
- *
- * Not chosen as a cost limit — we keep $9.25 of every $15 at twelve hours and only stop making money at
- * thirty-four. Twelve clears three showings a week with room, and across a realistic spread of
- * users the difference between capping at six and capping at twelve is 44 cents a month,
- * because most people sit at two to four hours whatever the number says.
+ * Agreed 25 Sep: software only, for people who already record (phone, WhatsApp voice notes,
+ * Plaud, any recorder). No pen, no shipping. Break-even is about 13 recorded hours a month
+ * at $0.70 an hour; our real users record 3.5 to 8.3.
  */
-export const INCLUDED_HOURS = 12
+export const SOFTWARE_MONTHLY_USD = 10
+export const SOFTWARE_HALFYEAR_USD = 54
+
+/**
+ * Fair-use ceiling on "unlimited", in hours a month. Agreed 25 Sep, replacing the 12-hour cap:
+ * every plan is sold as unlimited and this is the line almost nobody reaches. It exists for
+ * the one account that would record around the clock (100 h costs us about $70).
+ * The name is kept so the allowance code that reads it is unchanged.
+ */
+export const INCLUDED_HOURS = 100
 
 /**
  * Free trial length, in days.
  *
- * Two weeks for someone who can start today with a phone recording. Three for someone waiting
- * on a posted recorder, because despatch eats three to five days of a fourteen-day trial and
- * a trial that expires before the product arrives is not a trial.
+ * Seven for software only: nothing to wait for, a week is enough to send a few recordings.
+ * Twenty-one for the monthly pen plan, because posting the pen eats three to five days.
+ * Prepaid plans (6 months, a year) have none: they include the pen.
  */
-export const TRIAL_DAYS = 14
+export const TRIAL_DAYS = 7
 export const TRIAL_DAYS_POSTED = 21
 
 export type Offer = 'own-recorder' | 'posted-pen'
-export type Plan = 'monthly' | 'annual'
+export type Plan = 'monthly' | 'halfyear' | 'annual'
+
+export function parsePlan(v: unknown): Plan {
+  return v === 'annual' ? 'annual' : v === 'halfyear' ? 'halfyear' : 'monthly'
+}
+export function parseOffer(v: unknown): Offer {
+  return v === 'own-recorder' ? 'own-recorder' : 'posted-pen'
+}
+
+/** Free days before the first charge. Prepaid plans have none. */
+export function trialDaysFor(offer: Offer, plan: Plan = 'monthly'): number {
+  if (plan !== 'monthly') return 0
+  return offer === 'posted-pen' ? TRIAL_DAYS_POSTED : TRIAL_DAYS
+}
 
 /**
- * Free days before the first charge. Agreed 23 Sep: the yearly plan has none. It includes the
- * recorder, and a trial meant posting $48 of hardware to someone who could cancel on day 20
- * having paid nothing. Monthly customers pay for the pen up front, so their trial risks nothing.
+ * What each offer and plan costs, and the env var holding its Stripe price. Software only has
+ * no yearly plan; asking for one is refused rather than quietly charged as something else.
  */
-export function trialDaysFor(offer: Offer, plan: Plan = 'monthly'): number {
-  if (plan === 'annual') return 0
-  return offer === 'posted-pen' ? TRIAL_DAYS_POSTED : TRIAL_DAYS
+export function planPrice(offer: Offer, plan: Plan): { usd: number; months: number; env: string } | null {
+  if (offer === 'posted-pen') {
+    if (plan === 'monthly') return { usd: PLAN_MONTHLY_USD, months: 1, env: 'STRIPE_PRICE_MONTHLY' }
+    if (plan === 'halfyear') return { usd: PLAN_HALFYEAR_USD, months: 6, env: 'STRIPE_PRICE_HALFYEAR' }
+    return { usd: PLAN_ANNUAL_USD, months: 12, env: 'STRIPE_PRICE_ANNUAL' }
+  }
+  if (plan === 'monthly') return { usd: SOFTWARE_MONTHLY_USD, months: 1, env: 'STRIPE_PRICE_SOFTWARE_MONTHLY' }
+  if (plan === 'halfyear') return { usd: SOFTWARE_HALFYEAR_USD, months: 6, env: 'STRIPE_PRICE_SOFTWARE_HALFYEAR' }
+  return null
 }
 
 export type Usage = {
@@ -63,10 +89,9 @@ export type Usage = {
 }
 
 // ---------------------------------------------------------------------------
-// Agreed 23 Sep: the twelve hours are a cap, not a report. Past them a recording is still
-// uploaded and kept, but nothing is transcribed or written until the month resets or the
-// user buys more. Bought hours never expire and are only drawn on once the month's included
-// hours are gone.
+// Past the fair-use ceiling a recording is still uploaded and kept, but nothing is transcribed
+// until the month resets. Bought hours (from the 23 Sep top-ups) still count if anyone has
+// them; the Buy hours page is no longer linked.
 // ---------------------------------------------------------------------------
 
 /** Price of one extra hour. Sold in whole hours only. */

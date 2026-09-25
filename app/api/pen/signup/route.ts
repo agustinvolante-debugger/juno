@@ -1,3 +1,4 @@
+import { parsePlan, parseOffer } from '@/lib/pen/plan'
 import { NextResponse } from 'next/server'
 import { validate, saveSignup, type Signup } from '@/lib/pen/signup'
 import { createPending } from '@/lib/pen/accounts'
@@ -70,8 +71,8 @@ export async function POST(req: Request) {
     // fills in a form.
     let checkoutUrl: string | null = null
     try {
-      const plan: Plan = b.plan === 'annual' ? 'annual' : 'monthly'
-      const offer: Offer = b.offer === 'own-recorder' ? 'own-recorder' : 'posted-pen'
+      const plan: Plan = parsePlan(b.plan)
+      const offer: Offer = parseOffer(b.offer)
       const r = await startPlanCheckout({ email: v.value.email, plan, offer, origin: new URL(req.url).origin })
       // Not configured yet: fall through to the confirmation email, as before.
       if ('url' in r) checkoutUrl = r.url

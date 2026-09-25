@@ -3194,3 +3194,11 @@ body:has(.pen-root) {
   .pen-tximp-back { align-items: flex-end; padding: 0; }
   .pen-tximp { width: 100%; max-height: 92vh; border-radius: 18px 18px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
 }
+
+/* Pricing v2: two groups (with the pen / your own recorder). The 3-up row widens the shared
+   grid; the 2-up row stays centred at the old width. */
+.pen-lp-plangroup { display: flex; flex-direction: column; gap: 14px; }
+.pen-lp-plangroup-h { font-family: var(--font-display); font-size: var(--t-h3); line-height: var(--t-h3-lh); text-align: center; }
+.pen-lp-plangroup-sub { margin-top: -6px; text-align: center; font-size: var(--t-small); line-height: var(--t-small-lh); }
+.pen-lp-plans-3 { max-width: 1040px; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); }
+.pen-lp-plans-2 { max-width: 700px; }

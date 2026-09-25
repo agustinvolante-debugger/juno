@@ -29,7 +29,7 @@ export default function SignupPage() {
         // Which plan and which offer, both carried in the link. A cold-email recipient arrives
         // on ?offer=posted-pen and gets the longer trial; someone who already owns a recorder
         // starts today and gets fourteen days.
-        plan: url.get('plan') === 'annual' ? 'annual' : 'monthly',
+        plan: url.get('plan') === 'annual' ? 'annual' : url.get('plan') === 'halfyear' ? 'halfyear' : 'monthly',
         offer: url.get('offer') === 'own-recorder' ? 'own-recorder' : 'posted-pen',
         name: f.get('name'),
         email: f.get('email'),

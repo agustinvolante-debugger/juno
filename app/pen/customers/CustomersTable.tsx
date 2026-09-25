@@ -9,6 +9,7 @@ const STATUS: Record<CustomerStatus, { label: string; tone: string }> = {
   pending: { label: 'Signed up, not paid', tone: 'dim' },
   trial: { label: 'Trial', tone: 'warn' },
   monthly: { label: 'Monthly', tone: 'good' },
+  halfyear: { label: '6 months', tone: 'good' },
   yearly: { label: 'Yearly', tone: 'good' },
   active: { label: 'Paying', tone: 'good' },
   granted: { label: 'Free access', tone: 'accent' },
@@ -42,7 +43,7 @@ export default function CustomersTable({ customers, summary, stripeBase }: { cus
         filter === 'all' ||
         (filter === 'pending' && c.status === 'pending') ||
         (filter === 'trial' && c.status === 'trial') ||
-        (filter === 'paying' && ['monthly', 'yearly', 'active'].includes(c.status)) ||
+        (filter === 'paying' && ['monthly', 'halfyear', 'yearly', 'active'].includes(c.status)) ||
         (filter === 'cancelled' && c.status === 'cancelled') ||
         (filter === 'pens' && c.pen === 'to-post')
       return f && (!n || [c.email, c.name, c.phone, c.role, c.address].some((x) => x?.toLowerCase().includes(n)))

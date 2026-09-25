@@ -11,9 +11,9 @@
 import { supabaseAdmin } from '@/lib/supabase'
 import { ALLOWED_EMAILS } from '@/lib/auth'
 import { foldAllowance, isMissingSchema, type MeterRow } from './allowance'
-import { isUncapped, PLAN_MONTHLY_USD, PLAN_ANNUAL_USD } from './plan'
+import { isUncapped, planPrice, parsePlan, parseOffer } from './plan'
 
-export type CustomerStatus = 'pending' | 'trial' | 'monthly' | 'yearly' | 'active' | 'granted' | 'cancelled'
+export type CustomerStatus = 'pending' | 'trial' | 'monthly' | 'halfyear' | 'yearly' | 'active' | 'granted' | 'cancelled'
 export type PenState = 'to-post' | 'posted' | 'own' | 'none'
 
 export type Customer = {
@@ -48,7 +48,7 @@ export type CustomerSummary = {
   trial: number
   paying: number
   cancelled: number
-  /** Monthly recurring revenue: $15 per monthly plan, $12 per yearly one. Trials excluded. */
+  /** Monthly recurring revenue from each paying customer's own plan. Trials excluded. */
   mrrUsd: number
   pensToPost: number
 }
@@ -78,6 +78,7 @@ function statusOf(a: AccountRow | undefined, email: string, now: number): Custom
   if (a.status === 'pending') return 'pending'
   if (a.trial_ends_at && Date.parse(a.trial_ends_at) > now) return 'trial'
   if (a.plan === 'monthly') return 'monthly'
+  if (a.plan === 'halfyear') return 'halfyear'
   if (a.plan === 'annual') return 'yearly'
   return a.stripe_customer_id ? 'active' : 'granted'
 }
@@ -123,7 +124,7 @@ export async function listCustomers(now = new Date()): Promise<{ customers: Cust
       ? [s.ship_line1, s.ship_line2, s.ship_city, s.ship_state, s.ship_postcode, s.ship_country].filter(Boolean).join(', ') || null
       : null
     // A pen is owed when they chose the posted pen and are trialing or paying.
-    const owed = a?.offer === 'posted-pen' && ['trial', 'monthly', 'yearly', 'active'].includes(status)
+    const owed = a?.offer === 'posted-pen' && ['trial', 'monthly', 'halfyear', 'yearly', 'active'].includes(status)
     const pen: PenState = a?.offer === 'own-recorder' ? 'own' : a?.pen_shipped_at ? 'posted' : owed ? 'to-post' : 'none'
     const last = mine.map((m) => m.recorded_at ?? m.created_at).sort().pop() ?? null
     return {
@@ -161,9 +162,14 @@ export async function listCustomers(now = new Date()): Promise<{ customers: Cust
     total: customers.length,
     pending: count(['pending']),
     trial: count(['trial']),
-    paying: count(['monthly', 'yearly', 'active']),
+    paying: count(['monthly', 'halfyear', 'yearly', 'active']),
     cancelled: count(['cancelled']),
-    mrrUsd: count(['monthly']) * PLAN_MONTHLY_USD + count(['yearly']) * (PLAN_ANNUAL_USD / 12),
+    // Each paying customer's own plan, per month (software only is cheaper than the pen plans).
+    mrrUsd: customers.reduce((sum, c) => {
+      if (!['monthly', 'halfyear', 'yearly'].includes(c.status)) return sum
+      const p = planPrice(parseOffer(c.offer), parsePlan(c.plan))
+      return sum + (p ? p.usd / p.months : 0)
+    }, 0),
     pensToPost: customers.filter((c) => c.pen === 'to-post').length,
   }
   return { customers, summary }
