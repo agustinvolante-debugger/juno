@@ -48,7 +48,7 @@ export default function SignupPage() {
         ship_postcode: f.get('ship_postcode'),
         ship_country: f.get('ship_country'),
         note: f.get('note'),
-        company: f.get('company'), // honeypot
+        jp_hp_7: f.get('jp_hp_7'), // honeypot, see the input below
         elapsed: Date.now() - startedAt.current,
         source: url.get('from') ?? 'landing',
       })
@@ -102,10 +102,12 @@ export default function SignupPage() {
         </header>
 
         <form className="pen-su-form" onSubmit={submit} noValidate>
-          {/* Hidden from people, irresistible to bots. */}
+          {/* Hidden from people, irresistible to bots. Named so no browser autofill recognises it:
+              it used to be name="company", Chrome filled it with the user's company, and every
+              autofilled signup was silently dropped as a bot. */}
           <input
             type="text"
-            name="company"
+            name="jp_hp_7"
             tabIndex={-1}
             autoComplete="off"
             aria-hidden="true"

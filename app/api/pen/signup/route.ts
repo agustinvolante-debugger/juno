@@ -38,7 +38,8 @@ export async function POST(req: Request) {
 
   // Honeypot: a field hidden from people and irresistible to bots. Answer 200 so the bot
   // records a success and does not retune.
-  if (typeof b.company === 'string' && b.company.trim()) {
+  // Not "company": browser autofill fills that, which dropped real people as bots.
+  if (typeof b.jp_hp_7 === 'string' && b.jp_hp_7.trim()) {
     return NextResponse.json({ ok: true })
   }
 
