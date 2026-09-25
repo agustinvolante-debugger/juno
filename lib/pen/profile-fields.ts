@@ -129,6 +129,23 @@ export const ROLES: Role[] = [
 
 export const NOTE_STYLES = ['short', 'detailed'] as const
 
+/**
+ * Languages offered for "languages you speak" and "write my notes in". Codes are AssemblyAI's
+ * (all covered by universal-3-5-pro), so the same list feeds expected_languages.
+ */
+export const LANGUAGES = [
+  { code: 'en', name: 'English' },
+  { code: 'es', name: 'Spanish' },
+  { code: 'pt', name: 'Portuguese' },
+  { code: 'fr', name: 'French' },
+  { code: 'it', name: 'Italian' },
+  { code: 'de', name: 'German' },
+] as const
+
+export function languageName(code: string | null | undefined): string | null {
+  return LANGUAGES.find((l) => l.code === code)?.name ?? null
+}
+
 export type AgentProfile = {
   /** One of ROLES[].value. Decides which follow-up questions apply. */
   role?: string
@@ -139,6 +156,10 @@ export type AgentProfile = {
   noteStyle?: (typeof NOTE_STYLES)[number]
   /** Names, places and terms to spell right. One per line or comma-separated. */
   vocabulary?: string
+  /** Languages they speak on recordings (LANGUAGES codes). A hint for the transcriber. */
+  languages?: string[]
+  /** Language the notes are written in. Unset means the language of the recording. */
+  notesLanguage?: string
   /** Answers to the role's own questions, keyed by Question.key. */
   answers?: Record<string, string | string[]>
 }

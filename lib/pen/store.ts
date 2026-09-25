@@ -104,6 +104,12 @@ export type PenSession = {
   merge_index: number | null
   /** 'whatsapp' when the file came in over WhatsApp, so the briefing goes back there too. */
   source_channel?: string | null
+  /** Who each speaker label is. See lib/pen/speakers.ts. */
+  speaker_map?: Record<string, unknown> | null
+  /** Language AssemblyAI detected, e.g. 'es'. */
+  language?: string | null
+  /** On-demand translation: { lang, utterances: string[] } parallel to transcript.utterances. */
+  translation?: { lang: string; utterances: string[] } | null
   created_at: string
   updated_at: string
 }

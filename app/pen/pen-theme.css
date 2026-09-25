@@ -251,7 +251,7 @@ body:has(.pen-root) {
 @keyframes penBlink { 0%,80%,100% { opacity:.22 } 40% { opacity:1 } }
 
 /* Transcript */
-.pen-utt { display: grid; grid-template-columns: 74px 1fr; gap: 14px; padding: 8px 0; }
+.pen-utt { display: grid; grid-template-columns: 104px 1fr; gap: 14px; padding: 8px 0; }
 .pen-utt + .pen-utt { border-top: 1px solid var(--hair); }
 
 @media (max-width: 900px) { .pen-utt { grid-template-columns: 1fr; gap: 2px; } }
@@ -3136,3 +3136,24 @@ body:has(.pen-root) {
   .pen-wa-phone em { font-style: normal; font-size: var(--t-small); color: var(--soft); }
   .pen-wa-phone-go { flex: none; color: var(--dim); }
 }
+
+/* Transcript: "Who's who" (name each speaker label) and translate, above the lines. */
+.pen-spkn { margin: 0 0 22px; padding: 16px 18px; border-radius: 14px; background: var(--sunk); border: 1px solid var(--hair); display: flex; flex-direction: column; gap: 12px; }
+.pen-spkn-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.pen-spkn-lang { font-size: var(--t-small); color: var(--soft); }
+.pen-spkn-rows { display: flex; flex-direction: column; gap: 8px; }
+.pen-spkn-row { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; }
+.pen-spkn-label { display: flex; flex-direction: column; min-width: 150px; font-weight: 600; font-size: var(--t-small); color: var(--ink); }
+.pen-spkn-label em { font-style: normal; font-weight: 400; font-size: var(--t-label); color: var(--dim); }
+.pen-spkn select, .pen-spkn input {
+  font: inherit; font-size: var(--t-small); padding: 7px 10px; border-radius: 9px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink); max-width: 100%;
+}
+.pen-spkn-type { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pen-spkn-auto { font-size: var(--t-label); color: var(--dim); }
+.pen-spkn-update { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: var(--t-small); color: var(--soft); padding-top: 4px; border-top: 1px solid var(--hair); }
+.pen-spkn-translate { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--hair); }
+.pen-spkn-link { font-size: var(--t-small); color: var(--soft); text-decoration: underline; background: none; border: 0; cursor: pointer; }
+.pen-utt-tr { grid-column: 2; margin: 2px 0 0; font-size: var(--t-small); line-height: 1.5; color: var(--soft); font-style: italic; }
+.pen-spk-tag { overflow-wrap: anywhere; }
+@media (max-width: 900px) { .pen-utt-tr { grid-column: auto; } }

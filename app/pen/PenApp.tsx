@@ -10,6 +10,8 @@ import type { PersonCard } from '@/lib/pen/people'
 import { useTagPicker, TagMenu, shortLabel, type Taggable } from './TagPicker'
 import NoteEditor, { blocksFrom } from './NoteEditor'
 import TranscriptEditor from './TranscriptEditor'
+import SpeakerNames from './SpeakerNames'
+import { speakersIn, type SpeakerMap } from '@/lib/pen/speakers'
 import ChatView from './ChatView'
 import DocView from './DocView'
 import Overview from './Overview'
@@ -414,7 +416,7 @@ export default function PenApp({
           const tRes = await fetch('/api/pen/transcribe', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: session.id, speakers: 3 }),
+            body: JSON.stringify({ id: session.id }),
           })
           if (tRes.status === 402) {
             // Saved and waiting, not failed. The banner says so and the row shows it.
@@ -1501,13 +1503,19 @@ function ImportTray({
  * overlay keyed by utterance index, and index 7 of part two is a different line from index 7
  * of part one. Merging the overlays would quietly rewrite the wrong sentences.
  */
-function PartTranscript({ part }: { part: PenSession }) {
+function PartTranscript({ part, onUpdateNotes }: { part: PenSession; onUpdateNotes: () => void }) {
   const [edits, setEdits] = useState<Record<string, string>>(part.transcript_edits ?? {})
+  const [map, setMap] = useState<SpeakerMap | null>((part.speaker_map as SpeakerMap | null) ?? null)
+  const [translation, setTranslation] = useState(part.translation ?? null)
+  const [showTr, setShowTr] = useState(false)
   const [state, setState] = useState<'saved' | 'saving' | 'failed'>('saved')
   const dirty = useRef(false)
 
   useEffect(() => {
     setEdits(part.transcript_edits ?? {})
+    setMap((part.speaker_map as SpeakerMap | null) ?? null)
+    setTranslation(part.translation ?? null)
+    setShowTr(false)
     setState('saved')
     dirty.current = false
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1535,12 +1543,28 @@ function PartTranscript({ part }: { part: PenSession }) {
       : <Muted>This part has no transcript yet.</Muted>
   }
   return (
-    <TranscriptEditor
-      utterances={utts}
-      edits={edits}
-      saveState={state}
-      onEdit={(i, text) => { dirty.current = true; setEdits((prev) => ({ ...prev, [String(i)]: text })) }}
-    />
+    <>
+      <SpeakerNames
+        sessionId={part.id}
+        utterances={utts}
+        initialMap={(part.speaker_map as SpeakerMap | null) ?? null}
+        language={part.language ?? null}
+        translation={translation}
+        showTranslation={showTr}
+        onMap={setMap}
+        onTranslation={setTranslation}
+        onShowTranslation={setShowTr}
+        onUpdateNotes={onUpdateNotes}
+      />
+      <TranscriptEditor
+        utterances={utts}
+        edits={edits}
+        saveState={state}
+        speakerMap={map}
+        translation={showTr ? translation?.utterances : null}
+        onEdit={(i, text) => { dirty.current = true; setEdits((prev) => ({ ...prev, [String(i)]: text })) }}
+      />
+    </>
   )
 }
 
@@ -1600,10 +1624,16 @@ function Detail({
 
   // Transcript corrections, same pattern.
   const [tEdits, setTEdits] = useState<Record<string, string>>(session.transcript_edits ?? {})
+  const [speakerMap, setSpeakerMap] = useState<SpeakerMap | null>((session.speaker_map as SpeakerMap | null) ?? null)
+  const [translation, setTranslation] = useState(session.translation ?? null)
+  const [showTr, setShowTr] = useState(false)
   const [tState, setTState] = useState<'saved' | 'saving' | 'failed'>('saved')
   const dirtyT = useRef(false)
   useEffect(() => {
     setTEdits(session.transcript_edits ?? {})
+    setSpeakerMap((session.speaker_map as SpeakerMap | null) ?? null)
+    setTranslation(session.translation ?? null)
+    setShowTr(false)
     setTState('saved')
     dirtyT.current = false
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1625,9 +1655,14 @@ function Detail({
   // A joined meeting is measured end to end, not by whichever part you happen to be looking
   // at — the whole point of the join is that it is one meeting.
   const totalSec = parts.reduce((t, x) => t + (x.duration_sec ?? 0), 0)
+  // People, not labels: "Same person as Speaker A" in Who's who counts once. Split meetings
+  // keep the old count, since labels restart in each part.
   const speakerCount = useMemo(
-    () => new Set(parts.flatMap((x) => (x.transcript?.utterances ?? []).map((u) => u.speaker))).size,
-    [parts],
+    () =>
+      parts.length === 1
+        ? speakersIn(parts[0].transcript?.utterances ?? [], speakerMap).length
+        : new Set(parts.flatMap((x) => (x.transcript?.utterances ?? []).map((u) => u.speaker))).size,
+    [parts, speakerMap],
   )
   const done = new Set(Array.isArray(session.action_done) ? session.action_done : [])
 
@@ -1816,12 +1851,28 @@ function Detail({
       {tab === 'transcript' ? (
         <div className="pen-panel mt-6 p-6">
           {utts.length ? (
-            <TranscriptEditor
-              utterances={utts}
-              edits={tEdits}
-              saveState={tState}
-              onEdit={(i, text) => { dirtyT.current = true; setTEdits((prev) => ({ ...prev, [String(i)]: text })) }}
-            />
+            <>
+              <SpeakerNames
+                sessionId={session.id}
+                utterances={utts}
+                initialMap={(session.speaker_map as SpeakerMap | null) ?? null}
+                language={session.language ?? null}
+                translation={translation}
+                showTranslation={showTr}
+                onMap={setSpeakerMap}
+                onTranslation={setTranslation}
+                onShowTranslation={setShowTr}
+                onUpdateNotes={() => regenerate()}
+              />
+              <TranscriptEditor
+                utterances={utts}
+                edits={tEdits}
+                saveState={tState}
+                speakerMap={speakerMap}
+                translation={showTr ? translation?.utterances : null}
+                onEdit={(i, text) => { dirtyT.current = true; setTEdits((prev) => ({ ...prev, [String(i)]: text })) }}
+              />
+            </>
           ) : session.transcript?.text ? (
             <p className="whitespace-pre-wrap text-[16.5px] leading-relaxed">{session.transcript.text}</p>
           ) : (
@@ -1842,7 +1893,7 @@ function Detail({
                 Speakers are labelled fresh in each file, so “Speaker A” here may be someone else
                 than “Speaker A” above. The notes above already account for that.
               </p>
-              <PartTranscript part={part} />
+              <PartTranscript part={part} onUpdateNotes={() => regenerate()} />
             </div>
           ))}
         </div>

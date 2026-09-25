@@ -249,3 +249,17 @@ create index if not exists pen_clients_user on pen_clients(user_email);
 -- alter table public.pen_sessions add column if not exists source_channel text;
 -- alter table public.pen_whatsapp_links enable row level security;
 -- alter table public.pen_whatsapp_messages enable row level security;
+
+-- ---------------------------------------------------------------------------
+-- 2026-09-24 (b) — speaker names, language, translation. Run each line separately.
+--
+-- speaker_map  who each AssemblyAI label is: {"A": {"name","person_id","me","same_as","source"}}.
+--              Names live beside the transcript, never in it. See lib/pen/speakers.ts.
+-- language     the language AssemblyAI detected ('es', 'pt', ...). Notes follow it unless the
+--              profile fixes a language.
+-- translation  on-demand transcript translation: {"lang","utterances":[...]} parallel to
+--              transcript.utterances.
+-- ---------------------------------------------------------------------------
+-- alter table public.pen_sessions add column if not exists speaker_map jsonb;
+-- alter table public.pen_sessions add column if not exists language text;
+-- alter table public.pen_sessions add column if not exists translation jsonb;

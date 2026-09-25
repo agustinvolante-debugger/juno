@@ -7,8 +7,8 @@
 import { supabaseAdmin } from '@/lib/supabase'
 import { isMissingSchema } from './allowance'
 
-import { roleOf, type AgentProfile } from './profile-fields'
-export { ROLES, NOTE_STYLES, type AgentProfile } from './profile-fields'
+import { roleOf, LANGUAGES, type AgentProfile } from './profile-fields'
+export { ROLES, NOTE_STYLES, LANGUAGES, type AgentProfile } from './profile-fields'
 
 const TEXT_MAX = 400
 const VOCAB_MAX = 2000
@@ -48,6 +48,11 @@ export function cleanProfile(raw: unknown): AgentProfile {
     useFor: str(r.useFor),
     noteStyle: r.noteStyle === 'short' || r.noteStyle === 'detailed' ? r.noteStyle : undefined,
     vocabulary: str(r.vocabulary, VOCAB_MAX),
+    languages: (() => {
+      const codes = Array.isArray(r.languages) ? r.languages.filter((c): c is string => LANGUAGES.some((l) => l.code === c)) : []
+      return codes.length ? [...new Set(codes)] : undefined
+    })(),
+    notesLanguage: typeof r.notesLanguage === 'string' && LANGUAGES.some((l) => l.code === r.notesLanguage) ? r.notesLanguage : undefined,
     answers: Object.keys(answers).length ? answers : undefined,
   }
 }

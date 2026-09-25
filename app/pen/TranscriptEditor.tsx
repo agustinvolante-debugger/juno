@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef } from 'react'
 import type { Utterance } from '@/lib/pen/store'
+import { speakerName, type SpeakerMap } from '@/lib/pen/speakers'
 
 // The transcript is editable, but corrections are stored as an OVERLAY keyed by utterance
 // index rather than written over the original. AssemblyAI's output stays intact, so a bad
@@ -11,7 +12,13 @@ export default function TranscriptEditor({
   edits,
   onEdit,
   saveState,
+  speakerMap,
+  translation,
 }: {
+  /** Names for the speaker labels, where known. */
+  speakerMap?: SpeakerMap | null
+  /** Shown under each line, read-only, when the user has switched the translation on. */
+  translation?: string[] | null
   utterances: Utterance[]
   edits: Record<string, string>
   onEdit: (index: number, text: string) => void
@@ -41,7 +48,7 @@ export default function TranscriptEditor({
         const edited = typeof edits[String(i)] === 'string' && edits[String(i)] !== u.text
         return (
           <div key={i} className="pen-utt" data-edited={edited}>
-            <div className="pen-label pen-spk-tag pt-0.5">Speaker {u.speaker}</div>
+            <div className="pen-label pen-spk-tag pt-0.5">{speakerName(speakerMap, u.speaker)}</div>
             <textarea
               ref={(el) => { refs.current[i] = el; autoGrow(el) }}
               className="pen-utt-input"
@@ -50,6 +57,7 @@ export default function TranscriptEditor({
               value={edits[String(i)] ?? u.text}
               onChange={(e) => { onEdit(i, e.target.value); autoGrow(e.currentTarget) }}
             />
+            {translation?.[i] ? <p className="pen-utt-tr">{translation[i]}</p> : null}
           </div>
         )
       })}

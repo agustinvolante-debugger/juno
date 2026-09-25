@@ -7,6 +7,7 @@
 import { getSession, updateSession, createReadUrl, listSessions, type PenSession } from './store'
 import { submit, hasKey } from './aai'
 import { getAllowance, type Allowance } from './allowance'
+import { hintsFor } from './hints'
 
 export type StartResult =
   | { ok: true; aaiId: string; webhook: boolean }
@@ -18,14 +19,7 @@ export type StartResult =
  */
 export const AAI_PREFIX = 'aai:'
 
-/** Speakers to expect when nobody said. A showing is usually an agent and one or two buyers. */
-const DEFAULT_SPEAKERS = 3
-
-export async function startTranscription(
-  email: string,
-  session: PenSession,
-  speakers: number = DEFAULT_SPEAKERS,
-): Promise<StartResult> {
+export async function startTranscription(email: string, session: PenSession): Promise<StartResult> {
   if (!hasKey()) throw new Error('ASSEMBLYAI_API_KEY is not set. Add it to .env.local and to the Vercel project env.')
 
   const allowance = await getAllowance(email)
@@ -45,7 +39,10 @@ export async function startTranscription(
   const base = process.env.PEN_PUBLIC_URL || process.env.NEXTAUTH_URL
   const webhookUrl = secret && base ? `${base.replace(/\/$/, '')}/api/pen/webhook?k=${secret}` : undefined
 
-  const t = await submit({ audioUrl, webhookUrl, speakersExpected: speakers })
+  // Names, vocabulary, languages and who was on the call. A failure here must not stop the
+  // recording being transcribed; it just goes without the extra context.
+  const hints = await hintsFor(email, session.id).catch(() => ({}))
+  const t = await submit({ audioUrl, webhookUrl, ...hints })
   await updateSession(session.id, {
     aai_id: t.id,
     status: 'transcribing',

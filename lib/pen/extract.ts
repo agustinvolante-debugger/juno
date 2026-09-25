@@ -177,7 +177,16 @@ original conversation belongs to, so carry the minimum that makes them useful.`
 
 export async function extractNotes(
   dialogue: string,
-  opts?: { category?: MeetingType | null; priorProfile?: unknown; partNotes?: PenNotes[]; agent?: string },
+  opts?: {
+    category?: MeetingType | null
+    priorProfile?: unknown
+    partNotes?: PenNotes[]
+    agent?: string
+    /** Language name to write in, e.g. "Spanish". Unset: the language spoken. */
+    language?: string | null
+    /** Who the user said was on the call. The user first, marked. */
+    attendees?: { name: string; me?: boolean }[]
+  },
 ): Promise<PenNotes> {
   const cat = (opts?.category ?? '').trim()
   const forced = cat
@@ -190,6 +199,25 @@ export async function extractNotes(
   const prior = opts?.priorProfile
     ? `\n\nWhat you already know about these people from earlier meetings — use it to sharpen the ` +
       `notes, and flag anything that contradicts it under "missed":\n${JSON.stringify(opts.priorProfile)}`
+    : ''
+
+  // Language. Nothing used to say, so a Spanish call could come back with English notes one
+  // day and Spanish the next. The transcript itself always stays as spoken.
+  const language = opts?.language
+    ? `\n\nWrite every text field of the notes in ${opts.language}, whatever language the transcript is in. ` +
+      `Keep names, and quotes, exactly as spoken.`
+    : `\n\nWrite every text field of the notes in the main language spoken in the transcript ` +
+      `(Spanish transcript, Spanish notes; Portuguese transcript, Portuguese notes). Keep quotes exactly as spoken.`
+
+  // Who was there, as the user told us. Without this the model counted voices and names on
+  // its own and a two-person call came back with three attendees.
+  const people = opts?.attendees?.length
+    ? `\n\nWHO WAS ON THIS CALL, as the user said: ` +
+      opts.attendees.map((a) => (a.me ? `${a.name} (the user, the person recording)` : a.name)).join('; ') +
+      `. This list is authoritative. Put in "people" only these people, and only the ones who speak. ` +
+      `Someone who is merely talked about is not an attendee: mention them in the notes if they matter, never in "people". ` +
+      `If a voice plainly belongs to someone not on the list, add them once as "Unknown speaker" rather than guessing a name. ` +
+      `Where the transcript already shows names instead of "Speaker A", those were matched by voice; trust them unless the words make it impossible.`
     : ''
 
   // Coverage floor for a meeting that arrived in parts.
@@ -235,7 +263,7 @@ export async function extractNotes(
     model: MODEL,
     max_tokens: MAX,
     system: SYSTEM + (opts?.agent ?? ''),
-    messages: [{ role: 'user', content: `Transcript:\n\n${dialogue}${forced}${prior}${floor}` }],
+    messages: [{ role: 'user', content: `Transcript:\n\n${dialogue}${forced}${people}${language}${prior}${floor}` }],
     output_config: { format: jsonSchemaOutputFormat(NOTES_SCHEMA) },
   })
   const res = await stream.finalMessage()

@@ -17,6 +17,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { stripMarkdown } from './plaintext'
 import type { ArchiveTurn, PenNotes, MeetingType, Transcript, Mention } from './store'
 import { ownedPeople, sessionsWith } from './people'
+import { namedDialogue, type SpeakerMap } from './speakers'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 // Both stages are retrieval, not synthesis — pick the recordings, then answer from what is in
@@ -153,12 +154,10 @@ function indexLine(r: IndexRow) {
  * applied on top. Searching the uncorrected original would find the garbled version of a name
  * the user has already fixed.
  */
-function dialogueOf(t: Transcript | null | undefined, edits: Record<string, string> | null | undefined): string {
+function dialogueOf(t: Transcript | null | undefined, edits: Record<string, string> | null | undefined, map?: SpeakerMap | null): string {
   if (!t) return '(not transcribed)'
-  const e = edits ?? {}
-  const body = t.utterances?.length
-    ? t.utterances.map((u, i) => `Speaker ${u.speaker}: ${e[String(i)] ?? u.text}`).join('\n')
-    : (t.text ?? '')
+  // Names instead of "Speaker A" where known, so "what did Chris say" can find Chris.
+  const body = t.utterances?.length ? namedDialogue(t.utterances, map, edits) : (t.text ?? '')
   if (!body) return '(not transcribed)'
   return body.length > MAX_TRANSCRIPT_CHARS
     ? `${body.slice(0, MAX_TRANSCRIPT_CHARS)}\n[transcript truncated]`
@@ -319,7 +318,7 @@ async function answerFrom(
   wanted = wanted.slice(0, MAX_ANSWER_ROWS)
   const { data: full, error: e2 } = await supabaseAdmin
     .from('pen_sessions')
-    .select('id,title,client_name,meeting_type,recorded_at,created_at,notes,user_notes,transcript,transcript_edits')
+    .select('id,title,client_name,meeting_type,recorded_at,created_at,notes,user_notes,transcript,transcript_edits,speaker_map')
     .in('id', wanted)
   if (e2) throw new Error(e2.message)
 
@@ -363,6 +362,7 @@ async function answerFrom(
         user_notes?: string | null
         transcript?: Transcript | null
         transcript_edits?: Record<string, string> | null
+        speaker_map?: SpeakerMap | null
       }
       return (
         `--- [${m.marker}] recording ${r.id}\n` +
@@ -372,7 +372,7 @@ async function answerFrom(
         (r.client_name ? `with: ${r.client_name}\n` : '') +
         (r.user_notes ? `their own notes: ${r.user_notes.slice(0, 1500)}\n` : '') +
         `extracted notes: ${JSON.stringify(r.notes ?? {})}\n` +
-        `transcript:\n${dialogueOf(r.transcript, r.transcript_edits)}\n`
+        `transcript:\n${dialogueOf(r.transcript, r.transcript_edits, r.speaker_map)}\n`
       )
     })
     .join('\n')

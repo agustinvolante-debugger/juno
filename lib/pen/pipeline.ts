@@ -15,8 +15,32 @@ import type { PenSession, MeetingType } from './store'
 import { extractNotes, isViewing, updateClientProfile } from './extract'
 import { categorize, CONFIDENCE_FLOOR } from './categorize'
 import { toDialogue } from './aai'
+import { namedDialogue, type SpeakerMap } from './speakers'
 import { groupSessions, combinedDialogue } from './merge'
-import { briefFor } from './profile'
+import { briefFor, getProfile } from './profile'
+import { languageName } from './profile-fields'
+import { peopleOnSession } from './people'
+import { hintsFor } from './hints'
+import { cleanupTranscript } from './cleanup'
+
+/**
+ * The language to write in and who was on the call.
+ *
+ * Language: the profile's fixed choice if set, otherwise the language AssemblyAI heard.
+ * Attendees: the user plus the people they tagged, which the notes treat as the full list.
+ */
+async function notesContext(email: string, session: PenSession): Promise<{ language: string | null; attendees?: { name: string; me?: boolean }[] }> {
+  const [profile, onCall] = await Promise.all([
+    getProfile(email).catch(() => ({}) as Awaited<ReturnType<typeof getProfile>>),
+    peopleOnSession(email, session.id).catch(() => []),
+  ])
+  const language = languageName(profile.notesLanguage) ?? languageName(session.language) ?? null
+  if (!onCall.length) return { language }
+  return {
+    language,
+    attendees: [{ name: profile.name?.trim() || 'The user', me: true }, ...onCall.map((p) => ({ name: p.name }))],
+  }
+}
 
 /** Held while extraction runs, so a second caller sees the row is taken. */
 export const STATUS_WORKING = 'noting'
@@ -26,8 +50,15 @@ export type NotesResult = {
   category: { value: string | null; confidence: number | null; alternatives: string[] }
 }
 
+/**
+ * The transcript as the model reads it: names instead of "Speaker A" where known, and the
+ * user's corrections (and the clean-up pass's) applied. Before this the notes were written
+ * from the raw transcript, so a fixed name stayed wrong in the notes.
+ */
 export function dialogueOf(session: PenSession): string {
-  return toDialogue({ id: session.aai_id ?? '', status: 'completed', ...session.transcript })
+  const u = session.transcript?.utterances ?? []
+  if (!u.length) return toDialogue({ id: session.aai_id ?? '', status: 'completed', ...session.transcript })
+  return namedDialogue(u, session.speaker_map as SpeakerMap | null, session.transcript_edits).slice(0, 400000)
 }
 
 /**
@@ -57,11 +88,28 @@ export async function writeNotes(opts: {
   /** Manual regeneration bypasses the claim; automatic runs must take it. */
   claim: boolean
 }): Promise<NotesResult | 'taken'> {
-  const { email, session, forceType } = opts
+  const { email, forceType } = opts
+  let session = opts.session
 
   if (opts.claim) {
     const won = await claimStatus(session.id, 'transcribed', STATUS_WORKING)
     if (!won) return 'taken'
+  }
+
+  // The clean-up pass, once per recording, before the first notes: fixes plain mishearings
+  // into the edit overlay. Skipped when anything is already in the overlay (the user has been
+  // correcting it) and on manual re-runs. Never blocks the notes if it fails.
+  if (opts.claim && !Object.keys(session.transcript_edits ?? {}).length && session.transcript?.utterances?.length) {
+    try {
+      const h = await hintsFor(email, session.id)
+      const edits = await cleanupTranscript(session.transcript.utterances, { vocabulary: h.keyterms ?? [], context: h.context })
+      if (Object.keys(edits).length) {
+        await updateSession(session.id, { transcript_edits: edits })
+        session = { ...session, transcript_edits: edits }
+      }
+    } catch (e) {
+      console.warn(`pen: clean-up skipped for ${session.id}: ${(e as Error).message}`)
+    }
   }
 
   const dialogue = await dialogueFor(email, session)
@@ -90,12 +138,17 @@ export async function writeNotes(opts: {
       ? (await groupSessions(email, session.merge_group)).map((x) => x.notes).filter((x) => x && Object.keys(x).length)
       : undefined
 
+    const { language, attendees } = await notesContext(email, session)
     const notes = await extractNotes(dialogue, {
       category: category || null,
       priorProfile: prior,
       agent: await briefFor(email),
+      language,
+      attendees,
       ...(partNotes && partNotes.length > 1 ? { partNotes } : {}),
     })
+    // The transcript marks the user as "Name (the user)" for the model; keep that out of the notes.
+    for (const p of notes.people ?? []) if (p.speaker) p.speaker = p.speaker.replace(/\s*\(the user\)\s*$/i, '')
     const clientName = session.client_name || notes.client_name || ''
 
     await updateSession(session.id, {

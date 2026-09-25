@@ -26,7 +26,7 @@ export async function POST(req: Request) {
   if (session.status === 'transcribing') return NextResponse.json({ session })
 
   try {
-    const r = await startTranscription(email, session, b.speakers)
+    const r = await startTranscription(email, session)
     if (!r.ok) {
       // 402 Payment Required is the honest code: the recording is saved, it is waiting on time.
       return NextResponse.json(
@@ -57,12 +57,8 @@ export async function GET(req: Request) {
     const { fetchTranscript } = await import('@/lib/pen/aai')
     const t = await fetchTranscript(session.aai_id)
     if (t.status === 'completed') {
-      await updateSession(session.id, {
-        status: 'transcribed',
-        transcript: { text: t.text ?? '', utterances: t.utterances ?? [] },
-        duration_sec: t.audio_duration ?? session.duration_sec,
-        ...(t.audio_duration ? { metered_sec: Math.round(t.audio_duration) } : {}),
-      })
+      const { storeTranscript } = await import('@/lib/pen/store-transcript')
+      await storeTranscript(session, t)
     } else if (t.status === 'error') {
       // A recording that could not be transcribed costs the user nothing.
       await updateSession(session.id, { status: 'error', error_text: t.error ?? 'assemblyai error', metered_sec: 0 })

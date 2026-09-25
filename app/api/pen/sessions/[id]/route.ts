@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { ownedPeople } from '@/lib/pen/people'
 import { authedEmail } from '@/lib/news/auth'
 import { getSession, updateSession, deleteSession } from '@/lib/pen/store'
 
@@ -53,6 +54,29 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       if (/^\d+$/.test(k) && typeof src[k] === 'string') out[k] = (src[k] as string).slice(0, 4000)
     }
     patch.transcript_edits = out
+  }
+  // Who each speaker label is, set from the transcript's "Who's who" row. Labels must exist in
+  // this transcript; a person id must be one of the user's own contacts.
+  if (b.speaker_map && typeof b.speaker_map === 'object' && !Array.isArray(b.speaker_map)) {
+    const labels = new Set((existing.transcript?.utterances ?? []).map((u) => u.speaker))
+    const src = b.speaker_map as Record<string, Record<string, unknown>>
+    const ids = Object.values(src).flatMap((e) => (typeof e?.person_id === 'string' ? [e.person_id] : []))
+    const owned = new Set((await ownedPeople(email, ids)).map((p) => p.id))
+    const out: Record<string, unknown> = {}
+    for (const [label, e] of Object.entries(src)) {
+      if (!labels.has(label) || !e || typeof e !== 'object') continue
+      const same = typeof e.same_as === 'string' && labels.has(e.same_as) && e.same_as !== label ? e.same_as : null
+      const name = typeof e.name === 'string' ? e.name.trim().slice(0, 120) : ''
+      if (!same && !name) continue
+      out[label] = {
+        name: same ? '' : name,
+        person_id: typeof e.person_id === 'string' && owned.has(e.person_id) ? e.person_id : null,
+        me: e.me === true,
+        same_as: same,
+        source: 'user',
+      }
+    }
+    patch.speaker_map = out
   }
   if (!Object.keys(patch).length) return NextResponse.json({ error: 'nothing to update' }, { status: 400 })
 

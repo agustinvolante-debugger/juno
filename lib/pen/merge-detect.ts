@@ -15,6 +15,7 @@
 // part two — which the extraction prompt is told explicitly.
 
 import type { PenSession, Utterance } from './store'
+import { namedDialogue, type SpeakerMap } from './speakers'
 
 /** Two files count as one meeting if the second starts within this many seconds of the
  *  first ending. The pen is sample-accurate, but a second of slack costs nothing. */
@@ -112,7 +113,7 @@ export function combinedDialogue(segments: PenSession[]): string {
   segments.forEach((s, i) => {
     const u = s.transcript?.utterances ?? []
     const body = u.length
-      ? u.map((x) => `Speaker ${x.speaker}: ${x.text}`).join('\n')
+      ? namedDialogue(u, s.speaker_map as SpeakerMap | null, s.transcript_edits)
       : (s.transcript?.text ?? '')
     const mins = Math.round(offsetSec / 60)
     parts.push(

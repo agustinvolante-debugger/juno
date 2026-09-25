@@ -1,3 +1,4 @@
+import { getProfile } from '@/lib/pen/profile'
 import { NextResponse, after } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
 import { getSession } from '@/lib/pen/store'
@@ -11,7 +12,9 @@ async function forSession(email: string, sessionId: string) {
   const session = await getSession(email, sessionId)
   if (!session) return null
   const people = await peopleOnSession(email, sessionId)
-  return { people, suggestions: suggestionsFrom(session.notes, people) }
+  // The user's own name, for the transcript's "Who's who" menu ("You (Agustín)").
+  const me = (await getProfile(email).catch(() => ({ name: undefined }))).name ?? null
+  return { people, suggestions: suggestionsFrom(session.notes, people), me }
 }
 
 // GET ?session=<id>  the recording page's People section

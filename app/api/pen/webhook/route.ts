@@ -6,6 +6,7 @@ import { sendBriefing, sendFailureNotice, hasSomethingToSay } from '@/lib/pen/br
 import { autoJoin } from '@/lib/pen/merge'
 import { enrichPerson, peopleOnSession } from '@/lib/pen/people'
 import { sendWhatsAppBriefing, sendWhatsAppFailure } from '@/lib/pen/whatsapp/bot'
+import { storeTranscript } from '@/lib/pen/store-transcript'
 
 export const dynamic = 'force-dynamic'
 // The response goes back immediately; `after()` keeps the function alive for the slow part.
@@ -51,14 +52,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true })
     }
 
-    await updateSession(session.id, {
-      status: 'transcribed',
-      transcript: { text: t.text ?? '', utterances: t.utterances ?? [] },
-      duration_sec: t.audio_duration ?? session.duration_sec,
-      // The real length replaces the browser's estimate on the meter.
-      ...(t.audio_duration ? { metered_sec: Math.round(t.audio_duration) } : {}),
-      error_text: null,
-    })
+    await storeTranscript(session, t)
 
     // Answer AssemblyAI now. Holding the connection for the ~80s that extraction takes would
     // look like a failed delivery and earn a retry, which is how you get two briefings.

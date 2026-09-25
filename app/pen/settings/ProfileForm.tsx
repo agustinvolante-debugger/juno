@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { ROLES, roleOf, type AgentProfile, type Question } from '@/lib/pen/profile-fields'
+import { ROLES, LANGUAGES, roleOf, type AgentProfile, type Question } from '@/lib/pen/profile-fields'
 import { putJson, errMessage } from '@/lib/pen/http'
 
 /**
@@ -128,6 +128,37 @@ export default function ProfileForm({ initial, loadError }: { initial: AgentProf
           </button>
         </div>
       </fieldset>
+
+      <fieldset className="pen-su-choice">
+        <legend className="pen-label">Languages you speak on recordings <em>pick any</em></legend>
+        <div className="pen-set-chips">
+          {LANGUAGES.map((l) => {
+            const on = (p.languages ?? []).includes(l.code)
+            return (
+              <button
+                type="button"
+                key={l.code}
+                className="pen-set-chip"
+                data-on={on}
+                aria-pressed={on}
+                onClick={() => set('languages', on ? (p.languages ?? []).filter((c) => c !== l.code) : [...(p.languages ?? []), l.code])}
+              >
+                {l.name}
+              </button>
+            )
+          })}
+        </div>
+      </fieldset>
+
+      <label className="pen-su-field">
+        <span className="pen-label">Write my notes in</span>
+        <select value={p.notesLanguage ?? ''} onChange={(e) => set('notesLanguage', e.target.value || undefined)}>
+          <option value="">The language of the recording</option>
+          {LANGUAGES.map((l) => (
+            <option key={l.code} value={l.code}>{`Always ${l.name}`}</option>
+          ))}
+        </select>
+      </label>
 
       <label className="pen-su-field">
         <span className="pen-label">Names and terms to spell right <em>one per line</em></span>
