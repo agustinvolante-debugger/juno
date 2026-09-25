@@ -26,10 +26,10 @@ export const PEN_USD = 50
 
 /**
  * Agreed 25 Sep: software only, for people who already record (phone, WhatsApp voice notes,
- * Plaud, any recorder). No pen, no shipping. Break-even is about 13 recorded hours a month
- * at $0.70 an hour; our real users record 3.5 to 8.3.
+ * Plaud, any recorder). No pen, no shipping. $12 (changed from $10 the same day): break-even
+ * is about 16 recorded hours a month at $0.70 an hour; our real users record 3.5 to 8.3.
  */
-export const SOFTWARE_MONTHLY_USD = 10
+export const SOFTWARE_MONTHLY_USD = 12
 export const SOFTWARE_HALFYEAR_USD = 54
 
 /**
