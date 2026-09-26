@@ -5,7 +5,7 @@ import { createPending } from '@/lib/pen/accounts'
 import type { Offer, Plan } from '@/lib/pen/plan'
 import { startPlanCheckout } from '@/lib/pen/checkout'
 import { sendEmailResult } from '@/lib/news/email'
-import { notifyUnpaidSignup } from '@/lib/pen/notify-owner'
+import { notifyUnpaidSignup, notifyPenWaitlist } from '@/lib/pen/notify-owner'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Too many attempts. Try again in a few minutes.' }, { status: 429 })
   }
 
-  const v = validate(b, { needsAddress: parseOffer(b.offer) === 'posted-pen' })
+  const v = validate(b, { needsAddress: parseOffer(b.offer) === 'posted-pen' && b.waitlist !== 'pen' })
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
 
   try {
@@ -72,6 +72,13 @@ export async function POST(req: Request) {
     // every signup needed a second act of willingness days later. Taking the card now is what
     // makes the free recorder affordable: without it we are posting hardware to anyone who
     // fills in a form.
+    // The pen isn't sold in Chile or Brazil yet: its "notify me" button lands here. Save the
+    // person and tell the owners, but never open a checkout for a pen we can't ship.
+    if (b.waitlist === 'pen') {
+      void notifyPenWaitlist(v.value).catch(() => {})
+      return NextResponse.json({ ok: true, created, checkoutUrl: null, waitlist: true })
+    }
+
     let checkoutUrl: string | null = null
     try {
       const plan: Plan = parsePlan(b.plan)

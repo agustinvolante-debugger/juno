@@ -84,3 +84,14 @@ export async function notifyUnpaidSignup(s: { name: string; email: string; phone
     ['Note', s.note ?? '—'],
   ])
 }
+
+/** Someone asked to hear when the pen reaches their country (Chile, Brazil). No payment. */
+export async function notifyPenWaitlist(s: { name: string; email: string; phone?: string | null; role?: string | null; note?: string | null }) {
+  await send(`Pen waitlist: ${s.name}`, [
+    ['Name', s.name],
+    ['Email', s.email],
+    ['Phone', s.phone ?? '—'],
+    ['Role', s.role ?? '—'],
+    ['Note', s.note ?? '—'],
+  ])
+}

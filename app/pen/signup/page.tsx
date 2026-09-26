@@ -17,10 +17,14 @@ export default function SignupPage() {
   // Only pen plans ship anything. Read after mount (the URL isn't known on the server), so a
   // software-only signup never asks for a street address.
   const [shipsPen, setShipsPen] = useState(true)
+  // The "notify me when the pen arrives" version of this form: no address, no checkout.
+  const [waitlist, setWaitlist] = useState(false)
 
   useEffect(() => {
     firstField.current?.focus()
-    setShipsPen(new URLSearchParams(window.location.search).get('offer') !== 'own-recorder')
+    const q = new URLSearchParams(window.location.search)
+    setShipsPen(q.get('offer') !== 'own-recorder' && q.get('waitlist') !== 'pen')
+    setWaitlist(q.get('waitlist') === 'pen')
   }, [])
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -49,6 +53,8 @@ export default function SignupPage() {
         ship_country: f.get('ship_country'),
         note: f.get('note'),
         jp_hp_7: f.get('jp_hp_7'), // honeypot, see the input below
+        // "Notify me when the pen arrives" (Chile, Brazil): saved, never sent to checkout.
+        waitlist: url.get('waitlist') === 'pen' ? 'pen' : undefined,
         elapsed: Date.now() - startedAt.current,
         source: url.get('from') ?? 'landing',
       })
@@ -74,8 +80,9 @@ export default function SignupPage() {
             <div className="pen-su-tick" aria-hidden>&#10003;</div>
             <h1 className="pen-display text-[34px] leading-tight">You&rsquo;re on the list.</h1>
             <p className="mt-4 text-[16.5px] leading-relaxed" style={{ color: 'var(--soft)' }}>
-              There&rsquo;s a confirmation in your inbox. We&rsquo;ll send a link to start your
-              free trial, and get the recorder in the post.
+              {waitlist
+                ? 'We’ll email you as soon as the pen is available where you are.'
+                : 'There’s a confirmation in your inbox. We’ll send a link to start your free trial, and get the recorder in the post.'}
             </p>
             <Link href="/pen" className="pen-lp-btn pen-lp-btn-ghost mt-8 inline-flex">Back to the site</Link>
           </div>
