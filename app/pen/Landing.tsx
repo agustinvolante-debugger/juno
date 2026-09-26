@@ -126,10 +126,16 @@ function offerLine(t: Copy, market: Market): string {
 /** "No pen?" — a link that opens the own-recorder pricing tab. */
 function NoPenLine() {
   const { t } = useL()
+  // The question part ("No pen?") is set in bold; the rest links on to the plans.
+  const m = /^(.*?\?)\s+(.*)$/.exec(t.hero.noPen)
   return (
-    <p className="pen-lp2-nopen">
-      <a href="#plans-own">{t.hero.noPen}</a>
-    </p>
+    <a href="#plans-own" className="pen-lp2-nopen">
+      <Icon name="wave" size={17} />
+      <span>
+        {m ? <><strong>{m[1]}</strong> {m[2]}</> : t.hero.noPen}
+      </span>
+      <Icon name="chevron" size={15} className="pen-lp2-nopen-go" />
+    </a>
   )
 }
 

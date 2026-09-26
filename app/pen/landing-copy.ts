@@ -329,7 +329,7 @@ const ES: Copy = {
     h1b: 'Te devuelve el resumen.',
     lede: 'Graba con el celular o con el lápiz, envía el audio por WhatsApp y recibe quién estuvo, qué se decidió, qué te toca hacer y lo que casi se te pasa. Después pregúntale lo que quieras.',
     offer: 'Grabación ilimitada desde {own} al mes, con el celular o cualquier grabadora.',
-    noPen: 'Funciona con audios o transcripciones de tu celular, Plaud, Pocket o cualquier grabadora.',
+    noPen: '¿Sin lápiz? Funciona con audios o transcripciones de tu celular, Plaud, Pocket o cualquier grabadora.',
     float: { detected: 'Detectado en esta llamada', buyer: 'compradora', todo: 'Enviar tasaciones de Los Dominicos', due: 'Para el viernes', draft: 'Borrador listo', draftTitle: 'Re: estacionamiento antes del sábado', openGmail: 'Abrir en Gmail' },
   },
   wa: {
@@ -553,7 +553,7 @@ const PT: Copy = {
     h1b: 'Ele devolve o resumo.',
     lede: 'Grave com o celular ou com a caneta, envie o áudio pelo WhatsApp e receba quem estava, o que foi decidido, o que você precisa fazer e o que quase passou batido. Depois pergunte o que quiser.',
     offer: 'Gravação ilimitada a partir de {own} por mês, com o celular ou qualquer gravador.',
-    noPen: 'Funciona com áudios ou transcrições do seu celular, Plaud, Pocket ou qualquer gravador.',
+    noPen: 'Sem caneta? Funciona com áudios ou transcrições do seu celular, Plaud, Pocket ou qualquer gravador.',
     float: { detected: 'Detectado nesta reunião', buyer: 'compradora', todo: 'Enviar avaliações dos Jardins', due: 'Para sexta', draft: 'Rascunho pronto', draftTitle: 'Re: vaga antes de sábado', openGmail: 'Abrir no Gmail' },
   },
   wa: {

@@ -3223,13 +3223,24 @@ body:has(.pen-root) {
    and the language switch. The phone uses WhatsApp's own chat colours so it reads as
    WhatsApp at a glance; everything around it stays in the Juno palette.
    --------------------------------------------------------------------------------------- */
-.pen-lp2-nopen { margin: 8px 0 0; font-size: var(--t-small); line-height: var(--t-small-lh); }
-.pen-lp2-nopen a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
-.pen-lp2-nopen a:hover { color: var(--accent-ink); }
+.pen-lp2-nopen {
+  display: flex; align-items: center; gap: 10px; width: fit-content; max-width: 100%; margin: 16px 0 0;
+  padding: 12px 16px; border-radius: 14px; background: var(--accent-wash); border: 1px solid var(--accent-line);
+  font-size: var(--t-body); line-height: 1.45; color: var(--accent-ink); text-decoration: none;
+  transition: border-color .15s ease, transform .15s ease;
+}
+.pen-lp2-nopen strong { font-weight: 700; }
+.pen-lp2-nopen > svg:first-child { flex: none; color: var(--accent); }
+.pen-lp2-nopen-go { flex: none; color: var(--accent); }
+.pen-lp2-nopen:hover { border-color: var(--accent); transform: translateY(-1px); }
+.pen-lp2-nopen:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-.pen-lp2-chatstage { position: relative; display: flex; justify-content: center; align-items: center; min-height: 560px; }
+/* Phone and pen side by side: the phone left of centre, the pen standing beside it with a
+   slight tilt, drawn large enough to read as the other half of the product. */
+.pen-lp2-chatstage { position: relative; display: flex; justify-content: center; align-items: center; min-height: 600px; }
 .pen-lp2-chatstage .pen-lp2-halo { inset: 8% 4%; }
-.pen-lp2-chat-pen { position: absolute; z-index: 0; width: 78%; right: -30%; bottom: 20%; transform: rotate(-62deg); pointer-events: none; }
+.pen-lp2-chatstage .pen-ph { margin-right: 34%; }
+.pen-lp2-chat-pen { position: absolute; z-index: 0; width: 118%; right: -47%; top: 50%; transform: translateY(-50%) rotate(-76deg); pointer-events: none; }
 
 .pen-ph {
   position: relative; z-index: 1; width: 272px; max-width: 78%; aspect-ratio: 9 / 18.6;
@@ -3261,13 +3272,15 @@ body:has(.pen-root) {
 .pen-ph-field { flex: 1; height: 26px; border-radius: 13px; background: #FFFFFF; border: 1px solid #E4E1DC; }
 .pen-ph-mic { width: 26px; height: 26px; border-radius: 50%; background: #0B6B44; color: transparent; }
 @media (max-width: 900px) {
-  .pen-lp2-chatstage { min-height: 500px; }
-  .pen-lp2-chat-pen { width: 70%; right: -10%; bottom: 8%; }
+  .pen-lp2-chatstage { min-height: 540px; }
+  .pen-lp2-chatstage .pen-ph { margin-right: 30%; }
+  .pen-lp2-chat-pen { width: 104%; right: -42%; }
 }
 @media (max-width: 480px) {
-  .pen-lp2-chatstage { min-height: 460px; }
-  .pen-ph { width: 236px; }
-  .pen-lp2-chat-pen { width: 64%; right: -14%; }
+  .pen-lp2-chatstage { min-height: 470px; overflow: hidden; }
+  .pen-ph { width: 214px; }
+  .pen-lp2-chatstage .pen-ph { margin-right: 28%; }
+  .pen-lp2-chat-pen { width: 112%; right: -46%; }
 }
 
 .pen-lp2-soon {
