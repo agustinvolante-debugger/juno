@@ -53,6 +53,14 @@ export function cleanProfile(raw: unknown): AgentProfile {
       return codes.length ? [...new Set(codes)] : undefined
     })(),
     notesLanguage: typeof r.notesLanguage === 'string' && LANGUAGES.some((l) => l.code === r.notesLanguage) ? r.notesLanguage : undefined,
+    appLanguage: r.appLanguage === 'en' || r.appLanguage === 'es' || r.appLanguage === 'pt' ? r.appLanguage : undefined,
+    onboarding: (() => {
+      const o = (r.onboarding && typeof r.onboarding === 'object' ? r.onboarding : {}) as Record<string, unknown>
+      const out: { sample?: string; tour?: string } = {}
+      if (typeof o.sample === 'string') out.sample = o.sample.slice(0, 40)
+      if (typeof o.tour === 'string') out.tour = o.tour.slice(0, 40)
+      return Object.keys(out).length ? out : undefined
+    })(),
     answers: Object.keys(answers).length ? answers : undefined,
   }
 }
@@ -71,7 +79,9 @@ export async function getProfile(email: string): Promise<AgentProfile> {
 }
 
 export async function saveProfile(email: string, raw: unknown): Promise<AgentProfile> {
-  const profile = cleanProfile(raw)
+  // First-run state is the app's, never the form's: keep what is stored, whatever the form sent.
+  const stored = await getProfileRaw(email).catch(() => null)
+  const profile = cleanProfile({ ...(raw && typeof raw === 'object' ? raw : {}), onboarding: stored?.onboarding })
   const { error } = await supabaseAdmin
     .from('pen_profiles')
     .upsert({ user_email: email.toLowerCase(), profile, updated_at: new Date().toISOString() }, { onConflict: 'user_email' })
@@ -127,4 +137,24 @@ export async function briefFor(email: string): Promise<string> {
   } catch {
     return ''
   }
+}
+
+/** The stored profile including first-run state. */
+export async function getProfileRaw(email: string): Promise<AgentProfile | null> {
+  const { data, error } = await supabaseAdmin.from('pen_profiles').select('profile').ilike('user_email', email).maybeSingle()
+  if (error) return null
+  return data ? cleanProfile((data as { profile?: unknown }).profile) : null
+}
+
+/**
+ * Records a first-run step (the sample was made, the tour was finished or skipped) without
+ * touching anything the user typed. Merges into the stored profile rather than replacing it.
+ */
+export async function markOnboarding(email: string, key: 'sample' | 'tour'): Promise<void> {
+  const current = (await getProfileRaw(email)) ?? {}
+  const next = cleanProfile({ ...current, onboarding: { ...(current.onboarding ?? {}), [key]: new Date().toISOString() } })
+  const { error } = await supabaseAdmin
+    .from('pen_profiles')
+    .upsert({ user_email: email.toLowerCase(), profile: next, updated_at: new Date().toISOString() }, { onConflict: 'user_email' })
+  if (error) throw new Error(error.message)
 }

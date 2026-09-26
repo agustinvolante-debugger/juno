@@ -11,6 +11,9 @@ import { botNumber, configured as whatsappReady } from '@/lib/pen/whatsapp/vonag
 import Landing from './Landing'
 import { headers, cookies } from 'next/headers'
 import { marketFor } from './landing-copy'
+import { getProfileRaw } from '@/lib/pen/profile'
+import { ensureSample } from '@/lib/pen/sample'
+import { parseLang } from '@/lib/pen/currency'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,9 +39,18 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
   let allowance: Allowance | null = null
   let loadError: string | null = null
   let whatsapp: { number: string; linked: boolean } | null = null
+  let appLang: 'en' | 'es' | 'pt' = 'en'
+  let showTour = false
   try {
     // Sequential on purpose: if the tables are missing, the first call already tells us
     // and there is no point paying for the second.
+    // First run: the app's language, a sample recording for a brand-new account, and whether
+    // the tour still needs to play. None of it may block the page.
+    const [h, c] = await Promise.all([headers(), cookies()])
+    const profile = await getProfileRaw(email).catch(() => null)
+    appLang = parseLang(profile?.appLanguage ?? c.get('juno_lang')?.value ?? marketFor(h.get('x-vercel-ip-country'), null).lang)
+    showTour = !profile?.onboarding?.tour
+    await ensureSample(email, appLang, profile?.name ?? session?.user?.name ?? null).catch(() => {})
     sessions = await listSessions(email)
     stats = await archiveStats(email)
     // The bar in the sidebar. A failure here must not take the recordings down with it.
@@ -61,6 +73,8 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
       stats={stats}
       allowance={allowance}
       whatsapp={whatsapp}
+      appLang={appLang}
+      showTour={showTour}
       loadError={loadError}
       email={email}
       name={session?.user?.name ?? null}

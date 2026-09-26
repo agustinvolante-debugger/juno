@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { ROLES, LANGUAGES, roleOf, type AgentProfile, type Question } from '@/lib/pen/profile-fields'
+import { ROLES, LANGUAGES, APP_LANGUAGES, roleOf, type AgentProfile, type Question } from '@/lib/pen/profile-fields'
 import { putJson, errMessage } from '@/lib/pen/http'
 
 /**
@@ -128,6 +128,15 @@ export default function ProfileForm({ initial, loadError }: { initial: AgentProf
           </button>
         </div>
       </fieldset>
+
+      <label className="pen-su-field">
+        <span className="pen-label">App language</span>
+        <select id="profile-app-language" value={p.appLanguage ?? 'en'} onChange={(e) => set('appLanguage', e.target.value)}>
+          {APP_LANGUAGES.map((l) => (
+            <option key={l.code} value={l.code}>{l.name}</option>
+          ))}
+        </select>
+      </label>
 
       <fieldset className="pen-su-choice">
         <legend className="pen-label">Languages you speak on recordings <em>pick any</em></legend>

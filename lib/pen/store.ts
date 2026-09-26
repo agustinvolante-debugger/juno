@@ -272,7 +272,7 @@ export async function deleteSession(userEmail: string, id: string): Promise<bool
 
   // 'aai:' paths live in AssemblyAI's storage (WhatsApp files) and 'text:' imports have no
   // audio at all; neither is in our bucket.
-  if (session.storage_path && !session.storage_path.startsWith('aai:') && !session.storage_path.startsWith('text:')) {
+  if (session.storage_path && !/^(aai|text|sample):/.test(session.storage_path)) {
     // Best effort, and deliberately after the row: failing here costs storage, not correctness.
     const { error: se } = await supabaseAdmin.storage.from(BUCKET).remove([session.storage_path])
     if (se) console.warn(`pen: orphaned object ${session.storage_path}: ${se.message}`)

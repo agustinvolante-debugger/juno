@@ -3299,3 +3299,21 @@ body:has(.pen-root) {
 }
 .pen-lp-lang:hover { color: var(--ink); border-color: var(--ink); }
 .pen-lp-lang[data-on='true'] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+/* First-run tour (Tour.tsx). Four plain dim panels around the target and a ring; no
+   transitions on the full-screen layers (they composite badly in some browsers). */
+.pen-tour { position: fixed; inset: 0; z-index: 120; }
+.pen-tour-dim { position: fixed; background: rgba(22, 21, 15, .52); }
+.pen-tour-ring { position: fixed; border-radius: 14px; box-shadow: 0 0 0 2px var(--accent), 0 0 0 6px rgba(11, 107, 68, .25); pointer-events: none; }
+.pen-tour-card {
+  position: fixed; display: flex; flex-direction: column; gap: 8px; padding: 18px 18px 14px;
+  border-radius: 16px; background: var(--paper); border: 1px solid var(--line);
+  box-shadow: 0 22px 50px -18px rgba(22, 21, 15, .5);
+}
+.pen-tour-count { font-family: var(--font-mono); font-size: var(--t-label); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.pen-tour-title { margin: 0; font-family: var(--font-display); font-size: 26px; line-height: 1.12; color: var(--ink); }
+.pen-tour-body { margin: 0; font-size: var(--t-small); line-height: 1.55; color: var(--soft); }
+.pen-tour-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+.pen-tour-nav { display: flex; gap: 8px; }
+.pen-tour-skip { font-size: var(--t-small); color: var(--dim); background: none; border: 0; padding: 4px 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.pen-tour-skip:hover { color: var(--ink); }

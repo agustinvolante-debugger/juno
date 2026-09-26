@@ -12,6 +12,7 @@ import NoteEditor, { blocksFrom } from './NoteEditor'
 import TranscriptEditor from './TranscriptEditor'
 import SpeakerNames from './SpeakerNames'
 import TranscriptImport from './TranscriptImport'
+import Tour from './Tour'
 import { speakersIn, type SpeakerMap } from '@/lib/pen/speakers'
 import ChatView from './ChatView'
 import DocView from './DocView'
@@ -92,7 +93,13 @@ export default function PenApp({
   avatar,
   allowance: initialAllowance,
   whatsapp,
+  appLang = 'en',
+  showTour = false,
 }: {
+  /** The app's language; for now it drives the tour (the rest of the app follows). */
+  appLang?: 'en' | 'es' | 'pt'
+  /** First sign-in: play the tour once. */
+  showTour?: boolean
   /** Juno Pen's WhatsApp number and whether this account has linked a phone. Null when off. */
   whatsapp?: { number: string; linked: boolean } | null
   initial: PenSession[]
@@ -169,6 +176,18 @@ export default function PenApp({
   // Everyone the user has added, for the @ picker. Refreshed when a recording's People change.
   const [people, setPeople] = useState<PersonCard[]>([])
   const [txImport, setTxImport] = useState(false)
+  // The tour: once on first sign-in (the account remembers), and from the menu on demand.
+  const [tourOpen, setTourOpen] = useState(false)
+  useEffect(() => {
+    let seenHere = false
+    try { seenHere = localStorage.getItem('juno-tour-done') === '1' } catch {}
+    if (showTour && !seenHere) setTourOpen(true)
+  }, [showTour])
+  const closeTour = useCallback(() => {
+    setTourOpen(false)
+    try { localStorage.setItem('juno-tour-done', '1') } catch {}
+    void fetch('/api/pen/onboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ step: 'tour' }) }).catch(() => {})
+  }, [])
   const refreshPeople = useCallback(async () => {
     try {
       setPeople((await getJson<{ people: PersonCard[] }>('/api/pen/people')).people)
@@ -567,6 +586,7 @@ export default function PenApp({
         <Icon name="quote" size={15} />
         Import a transcript
       </button>
+      {tourOpen && <Tour lang={appLang} onClose={closeTour} onUpload={() => fileInput.current?.click()} />}
       {txImport && (
         <TranscriptImport
           people={people}
@@ -737,7 +757,7 @@ export default function PenApp({
           </button>
           <input ref={fileInput} type="file" multiple accept={accept} className="hidden"
                  onChange={(e) => e.target.files && addFiles(e.target.files)} />
-          <Account email={email} name={name} avatar={avatar} />
+          <Account email={email} name={name} avatar={avatar} lang={appLang} onTour={() => { setNavOpen(false); setTourOpen(true) }} />
         </div>
       </header>
 
@@ -989,7 +1009,9 @@ function useIsPhone(): boolean {
  * Who you are signed in as. The mock shows a photo and a first name; an elided email address
  * is a worse answer to the same question, and Google already gives us both.
  */
-function Account({ email, name, avatar }: { email: string; name?: string | null; avatar?: string | null }) {
+const TOUR_LABEL = { en: 'Take the tour', es: 'Ver el tour', pt: 'Ver o tour' } as const
+
+function Account({ email, name, avatar, lang = 'en', onTour }: { email: string; name?: string | null; avatar?: string | null; lang?: 'en' | 'es' | 'pt'; onTour?: () => void }) {
   const [open, setOpen] = useState(false)
   const wrap = useRef<HTMLDivElement>(null)
   const label = name?.trim() || email.split('@')[0]
@@ -1019,6 +1041,12 @@ function Account({ email, name, avatar }: { email: string; name?: string | null;
             <Icon name="settings" size={17} />
             Settings
           </Link>
+          {onTour && (
+            <button type="button" className="pen-acct2-item" onClick={() => { setOpen(false); onTour() }}>
+              <Icon name="sparkle" size={17} />
+              {TOUR_LABEL[lang]}
+            </button>
+          )}
           {isOwner(email) && (
             <Link href="/pen/customers" className="pen-acct2-item">
               <Icon name="people" size={17} />

@@ -142,6 +142,13 @@ export const LANGUAGES = [
   { code: 'de', name: 'German' },
 ] as const
 
+/** The app itself is available in these three. */
+export const APP_LANGUAGES = [
+  { code: 'en', name: 'English' },
+  { code: 'es', name: 'Español' },
+  { code: 'pt', name: 'Português' },
+] as const
+
 export function languageName(code: string | null | undefined): string | null {
   return LANGUAGES.find((l) => l.code === code)?.name ?? null
 }
@@ -160,6 +167,11 @@ export type AgentProfile = {
   languages?: string[]
   /** Language the notes are written in. Unset means the language of the recording. */
   notesLanguage?: string
+  /** Language of the app itself: menus, the tour, emails, WhatsApp replies. 'en' | 'es' | 'pt'. */
+  appLanguage?: string
+  /** First-run state, set by the app (never by the form): when the sample was made, when the
+   *  tour was finished or skipped. */
+  onboarding?: { sample?: string; tour?: string }
   /** Answers to the role's own questions, keyed by Question.key. */
   answers?: Record<string, string | string[]>
 }
