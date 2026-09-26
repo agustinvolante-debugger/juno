@@ -6,6 +6,7 @@
 
 import { createCheckoutSession } from './stripe'
 import { planPrice, trialDaysFor, type Offer, type Plan } from './plan'
+import { stripeLocale, type Currency, type Lang } from './currency'
 
 export type PlanCheckout = { url: string } | { error: string }
 
@@ -16,10 +17,19 @@ export async function startPlanCheckout(opts: {
   /** Where to send them back to: the origin the request came from. */
   origin: string
   reference?: string
+  /** Chile and Brazil pay software-only plans in CLP/BRL. Ignored for pen plans. */
+  currency?: Currency
+  /** The language the customer signed up in: Stripe's page and every later email follow it. */
+  lang?: Lang
 }): Promise<PlanCheckout> {
   const price = planPrice(opts.offer, opts.plan)
   if (!price) return { error: 'That plan is not available. Software only comes monthly or every 6 months.' }
-  const priceId = process.env[price.env]
+  // Local prices exist only for software-only plans (STRIPE_PRICE_SOFTWARE_MONTHLY_CLP etc).
+  // If one is missing, charge the dollar price rather than fail the signup.
+  const cur: Currency = opts.offer === 'own-recorder' && opts.currency && opts.currency !== 'usd' ? opts.currency : 'usd'
+  const localEnv = cur === 'usd' ? null : `${price.env}_${cur.toUpperCase()}`
+  const priceId = (localEnv && process.env[localEnv]) || process.env[price.env]
+  const charged: Currency = localEnv && process.env[localEnv] ? cur : 'usd'
   // Named precisely, because the failure otherwise looks like a Stripe outage.
   if (!priceId) return { error: `Checkout isn't configured yet: ${price.env} is not set.` }
 
@@ -37,7 +47,8 @@ export async function startPlanCheckout(opts: {
     successUrl: `${opts.origin}/pen?welcome=1`,
     cancelUrl: `${opts.origin}/pen/signup?cancelled=1`,
     reference: opts.reference,
-    metadata: { plan: opts.plan, offer: opts.offer },
+    metadata: { plan: opts.plan, offer: opts.offer, lang: opts.lang ?? 'en', currency: charged },
+    locale: stripeLocale(opts.lang ?? 'en'),
   })
   return { url: session.url }
 }

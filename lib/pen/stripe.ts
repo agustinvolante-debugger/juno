@@ -67,6 +67,8 @@ export async function createCheckoutSession(opts: {
   /** Ties the Stripe session back to our signup row. */
   reference?: string
   metadata?: Record<string, string>
+  /** Stripe's payment page language, e.g. 'es-419'. Unset: the browser's. */
+  locale?: string
 }): Promise<CheckoutSession> {
   return stripe<CheckoutSession>('checkout/sessions', {
     mode: 'subscription',
@@ -77,6 +79,7 @@ export async function createCheckoutSession(opts: {
     cancel_url: opts.cancelUrl,
     payment_method_collection: 'always',
     allow_promotion_codes: true,
+    ...(opts.locale ? { locale: opts.locale } : {}),
     subscription_data: {
       // trialDays 0 means charge now: the yearly plan, where the recorder is included and
       // shipping it before any payment would hand out free hardware to anyone who cancels.

@@ -1,4 +1,5 @@
 import { parsePlan, parseOffer } from '@/lib/pen/plan'
+import { parseCurrency, parseLang } from '@/lib/pen/currency'
 import { NextResponse } from 'next/server'
 import { validate, saveSignup } from '@/lib/pen/signup'
 import { createPending } from '@/lib/pen/accounts'
@@ -53,7 +54,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Too many attempts. Try again in a few minutes.' }, { status: 429 })
   }
 
-  const v = validate(b, { needsAddress: parseOffer(b.offer) === 'posted-pen' && b.waitlist !== 'pen' })
+  const v = validate(b, { needsAddress: parseOffer(b.offer) === 'posted-pen' && b.waitlist !== 'pen', lang: parseLang(b.lang) })
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
 
   try {
@@ -83,7 +84,14 @@ export async function POST(req: Request) {
     try {
       const plan: Plan = parsePlan(b.plan)
       const offer: Offer = parseOffer(b.offer)
-      const r = await startPlanCheckout({ email: v.value.email, plan, offer, origin: new URL(req.url).origin })
+      const r = await startPlanCheckout({
+        email: v.value.email,
+        plan,
+        offer,
+        origin: new URL(req.url).origin,
+        currency: parseCurrency(b.cur),
+        lang: parseLang(b.lang),
+      })
       // Not configured yet: fall through to the confirmation email, as before.
       if ('url' in r) checkoutUrl = r.url
     } catch {
@@ -94,7 +102,7 @@ export async function POST(req: Request) {
     // Only when there is no card to take. Otherwise the welcome email from the Stripe webhook
     // is the one that should land, and two emails about the same signup is a bug.
     if (!checkoutUrl) {
-      void sendConfirmation(v.value.name, v.value.email).catch(() => {})
+      void sendConfirmation(v.value.name, v.value.email, parseLang(b.lang)).catch(() => {})
       // No checkout means no webhook will ever tell the owners, so say so here, as unpaid.
       void notifyUnpaidSignup(v.value, typeof b.plan === 'string' ? b.plan : null, typeof b.offer === 'string' ? b.offer : null).catch(() => {})
     }
@@ -107,20 +115,23 @@ export async function POST(req: Request) {
 
 const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-async function sendConfirmation(name: string, email: string) {
+const CONFIRM = {
+  en: { subject: 'You’re on the list for Juno Pen', hi: 'Hi', body: 'You’re on the list. Juno Pen turns a recorded conversation into the write-up: what was said, who said it, what you agreed to, and the thing you nearly missed.', next: 'We’ll email you the moment your account is open. Replying to this reaches a person.' },
+  es: { subject: 'Estás en la lista de Juno Pen', hi: 'Hola', body: 'Estás en la lista. Juno Pen convierte una conversación grabada en un resumen: qué se dijo, quién lo dijo, qué acordaron y lo que casi se te pasa.', next: 'Te escribimos apenas tu cuenta esté lista. Si respondes este correo, te contesta una persona.' },
+  pt: { subject: 'Você está na lista do Juno Pen', hi: 'Olá', body: 'Você está na lista. O Juno Pen transforma uma conversa gravada em um resumo: o que foi dito, quem disse, o que foi combinado e o que quase passou batido.', next: 'Avisamos por e-mail assim que sua conta estiver pronta. Se responder este e-mail, uma pessoa vai ler.' },
+} as const
+
+async function sendConfirmation(name: string, email: string, lang: 'en' | 'es' | 'pt' = 'en') {
   const first = name.split(/\s+/)[0]
+  const C = CONFIRM[lang]
   await sendEmailResult({
     to: email,
-    subject: 'You’re on the list for Juno Pen',
+    subject: C.subject,
     html:
       `<!doctype html><html><head><meta charset="utf-8"></head>` +
       `<body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.65;color:#16150F;padding:24px;max-width:560px">` +
-      `<p>Hi ${esc(first)},</p>` +
-      `<p>You’re on the list. Juno Pen turns a recorded conversation into the write-up — what was said, ` +
-      `who said it, what you agreed to, and the thing you nearly missed.</p>` +
-      `<p>We have your address and will get the recorder in the post.</p>` +
-      `<p>We’ll email you the moment your account is open. Replying to this reaches a person.</p>` +
-      `<p style="color:#514E45">— Agustin</p>` +
+      `<p>${C.hi} ${esc(first)},</p><p>${C.body}</p><p>${C.next}</p>` +
+      `<p style="color:#514E45">Agustin</p>` +
       `</body></html>`,
   })
 }

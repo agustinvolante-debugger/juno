@@ -26,24 +26,32 @@ const EMAIL_RE = /^[^\s@,;:<>()[\]\\]+@[^\s@.,;:<>()[\]\\]+\.[a-z]{2,}$/i
 
 export { ROLES } from './signup-fields'
 
-export function validate(b: Record<string, unknown>, opts: { needsAddress?: boolean } = {}): { ok: true; value: Signup } | { ok: false; error: string } {
+/** Form errors in the language the visitor signed up in. */
+const ERR = {
+  en: { name: 'Please give us a name to put on it.', email: 'That email address doesn’t look right.', line1: 'We need a street address to send the recorder.', city: 'We need a city to send the recorder.', postcode: 'We need a ZIP or postcode to send the recorder.' },
+  es: { name: 'Necesitamos un nombre.', email: 'Ese correo no parece correcto.', line1: 'Necesitamos una dirección para enviar el lápiz.', city: 'Necesitamos una ciudad para enviar el lápiz.', postcode: 'Necesitamos un código postal para enviar el lápiz.' },
+  pt: { name: 'Precisamos de um nome.', email: 'Esse e-mail não parece correto.', line1: 'Precisamos de um endereço para enviar a caneta.', city: 'Precisamos de uma cidade para enviar a caneta.', postcode: 'Precisamos de um CEP para enviar a caneta.' },
+} as const
+
+export function validate(b: Record<string, unknown>, opts: { needsAddress?: boolean; lang?: 'en' | 'es' | 'pt' } = {}): { ok: true; value: Signup } | { ok: false; error: string } {
   const needsAddress = opts.needsAddress ?? true
+  const E = ERR[opts.lang ?? 'en']
   const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
 
   const name = str(b.name, 120)
-  if (name.length < 2) return { ok: false, error: 'Please give us a name to put on it.' }
+  if (name.length < 2) return { ok: false, error: E.name }
 
   const email = str(b.email, 200)
-  if (!EMAIL_RE.test(email)) return { ok: false, error: 'That email address doesn’t look right.' }
+  if (!EMAIL_RE.test(email)) return { ok: false, error: E.email }
 
   // Pen plans post a recorder; software-only plans (own recorder) have nothing to ship.
   const line1 = str(b.ship_line1, 200)
   const city = str(b.ship_city, 120)
   const postcode = str(b.ship_postcode, 32)
   if (needsAddress) {
-    if (!line1) return { ok: false, error: 'We need a street address to send the recorder.' }
-    if (!city) return { ok: false, error: 'We need a city to send the recorder.' }
-    if (!postcode) return { ok: false, error: 'We need a ZIP or postcode to send the recorder.' }
+    if (!line1) return { ok: false, error: E.line1 }
+    if (!city) return { ok: false, error: E.city }
+    if (!postcode) return { ok: false, error: E.postcode }
   }
 
 

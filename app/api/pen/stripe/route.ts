@@ -4,6 +4,7 @@ import { activate, deactivate } from '@/lib/pen/accounts'
 import { settleHoursCheckout } from '@/lib/pen/hours'
 import { sendEmailResult } from '@/lib/news/email'
 import { planPrice, parsePlan, parseOffer } from '@/lib/pen/plan'
+import { LOCAL_PRICES, money, parseCurrency } from '@/lib/pen/currency'
 import { notifyPaid, notifyHours } from '@/lib/pen/notify-owner'
 
 export const dynamic = 'force-dynamic'
@@ -120,7 +121,7 @@ export async function POST(req: Request) {
         })
         // The subscription.created event that follows carries the trial dates; this one only
         // has to open the door, which it should do immediately rather than wait for it.
-        await welcome(email, o.metadata?.offer ?? null, o.metadata?.plan ?? null).catch(() => {})
+        await welcome(email, o.metadata?.offer ?? null, o.metadata?.plan ?? null, o.metadata?.lang).catch(() => {})
         // The owners' "new customer" email, now that there is one.
         await notifyPaid({ email, plan: o.metadata?.plan ?? null, offer: o.metadata?.offer ?? null, amountCents: o.amount_total ?? null }).catch(() => {})
         break
@@ -154,7 +155,7 @@ export async function POST(req: Request) {
       // ending with a payment method attached, so it is exactly the right moment to say so —
       // and a surprise charge is the fastest way to turn a trial into a chargeback.
       case 'customer.subscription.trial_will_end': {
-        if (email) await trialEnding(email, trialEnd(o), o.metadata?.plan ?? null, o.metadata?.offer ?? null).catch(() => {})
+        if (email) await trialEnding(email, trialEnd(o), o.metadata?.plan ?? null, o.metadata?.offer ?? null, o.metadata?.lang, o.metadata?.currency ?? null).catch(() => {})
         break
       }
 
@@ -162,7 +163,7 @@ export async function POST(req: Request) {
       // past_due, then canceled — the subscription.updated handler above closes the door. This
       // is here to tell them before that happens, while it is still fixable.
       case 'invoice.payment_failed': {
-        if (email) await paymentFailed(email).catch(() => {})
+        if (email) await paymentFailed(email, invoiceLang(o)).catch(() => {})
         break
       }
 
@@ -194,67 +195,134 @@ const shell = (body: string) =>
   body +
   `</body></html>`
 
-function trialCharge(plan: string | null, offer: string | null): string {
+// Customer emails in the language they signed up in (Stripe metadata `lang`, set at
+// checkout), and trial amounts in the currency they pay in (metadata `currency`).
+type MailLang = 'en' | 'es' | 'pt'
+const LOCALE: Record<MailLang, string> = { en: 'en-GB', es: 'es-CL', pt: 'pt-BR' }
+
+const MAIL = {
+  en: {
+    trialSubject: 'Your Juno Pen trial ends in three days',
+    trialBody: (when: string, charge: string) => `<p>Your free trial ends on ${when}, and the card on file will be charged ${charge}.</p>`,
+    trialCancel: '<p>If Juno Pen hasn&rsquo;t earned that, cancel in one click. No email, no call, nothing to explain.</p>',
+    inThreeDays: 'in three days',
+    firstMonth: (p: string) => `${p} for the first month`,
+    firstMonths: (p: string, n: number) => `${p} for the first ${n} months`,
+    forPlan: 'for your plan',
+    declinedSubject: 'Your card was declined',
+    declined: '<p>We couldn&rsquo;t charge the card on file, so your Juno Pen account is on hold.</p><p>Your recordings and notes are untouched. Update the card and everything comes straight back.</p>',
+    declinedIgnore: 'If you meant to cancel, ignore this. Nothing else happens.',
+    welcomeSubject: 'Your Juno Pen account is open',
+    welcomeTop: '<p>You&rsquo;re all set. Sign in with this email address and everything is there.</p>',
+    welcomeOwn: '<p>Upload anything to start: a voice memo off your phone works, and it&rsquo;s the fastest way to see what the write-up looks like.</p>',
+    welcomePrepaid: (len: string) => `<p>Your ${len} started, and your recorder goes in the post shortly. In the meantime you can upload anything you already have; a voice memo works.</p>`,
+    year: 'year', half: 'six months',
+    welcomeMonthlyPen: '<p>Your recorder goes in the post shortly, and your 21 free days have started. Upload anything you already have while it&rsquo;s on its way; a voice memo works.</p>',
+    reply: 'Reply to this and it reaches a person.',
+  },
+  es: {
+    trialSubject: 'Tu prueba de Juno Pen termina en tres días',
+    trialBody: (when: string, charge: string) => `<p>Tu prueba gratis termina el ${when}, y se cobrará ${charge} a la tarjeta registrada.</p>`,
+    trialCancel: '<p>Si Juno Pen no te sirvió, cancela con un clic. Sin correos, sin llamadas, sin explicaciones.</p>',
+    inThreeDays: 'en tres días',
+    firstMonth: (p: string) => `${p} por el primer mes`,
+    firstMonths: (p: string, n: number) => `${p} por los primeros ${n} meses`,
+    forPlan: 'el valor de tu plan',
+    declinedSubject: 'Tu tarjeta fue rechazada',
+    declined: '<p>No pudimos cobrar a la tarjeta registrada, así que tu cuenta de Juno Pen está en pausa.</p><p>Tus grabaciones y notas están intactas. Actualiza la tarjeta y todo vuelve al instante.</p>',
+    declinedIgnore: 'Si querías cancelar, ignora este correo. No pasa nada más.',
+    welcomeSubject: 'Tu cuenta de Juno Pen está lista',
+    welcomeTop: '<p>Todo listo. Entra con este correo y ahí está todo.</p>',
+    welcomeOwn: '<p>Para empezar, sube cualquier audio o mándalo por WhatsApp: una nota de voz del celular sirve, y es la forma más rápida de ver cómo queda el resumen.</p>',
+    welcomePrepaid: (len: string) => `<p>Empezaron tus ${len}, y te enviaremos el lápiz pronto. Mientras tanto puedes subir cualquier audio que ya tengas.</p>`,
+    year: '12 meses', half: 'seis meses',
+    welcomeMonthlyPen: '<p>Te enviaremos el lápiz pronto, y tus 21 días gratis ya empezaron. Mientras llega, sube cualquier audio que ya tengas.</p>',
+    reply: 'Responde este correo y te contesta una persona.',
+  },
+  pt: {
+    trialSubject: 'Seu teste do Juno Pen termina em três dias',
+    trialBody: (when: string, charge: string) => `<p>Seu teste grátis termina em ${when}, e o cartão cadastrado será cobrado em ${charge}.</p>`,
+    trialCancel: '<p>Se o Juno Pen não valeu a pena, cancele com um clique. Sem e-mails, sem ligações, sem explicações.</p>',
+    inThreeDays: 'em três dias',
+    firstMonth: (p: string) => `${p} pelo primeiro mês`,
+    firstMonths: (p: string, n: number) => `${p} pelos primeiros ${n} meses`,
+    forPlan: 'o valor do seu plano',
+    declinedSubject: 'Seu cartão foi recusado',
+    declined: '<p>Não conseguimos cobrar o cartão cadastrado, então sua conta do Juno Pen está pausada.</p><p>Suas gravações e notas estão intactas. Atualize o cartão e tudo volta na hora.</p>',
+    declinedIgnore: 'Se você queria cancelar, ignore este e-mail. Nada mais acontece.',
+    welcomeSubject: 'Sua conta do Juno Pen está pronta',
+    welcomeTop: '<p>Tudo certo. Entre com este e-mail e está tudo lá.</p>',
+    welcomeOwn: '<p>Para começar, envie qualquer áudio pelo site ou pelo WhatsApp: uma mensagem de voz do celular serve, e é o jeito mais rápido de ver como fica o resumo.</p>',
+    welcomePrepaid: (len: string) => `<p>Seus ${len} começaram, e enviaremos a caneta em breve. Enquanto isso, você pode enviar qualquer áudio que já tenha.</p>`,
+    year: '12 meses', half: 'seis meses',
+    welcomeMonthlyPen: '<p>Enviaremos a caneta em breve, e seus 21 dias grátis já começaram. Enquanto ela chega, envie qualquer áudio que já tenha.</p>',
+    reply: 'Responda este e-mail e uma pessoa vai ler.',
+  },
+} as const
+
+function mailLang(v: unknown): MailLang {
+  return v === 'es' || v === 'pt' ? v : 'en'
+}
+
+function trialCharge(plan: string | null, offer: string | null, lang: MailLang, currency: string | null): string {
+  const M = MAIL[lang]
   const p = planPrice(parseOffer(offer), parsePlan(plan))
-  if (!p) return 'for your plan'
-  return p.months === 1 ? `$${p.usd} for the first month` : `$${p.usd} for the first ${p.months} months`
+  if (!p) return M.forPlan
+  const cur = parseCurrency(currency)
+  const amount =
+    cur === 'usd' ? money(p.usd, 'usd') : money(p.months === 1 ? LOCAL_PRICES[cur].monthly : LOCAL_PRICES[cur].halfyear, cur)
+  return p.months === 1 ? M.firstMonth(amount) : M.firstMonths(amount, p.months)
 }
 
-async function trialEnding(email: string, endsAt: string | null, plan: string | null, offer: string | null = null) {
-  const when = endsAt
-    ? new Date(endsAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
-    : 'in three days'
+async function trialEnding(email: string, endsAt: string | null, plan: string | null, offer: string | null = null, langRaw: unknown = null, currency: string | null = null) {
+  const lang = mailLang(langRaw)
+  const M = MAIL[lang]
+  const when = endsAt ? new Date(endsAt).toLocaleDateString(LOCALE[lang], { day: 'numeric', month: 'long' }) : M.inThreeDays
   await sendEmailResult({
     to: email,
-    subject: 'Your Juno Pen trial ends in three days',
+    subject: M.trialSubject,
+    // The amount comes from the plan and currency they are on; a wrong amount here would be
+    // a surprise charge.
+    html: shell(M.trialBody(when, trialCharge(plan, offer, lang, currency)) + M.trialCancel + `<p style="color:#514E45">${M.reply}</p>`),
+  })
+}
+
+async function paymentFailed(email: string, langRaw: unknown = null) {
+  const M = MAIL[mailLang(langRaw)]
+  const base = (process.env.PEN_PUBLIC_URL || 'https://www.tryjunoapp.com').replace(/\/$/, '')
+  await sendEmailResult({
+    to: email,
+    subject: M.declinedSubject,
     html: shell(
-      // The yearly plan is charged $144 up front, not $15; saying $15 would be a surprise charge.
-      // The amount comes from the plan they are on; saying $15 to a $10 or $144 customer would
-      // be a surprise charge.
-      `<p>Your free trial ends on ${when}, and the card on file will be charged ${trialCharge(plan, offer)}.</p>` +
-        `<p>If Juno Pen hasn&rsquo;t earned that, cancel in one click and keep the recorder &mdash; ` +
-        `no email, no call, nothing to explain.</p>` +
-        `<p style="color:#514E45">Reply to this and it reaches a person.</p>`,
+      M.declined +
+        `<p><a href="${base}" style="color:#0B6B44">${base.replace(/^https?:\/\//, '')}</a></p>` +
+        `<p style="color:#514E45">${M.declinedIgnore}</p>`,
     ),
   })
 }
 
-async function paymentFailed(email: string) {
-  const base = (process.env.PEN_PUBLIC_URL || 'https://pen.tryjunoapp.com').replace(/\/$/, '')
+async function welcome(email: string, offer: string | null, plan: string | null, langRaw: unknown = null) {
+  const M = MAIL[mailLang(langRaw)]
+  const base = (process.env.PEN_PUBLIC_URL || 'https://www.tryjunoapp.com').replace(/\/$/, '')
   await sendEmailResult({
     to: email,
-    subject: 'Your card was declined',
+    subject: M.welcomeSubject,
     html: shell(
-      `<p>We couldn&rsquo;t charge the card on file, so your Juno Pen account is on hold.</p>` +
-        `<p>Your recordings and notes are untouched &mdash; update the card and everything ` +
-        `comes straight back.</p>` +
-        `<p><a href="${base}" style="color:#2C5F7C">${base.replace(/^https?:\/\//, '')}</a></p>` +
-        `<p style="color:#514E45">If you meant to cancel, ignore this. Nothing else happens.</p>`,
+      M.welcomeTop +
+        `<p><a href="${base}" style="color:#0B6B44">${base.replace(/^https?:\/\//, '')}</a></p>` +
+        (offer === 'own-recorder'
+          ? M.welcomeOwn
+          : plan === 'annual' || plan === 'halfyear'
+            ? M.welcomePrepaid(plan === 'annual' ? M.year : M.half)
+            // The trial counts from sign-up, not delivery, so the email must not say otherwise.
+            : M.welcomeMonthlyPen) +
+        `<p style="color:#514E45">${M.reply}</p>`,
     ),
   })
 }
 
-async function welcome(email: string, offer: string | null, plan: string | null) {
-  const base = (process.env.PEN_PUBLIC_URL || 'https://pen.tryjunoapp.com').replace(/\/$/, '')
-  await sendEmailResult({
-    to: email,
-    subject: 'Your Juno Pen account is open',
-    html:
-      `<!doctype html><html><head><meta charset="utf-8"></head>` +
-      `<body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.65;color:#16150F;padding:24px;max-width:560px">` +
-      `<p>You&rsquo;re all set. Sign in with this email address and everything is there.</p>` +
-      `<p><a href="${base}" style="color:#2C5F7C">${base.replace(/^https?:\/\//, '')}</a></p>` +
-      (offer === 'own-recorder'
-        ? `<p>Upload anything to start &mdash; a voice memo off your phone works, and that is ` +
-          `the fastest way to see what the write-up looks like.</p>`
-        : plan === 'annual' || plan === 'halfyear'
-          ? `<p>Your ${plan === 'annual' ? 'year' : 'six months'} ${plan === 'annual' ? 'has' : 'have'} started, and your recorder goes in the post shortly. In the ` +
-            `meantime you can upload anything you already have &mdash; a voice memo works.</p>`
-          // The trial counts from sign-up, not delivery, so the email must not say otherwise.
-          : `<p>Your recorder goes in the post shortly, and your 21 free days have started. ` +
-            `Upload anything you already have while it&rsquo;s on its way &mdash; a voice memo ` +
-            `works, and it&rsquo;s the quickest way to see what the write-up looks like.</p>`) +
-      `<p style="color:#514E45">Reply to this and it reaches a person.</p>` +
-      `</body></html>`,
-  })
+/** An invoice carries its subscription's metadata in one of two places depending on API version. */
+function invoiceLang(o: Record<string, unknown>): unknown {
+  const inv = o as { subscription_details?: { metadata?: Record<string, string> }; parent?: { subscription_details?: { metadata?: Record<string, string> } }; metadata?: Record<string, string> }
+  return inv.parent?.subscription_details?.metadata?.lang ?? inv.subscription_details?.metadata?.lang ?? inv.metadata?.lang ?? null
 }

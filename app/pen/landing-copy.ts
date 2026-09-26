@@ -8,8 +8,9 @@
 // Copy rules kept across all three: one label per call to action, no em dashes in anything a
 // reader sees, and no claim the product cannot stand behind.
 
-export type Lang = 'en' | 'es' | 'pt'
-export type Currency = 'usd' | 'clp' | 'brl'
+import type { Lang, Currency } from '@/lib/pen/currency'
+export type { Lang, Currency } from '@/lib/pen/currency'
+export { LOCAL_PRICES, money } from '@/lib/pen/currency'
 export type Market = { lang: Lang; currency: Currency }
 
 /** Spanish-speaking Latin America (and Spain) gets Spanish; Brazil gets Portuguese. */
@@ -26,18 +27,6 @@ export function marketFor(country: string | null | undefined, choice: string | n
   const currency: Currency =
     lang === 'pt' ? (c === '' || c === 'BR' ? 'brl' : 'usd') : lang === 'es' ? (c === '' || c === 'CL' ? 'clp' : 'usd') : 'usd'
   return { lang, currency }
-}
-
-/** Software-only prices in local money, set in Stripe as real prices in each currency. */
-export const LOCAL_PRICES: Record<Exclude<Currency, 'usd'>, { monthly: number; halfyear: number }> = {
-  clp: { monthly: 11990, halfyear: 49990 },
-  brl: { monthly: 59.9, halfyear: 269 },
-}
-
-export function money(amount: number, currency: Currency): string {
-  if (currency === 'clp') return `$${Math.round(amount).toLocaleString('es-CL')}`
-  if (currency === 'brl') return `R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: Number.isInteger(amount) ? 0 : 2, maximumFractionDigits: 2 })}`
-  return `$${amount}`
 }
 
 export type RoleDemo = { tab: string; short: string; q: string; a: string; sources: { title: string; date: string }[] }
