@@ -4,6 +4,7 @@ import { activate, deactivate } from '@/lib/pen/accounts'
 import { settleHoursCheckout } from '@/lib/pen/hours'
 import { sendEmailResult } from '@/lib/news/email'
 import { planPrice, parsePlan, parseOffer } from '@/lib/pen/plan'
+import { notifyPaid, notifyHours } from '@/lib/pen/notify-owner'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -106,6 +107,7 @@ export async function POST(req: Request) {
             amount_total: o.amount_total,
             metadata: o.metadata,
           })
+          if (email) await notifyHours({ email, amountCents: o.amount_total ?? null, hours: o.metadata?.hours ?? null }).catch(() => {})
           break
         }
         if (!email) break
@@ -119,6 +121,8 @@ export async function POST(req: Request) {
         // The subscription.created event that follows carries the trial dates; this one only
         // has to open the door, which it should do immediately rather than wait for it.
         await welcome(email, o.metadata?.offer ?? null, o.metadata?.plan ?? null).catch(() => {})
+        // The owners' "new customer" email, now that there is one.
+        await notifyPaid({ email, plan: o.metadata?.plan ?? null, offer: o.metadata?.offer ?? null, amountCents: o.amount_total ?? null }).catch(() => {})
         break
       }
 

@@ -1,10 +1,11 @@
 import { parsePlan, parseOffer } from '@/lib/pen/plan'
 import { NextResponse } from 'next/server'
-import { validate, saveSignup, type Signup } from '@/lib/pen/signup'
+import { validate, saveSignup } from '@/lib/pen/signup'
 import { createPending } from '@/lib/pen/accounts'
 import type { Offer, Plan } from '@/lib/pen/plan'
 import { startPlanCheckout } from '@/lib/pen/checkout'
 import { sendEmailResult } from '@/lib/news/email'
+import { notifyUnpaidSignup } from '@/lib/pen/notify-owner'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -62,7 +63,8 @@ export async function POST(req: Request) {
     // to active; without this the webhook would be creating strangers from scratch.
     await createPending(v.value.email, v.value.source ?? 'signup').catch(() => {})
 
-    void notifyOwner(v.value, created).catch(() => {})
+    // The owners hear about a signup when Stripe confirms the checkout (webhook), not here:
+    // a form submitted and abandoned at the payment page is not a customer.
 
     // Hand straight to checkout so the card is taken in the same sitting.
     //
@@ -84,7 +86,11 @@ export async function POST(req: Request) {
 
     // Only when there is no card to take. Otherwise the welcome email from the Stripe webhook
     // is the one that should land, and two emails about the same signup is a bug.
-    if (!checkoutUrl) void sendConfirmation(v.value.name, v.value.email).catch(() => {})
+    if (!checkoutUrl) {
+      void sendConfirmation(v.value.name, v.value.email).catch(() => {})
+      // No checkout means no webhook will ever tell the owners, so say so here, as unpaid.
+      void notifyUnpaidSignup(v.value, typeof b.plan === 'string' ? b.plan : null, typeof b.offer === 'string' ? b.offer : null).catch(() => {})
+    }
 
     return NextResponse.json({ ok: true, created, checkoutUrl })
   } catch (e) {
@@ -112,23 +118,3 @@ async function sendConfirmation(name: string, email: string) {
   })
 }
 
-async function notifyOwner(s: Signup, created: boolean) {
-  const to = process.env.PEN_SIGNUP_NOTIFY || process.env.RESEND_FROM_EMAIL
-  if (!to) return
-  const rows: [string, string][] = [
-    ['Name', s.name],
-    ['Email', s.email],
-    ['Phone', s.phone ?? '—'],
-    ['Role', s.role ?? '—'],
-    ['Ship to', [s.ship_line1, s.ship_line2, s.ship_city, s.ship_state, s.ship_postcode, s.ship_country].filter(Boolean).join(', ') || '—'],
-    ['Note', s.note ?? '—'],
-  ]
-  await sendEmailResult({
-    to: to.replace(/^.*<|>.*$/g, ''),
-    subject: `${created ? 'New' : 'Updated'} Juno Pen signup — ${s.name}`,
-    html:
-      `<!doctype html><html><head><meta charset="utf-8"></head><body style="font-family:ui-monospace,Menlo,monospace;font-size:13px;padding:20px">` +
-      rows.map(([k, val]) => `<div><strong>${k}:</strong> ${esc(String(val))}</div>`).join('') +
-      `</body></html>`,
-  })
-}
