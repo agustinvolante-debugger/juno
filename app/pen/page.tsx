@@ -9,10 +9,12 @@ import PenApp from './PenApp'
 import { getLinkByEmail } from '@/lib/pen/whatsapp/store'
 import { botNumber, configured as whatsappReady } from '@/lib/pen/whatsapp/vonage'
 import Landing from './Landing'
+import { headers, cookies } from 'next/headers'
+import { marketFor } from './landing-copy'
 
 export const dynamic = 'force-dynamic'
 
-export default async function PenPage() {
+export default async function PenPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const email = await authedEmail()
   // Name and picture come free with the Google session; the mock shows both, and an avatar is
   // a far better "you are signed in as" signal than an elided email address.
@@ -20,7 +22,14 @@ export default async function PenPage() {
 
   // Signed out gets the landing page; signed in goes straight to the app. Same URL, so a
   // shared link works for someone who has never seen it and for someone who lives in it.
-  if (!email) return <Landing />
+  if (!email) {
+    // Which version of the landing page: ?m= (the footer switch) wins, then the remembered
+    // choice, then the country Vercel reports for the visitor.
+    const sp = await searchParams
+    const m = typeof sp.m === 'string' ? sp.m : null
+    const [h, c] = await Promise.all([headers(), cookies()])
+    return <Landing market={marketFor(h.get('x-vercel-ip-country'), m ?? c.get('juno_lang')?.value ?? null)} />
+  }
 
   let sessions: Awaited<ReturnType<typeof listSessions>> = []
   let stats: Awaited<ReturnType<typeof archiveStats>> | null = null

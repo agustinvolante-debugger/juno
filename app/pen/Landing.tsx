@@ -2,20 +2,26 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { motion } from 'motion/react'
 import type { CSSProperties } from 'react'
 import PenSequence from './PenSequence'
 import PenArt from './PenArt'
+import PhoneChat from './PhoneChat'
 import Icon, { type IconName } from './Icon'
 import { PLAN_MONTHLY_USD, PLAN_HALFYEAR_USD, PLAN_ANNUAL_USD, PEN_USD, SOFTWARE_MONTHLY_USD, SOFTWARE_HALFYEAR_USD, TRIAL_DAYS, TRIAL_DAYS_POSTED } from '@/lib/pen/plan'
+import { COPY, LOCAL_PRICES, money, type Copy, type Market, type RoleDemo } from './landing-copy'
 
-// The signed-out face of tryjunoapp.com.
+// The signed-out face of tryjunoapp.com, in three versions.
 //
 // Same typography and palette as the app (Instrument Serif, Literata, IBM Plex Mono, warm
 // paper, one emerald accent): a landing page that looks nothing like the product it sells is
-// a promise the product then breaks. What it sells is two things at once, the software and
-// the pen, so the hero shows both in one picture and the page then gives each its own act.
+// a promise the product then breaks.
+//
+// One layout for every market; the words live in landing-copy.ts. The US page leads with the
+// pen and search. The Spanish and Portuguese pages lead with WhatsApp and the phone, because
+// that is how Latin America already talks and because the pen cannot be shipped there yet:
+// it appears as "coming soon", and every button starts the own-recorder trial instead.
 //
 // Copy rules kept from the previous page: one label per call to action, no em dashes in
 // anything a reader sees, and no claim the product cannot stand behind. The security card
@@ -25,10 +31,22 @@ import { PLAN_MONTHLY_USD, PLAN_HALFYEAR_USD, PLAN_ANNUAL_USD, PEN_USD, SOFTWARE
 const SIGN_IN = '/auth/signin?callbackUrl=/pen'
 // Everything that means "I want to try this" goes here.
 const SIGN_UP = '/pen/signup'
-/** One label for one intent, in one place. */
-const CTA = `Start ${TRIAL_DAYS_POSTED} days free`
-/** The yearly plan is paid up front (no trial), so its button cannot promise free days. */
-const CTA_YEARLY = 'Get the year'
+
+type Ctx = { t: Copy; market: Market; latam: boolean }
+const L = createContext<Ctx>({ t: COPY.en, market: { lang: 'en', currency: 'usd' }, latam: false })
+const useL = () => useContext(L)
+
+/** A signup link that carries the page's language and currency through to checkout. */
+function signup(params: string, market: Market): string {
+  const extra = market.lang === 'en' ? '' : `&lang=${market.lang}&cur=${market.currency}`
+  return `${SIGN_UP}?${params}${extra}`
+}
+
+/** What a software-only plan costs where the visitor is. */
+function ownPrice(market: Market, plan: 'monthly' | 'halfyear'): string {
+  if (market.currency === 'usd') return money(plan === 'monthly' ? SOFTWARE_MONTHLY_USD : SOFTWARE_HALFYEAR_USD, 'usd')
+  return money(LOCAL_PRICES[market.currency][plan], market.currency)
+}
 
 /**
  * CSS-driven reveal. A marketing page must not start at opacity 0 and wait for JS: a slow
@@ -42,38 +60,56 @@ function Reveal({ children, delay = 0, className }: { children: React.ReactNode;
   )
 }
 
-export default function Landing() {
+export default function Landing({ market = { lang: 'en', currency: 'usd' } }: { market?: Market }) {
+  const t = COPY[market.lang]
+  const latam = market.lang !== 'en'
+  // The root layout says lang="en" for the whole site; the page it actually shows may not be.
+  useEffect(() => {
+    document.documentElement.lang = market.lang === 'pt' ? 'pt-BR' : market.lang
+  }, [market.lang])
   return (
-    <div className="pen-lp pen-lp2">
-      <Nav />
-      <Hero />
-      <Audience />
-      <Features />
-      <HowItWorks />
-      <ThePen />
-      <Pricing />
-      <Closing />
-      <Footer />
-    </div>
+    <L.Provider value={{ t, market, latam }}>
+      <div className="pen-lp pen-lp2">
+        <Nav />
+        {latam ? <HeroChat /> : <Hero />}
+        <Audience />
+        <Features />
+        <HowItWorks />
+        <ThePen />
+        <Pricing />
+        <Closing />
+        <Footer />
+      </div>
+    </L.Provider>
   )
 }
 
 /* ------------------------------------------------------------------- nav */
 
+/** The one "try it" label: the pen trial in the US, the own-recorder trial everywhere else. */
+function useMainCta(): { label: string; href: (from: string) => string } {
+  const { t, market, latam } = useL()
+  return latam
+    ? { label: t.cta.trialOwn(TRIAL_DAYS), href: (from) => signup(`plan=monthly&offer=own-recorder&from=${from}`, market) }
+    : { label: t.cta.trialPen(TRIAL_DAYS_POSTED), href: (from) => signup(`from=${from}`, market) }
+}
+
 function Nav() {
+  const { t } = useL()
+  const cta = useMainCta()
   return (
     <header className="pen-lp-nav">
       <div className="pen-lp-wrap flex items-center justify-between gap-3">
-        <Link href="/" className="flex items-center" aria-label="Juno Pen, home">
+        <Link href="/" className="flex items-center" aria-label={t.nav.home}>
           <Image src="/juno_mark.png" alt="" width={32} height={32} className="pen-mark" priority />
           <span className="pen-display pen-lp-wordmark">Juno Pen</span>
         </Link>
         <nav className="flex items-center gap-1">
-          <a href="#features" className="pen-lp-navlink pen-lp2-hide-sm">What it does</a>
-          <a href="#pen" className="pen-lp-navlink pen-lp2-hide-sm">The pen</a>
-          <a href="#pricing" className="pen-lp-navlink pen-lp2-hide-sm">Pricing</a>
-          <Link href={SIGN_IN} className="pen-lp-navlink">Sign in</Link>
-          <Link href={`${SIGN_UP}?from=nav`} className="pen-lp-btn pen-lp-btn-sm pen-lp-btn-primary">{CTA}</Link>
+          <a href="#features" className="pen-lp-navlink pen-lp2-hide-sm">{t.nav.features}</a>
+          <a href="#pen" className="pen-lp-navlink pen-lp2-hide-sm">{t.nav.pen}</a>
+          <a href="#pricing" className="pen-lp-navlink pen-lp2-hide-sm">{t.nav.pricing}</a>
+          <Link href={SIGN_IN} className="pen-lp-navlink">{t.nav.signIn}</Link>
+          <Link href={cta.href('nav')} className="pen-lp-btn pen-lp-btn-sm pen-lp-btn-primary">{cta.label}</Link>
         </nav>
       </div>
     </header>
@@ -82,32 +118,44 @@ function Nav() {
 
 /* ------------------------------------------------------------------ hero */
 
+/** The line under the buttons, with prices filled in for the visitor's currency. */
+function offerLine(t: Copy, market: Market): string {
+  return t.hero.offer.replace('{yearly}', money(PLAN_ANNUAL_USD, 'usd')).replace('{own}', ownPrice(market, 'monthly'))
+}
+
+/** "No pen?" — a link that opens the own-recorder pricing tab. */
+function NoPenLine() {
+  const { t } = useL()
+  return (
+    <p className="pen-lp2-nopen">
+      <a href="#plans-own">{t.hero.noPen}</a>
+    </p>
+  )
+}
+
 function Hero() {
+  const { t, market } = useL()
+  const cta = useMainCta()
   return (
     <section className="pen-lp-wrap pen-lp2-hero">
       <div className="pen-lp2-hero-copy">
         <Reveal>
           <h1 className="pen-lp-h1 pen-lp2-h1">
-            Focus on the conversation. <span className="pen-lp-em">We&rsquo;ll remember every word.</span>
+            {t.hero.h1a} <span className="pen-lp-em">{t.hero.h1b}</span>
           </h1>
         </Reveal>
         <Reveal delay={0.08}>
-          <p className="pen-lp2-lede">
-            A real pen that records. Plug it in and Juno Pen writes up who was there, what was
-            decided, what you owe people, and the thing you nearly missed. Then it drafts the
-            follow-up email.
-          </p>
+          <p className="pen-lp2-lede">{t.hero.lede}</p>
         </Reveal>
         <Reveal delay={0.14}>
           <div className="pen-lp2-ctas">
-            <Link href={`${SIGN_UP}?from=hero`} className="pen-lp-btn pen-lp-btn-accent pen-lp2-btn-lg">{CTA}</Link>
-            <a href="#features" className="pen-lp-btn pen-lp2-btn-lg">See what it does</a>
+            <Link href={cta.href('hero')} className="pen-lp-btn pen-lp-btn-accent pen-lp2-btn-lg">{cta.label}</Link>
+            <a href="#features" className="pen-lp-btn pen-lp2-btn-lg">{t.cta.seeWhat}</a>
           </div>
         </Reveal>
         <Reveal delay={0.2}>
-          <p className="pen-lp2-offer">
-            {`Unlimited recording. $${PLAN_ANNUAL_USD} a year with the pen included, or $${SOFTWARE_MONTHLY_USD} a month with your own recorder.`}
-          </p>
+          <p className="pen-lp2-offer">{offerLine(t, market)}</p>
+          <NoPenLine />
         </Reveal>
       </div>
 
@@ -118,21 +166,59 @@ function Hero() {
 
           {/* What comes out of it, as the app draws it. Three small cards, each one feature. */}
           <div className="pen-lp2-float pen-lp2-float-a">
-            <span className="pen-lp2-float-label">Detected on this call</span>
-            <span className="pen-lp2-chip"><span className="pen-lp2-av">CD</span>Chris Dyas <em>buyer</em></span>
+            <span className="pen-lp2-float-label">{t.hero.float.detected}</span>
+            <span className="pen-lp2-chip"><span className="pen-lp2-av">CD</span>Chris Dyas <em>{t.hero.float.buyer}</em></span>
           </div>
           <div className="pen-lp2-float pen-lp2-float-b">
             <span className="pen-lp2-tick" />
             <span>
-              <span className="pen-lp2-float-strong">Send comps for Ridgewood</span>
-              <span className="pen-lp2-float-meta">Due Friday</span>
+              <span className="pen-lp2-float-strong">{t.hero.float.todo}</span>
+              <span className="pen-lp2-float-meta">{t.hero.float.due}</span>
             </span>
           </div>
           <div className="pen-lp2-float pen-lp2-float-c">
-            <span className="pen-lp2-float-label"><Icon name="mail" size={13} /> Draft ready</span>
-            <span className="pen-lp2-float-strong">Re: carport before Saturday</span>
-            <span className="pen-lp2-mini-btn">Open in Gmail</span>
+            <span className="pen-lp2-float-label"><Icon name="mail" size={13} /> {t.hero.float.draft}</span>
+            <span className="pen-lp2-float-strong">{t.hero.float.draftTitle}</span>
+            <span className="pen-lp2-mini-btn">{t.hero.float.openGmail}</span>
           </div>
+        </div>
+      </Reveal>
+    </section>
+  )
+}
+
+/** The Latin American hero: WhatsApp on a phone, the pen beside it. */
+function HeroChat() {
+  const { t, market } = useL()
+  const cta = useMainCta()
+  return (
+    <section className="pen-lp-wrap pen-lp2-hero">
+      <div className="pen-lp2-hero-copy">
+        <Reveal>
+          <h1 className="pen-lp-h1 pen-lp2-h1">
+            {t.hero.h1a} <span className="pen-lp-em">{t.hero.h1b}</span>
+          </h1>
+        </Reveal>
+        <Reveal delay={0.08}>
+          <p className="pen-lp2-lede">{t.hero.lede}</p>
+        </Reveal>
+        <Reveal delay={0.14}>
+          <div className="pen-lp2-ctas">
+            <Link href={cta.href('hero')} className="pen-lp-btn pen-lp-btn-accent pen-lp2-btn-lg">{cta.label}</Link>
+            <a href="#features" className="pen-lp-btn pen-lp2-btn-lg">{t.cta.seeWhat}</a>
+          </div>
+        </Reveal>
+        <Reveal delay={0.2}>
+          <p className="pen-lp2-offer">{offerLine(t, market)}</p>
+          <NoPenLine />
+        </Reveal>
+      </div>
+
+      <Reveal delay={0.1} className="pen-lp2-stage pen-lp2-stage-chat">
+        <div className="pen-lp2-chatstage" aria-hidden>
+          <div className="pen-lp2-halo" />
+          <PhoneChat lang={market.lang} />
+          <PenArt id="hero-pen-chat" className="pen-lp2-chat-pen" />
         </div>
       </Reveal>
     </section>
@@ -141,94 +227,21 @@ function Hero() {
 
 /* ------------------------------------------------------------- audience */
 
-type Role = {
-  tab: string
-  short: string
-  /** The question, with @-tags written as {Name}. */
-  q: string
-  /** The answer, with [n] citation markers. */
-  a: string
-  sources: { title: string; date: string }[]
-}
-
-// One question per kind of work, answered across several calls with the sources linked.
-// Everything shown is what the real archive chat does: @-tags, answers drawn from more than
-// one recording, and numbered citations that open the call they came from.
-const ROLES: Role[] = [
-  {
-    tab: 'Realtors',
-    short: 'Realtors',
-    q: 'What has {Sarah} said about parking across all the viewings?',
-    a: 'She has raised it at all three viewings [1][2][3]. At Oak Street she said they would not bid without covered parking [2], and at Ridgewood she called it the thing that decides it [3]. Tom has never objected to paying more for it [1].',
-    sources: [
-      { title: 'Maple Avenue viewing', date: 'Sep 9' },
-      { title: 'Oak Street viewing', date: 'Sep 14' },
-      { title: 'Ridgewood walk-through', date: 'Sep 21' },
-    ],
-  },
-  {
-    tab: 'Students',
-    short: 'Students',
-    q: 'What did Professor Ruiz say will be on the midterm?',
-    a: 'One WACC question with a changing capital structure [2] and a bond pricing problem like problem set 3 [1]. She said most people lose marks on the tax shield, not the formula [2], and that a formula sheet is allowed [3].',
-    sources: [
-      { title: 'Corporate Finance, lecture 4', date: 'Sep 10' },
-      { title: 'Corporate Finance, lecture 6', date: 'Sep 17' },
-      { title: 'Office hours', date: 'Sep 19' },
-    ],
-  },
-  {
-    tab: 'Bankers',
-    short: 'Bankers',
-    q: 'Which clients raised covenant issues this quarter?',
-    a: 'Two. Harbor Logistics said the board will not approve new facilities until leverage clears for two quarters [1]. Delta Foods asked to reset the interest cover test before renewal [3]. Meridian mentioned covenants but said it has headroom [2].',
-    sources: [
-      { title: 'Harbor Logistics review', date: 'Aug 4' },
-      { title: 'Meridian quarterly', date: 'Aug 19' },
-      { title: 'Delta Foods renewal call', date: 'Sep 2' },
-    ],
-  },
-  {
-    tab: 'Founders & CEOs',
-    short: 'Founders',
-    q: 'What did investors push back on most?',
-    a: 'Market size, in three of four calls [1][2][4]. Northbeam wanted month-6 retention by channel instead [3], and two funds asked who else is in the round before taking it to a partner meeting [2][4].',
-    sources: [
-      { title: 'Harbor VC intro', date: 'Aug 28' },
-      { title: 'Lattice Capital', date: 'Sep 3' },
-      { title: 'Northbeam Ventures', date: 'Sep 11' },
-      { title: 'Fieldstone seed call', date: 'Sep 16' },
-    ],
-  },
-  {
-    tab: 'Consultants',
-    short: 'Consult',
-    q: 'What did {Dana} commit to, and by when?',
-    a: 'Three things. Discount data by rep before the workshop [1], the Q3 margin bridge by Friday [2], and bringing the CFO to the board-pack review on the 14th [3].',
-    sources: [
-      { title: 'Kickoff with the COO', date: 'Sep 1' },
-      { title: 'Pricing workshop', date: 'Sep 12' },
-      { title: 'Steering call', date: 'Sep 18' },
-    ],
-  },
-]
-
 function Audience() {
+  const { t } = useL()
   const [active, setActive] = useState(0)
+  const roles = t.audience.roles
   return (
     <section className="pen-lp-wrap pen-lp2-sec">
       <Reveal>
-        <h2 className="pen-lp-h2 pen-lp2-h2">For anyone who talks for a living.</h2>
-        <p className="pen-lp2-sub">
-          Ask anything across every call you have ever recorded. Every answer shows exactly where
-          it was said.
-        </p>
+        <h2 className="pen-lp-h2 pen-lp2-h2">{t.audience.h2}</h2>
+        <p className="pen-lp2-sub">{t.audience.sub}</p>
       </Reveal>
       <Reveal delay={0.08}>
-        <Segmented items={ROLES.map((r) => ({ long: r.tab, short: r.short }))} active={active} onChange={setActive} />
+        <Segmented items={roles.map((r) => ({ long: r.tab, short: r.short }))} active={active} onChange={setActive} label={t.audience.aria} />
       </Reveal>
       <Reveal delay={0.14}>
-        <ChatDemo role={ROLES[active]} />
+        <ChatDemo role={roles[active]} />
       </Reveal>
     </section>
   )
@@ -271,7 +284,8 @@ function Cited({ text }: { text: string }) {
  * without JS; the animation runs when it scrolls into view and on every tab change, and not
  * at all for anyone who prefers reduced motion.
  */
-function ChatDemo({ role }: { role: Role }) {
+function ChatDemo({ role }: { role: RoleDemo }) {
+  const { t } = useL()
   const q = role.q.replace(/\{([^}]+)\}/g, '@$1')
   const words = role.a.split(' ')
   const [step, setStep] = useState<{ q: number; a: number }>({ q: q.length, a: words.length })
@@ -284,16 +298,16 @@ function ChatDemo({ role }: { role: Role }) {
     let qi = 0
     let ai = 0
     setStep({ q: 0, a: 0 })
-    const t = window.setInterval(() => {
+    const tm = window.setInterval(() => {
       if (qi < q.length) {
         qi = Math.min(q.length, qi + 2)
         setStep({ q: qi, a: 0 })
       } else if (ai < words.length) {
         ai += 1
         setStep({ q: q.length, a: ai })
-      } else window.clearInterval(t)
+      } else window.clearInterval(tm)
     }, 34)
-    return () => window.clearInterval(t)
+    return () => window.clearInterval(tm)
   }, [q, words.length])
 
   // Replay on tab change (not on first render).
@@ -333,12 +347,12 @@ function ChatDemo({ role }: { role: Role }) {
     <div className="pen-lp2-chatdemo" ref={box}>
       <div className="pen-lp2-chatbar">
         <Icon name="search" size={16} />
-        <span>Ask across every recording</span>
-        <span className="pen-lp2-chatbar-n">{`${role.sources.length} calls found`}</span>
+        <span>{t.audience.ask}</span>
+        <span className="pen-lp2-chatbar-n">{t.audience.found(role.sources.length)}</span>
       </div>
       <div className="pen-lp2-chatbody">
         <p className="pen-lp2-chatq">
-          {typedQ.split(/(@[A-Z][a-z]+)/g).map((p, i) =>
+          {typedQ.split(/(@[\p{Lu}][\p{Ll}]+)/gu).map((p, i) =>
             p.startsWith('@') ? <span key={i} className="pen-lp2-tag">{p}</span> : <span key={i}>{p}</span>,
           )}
           {asking && <span className="pen-lp2-caret" />}
@@ -369,7 +383,7 @@ function ChatDemo({ role }: { role: Role }) {
  * measured from the active segment and animated. Labels are plain text above it, so the
  * control works even if the animation never runs.
  */
-function Segmented({ items, active, onChange }: { items: { long: string; short: string }[]; active: number; onChange: (i: number) => void }) {
+function Segmented({ items, active, onChange, label }: { items: { long: string; short: string }[]; active: number; onChange: (i: number) => void; label: string }) {
   const trackRef = useRef<HTMLDivElement>(null)
   const btnRefs = useRef<(HTMLButtonElement | null)[]>([])
   const [pill, setPill] = useState<{ x: number; w: number } | null>(null)
@@ -377,9 +391,9 @@ function Segmented({ items, active, onChange }: { items: { long: string; short: 
     const track = trackRef.current
     const btn = btnRefs.current[active]
     if (!track || !btn) return
-    const t = track.getBoundingClientRect()
+    const tr = track.getBoundingClientRect()
     const b = btn.getBoundingClientRect()
-    setPill({ x: b.left - t.left, w: b.width })
+    setPill({ x: b.left - tr.left, w: b.width })
   }, [active])
   useLayoutEffect(measure, [measure])
   useEffect(() => {
@@ -389,7 +403,7 @@ function Segmented({ items, active, onChange }: { items: { long: string; short: 
     return () => window.removeEventListener('resize', onResize)
   }, [measure])
   return (
-    <div className="pen-seg pen-lp2-seg" role="tablist" aria-label="Who it is for" ref={trackRef}>
+    <div className="pen-seg pen-lp2-seg" role="tablist" aria-label={label} ref={trackRef}>
       {pill && (
         <motion.span
           className="pen-seg-pill"
@@ -432,42 +446,37 @@ function FeatureHead({ icon, title, tone }: { icon: IconName; title: string; ton
 }
 
 function Features() {
+  const { t, latam } = useL()
+  const f = t.features
   return (
     <section id="features" className="pen-lp-wrap pen-lp2-sec">
       <Reveal>
-        <h2 className="pen-lp-h2 pen-lp2-h2">Everything after the meeting, already done.</h2>
-        <p className="pen-lp2-sub">
-          The note, the people, the to-dos, the email, and an assistant that has read every
-          conversation you have ever recorded.
-        </p>
+        <h2 className="pen-lp-h2 pen-lp2-h2">{f.h2}</h2>
+        <p className="pen-lp2-sub">{f.sub}</p>
       </Reveal>
 
       <div className="pen-lp2-bento">
         {/* 1. The note */}
         <Reveal delay={0.04} className="pen-lp2-b pen-lp2-b-note">
           <article className="pen-lp2-card">
-            <FeatureHead icon="sparkle" title="Written up for you" />
-            <p className="pen-lp2-fcopy">Who said what, what was decided, and what happens next.</p>
+            <FeatureHead icon="sparkle" title={f.note.title} />
+            <p className="pen-lp2-fcopy">{f.note.copy}</p>
             <div className="pen-lp2-demo">
-              <div className="pen-lp2-demo-label">Summary</div>
-              <p className="pen-lp2-demo-text">
-                Third viewing with the Hendersons. Sarah led on the renovated kitchen; Tom went
-                straight to price and flagged it as above their ceiling. They asked to return at the
-                weekend with her mother.
-              </p>
-              <div className="pen-lp2-demo-label" style={{ marginTop: 16 }}>Next actions</div>
+              <div className="pen-lp2-demo-label">{f.note.summaryLabel}</div>
+              <p className="pen-lp2-demo-text">{f.note.summary}</p>
+              <div className="pen-lp2-demo-label" style={{ marginTop: 16 }}>{f.note.actionsLabel}</div>
               <ul className="pen-lp2-todos">
-                <li><span className="pen-lp2-tick pen-lp2-tick-on" /><s>Send comps for the street</s></li>
-                <li><span className="pen-lp2-tick" />Check the HOA on the carport <em>Priority</em></li>
-                <li><span className="pen-lp2-tick" />Confirm Saturday with her mother</li>
+                <li><span className="pen-lp2-tick pen-lp2-tick-on" /><s>{f.note.actions[0]}</s></li>
+                <li><span className="pen-lp2-tick" />{f.note.actions[1]} <em>{f.note.priority}</em></li>
+                <li><span className="pen-lp2-tick" />{f.note.actions[2]}</li>
               </ul>
-              <div className="pen-lp2-demo-label" style={{ marginTop: 18 }}>Decided</div>
-              <p className="pen-lp2-demo-small">They will make an offer this week if the covered parking checks out.</p>
-              <div className="pen-lp2-demo-label" style={{ marginTop: 18 }}>Transcript</div>
+              <div className="pen-lp2-demo-label" style={{ marginTop: 18 }}>{f.note.decidedLabel}</div>
+              <p className="pen-lp2-demo-small">{f.note.decided}</p>
+              <div className="pen-lp2-demo-label" style={{ marginTop: 18 }}>{f.note.transcriptLabel}</div>
               <div className="pen-lp2-turns">
-                <p><span className="pen-lp2-who">Sarah</span>We love the kitchen. The parking is the thing.</p>
-                <p><span className="pen-lp2-who">You</span>There is a covered spot with the unit, round the back.</p>
-                <p><span className="pen-lp2-who">Tom</span>Then we would want to move on it this week.</p>
+                {f.note.turns.map(([who, said]) => (
+                  <p key={who + said}><span className="pen-lp2-who">{who}</span>{said}</p>
+                ))}
               </div>
             </div>
           </article>
@@ -476,21 +485,21 @@ function Features() {
         {/* 2. People */}
         <Reveal delay={0.08} className="pen-lp2-b pen-lp2-b-people">
           <article className="pen-lp2-card">
-            <FeatureHead icon="people" title="Knows who was there" />
-            <p className="pen-lp2-fcopy">It picks out the people it heard. One click saves them, with what they care about.</p>
+            <FeatureHead icon="people" title={f.people.title} />
+            <p className="pen-lp2-fcopy">{f.people.copy}</p>
             <div className="pen-lp2-demo">
               <div className="pen-lp2-person">
-                <span className="pen-lp2-av pen-lp2-av-lg">SH</span>
+                <span className="pen-lp2-av pen-lp2-av-lg">{f.people.name.split(' ').map((w) => w[0]).join('')}</span>
                 <span>
-                  <span className="pen-lp2-demo-strong">Sarah Henderson</span>
-                  <span className="pen-lp2-demo-meta">Buyer · 3 calls</span>
+                  <span className="pen-lp2-demo-strong">{f.people.name}</span>
+                  <span className="pen-lp2-demo-meta">{f.people.meta}</span>
                 </span>
               </div>
-              <p className="pen-lp2-demo-small">Wants covered parking and a finished kitchen. Leads on design; defers to Tom on price.</p>
+              <p className="pen-lp2-demo-small">{f.people.about}</p>
               <div className="pen-lp2-detected">
-                <span className="pen-lp2-demo-meta">Detected on this call</span>
-                <span className="pen-lp2-pill">+ Tom · husband</span>
-                <span className="pen-lp2-pill">+ Maria · lender</span>
+                <span className="pen-lp2-demo-meta">{f.people.detected}</span>
+                <span className="pen-lp2-pill">{f.people.pills[0]}</span>
+                <span className="pen-lp2-pill">{f.people.pills[1]}</span>
               </div>
             </div>
           </article>
@@ -499,15 +508,12 @@ function Features() {
         {/* 3. Jot and enhance */}
         <Reveal delay={0.12} className="pen-lp2-b pen-lp2-b-ask">
           <article className="pen-lp2-card">
-            <FeatureHead icon="pen" title="Jot three words, get the whole story" />
-            <p className="pen-lp2-fcopy">Type a quick note during the meeting. Press Enhance and it fills in what was actually said.</p>
+            <FeatureHead icon="pen" title={f.jot.title} />
+            <p className="pen-lp2-fcopy">{f.jot.copy}</p>
             <div className="pen-lp2-demo">
-              <p className="pen-lp2-jot">no garage again</p>
-              <p className="pen-lp2-enh">
-                Third property in a row without one. Sarah raised it in passing, which makes it a filter,
-                not a preference.
-              </p>
-              <span className="pen-lp2-mini-btn pen-lp2-mini-btn-on"><Icon name="sparkle" size={13} />Enhance</span>
+              <p className="pen-lp2-jot">{f.jot.jot}</p>
+              <p className="pen-lp2-enh">{f.jot.enh}</p>
+              <span className="pen-lp2-mini-btn pen-lp2-mini-btn-on"><Icon name="sparkle" size={13} />{f.jot.button}</span>
             </div>
           </article>
         </Reveal>
@@ -515,18 +521,15 @@ function Features() {
         {/* 4. Email */}
         <Reveal delay={0.06} className="pen-lp2-b pen-lp2-b-email">
           <article className="pen-lp2-card">
-            <FeatureHead icon="mail" title="The follow-up, already written" />
-            <p className="pen-lp2-fcopy">Pick any action and get the email. Open it in Gmail or Outlook, edit, send.</p>
+            <FeatureHead icon="mail" title={f.email.title} />
+            <p className="pen-lp2-fcopy">{f.email.copy}</p>
             <div className="pen-lp2-demo">
-              <div className="pen-lp2-mail-row"><span>To</span>tom.henderson@gmail.com</div>
-              <div className="pen-lp2-mail-row"><span>Subject</span>Carport before Saturday</div>
-              <p className="pen-lp2-demo-small" style={{ marginTop: 10 }}>
-                Quick one before the second viewing: the HOA does allow the carport to be enclosed, so the
-                garage question has an answer.
-              </p>
+              <div className="pen-lp2-mail-row"><span>{f.email.to}</span>tom.henderson@gmail.com</div>
+              <div className="pen-lp2-mail-row"><span>{f.email.subjectLabel}</span>{f.email.subject}</div>
+              <p className="pen-lp2-demo-small" style={{ marginTop: 10 }}>{f.email.body}</p>
               <div className="pen-lp2-mail-btns">
-                <span className="pen-lp2-mini-btn pen-lp2-mini-btn-on">Open in Gmail</span>
-                <span className="pen-lp2-mini-btn">Outlook</span>
+                <span className="pen-lp2-mini-btn pen-lp2-mini-btn-on">{f.email.gmail}</span>
+                <span className="pen-lp2-mini-btn">{f.email.outlook}</span>
               </div>
             </div>
           </article>
@@ -535,23 +538,18 @@ function Features() {
         {/* 5. Nearly missed */}
         <Reveal delay={0.1} className="pen-lp2-b pen-lp2-b-missed">
           <article className="pen-lp2-card">
-            <FeatureHead icon="alert" title="What you nearly missed" tone="warn" />
-            <p className="pen-lp2-fcopy">The promise made in passing, the number nobody named.</p>
+            <FeatureHead icon="alert" title={f.missed.title} tone="warn" />
+            <p className="pen-lp2-fcopy">{f.missed.copy}</p>
             <ul className="pen-lp2-missed">
-              <li>
-                <span className="pen-lp2-dot" />
-                <span>
-                  <span className="pen-lp2-demo-strong">They asked to come back with her mother</span>
-                  <span className="pen-lp2-demo-meta">The strongest buying signal, in the last thirty seconds.</span>
-                </span>
-              </li>
-              <li>
-                <span className="pen-lp2-dot" />
-                <span>
-                  <span className="pen-lp2-demo-strong">You promised to check the HOA</span>
-                  <span className="pen-lp2-demo-meta">Said aloud, easy to forget by the weekend.</span>
-                </span>
-              </li>
+              {f.missed.items.map(([strong, meta]) => (
+                <li key={strong}>
+                  <span className="pen-lp2-dot" />
+                  <span>
+                    <span className="pen-lp2-demo-strong">{strong}</span>
+                    <span className="pen-lp2-demo-meta">{meta}</span>
+                  </span>
+                </li>
+              ))}
             </ul>
           </article>
         </Reveal>
@@ -559,51 +557,50 @@ function Features() {
         {/* 6. On top of it */}
         <Reveal delay={0.14} className="pen-lp2-b pen-lp2-b-home">
           <article className="pen-lp2-card">
-            <FeatureHead icon="checklist" title="On top of everything" />
-            <p className="pen-lp2-fcopy">Every open action across every call, in one place.</p>
+            <FeatureHead icon="checklist" title={f.home.title} />
+            <p className="pen-lp2-fcopy">{f.home.copy}</p>
             <div className="pen-lp2-stats">
-              <div><span className="pen-lp2-stat pen-lp2-stat-warn">12</span><span>still to do</span></div>
-              <div><span className="pen-lp2-stat">4</span><span>nearly missed</span></div>
-              <div><span className="pen-lp2-stat">27</span><span>people</span></div>
+              <div><span className="pen-lp2-stat pen-lp2-stat-warn">12</span><span>{f.home.stats[0]}</span></div>
+              <div><span className="pen-lp2-stat">4</span><span>{f.home.stats[1]}</span></div>
+              <div><span className="pen-lp2-stat">27</span><span>{f.home.stats[2]}</span></div>
             </div>
             <ul className="pen-lp2-todos pen-lp2-todos-sm">
-              <li><span className="pen-lp2-tick" />Send Priya the retention numbers</li>
-              <li><span className="pen-lp2-tick" />Email office hours by Wednesday</li>
+              <li><span className="pen-lp2-tick" />{f.home.todos[0]}</li>
+              <li><span className="pen-lp2-tick" />{f.home.todos[1]}</li>
             </ul>
           </article>
         </Reveal>
 
-        {/* 7. WhatsApp */}
-        <Reveal delay={0.06} className="pen-lp2-b pen-lp2-b-wa">
-          <article className="pen-lp2-card pen-lp2-wa">
-            <div className="pen-lp2-wa-copy">
-              <FeatureHead icon="chat" title="Or just send it on WhatsApp" />
-              <p className="pen-lp2-fcopy">
-                Plug the pen into your phone and send the recording to Juno Pen. The briefing comes back in the chat,
-                and you can ask about any call from there.
-              </p>
-            </div>
-            <div className="pen-lp2-wa-chat" aria-hidden="true">
-              <div className="pen-lp2-bub pen-lp2-bub-me"><Icon name="wave" size={14} />R20260922-213209.WAV</div>
-              <div className="pen-lp2-bub">
-                <strong>Maple Avenue viewing</strong> (38 min)
-                <br />
-                Sarah loved the kitchen; Tom balked at the price. Second viewing Saturday.
+        {/* 7. WhatsApp. The Latin American hero already is this card, so it only appears here
+            on the US page. */}
+        {!latam && (
+          <Reveal delay={0.06} className="pen-lp2-b pen-lp2-b-wa">
+            <article className="pen-lp2-card pen-lp2-wa">
+              <div className="pen-lp2-wa-copy">
+                <FeatureHead icon="chat" title={t.wa.title} />
+                <p className="pen-lp2-fcopy">{t.wa.body}</p>
               </div>
-              <div className="pen-lp2-bub pen-lp2-bub-me">What did Tom say about the garage?</div>
-            </div>
-          </article>
-        </Reveal>
+              <div className="pen-lp2-wa-chat" aria-hidden="true">
+                <div className="pen-lp2-bub pen-lp2-bub-me"><Icon name="wave" size={14} />{t.wa.me1}</div>
+                <div className="pen-lp2-bub">
+                  <strong>{t.wa.replyTitle}</strong> (38 min)
+                  <br />
+                  {t.wa.reply}
+                </div>
+                <div className="pen-lp2-bub pen-lp2-bub-me">{t.wa.me2}</div>
+              </div>
+            </article>
+          </Reveal>
+        )}
 
         {/* 8. Private */}
         <Reveal delay={0.08} className="pen-lp2-b pen-lp2-b-private">
           <article className="pen-lp2-card pen-lp2-card-ink">
-            <FeatureHead icon="lock" title="Private by design" tone="ink" />
+            <FeatureHead icon="lock" title={f.privateTitle} tone="ink" />
             <ul className="pen-lp2-private">
-              <li><Icon name="check" size={16} />Encrypted in transit and at rest</li>
-              <li><Icon name="check" size={16} />Private to your account</li>
-              <li><Icon name="check" size={16} />Delete anything, anytime</li>
-              <li><Icon name="check" size={16} />Never sold</li>
+              {f.privateItems.map((it) => (
+                <li key={it}><Icon name="check" size={16} />{it}</li>
+              ))}
             </ul>
           </article>
         </Reveal>
@@ -614,25 +611,24 @@ function Features() {
 
 /* ------------------------------------------------------------ how it works */
 
-const STEPS: { h: string; p: string; icon: IconName }[] = [
-  { h: 'Record', p: 'Press once and put it in your pocket. In voice mode it skips the silences.', icon: 'mic' },
-  { h: 'Plug it in', p: 'USB-C, straight into your laptop or phone. Juno Pen finds the new recordings, or send them on WhatsApp.', icon: 'usb' },
-  { h: 'Read the note', p: 'Minutes later: the summary, the people, the actions, and the email to send. In the app or in the chat.', icon: 'sparkle' },
-]
+const STEP_ICONS: IconName[] = ['mic', 'usb', 'sparkle']
+const STEP_ICONS_CHAT: IconName[] = ['mic', 'chat', 'sparkle']
 
 function HowItWorks() {
+  const { t, latam } = useL()
+  const icons = latam ? STEP_ICONS_CHAT : STEP_ICONS
   return (
     <section id="how" className="pen-lp-wrap pen-lp2-sec">
       <Reveal>
-        <h2 className="pen-lp-h2 pen-lp2-h2">Three steps. Two of them are plugging in a cable.</h2>
+        <h2 className="pen-lp-h2 pen-lp2-h2">{t.how.h2}</h2>
       </Reveal>
       <div className="pen-lp2-how">
         <div className="pen-lp2-steps">
-          {STEPS.map((s, i) => (
+          {t.how.steps.map((s, i) => (
             <Reveal key={s.h} delay={i * 0.07}>
               <div className="pen-lp2-step">
                 <span className="pen-lp2-step-n">{i + 1}</span>
-                <span className="pen-lp2-ficon"><Icon name={s.icon} size={18} /></span>
+                <span className="pen-lp2-ficon"><Icon name={icons[i]} size={18} /></span>
                 <span>
                   <h3 className="pen-lp2-ftitle">{s.h}</h3>
                   <p className="pen-lp2-fcopy">{s.p}</p>
@@ -653,33 +649,26 @@ function HowItWorks() {
 
 /* ---------------------------------------------------------------- the pen */
 
-const SPECS: { icon: IconName; k: string; v: string }[] = [
-  { icon: 'mic', k: '360° microphone', v: 'Picks up every side of the table, with noise reduction built in so voices come through clean.' },
-  { icon: 'usb', k: 'USB-C built in', v: 'Plugs straight into a laptop, phone or tablet. No cable to lose, nothing to install.' },
-  { icon: 'wave', k: 'One touch, voice activated', v: 'Press once to record. Voice mode pauses in the silences, so long meetings stay short to review.' },
-  { icon: 'clock', k: 'Timestamped files', v: 'Every recording is named by when it started. Long ones split cleanly and rejoin in Juno Pen.' },
-  { icon: 'save', k: 'Never loses a take', v: 'If the battery runs low it saves the recording before it powers down.' },
-  { icon: 'pen', k: 'It writes, too', v: 'A real ballpoint, refills in the box. Nobody asks what it is.' },
-]
+const SPEC_ICONS: IconName[] = ['mic', 'usb', 'wave', 'clock', 'save', 'pen']
 
 function ThePen() {
+  const { t, latam } = useL()
   return (
     <section id="pen" className="pen-lp2-pen">
       <div className="pen-lp-wrap">
         <div className="pen-lp2-pen-top">
           <Reveal>
-            <h2 className="pen-lp-h2 pen-lp2-h2">A pen that hears the whole room.</h2>
-            <p className="pen-lp2-sub">
-              Clip it in a shirt pocket or leave it on the table. Clear audio, a battery that lasts the
-              week, and room for years of meetings.
-            </p>
+            {latam && <span className="pen-lp2-soon">{t.pen.soon}</span>}
+            <h2 className="pen-lp-h2 pen-lp2-h2">{t.pen.h2}</h2>
+            <p className="pen-lp2-sub">{t.pen.sub}</p>
+            {latam && <p className="pen-lp2-sub pen-lp2-soon-body">{t.pen.soonBody}</p>}
           </Reveal>
           <Reveal delay={0.08} className="pen-lp2-pen-art">
             <div className="pen-lp2-halo pen-lp2-halo-wide" />
             <PenArt id="spec-pen" className="pen-lp2-spec-pen" />
             <figure className="pen-lp2-open">
               <PenArt id="open-pen" variant="open" className="pen-lp2-open-pen" />
-              <figcaption>Open it at the ring and the USB-C plug is right there.</figcaption>
+              <figcaption>{t.pen.open}</figcaption>
             </figure>
           </Reveal>
         </div>
@@ -688,24 +677,24 @@ function ThePen() {
           <Reveal delay={0.04}>
             <div className="pen-lp2-card pen-lp2-bignum">
               <span className="pen-lp2-num">72<small>GB</small></span>
-              <span className="pen-lp2-num-k">of storage</span>
-              <span className="pen-lp2-num-v">Over 7,000 hours of audio at the lowest bitrate. Years of meetings before it fills.</span>
+              <span className="pen-lp2-num-k">{t.pen.storageK}</span>
+              <span className="pen-lp2-num-v">{t.pen.storageV}</span>
             </div>
           </Reveal>
           <Reveal delay={0.1}>
             <div className="pen-lp2-card pen-lp2-bignum">
               <span className="pen-lp2-num">35<small>hrs</small></span>
-              <span className="pen-lp2-num-k">of recording per charge</span>
-              <span className="pen-lp2-num-v">A full working week of meetings between charges.</span>
+              <span className="pen-lp2-num-k">{t.pen.batteryK}</span>
+              <span className="pen-lp2-num-v">{t.pen.batteryV}</span>
             </div>
           </Reveal>
         </div>
 
         <div className="pen-lp2-specs">
-          {SPECS.map((s, i) => (
+          {t.pen.specs.map((s, i) => (
             <Reveal key={s.k} delay={0.04 + i * 0.04}>
               <div className="pen-lp2-card pen-lp2-spec">
-                <span className="pen-lp2-ficon"><Icon name={s.icon} size={18} /></span>
+                <span className="pen-lp2-ficon"><Icon name={SPEC_ICONS[i]} size={18} /></span>
                 <h3 className="pen-lp2-ftitle">{s.k}</h3>
                 <p className="pen-lp2-fcopy">{s.v}</p>
               </div>
@@ -714,9 +703,7 @@ function ThePen() {
         </div>
 
         <Reveal delay={0.1}>
-          <p className="pen-lp2-inbox">
-            In the box: the pen, a USB-C to USB-A cable, earphones, spare ink refills and a small screwdriver.
-          </p>
+          <p className="pen-lp2-inbox">{t.pen.inBox}</p>
         </Reveal>
       </div>
     </section>
@@ -724,18 +711,6 @@ function ThePen() {
 }
 
 /* ----------------------------------------------------------------- pricing */
-
-// Listed once, under every card, because it IS the same on every plan.
-const INCLUDED = [
-  'Unlimited recording (fair use: 100 hours a month)',
-  'Full transcript with who said what',
-  'Summary, decisions and action items',
-  'People detected and remembered',
-  'Ask across every recording with @',
-  'Follow-up emails drafted for you',
-  'A briefing in your inbox after each meeting',
-  'Notes in the language you spoke',
-]
 
 function PlanCta({ href, children, variant }: { href: string; children: React.ReactNode; variant: 'ghost' | 'accent' }) {
   return (
@@ -747,7 +722,7 @@ function PlanCta({ href, children, variant }: { href: string; children: React.Re
 
 type PlanCard = {
   name: string
-  price: number
+  price: string
   per: string
   line: string
   trade: string
@@ -767,7 +742,7 @@ function PlanCardView({ p, delay }: { p: PlanCard; delay: number }) {
             <span className={p.pro ? '' : 'pen-od-dim'}>{p.name}</span>
           </h3>
           <div className="mt-4 flex items-baseline gap-2">
-            <span className="pen-display pen-od-paper pen-t-price">{`$${p.price}`}</span>
+            <span className="pen-display pen-od-paper pen-t-price">{p.price}</span>
             <span className="pen-mono pen-od-dim pen-t-small">{p.per}</span>
           </div>
           <p className="pen-mono pen-od-mid mt-3 pen-t-small">{p.line}</p>
@@ -779,102 +754,151 @@ function PlanCardView({ p, delay }: { p: PlanCard; delay: number }) {
   )
 }
 
-const WITH_PEN: PlanCard[] = [
-  {
-    name: 'Monthly',
-    price: PLAN_MONTHLY_USD,
-    per: 'a month',
-    line: `${TRIAL_DAYS_POSTED} days free · pen $${PEN_USD} once`,
-    trade: 'You buy the pen, and you can stop any month you like.',
-    href: `${SIGN_UP}?plan=monthly&offer=posted-pen&from=pricing`,
-    cta: CTA,
-  },
-  {
-    name: '6 months',
-    price: PLAN_HALFYEAR_USD,
-    per: 'every 6 months',
-    line: `$${PLAN_HALFYEAR_USD / 6} a month · pen included`,
-    trade: 'The pen is on us, paid up front for half a year.',
-    href: `${SIGN_UP}?plan=halfyear&offer=posted-pen&from=pricing`,
-    cta: 'Get 6 months',
-    ribbon: 'Pen included',
-  },
-  {
-    name: 'Yearly',
-    price: PLAN_ANNUAL_USD,
-    per: 'a year',
-    line: `$${Math.round(PLAN_ANNUAL_USD / 12)} a month · pen included`,
-    trade: 'The pen is on us, and it works out cheapest.',
-    href: `${SIGN_UP}?plan=annual&offer=posted-pen&from=pricing`,
-    cta: CTA_YEARLY,
-    ribbon: 'Best value',
-    pro: true,
-  },
-]
+function penPlans(t: Copy, market: Market): PlanCard[] {
+  const P = t.pricing
+  return [
+    {
+      name: P.monthly,
+      price: money(PLAN_MONTHLY_USD, 'usd'),
+      per: P.perMonth,
+      line: P.penLineMonthly(TRIAL_DAYS_POSTED, money(PEN_USD, 'usd')),
+      trade: P.tradeMonthlyPen,
+      href: signup('plan=monthly&offer=posted-pen&from=pricing', market),
+      cta: t.cta.trialPen(TRIAL_DAYS_POSTED),
+    },
+    {
+      name: P.halfyear,
+      price: money(PLAN_HALFYEAR_USD, 'usd'),
+      per: P.perHalf,
+      line: P.penLineIncluded(money(PLAN_HALFYEAR_USD / 6, 'usd')),
+      trade: P.tradeHalfPen,
+      href: signup('plan=halfyear&offer=posted-pen&from=pricing', market),
+      cta: t.cta.halfyear,
+      ribbon: P.ribbonPen,
+    },
+    {
+      name: P.yearly,
+      price: money(PLAN_ANNUAL_USD, 'usd'),
+      per: P.perYear,
+      line: P.penLineIncluded(money(Math.round(PLAN_ANNUAL_USD / 12), 'usd')),
+      trade: P.tradeYearPen,
+      href: signup('plan=annual&offer=posted-pen&from=pricing', market),
+      cta: t.cta.yearly,
+      ribbon: P.ribbonBest,
+      pro: true,
+    },
+  ]
+}
 
-const OWN_RECORDER: PlanCard[] = [
-  {
-    name: 'Monthly',
-    price: SOFTWARE_MONTHLY_USD,
-    per: 'a month',
-    line: `${TRIAL_DAYS} days free`,
-    trade: 'Record on your phone or any recorder and upload the file.',
-    href: `${SIGN_UP}?plan=monthly&offer=own-recorder&from=pricing`,
-    cta: `Start ${TRIAL_DAYS} days free`,
-  },
-  {
-    name: '6 months',
-    price: SOFTWARE_HALFYEAR_USD,
-    per: 'every 6 months',
-    line: `$${SOFTWARE_HALFYEAR_USD / 6} a month · billed today`,
-    trade: 'The same, paid up front for half a year.',
-    href: `${SIGN_UP}?plan=halfyear&offer=own-recorder&from=pricing`,
-    cta: 'Get 6 months',
-  },
-]
+function ownPlans(t: Copy, market: Market): PlanCard[] {
+  const P = t.pricing
+  const half = market.currency === 'usd' ? SOFTWARE_HALFYEAR_USD : LOCAL_PRICES[market.currency].halfyear
+  return [
+    {
+      name: P.monthly,
+      price: ownPrice(market, 'monthly'),
+      per: P.perMonth,
+      line: P.ownLineMonthly(TRIAL_DAYS),
+      trade: P.tradeOwnMonthly,
+      href: signup('plan=monthly&offer=own-recorder&from=pricing', market),
+      cta: t.cta.trialOwn(TRIAL_DAYS),
+      pro: market.lang !== 'en',
+    },
+    {
+      name: P.halfyear,
+      price: ownPrice(market, 'halfyear'),
+      per: P.perHalf,
+      line: P.ownLineHalf(money(market.currency === 'clp' ? Math.round(half / 6 / 10) * 10 : Math.round((half / 6) * 100) / 100, market.currency)),
+      trade: P.tradeOwnHalf,
+      href: signup('plan=halfyear&offer=own-recorder&from=pricing', market),
+      cta: t.cta.halfyear,
+    },
+  ]
+}
+
+/** Latin America: the pen tab is a single "coming soon" card with a notify-me. */
+function PenSoon() {
+  const { t, market } = useL()
+  return (
+    <Reveal>
+      <article className="pen-lp-plan pen-lp-plan-soon">
+        <header>
+          <h3 className="pen-mono pen-t-label uppercase tracking-[.14em] pen-od-dim">{t.pen.soon}</h3>
+          <p className="pen-display pen-od-paper pen-lp-soon-h">{t.pricing.soonTitle}</p>
+        </header>
+        <p className="pen-lp-plan-trade">{t.pricing.soonBody}</p>
+        <PlanCta href={signup('offer=posted-pen&waitlist=pen&from=pricing', market)} variant="ghost">{t.pricing.soonCta}</PlanCta>
+      </article>
+    </Reveal>
+  )
+}
 
 function Pricing() {
-  const [group, setGroup] = useState<'pen' | 'own'>('pen')
+  const { t, market, latam } = useL()
+  // The US leads with the pen; Latin America with the phone, because the pen can't ship yet.
+  const [group, setGroup] = useState<'pen' | 'own'>(latam ? 'own' : 'pen')
+  // "No pen?" in the hero links to #plans-own: open that tab and scroll to it.
+  useEffect(() => {
+    const open = () => {
+      if (window.location.hash === '#plans-own') setGroup('own')
+    }
+    open()
+    window.addEventListener('hashchange', open)
+    return () => window.removeEventListener('hashchange', open)
+  }, [])
+  const P = t.pricing
   return (
     <section id="pricing" className="pen-lp-dark pen-lp2-pricing">
       <div className="pen-lp-wrap py-24 sm:py-28">
         <Reveal>
-          <h2 className="pen-lp-h2 pen-lp-h2-tight pen-od-paper">Unlimited recording on every plan.</h2>
-          <p className="pen-od-soft mt-5 pen-t-lede-sm text-balance">
-            With the Juno pen, or with the recorder you already have. Same notes, same search, same everything.
-          </p>
+          <h2 className="pen-lp-h2 pen-lp-h2-tight pen-od-paper">{P.h2}</h2>
+          <p className="pen-od-soft mt-5 pen-t-lede-sm text-balance">{P.sub}</p>
         </Reveal>
 
-        {/* One group at a time: five cards at once read as a menu. The pen tab leads because
-            it is the US offer; a market page can open on the other. */}
-        <div className="pen-lp-tabs" role="tablist" aria-label="Choose how you record">
-          <button type="button" role="tab" id="plans-tab-pen" aria-controls="plans-panel" aria-selected={group === 'pen'} className="pen-lp-tab" data-on={group === 'pen'} onClick={() => setGroup('pen')}>
-            With the Juno pen
-          </button>
-          <button type="button" role="tab" id="plans-tab-own" aria-controls="plans-panel" aria-selected={group === 'own'} className="pen-lp-tab" data-on={group === 'own'} onClick={() => setGroup('own')}>
-            Your own recorder
-          </button>
+        {/* One group at a time: five cards at once read as a menu. */}
+        <div id="plans-own" className="pen-lp-tabs" role="tablist" aria-label={P.tabAria}>
+          {(latam ? (['own', 'pen'] as const) : (['pen', 'own'] as const)).map((g) => (
+            <button
+              key={g}
+              type="button"
+              role="tab"
+              id={`plans-tab-${g}`}
+              aria-controls="plans-panel"
+              aria-selected={group === g}
+              className="pen-lp-tab"
+              data-on={group === g}
+              onClick={() => setGroup(g)}
+            >
+              {g === 'pen' ? P.tabPen : P.tabOwn}
+            </button>
+          ))}
         </div>
 
-        <div id="plans-panel" role="tabpanel" aria-labelledby={group === 'pen' ? 'plans-tab-pen' : 'plans-tab-own'} className="pen-lp-plangroup mt-8">
-          {group === 'own' && (
-            <p className="pen-lp-plangroup-sub pen-od-dim">Your phone, WhatsApp voice notes, Plaud, or any recorder that gives you an audio file.</p>
+        <div id="plans-panel" role="tabpanel" aria-labelledby={`plans-tab-${group}`} className="pen-lp-plangroup mt-8">
+          {group === 'own' && <p className="pen-lp-plangroup-sub pen-od-dim">{P.ownSub}</p>}
+          {group === 'pen' && latam ? (
+            <div className="pen-lp-plans pen-lp-plans-1">
+              <PenSoon />
+            </div>
+          ) : (
+            <div className={`pen-lp-plans ${group === 'pen' ? 'pen-lp-plans-3' : 'pen-lp-plans-2'}`}>
+              {(group === 'pen' ? penPlans(t, market) : ownPlans(t, market)).map((p, i) => (
+                <PlanCardView key={`${group}-${p.name}`} p={p} delay={i * 0.05} />
+              ))}
+            </div>
           )}
-          <div className={`pen-lp-plans ${group === 'pen' ? 'pen-lp-plans-3' : 'pen-lp-plans-2'}`}>
-            {(group === 'pen' ? WITH_PEN : OWN_RECORDER).map((p, i) => <PlanCardView key={`${group}-${p.name}`} p={p} delay={i * 0.05} />)}
-          </div>
         </div>
 
         <Reveal delay={0.24}>
           <div className="pen-lp-both">
-            <p className="pen-t-small pen-od-dim">Every plan includes</p>
+            <p className="pen-t-small pen-od-dim">{P.includedTitle}</p>
             <ul className="pen-lp-bothlist">
-              {INCLUDED.map((f) => (
-                <li key={f}>
+              {P.included.map((it) => (
+                <li key={it}>
                   <svg viewBox="0 0 16 16" aria-hidden>
                     <path d="M3 8.4 L6.2 11.6 L13 4.8" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
-                  <span>{f}</span>
+                  <span>{it}</span>
                 </li>
               ))}
             </ul>
@@ -888,14 +912,16 @@ function Pricing() {
 /* ---------------------------------------------------------------- closing */
 
 function Closing() {
+  const { t, latam } = useL()
+  const cta = useMainCta()
   return (
     <section className="pen-lp-wrap pen-lp2-close">
       <Reveal>
         <div className="pen-lp2-close-card">
           <PenArt id="close-pen" className="pen-lp2-close-pen" />
-          <h2 className="pen-lp-h2 pen-lp2-h2">Your next meeting, remembered.</h2>
-          <p className="pen-lp2-sub">{`Try it free for ${TRIAL_DAYS_POSTED} days. The pen ships in the post.`}</p>
-          <Link href={`${SIGN_UP}?from=closing`} className="pen-lp-btn pen-lp-btn-accent pen-lp2-btn-lg">{CTA}</Link>
+          <h2 className="pen-lp-h2 pen-lp2-h2">{t.closing.h2}</h2>
+          <p className="pen-lp2-sub">{t.closing.sub(latam ? TRIAL_DAYS : TRIAL_DAYS_POSTED)}</p>
+          <Link href={cta.href('closing')} className="pen-lp-btn pen-lp-btn-accent pen-lp2-btn-lg">{cta.label}</Link>
         </div>
       </Reveal>
     </section>
@@ -904,7 +930,14 @@ function Closing() {
 
 /* ------------------------------------------------------------------ footer */
 
+const LANGS: { code: 'en' | 'es' | 'pt'; label: string }[] = [
+  { code: 'en', label: 'English' },
+  { code: 'es', label: 'Español' },
+  { code: 'pt', label: 'Português' },
+]
+
 function Footer() {
+  const { t, market } = useL()
   return (
     <footer className="pen-lp-foot">
       <div className="pen-lp-wrap flex flex-wrap items-center justify-between gap-5 py-9">
@@ -913,19 +946,28 @@ function Footer() {
           <span className="pen-mono pen-t-label" style={{ color: 'var(--faint)' }}>&copy; {new Date().getFullYear()} Juno Pen</span>
         </div>
         <nav className="flex flex-wrap items-center gap-x-6 gap-y-2">
-          <a href="#features" className="pen-lp-footlink">What it does</a>
-          <a href="#pen" className="pen-lp-footlink">The pen</a>
-          <a href="#pricing" className="pen-lp-footlink">Pricing</a>
-          <Link href="/privacy" className="pen-lp-footlink">Privacy</Link>
-          <Link href="/terms" className="pen-lp-footlink">Terms</Link>
-          <Link href={SIGN_IN} className="pen-lp-footlink">Sign in</Link>
+          <a href="#features" className="pen-lp-footlink">{t.nav.features}</a>
+          <a href="#pen" className="pen-lp-footlink">{t.nav.pen}</a>
+          <a href="#pricing" className="pen-lp-footlink">{t.nav.pricing}</a>
+          <Link href="/privacy" className="pen-lp-footlink">{t.footer.privacy}</Link>
+          <Link href="/terms" className="pen-lp-footlink">{t.footer.terms}</Link>
+          <Link href={SIGN_IN} className="pen-lp-footlink">{t.nav.signIn}</Link>
         </nav>
       </div>
-      <div className="pen-lp-wrap pb-10">
-        <p className="pen-mono max-w-[70ch] pen-t-label leading-[1.8]" style={{ color: 'var(--faint)' }}>
-          Recording a conversation needs everyone&rsquo;s permission in many places, Florida included.
-          Juno Pen asks you to confirm consent before it processes anything.
-        </p>
+      <div className="pen-lp-wrap flex flex-wrap items-end justify-between gap-6 pb-10">
+        <div className="grid gap-2">
+          <p className="pen-mono max-w-[70ch] pen-t-label leading-[1.8]" style={{ color: 'var(--faint)' }}>{t.footer.consent}</p>
+          <p className="pen-mono max-w-[70ch] pen-t-label leading-[1.8]" style={{ color: 'var(--faint)' }}>{t.footer.trademarks}</p>
+        </div>
+        {/* Anyone can switch: a Chilean in San Francisco, or a visitor on a VPN. The choice is
+            remembered by the site (see proxy.ts). */}
+        <nav className="pen-lp-langs" aria-label={t.switcher}>
+          {LANGS.map((l) => (
+            <a key={l.code} href={`?m=${l.code}`} className="pen-lp-lang" data-on={market.lang === l.code} aria-current={market.lang === l.code ? 'true' : undefined}>
+              {l.label}
+            </a>
+          ))}
+        </nav>
       </div>
     </footer>
   )

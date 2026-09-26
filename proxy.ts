@@ -23,7 +23,14 @@ export async function proxy(req: NextRequest) {
     if (map[pathname]) {
       const url = req.nextUrl.clone()
       url.pathname = map[pathname]
-      return NextResponse.rewrite(url)
+      const res = NextResponse.rewrite(url)
+      // The landing page's language switch (?m=en|es|pt) is remembered for a year, so a
+      // Chilean in San Francisco who picks Español keeps getting it. See app/pen/page.tsx.
+      const m = req.nextUrl.searchParams.get('m')
+      if (pathname === '/' && (m === 'en' || m === 'es' || m === 'pt')) {
+        res.cookies.set('juno_lang', m, { path: '/', maxAge: 60 * 60 * 24 * 365, sameSite: 'lax' })
+      }
+      return res
     }
   }
 

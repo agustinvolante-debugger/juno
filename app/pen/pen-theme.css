@@ -3217,3 +3217,72 @@ body:has(.pen-root) {
 .pen-lp-tab[data-on='true'] { background: var(--od-ink); color: var(--ink); }
 .pen-lp-tab:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 2px; }
 @media (max-width: 400px) { .pen-lp-tab { padding: 9px 12px; } }
+
+/* ---------------------------------------------------------------------------------------
+   Regional landing (25 Sep): the "No pen?" line, the WhatsApp phone hero, "coming soon",
+   and the language switch. The phone uses WhatsApp's own chat colours so it reads as
+   WhatsApp at a glance; everything around it stays in the Juno palette.
+   --------------------------------------------------------------------------------------- */
+.pen-lp2-nopen { margin: 8px 0 0; font-size: var(--t-small); line-height: var(--t-small-lh); }
+.pen-lp2-nopen a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.pen-lp2-nopen a:hover { color: var(--accent-ink); }
+
+.pen-lp2-chatstage { position: relative; display: flex; justify-content: center; align-items: center; min-height: 560px; }
+.pen-lp2-chatstage .pen-lp2-halo { inset: 8% 4%; }
+.pen-lp2-chat-pen { position: absolute; z-index: 0; width: 78%; right: -30%; bottom: 20%; transform: rotate(-62deg); pointer-events: none; }
+
+.pen-ph {
+  position: relative; z-index: 1; width: 272px; max-width: 78%; aspect-ratio: 9 / 18.6;
+  border-radius: 46px; background: #121212; padding: 10px;
+  box-shadow: 0 0 0 1.5px #2a2a2a inset, 0 30px 60px -22px rgba(22, 21, 15, .55), 0 10px 22px -12px rgba(22, 21, 15, .35);
+  transform: rotate(-3deg);
+}
+.pen-ph-screen { position: relative; height: 100%; border-radius: 37px; overflow: hidden; background: #EFE7DD; display: flex; flex-direction: column; }
+.pen-ph-island { position: absolute; top: 9px; left: 50%; width: 86px; height: 24px; margin-left: -43px; border-radius: 14px; background: #121212; z-index: 2; }
+.pen-ph-head { display: flex; align-items: center; gap: 8px; padding: 42px 12px 9px; background: #F6F5F3; border-bottom: 1px solid #E4E1DC; }
+.pen-ph-back { font-size: 22px; line-height: 1; color: #0B6B44; margin-right: 2px; }
+.pen-ph-av { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: #16150F; color: #F2EFE5; font-family: var(--font-display); font-size: 17px; }
+.pen-ph-who { display: flex; flex-direction: column; line-height: 1.2; }
+.pen-ph-who strong { font-family: var(--font-ui); font-size: 13px; font-weight: 600; color: #111B21; }
+.pen-ph-who em { font-style: normal; font-size: 10.5px; color: #667781; }
+.pen-ph-chat { flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 10px 8px; overflow: hidden; font-family: var(--font-ui); font-size: 11.5px; line-height: 1.38; color: #111B21; }
+.pen-ph-msg { max-width: 84%; display: flex; flex-direction: column; gap: 2px; padding: 6px 8px 4px; border-radius: 8px; background: #FFFFFF; box-shadow: 0 1px .5px rgba(11, 20, 26, .13); }
+.pen-ph-me { align-self: flex-end; background: #D9FDD3; border-top-right-radius: 2px; }
+.pen-ph-them { align-self: flex-start; border-top-left-radius: 2px; }
+.pen-ph-title { font-weight: 700; }
+.pen-ph-line { display: block; }
+.pen-ph-meta { align-self: flex-end; display: inline-flex; align-items: center; gap: 3px; font-size: 9.5px; color: #667781; }
+.pen-ph-ticks { width: 14px; height: 9px; color: #53BDEB; }
+.pen-ph-file { display: flex; align-items: center; gap: 8px; padding: 5px; border-radius: 6px; background: rgba(0, 0, 0, .05); }
+.pen-ph-fileicon { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border-radius: 6px; background: #0B6B44; color: #fff; font-size: 14px; }
+.pen-ph-file strong { display: block; font-size: 11px; font-weight: 600; }
+.pen-ph-file em { display: block; font-style: normal; font-size: 9.5px; color: #667781; }
+.pen-ph-input { display: flex; align-items: center; gap: 6px; padding: 8px 8px 14px; background: #F6F5F3; }
+.pen-ph-field { flex: 1; height: 26px; border-radius: 13px; background: #FFFFFF; border: 1px solid #E4E1DC; }
+.pen-ph-mic { width: 26px; height: 26px; border-radius: 50%; background: #0B6B44; color: transparent; }
+@media (max-width: 900px) {
+  .pen-lp2-chatstage { min-height: 500px; }
+  .pen-lp2-chat-pen { width: 70%; right: -10%; bottom: 8%; }
+}
+@media (max-width: 480px) {
+  .pen-lp2-chatstage { min-height: 460px; }
+  .pen-ph { width: 236px; }
+  .pen-lp2-chat-pen { width: 64%; right: -14%; }
+}
+
+.pen-lp2-soon {
+  display: inline-block; margin-bottom: 14px; padding: 4px 10px; border-radius: 999px;
+  font-family: var(--font-mono); font-size: var(--t-label); letter-spacing: .08em; text-transform: uppercase;
+  background: var(--accent-wash); color: var(--accent-ink); border: 1px solid var(--accent-line);
+}
+.pen-lp2-soon-body { margin-top: 10px; color: var(--accent-ink); }
+.pen-lp-plans-1 { max-width: 440px; }
+.pen-lp-soon-h { margin-top: 12px; font-size: var(--t-h3); line-height: var(--t-h3-lh); }
+
+.pen-lp-langs { display: flex; gap: 4px; flex-wrap: wrap; }
+.pen-lp-lang {
+  font-family: var(--font-mono); font-size: var(--t-label); padding: 4px 10px; border-radius: 999px;
+  border: 1px solid var(--line); color: var(--dim); text-decoration: none; transition: color .14s ease, border-color .14s ease;
+}
+.pen-lp-lang:hover { color: var(--ink); border-color: var(--ink); }
+.pen-lp-lang[data-on='true'] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
