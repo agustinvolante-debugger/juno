@@ -18,13 +18,13 @@ const TABS: { id: PhoneTab; icon: IconName }[] = [
   { id: 'home', icon: 'home' },
   { id: 'upload', icon: 'plus' },
   { id: 'recordings', icon: 'recordings' },
-  { id: 'search', icon: 'search' },
+  { id: 'search', icon: 'chat' },
 ]
 
 const PS: Copy<Record<PhoneTab, string> & { back: string; tabs: string }> = {
-  en: { home: 'Home', upload: 'Upload', recordings: 'Recordings', search: 'Search', back: 'Back', tabs: 'Main' },
-  es: { home: 'Inicio', upload: 'Subir', recordings: 'Grabaciones', search: 'Buscar', back: 'Atrás', tabs: 'Principal' },
-  pt: { home: 'Início', upload: 'Enviar', recordings: 'Gravações', search: 'Buscar', back: 'Voltar', tabs: 'Principal' },
+  en: { home: 'Home', upload: 'Upload', recordings: 'Recordings', search: 'Chat', back: 'Back', tabs: 'Main' },
+  es: { home: 'Inicio', upload: 'Subir', recordings: 'Grabaciones', search: 'Chat', back: 'Atrás', tabs: 'Principal' },
+  pt: { home: 'Início', upload: 'Enviar', recordings: 'Gravações', search: 'Chat', back: 'Voltar', tabs: 'Principal' },
 }
 
 export default function PhoneShell({
