@@ -195,3 +195,9 @@ export async function pauseSubscription(id: string, resumesAt: Date): Promise<Su
 export async function resumeSubscription(id: string): Promise<Subscription> {
   return stripe<Subscription>(`subscriptions/${encodeURIComponent(id)}`, { pause_collection: '' })
 }
+
+/** The email on a Stripe customer, for events that only carry the customer id. */
+export async function customerEmail(id: string): Promise<string | null> {
+  const c = await stripe<{ email?: string | null; deleted?: boolean }>(`customers/${encodeURIComponent(id)}`)
+  return c.deleted ? null : (c.email ?? null)
+}

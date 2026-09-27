@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
 import crypto from 'node:crypto'
-import { activate, deactivate, setPausedUntil } from '@/lib/pen/accounts'
+import { activate, deactivate, getAccountByStripe, setPausedUntil } from '@/lib/pen/accounts'
 import { settleHoursCheckout } from '@/lib/pen/hours'
 import { sendEmailResult } from '@/lib/news/email'
 import { planPrice, parsePlan, parseOffer } from '@/lib/pen/plan'
 import { LOCAL_PRICES, money, parseCurrency, parseLang } from '@/lib/pen/currency'
 import { rememberAppLanguage } from '@/lib/pen/profile'
 import { notifyPaid, notifyHours } from '@/lib/pen/notify-owner'
-import { portalLoginUrl } from '@/lib/pen/stripe'
+import { customerEmail, portalLoginUrl } from '@/lib/pen/stripe'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -140,9 +140,10 @@ export async function POST(req: Request) {
         // `past_due` does NOT — the card failed at the end of the trial, which is exactly the
         // case this whole mechanic exists to catch.
         const live = sub.status === 'active' || sub.status === 'trialing'
-        if (live && email) {
+        const subEmail = email || (await emailForSubscription(sub))
+        if (live && subEmail) {
           await activate({
-            email,
+            email: subEmail,
             stripeCustomerId: typeof sub.customer === 'string' ? sub.customer : null,
             stripeSubscriptionId: sub.id ?? null,
             currentPeriodEnd: periodEnd(sub),
@@ -166,7 +167,10 @@ export async function POST(req: Request) {
       // ending with a payment method attached, so it is exactly the right moment to say so —
       // and a surprise charge is the fastest way to turn a trial into a chargeback.
       case 'customer.subscription.trial_will_end': {
-        if (email) await trialEnding(email, trialEnd(o), o.metadata?.plan ?? null, o.metadata?.offer ?? null, o.metadata?.lang, o.metadata?.currency ?? null).catch(() => {})
+        // Same as above: a subscription event, so no email on it. Before this lookup the
+        // trial-ending email was never sent at all.
+        const to = email || (await emailForSubscription(o))
+        if (to) await trialEnding(to, trialEnd(o), o.metadata?.plan ?? null, o.metadata?.offer ?? null, o.metadata?.lang, o.metadata?.currency ?? null).catch(() => {})
         break
       }
 
@@ -286,6 +290,16 @@ function trialCharge(plan: string | null, offer: string | null, lang: MailLang, 
   const amount =
     cur === 'usd' ? money(p.usd, 'usd') : money(p.months === 1 ? LOCAL_PRICES[cur].monthly : LOCAL_PRICES[cur].halfyear, cur)
   return p.months === 1 ? M.firstMonth(amount) : M.firstMonths(amount, p.months)
+}
+
+// Subscription objects carry no email. Our account row knows it (by subscription, then
+// customer); failing that, the Stripe customer does.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function emailForSubscription(sub: Record<string, any>): Promise<string | null> {
+  const customer = typeof sub.customer === 'string' ? sub.customer : null
+  const found = await getAccountByStripe(sub.id ?? null, customer).catch(() => null)
+  if (found?.email) return found.email
+  return customer ? ((await customerEmail(customer).catch(() => null))?.toLowerCase() ?? null) : null
 }
 
 // Where an email sends someone to cancel or fix their card: Stripe's portal sign-in, which needs

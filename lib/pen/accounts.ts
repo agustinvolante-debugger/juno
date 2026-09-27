@@ -141,3 +141,17 @@ export async function setPausedUntil(stripeSubscriptionId: string, until: string
     .eq('stripe_subscription_id', stripeSubscriptionId)
   if (error && !/column .* does not exist|schema cache/i.test(error.message)) throw new Error(error.message)
 }
+
+/**
+ * The account a Stripe subscription event is about. Subscription objects carry no email, so
+ * without this renewals and plan changes never reached activate() and the stored period end
+ * and trial end froze at signup. Matched on subscription first, then customer.
+ */
+export async function getAccountByStripe(subscriptionId: string | null, customerId: string | null): Promise<PenAccount | null> {
+  for (const [col, v] of [['stripe_subscription_id', subscriptionId], ['stripe_customer_id', customerId]] as const) {
+    if (!v) continue
+    const { data } = await supabaseAdmin.from('pen_accounts').select('*').eq(col, v).limit(1).maybeSingle()
+    if (data) return data as PenAccount
+  }
+  return null
+}
