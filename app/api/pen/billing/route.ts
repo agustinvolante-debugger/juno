@@ -22,7 +22,7 @@ export async function GET(req: Request) {
     const lang = await appLangFor(email)
     const session = await createPortalSession({
       customerId: account.stripe_customer_id,
-      returnUrl: `${origin}/pen/settings`,
+      returnUrl: `${origin}/pen/settings/billing`,
       locale: LOCALE[lang],
     })
     return NextResponse.redirect(session.url, 303)

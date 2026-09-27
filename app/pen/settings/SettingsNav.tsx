@@ -19,8 +19,7 @@ const ITEMS: { href: string; label: 'profile' | 'WhatsApp'; icon: IconName }[] =
 
 /**
  * `whatsapp` is false until the Vonage env vars exist, so nobody finds a page that can't work.
- * `billing` is true for anyone Stripe knows; it opens Stripe's portal (card, invoices, cancel),
- * so it is a plain link to the API route rather than a page of ours.
+ * `billing` is true for anyone Stripe knows: pause, and the way into Stripe's portal.
  */
 export default function SettingsNav({ whatsapp = false, billing = false }: { whatsapp?: boolean; billing?: boolean }) {
   const T = useCopy(SN)
@@ -34,10 +33,10 @@ export default function SettingsNav({ whatsapp = false, billing = false }: { wha
         </Link>
       ))}
       {billing && (
-        <a href="/api/pen/billing" className="pen-cat">
+        <Link href="/pen/settings/billing" className="pen-cat" data-active={path === '/pen/settings/billing'} aria-current={path === '/pen/settings/billing' ? 'page' : undefined}>
           <Icon name="lock" size={19} />
           <span className="pen-cat-label">{T.billing}</span>
-        </a>
+        </Link>
       )}
     </nav>
   )

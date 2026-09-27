@@ -17,7 +17,7 @@ export async function proxy(req: NextRequest) {
   // app (signed in), served by the real /pen route so it keeps its own layout and fonts.
   const isRoot = host === 'tryjunoapp.com' || host === 'www.tryjunoapp.com'
   if (isRoot) {
-    const map: Record<string, string> = { '/': '/pen', '/signup': '/pen/signup', '/settings': '/pen/settings', '/settings/hours': '/pen/settings/hours', '/settings/whatsapp': '/pen/settings/whatsapp',
+    const map: Record<string, string> = { '/': '/pen', '/signup': '/pen/signup', '/settings': '/pen/settings', '/settings/hours': '/pen/settings/hours', '/settings/whatsapp': '/pen/settings/whatsapp', '/settings/billing': '/pen/settings/billing',
       // Pen's own privacy policy and terms. Only here: other hosts keep app/privacy and app/terms.
       '/privacy': '/pen/privacy', '/terms': '/pen/terms' }
     // One address per page: /pen itself redirects to the clean root.

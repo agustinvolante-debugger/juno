@@ -178,3 +178,20 @@ export async function createPortalSession(opts: { customerId: string; returnUrl:
 export function portalLoginUrl(): string | null {
   return process.env.STRIPE_PORTAL_LOGIN_URL || null
 }
+
+export type Subscription = { id: string; status: string; pause_collection: { resumes_at: number | null } | null }
+
+/**
+ * Stops charging until `resumesAt`, then Stripe restarts the subscription by itself. `void`
+ * means the invoices that fall inside the pause are voided, not saved up and billed later.
+ */
+export async function pauseSubscription(id: string, resumesAt: Date): Promise<Subscription> {
+  return stripe<Subscription>(`subscriptions/${encodeURIComponent(id)}`, {
+    pause_collection: { behavior: 'void', resumes_at: Math.floor(resumesAt.getTime() / 1000) },
+  })
+}
+
+/** Ends a pause now. An empty value is how Stripe unsets pause_collection. */
+export async function resumeSubscription(id: string): Promise<Subscription> {
+  return stripe<Subscription>(`subscriptions/${encodeURIComponent(id)}`, { pause_collection: '' })
+}

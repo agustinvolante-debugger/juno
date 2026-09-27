@@ -62,6 +62,7 @@ const EN = {
   consent: (name: string) => `Got ${name}.\n\nOne tap before I write it up: did everyone on this recording agree to be recorded?`,
   agreed: 'Everyone agreed',
   outOfHours: (hours: string) => `You're out of recording hours for this month. Buy more at ${hours} and send the file again.`,
+  paused: (url: string) => `Your Juno Pen plan is paused, so this recording wasn't processed. Resume it at ${url} and send the file again.`,
   lost: 'I lost track of that file. Could you send it again?',
   cancelled: 'Okay, I won\'t transcribe it. Nothing was kept.',
   tooLate: (home: string) => `That one is already being transcribed, so I couldn't stop it. You'll find it at ${home}.`,
@@ -98,6 +99,7 @@ const BOT: Record<Lang, typeof EN> = {
     consent: (name) => `Recibí ${name}.\n\nUn toque antes de escribir las notas: ¿todos en esta grabación aceptaron ser grabados?`,
     agreed: 'Todos aceptaron',
     outOfHours: (hours) => `Se acabaron tus horas de grabación de este mes. Compra más en ${hours} y vuelve a mandar el archivo.`,
+    paused: (url) => `Tu plan de Juno Pen está en pausa, así que no procesamos esta grabación. Reactívalo en ${url} y vuelve a mandar el archivo.`,
     lost: 'Perdí la pista de ese archivo. ¿Me lo mandas otra vez?',
     cancelled: 'Listo, no lo voy a transcribir. No se guardó nada.',
     tooLate: (home) => `Esa ya se está transcribiendo, así que no pude detenerla. La encuentras en ${home}.`,
@@ -131,6 +133,7 @@ const BOT: Record<Lang, typeof EN> = {
     consent: (name) => `Recebi ${name}.\n\nUm toque antes de escrever as notas: todos nesta gravação concordaram em ser gravados?`,
     agreed: 'Todos concordaram',
     outOfHours: (hours) => `Suas horas de gravação deste mês acabaram. Compre mais em ${hours} e mande o arquivo de novo.`,
+    paused: (url) => `Seu plano do Juno Pen está pausado, então esta gravação não foi processada. Retome em ${url} e mande o arquivo de novo.`,
     lost: 'Perdi esse arquivo de vista. Pode mandar de novo?',
     cancelled: 'Tudo bem, não vou transcrever. Nada foi guardado.',
     tooLate: (home) => `Essa já está sendo transcrita, então não consegui parar. Ela está em ${home}.`,
@@ -228,7 +231,7 @@ async function askConsent(msg: Inbound, L: typeof EN): Promise<void> {
   const allowance = await getAllowance(link.email)
   if (!allowance.canProcess) {
     await moveMessage(msg.id, 'received', 'cancelled')
-    await sendText(msg.from, L.outOfHours(appUrl('/settings/hours')))
+    await sendText(msg.from, allowance.pausedUntil ? L.paused(appUrl('/settings/billing')) : L.outOfHours(appUrl('/settings/hours')))
     return
   }
 
@@ -289,7 +292,10 @@ async function transcribeFile(
   L: typeof EN,
 ): Promise<{ ok: true; session: PenSession; minutes: number | null } | { ok: false; session?: PenSession; message: string }> {
   // Checked again: hours may have run out between the file and the tap.
-  if (!(await getAllowance(email)).canProcess) return { ok: false, message: L.outOfHours(appUrl('/settings/hours')) }
+  const allowance = await getAllowance(email)
+  if (!allowance.canProcess) {
+    return { ok: false, message: allowance.pausedUntil ? L.paused(appUrl('/settings/billing')) : L.outOfHours(appUrl('/settings/hours')) }
+  }
 
   const media = await openMedia(mediaUrl)
   const bytes = Number(media.headers.get('content-length')) || 0

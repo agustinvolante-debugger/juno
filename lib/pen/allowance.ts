@@ -17,6 +17,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase'
 import { INCLUDED_HOURS, isUncapped, monthKey, nextMonthStart } from './plan'
+import { getAccount, isPaused } from './accounts'
 
 export type Allowance = {
   /** On the uncapped list: the numbers are reported, nothing is ever held. */
@@ -35,6 +36,8 @@ export type Allowance = {
   /** Recordings uploaded and waiting for time. */
   heldCount: number
   resetsAt: string
+  /** Set while the subscription is paused: nothing new is processed until then. */
+  pausedUntil: string | null
 }
 
 export type MeterRow = {
@@ -95,8 +98,12 @@ function charge(r: MeterRow): { at: number; sec: number } | null {
 }
 
 export async function getAllowance(email: string, now = new Date()): Promise<Allowance> {
-  const [rows, bought] = await Promise.all([meterRows(email), purchases(email)])
-  return foldAllowance(email, rows, bought, now)
+  const [rows, bought, account] = await Promise.all([meterRows(email), purchases(email), getAccount(email)])
+  const a = foldAllowance(email, rows, bought, now)
+  // A paused subscription holds new recordings the same way running out of hours does, and
+  // they go through on their own once the pause ends (resumeHeld runs when the app opens).
+  if (!a.uncapped && isPaused(account, now)) return { ...a, canProcess: false, pausedUntil: account!.paused_until! }
+  return a
 }
 
 /** The arithmetic, with no database, so the rules can be checked on their own. */
@@ -156,5 +163,6 @@ export function foldAllowance(
     canProcess: uncapped || remainingSec > 0,
     heldCount: rows.filter((r) => r.status === 'held').length,
     resetsAt: nextMonthStart(now).toISOString(),
+    pausedUntil: null,
   }
 }

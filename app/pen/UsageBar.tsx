@@ -14,6 +14,8 @@ const UB_EN = {
   counts: (d: string) => `Counts from the 1st. Resets ${d}.`,
   bought: (h: string) => `Plus ${h} of bought hours, which never expire.`,
   held: (n: number) => `${n} ${n === 1 ? 'recording is' : 'recordings are'} waiting for the month to reset.`,
+  paused: (d: string) => `Your plan is paused until ${d}. New recordings are kept and transcribed then.`,
+  heldPaused: (n: number) => `${n} ${n === 1 ? 'recording is' : 'recordings are'} waiting for the pause to end.`,
 }
 
 const UB: Copy<typeof UB_EN> = {
@@ -27,6 +29,8 @@ const UB: Copy<typeof UB_EN> = {
     counts: (d) => `Cuenta desde el día 1. Se reinicia el ${d}.`,
     bought: (h) => `Más ${h} de horas compradas, que no vencen.`,
     held: (n) => (n === 1 ? '1 grabación espera a que empiece el mes.' : `${n} grabaciones esperan a que empiece el mes.`),
+    paused: (d) => `Tu plan está en pausa hasta el ${d}. Las grabaciones nuevas se guardan y se transcriben entonces.`,
+    heldPaused: (n) => (n === 1 ? '1 grabación espera a que termine la pausa.' : `${n} grabaciones esperan a que termine la pausa.`),
   },
   pt: {
     head: 'Gravado este mês',
@@ -37,6 +41,8 @@ const UB: Copy<typeof UB_EN> = {
     counts: (d) => `Conta a partir do dia 1. Reinicia em ${d}.`,
     bought: (h) => `Mais ${h} de horas compradas, que não expiram.`,
     held: (n) => (n === 1 ? '1 gravação está esperando o mês virar.' : `${n} gravações estão esperando o mês virar.`),
+    paused: (d) => `Seu plano está pausado até ${d}. As gravações novas ficam guardadas e são transcritas depois.`,
+    heldPaused: (n) => (n === 1 ? '1 gravação está esperando a pausa terminar.' : `${n} gravações estão esperando a pausa terminar.`),
   },
 }
 
@@ -85,7 +91,9 @@ export default function UsageBar({ allowance }: { allowance: Allowance | null; s
         </div>
       )}
       <div className="pen-meter-sub">
-        {out
+        {a.pausedUntil
+          ? T.paused(shortDate(a.pausedUntil, lang, PLAN_TZ))
+          : out
           ? T.out(INCLUDED_HOURS, resets)
           : close || (!a.uncapped && pct >= 80)
             ? T.near(INCLUDED_HOURS, fmtHours(a.includedLeftSec), resets)
@@ -96,7 +104,7 @@ export default function UsageBar({ allowance }: { allowance: Allowance | null; s
       )}
       {a.heldCount > 0 && (
         <div className="pen-meter-sub pen-meter-held">
-          {T.held(a.heldCount)}
+          {a.pausedUntil ? T.heldPaused(a.heldCount) : T.held(a.heldCount)}
         </div>
       )}
     </div>

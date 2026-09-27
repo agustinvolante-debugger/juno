@@ -263,3 +263,7 @@ create index if not exists pen_clients_user on pen_clients(user_email);
 -- alter table public.pen_sessions add column if not exists speaker_map jsonb;
 -- alter table public.pen_sessions add column if not exists language text;
 -- alter table public.pen_sessions add column if not exists translation jsonb;
+
+-- 2026-09-27 (a) — pausing a monthly subscription for 30/60/90 days. Mirrors Stripe's
+-- pause_collection.resumes_at so uploads can be held without asking Stripe on every request.
+-- alter table public.pen_accounts add column if not exists paused_until timestamptz;

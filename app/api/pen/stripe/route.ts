@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import crypto from 'node:crypto'
-import { activate, deactivate } from '@/lib/pen/accounts'
+import { activate, deactivate, setPausedUntil } from '@/lib/pen/accounts'
 import { settleHoursCheckout } from '@/lib/pen/hours'
 import { sendEmailResult } from '@/lib/news/email'
 import { planPrice, parsePlan, parseOffer } from '@/lib/pen/plan'
@@ -152,6 +152,12 @@ export async function POST(req: Request) {
           })
         } else if (!live && sub.id) {
           await deactivate(sub.id)
+        }
+        // A pause started or ended (in the app, the dashboard, or by Stripe on the resume
+        // date). Stripe clears pause_collection itself when the date arrives.
+        if (sub.id) {
+          const resumes = sub.pause_collection?.resumes_at
+          await setPausedUntil(sub.id, typeof resumes === 'number' ? new Date(resumes * 1000).toISOString() : null)
         }
         break
       }

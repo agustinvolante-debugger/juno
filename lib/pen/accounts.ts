@@ -22,6 +22,8 @@ export type PenAccount = {
   /** Which offer brought them in — 'posted-pen' or 'own-recorder'. */
   offer: string | null
   activated_at: string | null
+  /** Set while a monthly subscription is paused (Stripe pause_collection.resumes_at). */
+  paused_until?: string | null
   note: string | null
   created_at: string
   updated_at: string
@@ -120,4 +122,22 @@ export async function deactivate(stripeSubscriptionId: string): Promise<void> {
     .update({ status: 'cancelled', updated_at: new Date().toISOString() })
     .eq('stripe_subscription_id', stripeSubscriptionId)
   if (error) throw new Error(error.message)
+}
+
+/** Paused right now. A date in the past means the pause is over, whatever the webhook did. */
+export function isPaused(a: PenAccount | null, now = new Date()): boolean {
+  return !!a?.paused_until && new Date(a.paused_until) > now
+}
+
+/**
+ * Records a pause (or its end) against the account. Keyed by subscription, because Stripe's
+ * subscription events carry no email. Tolerates the column not existing yet: a pause that
+ * isn't recorded here still stops the charges in Stripe, it just doesn't hold uploads.
+ */
+export async function setPausedUntil(stripeSubscriptionId: string, until: string | null): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('pen_accounts')
+    .update({ paused_until: until, updated_at: new Date().toISOString() })
+    .eq('stripe_subscription_id', stripeSubscriptionId)
+  if (error && !/column .* does not exist|schema cache/i.test(error.message)) throw new Error(error.message)
 }
