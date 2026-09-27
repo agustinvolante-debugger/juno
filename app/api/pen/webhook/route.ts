@@ -2,7 +2,7 @@ import { NextResponse, after } from 'next/server'
 import { getSessionByAai, getSession, updateSession } from '@/lib/pen/store'
 import { fetchTranscript } from '@/lib/pen/aai'
 import { writeNotes, STATUS_WORKING } from '@/lib/pen/pipeline'
-import { sendBriefing, sendFailureNotice, hasSomethingToSay } from '@/lib/pen/briefing'
+import { sendBriefing, sendFailureNotice, sendReadyNotice, hasSomethingToSay } from '@/lib/pen/briefing'
 import { autoJoin } from '@/lib/pen/merge'
 import { enrichPerson, peopleOnSession } from '@/lib/pen/people'
 import { sendWhatsAppBriefing, sendWhatsAppFailure } from '@/lib/pen/whatsapp/bot'
@@ -118,12 +118,20 @@ async function runUnattended(sessionId: string, email: string) {
       await Promise.all(people.map((p) => enrichPerson(email, p.id).catch(() => {})))
     }
 
-    if (!noted || !hasSomethingToSay(noted)) return
+    if (!noted) return
     // A tail part on its own says nothing worth an email — the combined briefing covers it.
     if (joined && noted.id !== joined.segments[0].id) return
 
     // Belt and braces against a retry that slipped past the claim.
     if (noted.briefing_sent_at) return
+
+    // Nothing to brief (no summary, to-dos, near-misses or questions). The upload screen
+    // promised an email when it's ready, so a short "it's ready" one goes instead of silence.
+    if (!hasSomethingToSay(noted)) {
+      const ready = await sendReadyNotice({ to: email, title: noted.title || sourceName })
+      if (ready.ok) await updateSession(noted.id, { briefing_sent_at: new Date().toISOString() })
+      return
+    }
 
     // Sent from WhatsApp: the short briefing goes back to that chat as well as the email.
     // Checked on this part OR the joined meeting's first part, since either may have come in
