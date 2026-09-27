@@ -624,6 +624,8 @@ export default function PenApp({
       title = T.mUploadTitle
       screen = (
         <div className="pen-m-upload">
+          <div className="pen-m-meter"><UsageBar allowance={allowance} /></div>
+          <div className="pen-m-upload-actions">
           {paused ? (
             <div className="pen-paused">
               <strong>{T.pausedTitle(fmtDate(paused, appLang, { day: 'numeric', month: 'long' }))}</strong>
@@ -635,10 +637,6 @@ export default function PenApp({
           ) : (
             <>
               <p className="pen-m-lede">{T.mUploadLede}</p>
-              <button type="button" className="pen-m-bigbtn" onClick={() => fileInput.current?.click()}>
-                <Icon name="plus" size={22} />
-                <span><strong>{T.mChoose}</strong><em>{T.mChooseSub}</em></span>
-              </button>
               {supportsPicker && (
                 <button type="button" className="pen-m-rowbtn" onClick={connectPen}>
                   <Icon name="usb" size={19} />
@@ -658,9 +656,13 @@ export default function PenApp({
                 <Icon name="quote" size={19} />
                 <span>{T.importTranscript}</span>
               </button>
+              <button type="button" className="pen-m-bigbtn" onClick={() => fileInput.current?.click()}>
+                <Icon name="plus" size={22} />
+                <span><strong>{T.mChoose}</strong><em>{T.mChooseSub}</em></span>
+              </button>
             </>
           )}
-          <div className="pen-m-meter"><UsageBar allowance={allowance} /></div>
+          </div>
         </div>
       )
     } else if (phoneTab === 'recordings') {
@@ -770,6 +772,9 @@ export default function PenApp({
             onThreadChanged={(id) => { setView({ k: 'chat', id }); void refreshChats() }}
             onDocCreated={(id) => { setView({ k: 'doc', id }); void refreshDocs() }}
             onCite={(sessionId) => { openSession(sessionId); setTab('note'); setChatOpen(false) }}
+            suggestions={searchSuggestions(stats, T, appLang)}
+            recent={chats.slice(0, 3).map((c) => ({ id: c.id, title: c.title ?? T.untitledChat }))}
+            onOpenRecent={(id) => openChat(id)}
           />
         )
       }
@@ -2144,7 +2149,7 @@ function Detail({
             </p>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="pen-d-actions flex flex-wrap items-center gap-2">
           {/* Keyed off the transcript, not the status. A session can land in `error` with a
               perfectly good transcript (a failed save, a transient API error), and gating the
               retry on status left it with no way out of the UI. */}

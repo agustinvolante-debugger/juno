@@ -41,6 +41,7 @@ const CV_EN = {
   askAnything: 'Ask anything across every recording… type @ to name one',
   asking: 'Asking…',
   ask: 'Ask',
+  recent: 'Recent',
 }
 
 const CV: Copy<typeof CV_EN> = {
@@ -65,6 +66,7 @@ const CV: Copy<typeof CV_EN> = {
     askAnything: 'Pregunta lo que quieras sobre todas tus grabaciones… escribe @ para nombrar una',
     asking: 'Preguntando…',
     ask: 'Preguntar',
+    recent: 'Recientes',
   },
   pt: {
     quick: [
@@ -86,6 +88,7 @@ const CV: Copy<typeof CV_EN> = {
     askAnything: 'Pergunte qualquer coisa sobre todas as gravações… digite @ para citar uma',
     asking: 'Perguntando…',
     ask: 'Perguntar',
+    recent: 'Recentes',
   },
 }
 
@@ -97,8 +100,16 @@ export default function ChatView({
   onThreadChanged,
   onDocCreated,
   recordings = [],
+  suggestions = [],
+  recent = [],
+  onOpenRecent,
 }: {
   chatId: string | null
+  /** Starter questions for an empty chat, so the screen is never blank (phone). */
+  suggestions?: string[]
+  /** Recent threads to reopen from an empty chat (phone). */
+  recent?: { id: string; title: string }[]
+  onOpenRecent?: (id: string) => void
   /** What @ can tag: people, and recordings (joined meetings once, under their first part). */
   recordings?: Taggable[]
   /** A question typed into the header search, with its @-tags; asked as soon as the view mounts. */
@@ -239,6 +250,21 @@ export default function ChatView({
             <p className="mt-3 max-w-[46ch] text-[14.5px] leading-relaxed" style={{ color: 'var(--dim)' }}>
               {T.emptyBody}
             </p>
+            {suggestions.length > 0 && (
+              <div className="pen-chat-sugg">
+                {suggestions.map((sq) => (
+                  <button type="button" key={sq} className="pen-chat-sugg-btn" onClick={() => void ask(sq)}>{sq}</button>
+                ))}
+              </div>
+            )}
+            {recent.length > 0 && onOpenRecent && (
+              <div className="pen-chat-recent">
+                <span className="pen-label">{T.recent}</span>
+                {recent.map((r) => (
+                  <button type="button" key={r.id} className="pen-chat-recent-btn" onClick={() => onOpenRecent(r.id)}>{r.title}</button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
