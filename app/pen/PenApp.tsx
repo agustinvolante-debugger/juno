@@ -628,7 +628,7 @@ export default function PenApp({
             onClick={() => { setCatFilter(null); setNavOpen(false) }}
           >
             <Icon name="recordings" size={19} />
-            <span className="pen-cat-label">{T.allRecordings}</span>
+            <span className="pen-cat-label">{T.allRecordingsNav}</span>
             <span className="pen-cat-n">{sessions.length}</span>
           </button>
         </div>

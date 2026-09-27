@@ -26,9 +26,9 @@ export function clientLang(): Lang {
   return current
 }
 
-/** "Sep 27" / "27 sept" / "27 de set." */
+/** "Sep 27" / "27 sept" / "27 de set". The trailing abbreviation dot is dropped: it doubles up before a full stop. */
 export function shortDate(iso: string | number | Date, lang: Lang, timeZone?: string): string {
-  return new Date(iso).toLocaleDateString(LOCALE[lang], { month: 'short', day: 'numeric', ...(timeZone ? { timeZone } : {}) })
+  return new Date(iso).toLocaleDateString(LOCALE[lang], { month: 'short', day: 'numeric', ...(timeZone ? { timeZone } : {}) }).replace(/\.$/, '')
 }
 
 export function fmtDate(iso: string | number | Date, lang: Lang, opts: Intl.DateTimeFormatOptions): string {
