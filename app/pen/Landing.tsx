@@ -955,8 +955,8 @@ function Footer() {
           <a href="#features" className="pen-lp-footlink">{t.nav.features}</a>
           <a href="#pen" className="pen-lp-footlink">{t.nav.pen}</a>
           <a href="#pricing" className="pen-lp-footlink">{t.nav.pricing}</a>
-          <Link href="/privacy" className="pen-lp-footlink">{t.footer.privacy}</Link>
-          <Link href="/terms" className="pen-lp-footlink">{t.footer.terms}</Link>
+          <Link href={`/privacy${market.lang === 'en' ? '' : `?lang=${market.lang}`}`} className="pen-lp-footlink">{t.footer.privacy}</Link>
+          <Link href={`/terms${market.lang === 'en' ? '' : `?lang=${market.lang}`}`} className="pen-lp-footlink">{t.footer.terms}</Link>
           <Link href={SIGN_IN} className="pen-lp-footlink">{t.nav.signIn}</Link>
         </nav>
       </div>

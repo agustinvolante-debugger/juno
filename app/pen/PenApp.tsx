@@ -2279,9 +2279,13 @@ function sentimentColor(s: string) {
   return 'var(--soft)'
 }
 
+// Newest recording first by when it was RECORDED (the file's own date), falling back to the
+// upload time for files without one. Sorting by upload time while heading by recording date put
+// an old recording uploaded today at the top under an old day, and could repeat a day heading.
 function groupByDay(sessions: PenSession[]): [string, PenSession[]][] {
+  const at = (s: PenSession) => new Date(s.recorded_at ?? s.created_at).getTime()
   const map = new Map<string, PenSession[]>()
-  for (const s of sessions) {
+  for (const s of [...sessions].sort((a, b) => at(b) - at(a))) {
     const key = new Date(s.recorded_at ?? s.created_at).toLocaleDateString(undefined, {
       weekday: 'short', month: 'short', day: 'numeric',
     })

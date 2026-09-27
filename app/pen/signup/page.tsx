@@ -24,6 +24,7 @@ const SU = {
     note: 'Anything we should know', notePh: 'What you’d want it for, or what you’ve tried before.',
     submit: 'Get started', sending: 'Sending…',
     finePen: 'We use this to set up your account and post your recorder. Nothing else.', fineOwn: 'We use this to set up your account. Nothing else.',
+    agree: ['By continuing you agree to the ', 'Terms', ' and ', 'Privacy Policy', '.'],
     doneH: 'You’re on the list.', doneWait: 'We’ll email you as soon as the pen is available where you are.',
     doneBody: 'There’s a confirmation in your inbox. We’ll send a link to start your free trial, and get the recorder in the post.',
     back: 'Back to the site', err: 'Something went wrong. Try again.', home: 'Back to Juno Pen',
@@ -40,6 +41,7 @@ const SU = {
     note: 'Algo que debamos saber', notePh: 'Para qué lo usarías, o qué has probado antes.',
     submit: 'Empezar', sending: 'Enviando…',
     finePen: 'Usamos esto para crear tu cuenta y enviarte el lápiz. Nada más.', fineOwn: 'Usamos esto para crear tu cuenta. Nada más.',
+    agree: ['Al continuar aceptas los ', 'Términos', ' y la ', 'Política de privacidad', '.'],
     doneH: 'Estás en la lista.', doneWait: 'Te escribimos apenas el lápiz esté disponible donde estás.',
     doneBody: 'Te llegó una confirmación al correo. Te enviaremos un enlace para empezar tu prueba gratis.',
     back: 'Volver al sitio', err: 'Algo salió mal. Inténtalo de nuevo.', home: 'Volver a Juno Pen',
@@ -56,6 +58,7 @@ const SU = {
     note: 'Algo que devemos saber', notePh: 'Para que você usaria, ou o que já testou antes.',
     submit: 'Começar', sending: 'Enviando…',
     finePen: 'Usamos isso para criar sua conta e enviar sua caneta. Nada mais.', fineOwn: 'Usamos isso para criar sua conta. Nada mais.',
+    agree: ['Ao continuar, você aceita os ', 'Termos', ' e a ', 'Política de privacidade', '.'],
     doneH: 'Você está na lista.', doneWait: 'Avisamos por e-mail assim que a caneta estiver disponível onde você está.',
     doneBody: 'Enviamos uma confirmação para o seu e-mail. Mandaremos um link para começar seu teste grátis.',
     back: 'Voltar ao site', err: 'Algo deu errado. Tente de novo.', home: 'Voltar ao Juno Pen',
@@ -250,6 +253,12 @@ export default function SignupPage() {
 
           <p className="pen-su-fine">
             {shipsPen ? T.finePen : T.fineOwn}
+          </p>
+          {/* Relative links: this page is /signup on the Pen domain (→ /privacy) and /pen/signup
+              elsewhere (→ /pen/privacy), and both resolve to the Pen versions. */}
+          <p className="pen-su-fine pen-su-agree">
+            {T.agree[0]}<a href={`terms${lang === 'en' ? '' : `?lang=${lang}`}`}>{T.agree[1]}</a>{T.agree[2]}
+            <a href={`privacy${lang === 'en' ? '' : `?lang=${lang}`}`}>{T.agree[3]}</a>{T.agree[4]}
           </p>
         </form>
       </main>
