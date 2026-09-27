@@ -9,8 +9,69 @@
 import { useEffect, useRef, useState } from 'react'
 import { patchJson, del, errMessage } from '@/lib/pen/http'
 import type { PenDoc } from '@/lib/pen/docs'
+import { useCopy, useLang } from './LangContext'
+import { fmtDate, plural, type Copy } from '@/lib/pen/i18n'
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'failed'
+
+const DV_EN = {
+  loadFailed: 'That page could not be loaded.',
+  saveFailed: 'Could not save this page.',
+  confirmDelete: 'Delete this page? This cannot be undone.',
+  deleteFailed: 'Could not delete this page.',
+  loading: 'Loading…',
+  kinds: { summary: 'Summary', prep: 'Prep doc', checklist: 'Checklist', note: 'Page' } as Record<string, string>,
+  page: 'Page',
+  recordings: ['recording', 'recordings'] as [string, string],
+  saving: 'saving',
+  saved: 'saved',
+  notSaved: 'not saved',
+  editOnly: 'Edit only',
+  preview: 'Preview',
+  copy: 'Copy',
+  delete: 'Delete',
+  dismiss: 'Dismiss',
+}
+
+const DV: Copy<typeof DV_EN> = {
+  en: DV_EN,
+  es: {
+    loadFailed: 'No se pudo cargar esa página.',
+    saveFailed: 'No se pudo guardar esta página.',
+    confirmDelete: '¿Borrar esta página? No se puede deshacer.',
+    deleteFailed: 'No se pudo borrar esta página.',
+    loading: 'Cargando…',
+    kinds: { summary: 'Resumen', prep: 'Preparación', checklist: 'Lista', note: 'Página' },
+    page: 'Página',
+    recordings: ['grabación', 'grabaciones'],
+    saving: 'guardando',
+    saved: 'guardado',
+    notSaved: 'sin guardar',
+    editOnly: 'Solo editar',
+    preview: 'Vista previa',
+    copy: 'Copiar',
+    delete: 'Borrar',
+    dismiss: 'Cerrar',
+  },
+  pt: {
+    loadFailed: 'Não foi possível carregar essa página.',
+    saveFailed: 'Não foi possível salvar esta página.',
+    confirmDelete: 'Apagar esta página? Não dá para desfazer.',
+    deleteFailed: 'Não foi possível apagar esta página.',
+    loading: 'Carregando…',
+    kinds: { summary: 'Resumo', prep: 'Preparação', checklist: 'Lista', note: 'Página' },
+    page: 'Página',
+    recordings: ['gravação', 'gravações'],
+    saving: 'salvando',
+    saved: 'salvo',
+    notSaved: 'não salvo',
+    editOnly: 'Só editar',
+    preview: 'Prévia',
+    copy: 'Copiar',
+    delete: 'Apagar',
+    dismiss: 'Fechar',
+  },
+}
 
 export default function DocView({
   docId,
@@ -21,6 +82,8 @@ export default function DocView({
   onDeleted: () => void
   onRenamed: () => void
 }) {
+  const T = useCopy(DV)
+  const lang = useLang()
   const [doc, setDoc] = useState<PenDoc | null>(null)
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
@@ -37,16 +100,17 @@ export default function DocView({
       .then(async (r) => (r.ok ? ((await r.json()) as { doc: PenDoc }) : null))
       .then((j) => {
         if (!alive) return
-        if (!j) return setError('That page could not be loaded.')
+        if (!j) return setError(T.loadFailed)
         setDoc(j.doc)
         setTitle(j.doc.title)
         setBody(j.doc.body)
         setSave('idle')
       })
-      .catch(() => alive && setError('That page could not be loaded.'))
+      .catch(() => alive && setError(T.loadFailed))
     return () => {
       alive = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docId])
 
   // Debounced autosave. The indicator is tri-state on purpose: a save indicator that says
@@ -61,7 +125,7 @@ export default function DocView({
         if (patch.title !== undefined) onRenamed()
       } catch (e) {
         setSave('failed')
-        setError(errMessage(e, 'Could not save this page.'))
+        setError(errMessage(e, T.saveFailed))
       }
     }, 700)
   }
@@ -69,12 +133,12 @@ export default function DocView({
   useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current) }, [])
 
   async function remove() {
-    if (!window.confirm('Delete this page? This cannot be undone.')) return
+    if (!window.confirm(T.confirmDelete)) return
     try {
       await del(`/api/pen/docs/${docId}`)
       onDeleted()
     } catch (e) {
-      setError(errMessage(e, 'Could not delete this page.'))
+      setError(errMessage(e, T.deleteFailed))
     }
   }
 
@@ -88,7 +152,7 @@ export default function DocView({
   if (!doc) {
     return (
       <div className="pen-panel px-8 py-14 text-center">
-        <p className="pen-mono text-[13px]" style={{ color: 'var(--dim)' }}>Loading…</p>
+        <p className="pen-mono text-[13px]" style={{ color: 'var(--dim)' }}>{T.loading}</p>
       </div>
     )
   }
@@ -107,29 +171,29 @@ export default function DocView({
             }}
           />
           <div className="pen-mono mt-2 flex flex-wrap items-center gap-x-2.5 text-[13px]" style={{ color: 'var(--dim)' }}>
-            <span>{KIND_LABEL[doc.kind] ?? 'Page'}</span>
+            <span>{T.kinds[doc.kind] ?? T.page}</span>
             <span style={{ color: 'var(--faint)' }}>·</span>
-            <span>{new Date(doc.created_at).toLocaleDateString(undefined, { dateStyle: 'medium' })}</span>
+            <span>{fmtDate(doc.created_at, lang, { dateStyle: 'medium' })}</span>
             {doc.source_ids.length > 0 && (
               <>
                 <span style={{ color: 'var(--faint)' }}>·</span>
-                <span>{doc.source_ids.length} recording{doc.source_ids.length === 1 ? '' : 's'}</span>
+                <span>{plural(doc.source_ids.length, T.recordings)}</span>
               </>
             )}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="pen-save" data-s={save}>
-            {save === 'saving' ? 'saving' : save === 'saved' ? 'saved' : save === 'failed' ? 'not saved' : ''}
+            {save === 'saving' ? T.saving : save === 'saved' ? T.saved : save === 'failed' ? T.notSaved : ''}
           </span>
           <button className="pen-btn" onClick={() => setPreview((v) => !v)}>
-            {preview ? 'Edit only' : 'Preview'}
+            {preview ? T.editOnly : T.preview}
           </button>
           <button className="pen-btn" onClick={() => void navigator.clipboard?.writeText(body)}>
-            Copy
+            {T.copy}
           </button>
           <button className="pen-btn pen-btn-quiet" onClick={remove}>
-            Delete
+            {T.delete}
           </button>
         </div>
       </div>
@@ -137,7 +201,7 @@ export default function DocView({
       {error && (
         <div className="pen-chat-error mt-4" role="alert">
           <span>{error}</span>
-          <button className="pen-chat-error-x" onClick={() => setError(null)} aria-label="Dismiss">×</button>
+          <button className="pen-chat-error-x" onClick={() => setError(null)} aria-label={T.dismiss}>×</button>
         </div>
       )}
 
@@ -155,13 +219,6 @@ export default function DocView({
       </div>
     </div>
   )
-}
-
-const KIND_LABEL: Record<string, string> = {
-  summary: 'Summary',
-  prep: 'Prep doc',
-  checklist: 'Checklist',
-  note: 'Page',
 }
 
 /**

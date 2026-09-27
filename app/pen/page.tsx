@@ -13,7 +13,7 @@ import { headers, cookies } from 'next/headers'
 import { marketFor } from './landing-copy'
 import { getProfileRaw } from '@/lib/pen/profile'
 import { ensureSample } from '@/lib/pen/sample'
-import { parseLang } from '@/lib/pen/currency'
+import { appLangFor } from './app-lang'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,9 +46,8 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
     // and there is no point paying for the second.
     // First run: the app's language, a sample recording for a brand-new account, and whether
     // the tour still needs to play. None of it may block the page.
-    const [h, c] = await Promise.all([headers(), cookies()])
     const profile = await getProfileRaw(email).catch(() => null)
-    appLang = parseLang(profile?.appLanguage ?? c.get('juno_lang')?.value ?? marketFor(h.get('x-vercel-ip-country'), null).lang)
+    appLang = await appLangFor(email, profile)
     showTour = !profile?.onboarding?.tour
     await ensureSample(email, appLang, profile?.name ?? session?.user?.name ?? null).catch(() => {})
     sessions = await listSessions(email)

@@ -10,6 +10,14 @@
 import { useCallback, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import type { Mention } from '@/lib/pen/store'
+import { useCopy } from './LangContext'
+import type { Copy } from '@/lib/pen/i18n'
+
+const TP: Copy<{ aria: string; people: string; recordings: string; open: (t: string) => string }> = {
+  en: { aria: 'People and recordings', people: 'People', recordings: 'Recordings', open: (t) => `Open “${t}”` },
+  es: { aria: 'Personas y grabaciones', people: 'Personas', recordings: 'Grabaciones', open: (t) => `Abrir “${t}”` },
+  pt: { aria: 'Pessoas e gravações', people: 'Pessoas', recordings: 'Gravações', open: (t) => `Abrir “${t}”` },
+}
 import Icon from './Icon'
 
 export type Taggable = { id: string; kind: 'recording' | 'person'; title: string; sub: string }
@@ -157,6 +165,7 @@ export function TagMenu({
   choose: (o: Taggable) => void
   up?: boolean
 }) {
+  const T = useCopy(TP)
   return (
     <AnimatePresence>
       {open && (
@@ -164,7 +173,7 @@ export function TagMenu({
           className="pen-tagpick"
           data-up={up}
           role="listbox"
-          aria-label="People and recordings"
+          aria-label={T.aria}
           initial={{ opacity: 0, y: up ? 4 : -4 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: up ? 4 : -4 }}
@@ -173,7 +182,7 @@ export function TagMenu({
           {matches.map((o, i) => (
             <li key={`${o.kind}-${o.id}`} role="option" aria-selected={i === pick}>
               {(i === 0 || matches[i - 1].kind !== o.kind) && (
-                <div className="pen-tagpick-head">{o.kind === 'person' ? 'People' : 'Recordings'}</div>
+                <div className="pen-tagpick-head">{o.kind === 'person' ? T.people : T.recordings}</div>
               )}
               <button
                 type="button"
@@ -202,6 +211,7 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /** Text with its @-tags drawn as chips. Recording chips open the recording. */
 export function TaggedText({ text, mentions, onOpen }: { text: string; mentions: Mention[]; onOpen: (id: string) => void }) {
+  const T = useCopy(TP)
   if (!mentions.length) return <>{text}</>
   const shown = (m: Mention) => `@${m.label ?? m.title}`
   // Longest first, so "@Call with Ana" wins over "@Call" when both are tagged.
@@ -217,7 +227,7 @@ export function TaggedText({ text, mentions, onOpen }: { text: string; mentions:
             {part}
           </span>
         ) : (
-          <button key={i} type="button" className="pen-tag" onClick={() => onOpen(m.id)} title={`Open “${m.title}”`}>
+          <button key={i} type="button" className="pen-tag" onClick={() => onOpen(m.id)} title={T.open(m.title)}>
             {part}
           </button>
         )

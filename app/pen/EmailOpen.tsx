@@ -10,6 +10,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getJson } from '@/lib/pen/http'
 import type { PenPerson } from '@/lib/pen/people'
+import { useCopy } from './LangContext'
+import type { Copy } from '@/lib/pen/i18n'
 
 type Client = 'gmail' | 'outlook' | 'other'
 const PREF_KEY = 'pen.mailClient'
@@ -25,9 +27,10 @@ export function splitDraft(draft: string): { to: string; subject: string; body: 
   let subject = ''
   let i = 0
   for (; i < Math.min(lines.length, 4); i++) {
-    const m = /^(to|subject)\s*:\s*(.*)$/i.exec(lines[i])
+    // English, Spanish and Portuguese headers: the draft is written in the recording's language.
+    const m = /^(to|para|subject|asunto|assunto)\s*:\s*(.*)$/i.exec(lines[i])
     if (!m) break
-    if (m[1].toLowerCase() === 'to') to = m[2].trim()
+    if (/^(to|para)$/i.test(m[1])) to = m[2].trim()
     else subject = m[2].trim()
   }
   const body = lines.slice(i).join('\n').replace(/^\n+/, '')
@@ -48,7 +51,37 @@ function composeUrl(client: Client, to: string, subject: string, body: string): 
 /** Some mail apps drop anything past roughly two thousand characters of mailto link. */
 const MAILTO_SAFE = 1900
 
-const LABEL: Record<Client, string> = { gmail: 'Open in Gmail', outlook: 'Open in Outlook', other: 'Other mail app' }
+const EO_EN = {
+  labels: { gmail: 'Open in Gmail', outlook: 'Open in Outlook', other: 'Other mail app' } as Record<Client, string>,
+  onClipboard: '[The full email is on your clipboard. Paste it here.]',
+  longNote: 'This one is long, so the full text is also on your clipboard. Paste it into the email.',
+  to: 'To',
+  theirEmail: (n: string) => `${n}'s email`,
+  recipient: 'Recipient email',
+  hint: 'Opens your own email with this filled in. Nothing is sent until you press Send there.',
+}
+
+const EO: Copy<typeof EO_EN> = {
+  en: EO_EN,
+  es: {
+    labels: { gmail: 'Abrir en Gmail', outlook: 'Abrir en Outlook', other: 'Otra app de correo' },
+    onClipboard: '[El correo completo está en tu portapapeles. Pégalo aquí.]',
+    longNote: 'Este es largo, así que el texto completo también quedó en tu portapapeles. Pégalo en el correo.',
+    to: 'Para',
+    theirEmail: (n) => `Correo de ${n}`,
+    recipient: 'Correo del destinatario',
+    hint: 'Abre tu propio correo con esto ya escrito. No se envía nada hasta que presiones Enviar ahí.',
+  },
+  pt: {
+    labels: { gmail: 'Abrir no Gmail', outlook: 'Abrir no Outlook', other: 'Outro app de e-mail' },
+    onClipboard: '[O e-mail completo está na sua área de transferência. Cole aqui.]',
+    longNote: 'Este é longo, então o texto completo também está na sua área de transferência. Cole no e-mail.',
+    to: 'Para',
+    theirEmail: (n) => `E-mail de ${n}`,
+    recipient: 'E-mail do destinatário',
+    hint: 'Abre o seu próprio e-mail com isto preenchido. Nada é enviado até você apertar Enviar lá.',
+  },
+}
 
 export default function EmailOpen({
   draft,
@@ -60,6 +93,7 @@ export default function EmailOpen({
   /** Copies the body, for when a link would cut it short. Returns whether it worked. */
   onCopy: (text: string) => Promise<boolean>
 }) {
+  const T = useCopy(EO)
   const parts = useMemo(() => splitDraft(draft), [draft])
   const [people, setPeople] = useState<PenPerson[]>([])
   const [to, setTo] = useState('')
@@ -111,8 +145,8 @@ export default function EmailOpen({
       // Too long for some mail apps to accept whole. Put the full text on the clipboard and
       // open with a pointer to it, rather than silently sending half an email.
       const copied = await onCopy(parts.body)
-      body = copied ? '[The full email is on your clipboard. Paste it here.]' : parts.body.slice(0, 1200)
-      setNote(copied ? 'This one is long, so the full text is also on your clipboard. Paste it into the email.' : null)
+      body = copied ? T.onClipboard : parts.body.slice(0, 1200)
+      setNote(copied ? T.longNote : null)
       window.location.href = composeUrl(client, to.trim(), parts.subject, body)
       return
     }
@@ -125,7 +159,7 @@ export default function EmailOpen({
   return (
     <div className="pen-mailopen">
       <label className="pen-mailopen-to">
-        <span className="pen-label">To</span>
+        <span className="pen-label">{T.to}</span>
         <input
           type="email"
           multiple
@@ -135,8 +169,8 @@ export default function EmailOpen({
             setTouched(true)
             setTo(e.target.value)
           }}
-          placeholder={parts.to ? `${parts.to}'s email` : 'name@example.com'}
-          aria-label="Recipient email"
+          placeholder={parts.to ? T.theirEmail(parts.to) : 'name@example.com'}
+          aria-label={T.recipient}
         />
         <datalist id={`mail-to-${sessionId}`}>
           {people.map((p) => (
@@ -147,12 +181,12 @@ export default function EmailOpen({
       <div className="pen-mailopen-btns">
         {order.map((c, i) => (
           <button key={c} type="button" className={i === 0 ? 'pen-btn pen-btn-accent' : 'pen-btn'} onClick={() => open(c)}>
-            {LABEL[c]}
+            {T.labels[c]}
           </button>
         ))}
       </div>
       <p className="pen-mailopen-hint">
-        {note ?? 'Opens your own email with this filled in. Nothing is sent until you press Send there.'}
+        {note ?? T.hint}
       </p>
     </div>
   )

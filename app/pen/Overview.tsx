@@ -17,6 +17,8 @@ import type { ArchiveStats, OpenAction, OpenMissed, ClientCard } from '@/lib/pen
 import type { PersonCard } from '@/lib/pen/people'
 import { postJson, errMessage } from '@/lib/pen/http'
 import Icon, { type IconName } from './Icon'
+import { useCopy, useLang } from './LangContext'
+import { shortDate as fmtShort, ago as fmtAgo, plural, type Copy } from '@/lib/pen/i18n'
 
 type Kind = 'todo' | 'missed' | 'people'
 
@@ -24,6 +26,184 @@ const MORPH = { type: 'spring' as const, stiffness: 420, damping: 40, mass: 0.8 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const
 /** Items a card shows before "See all". */
 const PREVIEW = 3
+
+/* ================================================================== copy */
+
+const OV_EN = {
+  saveFailed: 'That did not save. Try again.',
+  markedDone: 'Marked done',
+  markedHandled: 'Marked handled',
+  addedTodo: 'Added to Still to do',
+  heading: (n: number) => `${n} recording${n === 1 ? '' : 's'}, and what came out of them`,
+  recorded: (t: string) => `${t} recorded`,
+  latest: (d: string) => ` · latest ${d}`,
+  todo: 'Still to do',
+  todoEmpty: 'Nothing outstanding. Actions from each recording land here.',
+  missed: 'Nearly missed',
+  missedSub: 'said once, easy to lose',
+  missedEmpty: 'Nothing slipped through. When a meeting has something easy to miss, it shows up here.',
+  people: 'People',
+  lastSpoke: (name: string) => `last spoke with ${name}`,
+  nobody: 'nobody added yet',
+  peopleEmpty: "Add who you spoke with from a recording's People section. Then ask about them with @ in search.",
+  seeAll: (n: number) => `See all ${n}`,
+  open: 'Open',
+  ofDone: (d: number, t: number) => `${d} of ${t} done`,
+  markDone: (a: string) => `Mark done: ${a}`,
+  priority: 'Priority',
+  owner: 'Owner',
+  due: 'Due',
+  from: 'From',
+  markHandled: (m: string) => `Mark handled: ${m}`,
+  handled: 'Handled',
+  makeTodo: (m: string) => `Make it a to-do: ${m}`,
+  makeTodoTitle: 'Make it a to-do',
+  askAbout: (n: string) => `Ask about ${n}`,
+  calls: ['call', 'calls'] as [string, string],
+  noCard: 'No card yet. It is written the next time they are on a processed recording.',
+  mustHave: 'Must have',
+  dealbreakers: 'Dealbreakers',
+  neverSaid: 'Never said outright',
+  unknown: 'Still unknown',
+  close: 'Close',
+  filter: 'Filter',
+  show: 'Show',
+  shown: (n: number) => `${n} shown`,
+  todoFilter: 'Filter by words, person or recording',
+  all: (n: number) => `All ${n}`,
+  hasDate: 'Has a date',
+  nothingMatches: 'Nothing matches.',
+  missedFilter: 'Filter by words or recording',
+  last7: 'Last 7 days',
+  peopleFilter: 'Filter by name, email or role',
+  recent: 'Recent',
+  mostCalls: 'Most calls',
+  az: 'A to Z',
+  nobodyMatches: 'Nobody matches.',
+  orphans: 'Learned from recordings, not in People yet',
+  undo: 'Undo',
+  dismiss: 'Dismiss',
+  emptyTitle: 'Nothing recorded yet',
+  emptyBody: 'Plug the pen in and import one recording. From the second one on, Juno Pen starts joining them up: what the same people keep asking for, what you keep forgetting, what is still outstanding across everything.',
+}
+
+const OV: Copy<typeof OV_EN> = {
+  en: OV_EN,
+  es: {
+    saveFailed: 'No se guardó. Inténtalo otra vez.',
+    markedDone: 'Marcada como hecha',
+    markedHandled: 'Marcado como resuelto',
+    addedTodo: 'Agregado a Pendientes',
+    heading: (n) => `${n} ${n === 1 ? 'grabación' : 'grabaciones'}, y lo que salió de ellas`,
+    recorded: (t) => `${t} grabadas`,
+    latest: (d) => ` · la última el ${d}`,
+    todo: 'Pendientes',
+    todoEmpty: 'No hay nada pendiente. Las tareas de cada grabación aparecen aquí.',
+    missed: 'Casi se te pasa',
+    missedSub: 'se dijo una vez, fácil de perder',
+    missedEmpty: 'No se te escapó nada. Cuando una reunión tenga algo fácil de pasar por alto, aparecerá aquí.',
+    people: 'Personas',
+    lastSpoke: (name) => `última vez con ${name}`,
+    nobody: 'todavía no agregas a nadie',
+    peopleEmpty: 'Agrega con quién hablaste desde la sección Personas de una grabación. Después pregunta por ellos con @ en la búsqueda.',
+    seeAll: (n) => `Ver las ${n}`,
+    open: 'Abrir',
+    ofDone: (d, t) => `${d} de ${t} hechas`,
+    markDone: (a) => `Marcar como hecha: ${a}`,
+    priority: 'Prioridad',
+    owner: 'Responsable',
+    due: 'Fecha',
+    from: 'De',
+    markHandled: (m) => `Marcar como resuelto: ${m}`,
+    handled: 'Resuelto',
+    makeTodo: (m) => `Convertir en tarea: ${m}`,
+    makeTodoTitle: 'Convertir en tarea',
+    askAbout: (n) => `Preguntar por ${n}`,
+    calls: ['reunión', 'reuniones'],
+    noCard: 'Todavía no hay ficha. Se escribe la próxima vez que aparezca en una grabación procesada.',
+    mustHave: 'Imprescindible',
+    dealbreakers: 'Descartes',
+    neverSaid: 'Nunca lo dijo directo',
+    unknown: 'Todavía no se sabe',
+    close: 'Cerrar',
+    filter: 'Filtrar',
+    show: 'Mostrar',
+    shown: (n) => `${n} visibles`,
+    todoFilter: 'Filtra por palabras, persona o grabación',
+    all: (n) => `Todas ${n}`,
+    hasDate: 'Con fecha',
+    nothingMatches: 'No hay coincidencias.',
+    missedFilter: 'Filtra por palabras o grabación',
+    last7: 'Últimos 7 días',
+    peopleFilter: 'Filtra por nombre, correo o cargo',
+    recent: 'Recientes',
+    mostCalls: 'Más reuniones',
+    az: 'A a Z',
+    nobodyMatches: 'Nadie coincide.',
+    orphans: 'Aprendido de las grabaciones, todavía no está en Personas',
+    undo: 'Deshacer',
+    dismiss: 'Cerrar',
+    emptyTitle: 'Todavía no hay grabaciones',
+    emptyBody: 'Conecta el lápiz e importa una grabación. Desde la segunda, Juno Pen empieza a conectarlas: lo que las mismas personas siguen pidiendo, lo que se te sigue olvidando, lo que sigue pendiente en todo.',
+  },
+  pt: {
+    saveFailed: 'Não foi salvo. Tente de novo.',
+    markedDone: 'Marcada como feita',
+    markedHandled: 'Marcado como resolvido',
+    addedTodo: 'Adicionado a Pendências',
+    heading: (n) => `${n} ${n === 1 ? 'gravação' : 'gravações'}, e o que saiu delas`,
+    recorded: (t) => `${t} gravadas`,
+    latest: (d) => ` · a última em ${d}`,
+    todo: 'Pendências',
+    todoEmpty: 'Nada pendente. As tarefas de cada gravação aparecem aqui.',
+    missed: 'Quase passou batido',
+    missedSub: 'dito uma vez, fácil de perder',
+    missedEmpty: 'Nada escapou. Quando uma reunião tiver algo fácil de perder, aparece aqui.',
+    people: 'Pessoas',
+    lastSpoke: (name) => `última conversa com ${name}`,
+    nobody: 'ninguém adicionado ainda',
+    peopleEmpty: 'Adicione com quem você falou na seção Pessoas de uma gravação. Depois pergunte sobre eles com @ na busca.',
+    seeAll: (n) => `Ver todas (${n})`,
+    open: 'Abrir',
+    ofDone: (d, t) => `${d} de ${t} feitas`,
+    markDone: (a) => `Marcar como feita: ${a}`,
+    priority: 'Prioridade',
+    owner: 'Responsável',
+    due: 'Prazo',
+    from: 'De',
+    markHandled: (m) => `Marcar como resolvido: ${m}`,
+    handled: 'Resolvido',
+    makeTodo: (m) => `Virar tarefa: ${m}`,
+    makeTodoTitle: 'Virar tarefa',
+    askAbout: (n) => `Perguntar sobre ${n}`,
+    calls: ['reunião', 'reuniões'],
+    noCard: 'Ainda sem ficha. Ela é escrita na próxima vez que a pessoa aparecer numa gravação processada.',
+    mustHave: 'Indispensável',
+    dealbreakers: 'Eliminatórios',
+    neverSaid: 'Nunca disse com todas as letras',
+    unknown: 'Ainda não se sabe',
+    close: 'Fechar',
+    filter: 'Filtrar',
+    show: 'Mostrar',
+    shown: (n) => `${n} visíveis`,
+    todoFilter: 'Filtre por palavras, pessoa ou gravação',
+    all: (n) => `Todas ${n}`,
+    hasDate: 'Com prazo',
+    nothingMatches: 'Nada encontrado.',
+    missedFilter: 'Filtre por palavras ou gravação',
+    last7: 'Últimos 7 dias',
+    peopleFilter: 'Filtre por nome, e-mail ou cargo',
+    recent: 'Recentes',
+    mostCalls: 'Mais reuniões',
+    az: 'A a Z',
+    nobodyMatches: 'Ninguém encontrado.',
+    orphans: 'Aprendido nas gravações, ainda não está em Pessoas',
+    undo: 'Desfazer',
+    dismiss: 'Fechar',
+    emptyTitle: 'Nada gravado ainda',
+    emptyBody: 'Conecte a caneta e importe uma gravação. A partir da segunda, o Juno Pen começa a ligar os pontos: o que as mesmas pessoas continuam pedindo, o que você continua esquecendo, o que ainda está pendente em tudo.',
+  },
+}
 
 export default function Overview({
   stats,
@@ -42,6 +222,8 @@ export default function Overview({
 }) {
   // Local copies, so a tick removes the row immediately. Re-seeded whenever the server
   // snapshot changes, which happens a moment after each change settles.
+  const T = useCopy(OV)
+  const lang = useLang()
   const [actions, setActions] = useState<OpenAction[]>(stats.openActions)
   const [missed, setMissed] = useState<OpenMissed[]>(stats.openMissed ?? [])
   const [doneExtra, setDoneExtra] = useState(0)
@@ -74,7 +256,7 @@ export default function Overview({
     return postJson<{ ok: true; actionIndex?: number }>('/api/pen/home', body)
   }, [])
 
-  const fail = (e: unknown) => setToast({ text: errMessage(e, 'That did not save. Try again.'), tone: 'bad' })
+  const fail = (e: unknown) => setToast({ text: errMessage(e, T.saveFailed), tone: 'bad' })
 
   /* -------------------------------------------------------------- actions */
 
@@ -101,7 +283,7 @@ export default function Overview({
           fail(e)
         }
       }
-      setToast({ text: 'Marked done', undo })
+      setToast({ text: T.markedDone, undo })
       try {
         await saving
         changed()
@@ -112,7 +294,7 @@ export default function Overview({
         fail(e)
       }
     },
-    [actions, send, changed],
+    [actions, send, changed, T],
   )
 
   /* --------------------------------------------------------- nearly missed */
@@ -129,7 +311,7 @@ export default function Overview({
       setMissed((xs) => xs.filter((x) => x !== m))
       const saving = send({ op: 'handled', sessionId: m.sessionId, index: m.index })
       setToast({
-        text: 'Marked handled',
+        text: T.markedHandled,
         undo: async () => {
           restore()
           setToast(null)
@@ -150,7 +332,7 @@ export default function Overview({
         fail(e)
       }
     },
-    [missed, send, changed],
+    [missed, send, changed, T],
   )
 
   const promote = useCallback(
@@ -172,7 +354,7 @@ export default function Overview({
           index: r.actionIndex ?? 0,
         }
         setActions((xs) => [added, ...xs])
-        setToast({ text: 'Added to Still to do' })
+        setToast({ text: T.addedTodo })
         changed()
       } catch (e) {
         hidden.current.delete(key)
@@ -180,7 +362,7 @@ export default function Overview({
         fail(e)
       }
     },
-    [missed, send, changed],
+    [missed, send, changed, T],
   )
 
   useEffect(() => {
@@ -200,11 +382,11 @@ export default function Overview({
     <div className="pen-home">
       <header className="pen-home-head">
         <h2 className="pen-display pen-home-title">
-          {`${stats.recordings} recording${stats.recordings === 1 ? '' : 's'}, and what came out of them`}
+          {T.heading(stats.recordings)}
         </h2>
         <p className="pen-home-meta">
-          {`${hours >= 1 ? `${hours.toFixed(1)}h` : `${stats.minutes}m`} recorded`}
-          {stats.lastAt && ` · latest ${new Date(stats.lastAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+          {T.recorded(hours >= 1 ? `${hours.toFixed(1)} h` : `${stats.minutes} min`)}
+          {stats.lastAt && T.latest(fmtShort(stats.lastAt, lang))}
         </p>
       </header>
 
@@ -215,12 +397,12 @@ export default function Overview({
             open={open}
             onOpen={setOpen}
             icon="checklist"
-            title="Still to do"
+            title={T.todo}
             count={openCount}
             sub={
               <FollowThrough done={doneCount} total={doneCount + openCount} />
             }
-            empty="Nothing outstanding. Actions from each recording land here."
+            empty={T.todoEmpty}
             seeAll={openCount}
           >
             <AnimatePresence initial={false}>
@@ -235,10 +417,10 @@ export default function Overview({
             open={open}
             onOpen={setOpen}
             icon="alert"
-            title="Nearly missed"
+            title={T.missed}
             count={missedCount}
-            sub={<span>said once, easy to lose</span>}
-            empty="Nothing slipped through. When a meeting has something easy to miss, it shows up here."
+            sub={<span>{T.missedSub}</span>}
+            empty={T.missedEmpty}
             seeAll={missedCount}
           >
             <AnimatePresence initial={false}>
@@ -253,10 +435,10 @@ export default function Overview({
             open={open}
             onOpen={setOpen}
             icon="people"
-            title="People"
+            title={T.people}
             count={people.length}
-            sub={<span>{people.length ? `last spoke with ${people[0].name.split(' ')[0]}` : 'nobody added yet'}</span>}
-            empty="Add who you spoke with from a recording's People section. Then ask about them with @ in search."
+            sub={<span>{people.length ? T.lastSpoke(people[0].name.split(' ')[0]) : T.nobody}</span>}
+            empty={T.peopleEmpty}
             seeAll={people.length}
           >
             {people.slice(0, PREVIEW).map((p) => (
@@ -285,10 +467,10 @@ export default function Overview({
 
 /* ================================================================== card */
 
-const TITLES: Record<Kind, { title: string; icon: IconName }> = {
-  todo: { title: 'Still to do', icon: 'checklist' },
-  missed: { title: 'Nearly missed', icon: 'alert' },
-  people: { title: 'People', icon: 'people' },
+const TITLES: Record<Kind, { title: 'todo' | 'missed' | 'people'; icon: IconName }> = {
+  todo: { title: 'todo', icon: 'checklist' },
+  missed: { title: 'missed', icon: 'alert' },
+  people: { title: 'people', icon: 'people' },
 }
 
 function HomeCard({
@@ -314,6 +496,7 @@ function HomeCard({
   seeAll: number
   children: React.ReactNode
 }) {
+  const T = useCopy(OV)
   const reduce = useReducedMotion()
   const isOpen = open === kind
   const hasItems = count > 0
@@ -342,13 +525,13 @@ function HomeCard({
 
           {seeAll > PREVIEW && (
             <button type="button" className="pen-card-more" onClick={() => onOpen(kind)} aria-haspopup="dialog">
-              {`See all ${seeAll}`}
+              {T.seeAll(seeAll)}
               <Icon name="chevron" size={15} />
             </button>
           )}
           {hasItems && seeAll <= PREVIEW && (
             <button type="button" className="pen-card-more" data-quiet onClick={() => onOpen(kind)} aria-haspopup="dialog">
-              Open
+              {T.open}
               <Icon name="chevron" size={15} />
             </button>
           )}
@@ -383,13 +566,14 @@ function Count({ value, className }: { value: number; className?: string }) {
 }
 
 function FollowThrough({ done, total }: { done: number; total: number }) {
+  const T = useCopy(OV)
   const pct = total ? Math.min(100, (done / total) * 100) : 0
   return (
     <span className="pen-follow">
-      <span className="pen-follow-bar" role="img" aria-label={`${done} of ${total} done`}>
+      <span className="pen-follow-bar" role="img" aria-label={T.ofDone(done, total)}>
         <motion.span initial={false} animate={{ width: `${pct}%` }} transition={{ duration: 0.4, ease: EASE_OUT }} />
       </span>
-      <span className="pen-follow-n">{`${done} of ${total} done`}</span>
+      <span className="pen-follow-n">{T.ofDone(done, total)}</span>
     </span>
   )
 }
@@ -403,9 +587,7 @@ const rowMotion = {
   transition: { duration: 0.22, ease: EASE_OUT },
 }
 
-function shortDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
+
 
 /** Hover or keyboard focus shows it; leaving hides it. A short delay so skimming the list does not flash cards. */
 function usePeek() {
@@ -443,6 +625,8 @@ function Peek({ on, children }: { on: boolean; children: React.ReactNode }) {
 }
 
 function ActionRow({ a, onTick, onOpen, full = false }: { a: OpenAction; onTick: (a: OpenAction) => void; onOpen: (id: string) => void; full?: boolean }) {
+  const T = useCopy(OV)
+  const lang = useLang()
   const peek = usePeek()
   const [ticking, setTicking] = useState(false)
   // Undo brings the same row back while it is still leaving, so React reuses this component
@@ -458,7 +642,7 @@ function ActionRow({ a, onTick, onOpen, full = false }: { a: OpenAction; onTick:
           type="button"
           className="pen-tick"
           data-on={ticking}
-          aria-label={`Mark done: ${a.action}`}
+          aria-label={T.markDone(a.action)}
           onClick={() => {
             setTicking(true)
             // The check draws first, then the row leaves. Removing it instantly reads as a glitch.
@@ -482,7 +666,7 @@ function ActionRow({ a, onTick, onOpen, full = false }: { a: OpenAction; onTick:
         <button type="button" className="pen-row2-main" onClick={() => onOpen(a.sessionId)}>
           <span className="pen-row2-text" data-done={ticking}>{a.action}</span>
           <span className="pen-row2-meta">
-            {a.priority === 'high' && <span className="pen-row2-flag">Priority</span>}
+            {a.priority === 'high' && <span className="pen-row2-flag">{T.priority}</span>}
             {a.due && <span className="pen-row2-due">{a.due}</span>}
             <span>{a.sessionTitle}</span>
           </span>
@@ -492,9 +676,9 @@ function ActionRow({ a, onTick, onOpen, full = false }: { a: OpenAction; onTick:
         <Peek on={peek.on}>
           <p className="pen-peek-text">{a.action}</p>
           <dl className="pen-peek-facts">
-            {a.owner && <><dt>Owner</dt><dd>{a.owner}</dd></>}
-            {a.due && <><dt>Due</dt><dd>{a.due}</dd></>}
-            <dt>From</dt><dd>{`${a.sessionTitle} · ${shortDate(a.when)}`}</dd>
+            {a.owner && <><dt>{T.owner}</dt><dd>{a.owner}</dd></>}
+            {a.due && <><dt>{T.due}</dt><dd>{a.due}</dd></>}
+            <dt>{T.from}</dt><dd>{`${a.sessionTitle} · ${fmtShort(a.when, lang)}`}</dd>
           </dl>
         </Peek>
       )}
@@ -515,6 +699,8 @@ function MissedRow({
   onOpen: (id: string) => void
   full?: boolean
 }) {
+  const T = useCopy(OV)
+  const lang = useLang()
   const peek = usePeek()
   return (
     <motion.li {...rowMotion} className="pen-row2" data-full={full} {...(full ? {} : peek.bind)}>
@@ -523,13 +709,13 @@ function MissedRow({
         <button type="button" className="pen-row2-main" onClick={() => onOpen(m.sessionId)}>
           <span className="pen-row2-text">{m.item}</span>
           {full && m.why && <span className="pen-row2-why">{m.why}</span>}
-          <span className="pen-row2-meta"><span>{full ? `${m.sessionTitle} · ${shortDate(m.when)}` : m.sessionTitle}</span></span>
+          <span className="pen-row2-meta"><span>{full ? `${m.sessionTitle} · ${fmtShort(m.when, lang)}` : m.sessionTitle}</span></span>
         </button>
         <span className="pen-row2-tools">
-          <button type="button" className="pen-tool" onClick={() => onHandle(m)} aria-label={`Mark handled: ${m.item}`} title="Handled">
+          <button type="button" className="pen-tool" onClick={() => onHandle(m)} aria-label={T.markHandled(m.item)} title={T.handled}>
             <Icon name="check" size={15} />
           </button>
-          <button type="button" className="pen-tool" onClick={() => onPromote(m)} aria-label={`Make it a to-do: ${m.item}`} title="Make it a to-do">
+          <button type="button" className="pen-tool" onClick={() => onPromote(m)} aria-label={T.makeTodo(m.item)} title={T.makeTodoTitle}>
             <Icon name="plus" size={15} />
           </button>
         </span>
@@ -538,7 +724,7 @@ function MissedRow({
         <Peek on={peek.on}>
           <p className="pen-peek-text">{m.item}</p>
           {m.why && <p className="pen-peek-why">{m.why}</p>}
-          <dl className="pen-peek-facts"><dt>From</dt><dd>{`${m.sessionTitle} · ${shortDate(m.when)}`}</dd></dl>
+          <dl className="pen-peek-facts"><dt>{T.from}</dt><dd>{`${m.sessionTitle} · ${fmtShort(m.when, lang)}`}</dd></dl>
         </Peek>
       )}
     </motion.li>
@@ -546,15 +732,17 @@ function MissedRow({
 }
 
 function PersonRow({ p, client, onAsk }: { p: PersonCard; client?: ClientCard; onAsk: (p: PersonCard) => void }) {
+  const T = useCopy(OV)
+  const lang = useLang()
   const peek = usePeek()
   return (
     <li className="pen-row2" {...peek.bind}>
       <div className="pen-row2-inner">
         <span className="pen-avatar pen-row2-avatar">{initials(p.name)}</span>
-        <button type="button" className="pen-row2-main" onClick={() => onAsk(p)} title={`Ask about ${p.name}`}>
+        <button type="button" className="pen-row2-main" onClick={() => onAsk(p)} title={T.askAbout(p.name)}>
           <span className="pen-row2-text pen-row2-name">{p.name}</span>
           <span className="pen-row2-meta">
-            <span>{[`${p.recordings} ${p.recordings === 1 ? 'call' : 'calls'}`, p.lastAt && ago(p.lastAt)].filter(Boolean).join(' · ')}</span>
+            <span>{[plural(p.recordings, T.calls), p.lastAt && fmtAgo(p.lastAt, lang)].filter(Boolean).join(' · ')}</span>
           </span>
         </button>
       </div>
@@ -566,6 +754,7 @@ function PersonRow({ p, client, onAsk }: { p: PersonCard; client?: ClientCard; o
 }
 
 function PersonDetail({ p, client, onAsk }: { p: PersonCard; client?: ClientCard; onAsk: (p: PersonCard) => void }) {
+  const T = useCopy(OV)
   return (
     <div className="pen-person-detail">
       <div className="pen-person-detail-head">
@@ -573,11 +762,11 @@ function PersonDetail({ p, client, onAsk }: { p: PersonCard; client?: ClientCard
         {(p.role || p.company) && <span>{[p.role, p.company].filter(Boolean).join(' · ')}</span>}
       </div>
       {p.email && <span className="pen-person-email">{p.email}</span>}
-      {p.summary ? <p className="pen-peek-why">{p.summary}</p> : <p className="pen-peek-why">No card yet. It is written the next time they are on a processed recording.</p>}
+      {p.summary ? <p className="pen-peek-why">{p.summary}</p> : <p className="pen-peek-why">{T.noCard}</p>}
       {client && <ClientFacets c={client} />}
       <button type="button" className="pen-peek-ask" onMouseDown={(e) => e.preventDefault()} onClick={() => onAsk(p)}>
         <Icon name="search" size={14} />
-        {`Ask about ${p.name.split(' ')[0]}`}
+        {T.askAbout(p.name.split(' ')[0])}
       </button>
     </div>
   )
@@ -585,11 +774,12 @@ function PersonDetail({ p, client, onAsk }: { p: PersonCard; client?: ClientCard
 
 /** What the client profile learned across meetings. Formerly its own section on Home. */
 function ClientFacets({ c }: { c: ClientCard }) {
+  const T = useCopy(OV)
   const rows: [string, string[] | undefined, string][] = [
-    ['Must have', c.profile.must_haves, ''],
-    ['Dealbreakers', c.profile.dealbreakers, 'bad'],
-    ['Never said outright', c.profile.revealed_criteria, 'accent'],
-    ['Still unknown', c.profile.open_questions, ''],
+    [T.mustHave, c.profile.must_haves, ''],
+    [T.dealbreakers, c.profile.dealbreakers, 'bad'],
+    [T.neverSaid, c.profile.revealed_criteria, 'accent'],
+    [T.unknown, c.profile.open_questions, ''],
   ]
   const shown = rows.filter(([, xs]) => xs?.length)
   if (!shown.length) return null
@@ -608,6 +798,7 @@ function ClientFacets({ c }: { c: ClientCard }) {
 /* ================================================================= panel */
 
 function Panel({ open, onClose, children }: { open: Kind | null; onClose: () => void; children: React.ReactNode }) {
+  const T = useCopy(OV)
   const reduce = useReducedMotion()
   const [host, setHost] = useState<Element | null>(null)
   const back = useRef<HTMLElement | null>(null)
@@ -648,13 +839,13 @@ function Panel({ open, onClose, children }: { open: Kind | null; onClose: () => 
             className="pen-bigpanel"
             role="dialog"
             aria-modal="true"
-            aria-label={TITLES[open].title}
+            aria-label={T[TITLES[open].title]}
             {...(reduce ? { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 } } : {})}
           >
             <header className="pen-bigpanel-head">
               <span className="pen-card-icon" data-kind={open}><Icon name={TITLES[open].icon} size={17} /></span>
-              <h3 className="pen-bigpanel-title">{TITLES[open].title}</h3>
-              <button type="button" className="pen-bigpanel-close" onClick={onClose} aria-label="Close">
+              <h3 className="pen-bigpanel-title">{T[TITLES[open].title]}</h3>
+              <button type="button" className="pen-bigpanel-close" onClick={onClose} aria-label={T.close}>
                 <svg viewBox="0 0 20 20" aria-hidden><path d="M5.5 5.5l9 9M14.5 5.5l-9 9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
               </button>
             </header>
@@ -684,20 +875,21 @@ function Toolbar({ q, setQ, placeholder, filters, filter, setFilter, count }: {
   setFilter: (k: string) => void
   count: number
 }) {
+  const T = useCopy(OV)
   return (
     <div className="pen-bigpanel-tools">
       <label className="pen-bigpanel-search">
         <Icon name="search" size={16} />
-        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} aria-label="Filter" />
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} aria-label={T.filter} />
       </label>
-      <div className="pen-bigpanel-filters" role="group" aria-label="Show">
+      <div className="pen-bigpanel-filters" role="group" aria-label={T.show}>
         {filters.map((f) => (
           <button key={f.key} type="button" className="pen-set-chip" data-on={filter === f.key} aria-pressed={filter === f.key} onClick={() => setFilter(f.key)}>
             {f.label}
           </button>
         ))}
       </div>
-      <span className="pen-bigpanel-n">{`${count} shown`}</span>
+      <span className="pen-bigpanel-n">{T.shown(count)}</span>
     </div>
   )
 }
@@ -708,6 +900,7 @@ const match = (q: string, ...xs: (string | null | undefined)[]) => {
 }
 
 function TodoPanel({ actions, count, onTick, onOpen }: { actions: OpenAction[]; count: number; onTick: (a: OpenAction) => void; onOpen: (id: string) => void }) {
+  const T = useCopy(OV)
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState('all')
   const list = actions.filter(
@@ -718,8 +911,8 @@ function TodoPanel({ actions, count, onTick, onOpen }: { actions: OpenAction[]; 
       <Toolbar
         q={q}
         setQ={setQ}
-        placeholder="Filter by words, person or recording"
-        filters={[{ key: 'all', label: `All ${count}` }, { key: 'priority', label: 'Priority' }, { key: 'due', label: 'Has a date' }]}
+        placeholder={T.todoFilter}
+        filters={[{ key: 'all', label: T.all(count) }, { key: 'priority', label: T.priority }, { key: 'due', label: T.hasDate }]}
         filter={filter}
         setFilter={setFilter}
         count={list.length}
@@ -728,7 +921,7 @@ function TodoPanel({ actions, count, onTick, onOpen }: { actions: OpenAction[]; 
         <AnimatePresence initial={false}>
           {list.map((a) => <ActionRow key={`${a.sessionId}:${a.index}`} a={a} onTick={onTick} onOpen={onOpen} full />)}
         </AnimatePresence>
-        {!list.length && <li className="pen-card-empty">Nothing matches.</li>}
+        {!list.length && <li className="pen-card-empty">{T.nothingMatches}</li>}
       </ul>
     </>
   )
@@ -741,6 +934,7 @@ function MissedPanel({ missed, count, onHandle, onPromote, onOpen }: {
   onPromote: (m: OpenMissed) => void
   onOpen: (id: string) => void
 }) {
+  const T = useCopy(OV)
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState('all')
   const weekAgo = Date.now() - 7 * 86_400_000
@@ -750,8 +944,8 @@ function MissedPanel({ missed, count, onHandle, onPromote, onOpen }: {
       <Toolbar
         q={q}
         setQ={setQ}
-        placeholder="Filter by words or recording"
-        filters={[{ key: 'all', label: `All ${count}` }, { key: 'week', label: 'Last 7 days' }]}
+        placeholder={T.missedFilter}
+        filters={[{ key: 'all', label: T.all(count) }, { key: 'week', label: T.last7 }]}
         filter={filter}
         setFilter={setFilter}
         count={list.length}
@@ -760,7 +954,7 @@ function MissedPanel({ missed, count, onHandle, onPromote, onOpen }: {
         <AnimatePresence initial={false}>
           {list.map((m) => <MissedRow key={`${m.sessionId}:${m.index}`} m={m} onHandle={onHandle} onPromote={onPromote} onOpen={onOpen} full />)}
         </AnimatePresence>
-        {!list.length && <li className="pen-card-empty">Nothing matches.</li>}
+        {!list.length && <li className="pen-card-empty">{T.nothingMatches}</li>}
       </ul>
     </>
   )
@@ -772,6 +966,8 @@ function PeoplePanel({ people, clients, clientsByName, onAsk }: {
   clientsByName: Map<string, ClientCard>
   onAsk: (p: PersonCard) => void
 }) {
+  const T = useCopy(OV)
+  const lang = useLang()
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState('recent')
   const [openId, setOpenId] = useState<string | null>(null)
@@ -786,8 +982,8 @@ function PeoplePanel({ people, clients, clientsByName, onAsk }: {
       <Toolbar
         q={q}
         setQ={setQ}
-        placeholder="Filter by name, email or role"
-        filters={[{ key: 'recent', label: 'Recent' }, { key: 'calls', label: 'Most calls' }, { key: 'az', label: 'A to Z' }]}
+        placeholder={T.peopleFilter}
+        filters={[{ key: 'recent', label: T.recent }, { key: 'calls', label: T.mostCalls }, { key: 'az', label: T.az }]}
         filter={filter}
         setFilter={setFilter}
         count={list.length}
@@ -800,10 +996,10 @@ function PeoplePanel({ people, clients, clientsByName, onAsk }: {
               <button type="button" className="pen-row2-main" onClick={() => setOpenId(openId === p.id ? null : p.id)} aria-expanded={openId === p.id}>
                 <span className="pen-row2-text pen-row2-name">{p.name}</span>
                 <span className="pen-row2-meta">
-                  <span>{[p.role, p.company, `${p.recordings} ${p.recordings === 1 ? 'call' : 'calls'}`].filter(Boolean).join(' · ')}</span>
+                  <span>{[p.role, p.company, plural(p.recordings, T.calls)].filter(Boolean).join(' · ')}</span>
                 </span>
               </button>
-              {p.lastAt && <span className="pen-row2-when">{ago(p.lastAt)}</span>}
+              {p.lastAt && <span className="pen-row2-when">{fmtAgo(p.lastAt, lang)}</span>}
             </div>
             <AnimatePresence initial={false}>
               {openId === p.id && (
@@ -814,11 +1010,11 @@ function PeoplePanel({ people, clients, clientsByName, onAsk }: {
             </AnimatePresence>
           </li>
         ))}
-        {!list.length && !orphans.length && <li className="pen-card-empty">Nobody matches.</li>}
+        {!list.length && !orphans.length && <li className="pen-card-empty">{T.nobodyMatches}</li>}
       </ul>
       {orphans.length > 0 && (
         <div className="pen-bigpanel-orphans">
-          <h4 className="pen-bigpanel-subhead">Learned from recordings, not in People yet</h4>
+          <h4 className="pen-bigpanel-subhead">{T.orphans}</h4>
           {orphans.map((c) => (
             <div key={c.name} className="pen-orphan">
               <strong>{c.name}</strong>
@@ -834,6 +1030,7 @@ function PeoplePanel({ people, clients, clientsByName, onAsk }: {
 /* ================================================================= toast */
 
 function Toast({ toast, onClose }: { toast: { text: string; undo?: () => void; tone?: 'bad' } | null; onClose: () => void }) {
+  const T = useCopy(OV)
   return (
     <div className="pen-toast-wrap" aria-live="polite">
       <AnimatePresence>
@@ -848,8 +1045,8 @@ function Toast({ toast, onClose }: { toast: { text: string; undo?: () => void; t
             transition={{ duration: 0.2, ease: EASE_OUT }}
           >
             <span>{toast.text}</span>
-            {toast.undo && <button type="button" onClick={toast.undo}>Undo</button>}
-            <button type="button" className="pen-toast-x" onClick={onClose} aria-label="Dismiss">
+            {toast.undo && <button type="button" onClick={toast.undo}>{T.undo}</button>}
+            <button type="button" className="pen-toast-x" onClick={onClose} aria-label={T.dismiss}>
               <svg viewBox="0 0 20 20" aria-hidden><path d="M6 6l8 8M14 6l-8 8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
             </button>
           </motion.div>
@@ -867,23 +1064,13 @@ function initials(s: string) {
   return (parts[0][0] + (parts[1]?.[0] ?? '')).toUpperCase()
 }
 
-function ago(iso: string) {
-  const d = Math.floor((Date.now() - Date.parse(iso)) / 86_400_000)
-  if (d <= 0) return 'today'
-  if (d === 1) return 'yesterday'
-  if (d < 7) return `${d}d ago`
-  if (d < 60) return `${Math.floor(d / 7)}w ago`
-  return shortDate(iso)
-}
-
 function EmptyArchive() {
+  const T = useCopy(OV)
   return (
     <div className="pen-panel px-8 py-14 text-center">
-      <h2 className="pen-display text-[26px]">Nothing recorded yet</h2>
+      <h2 className="pen-display text-[26px]">{T.emptyTitle}</h2>
       <p className="mx-auto mt-3 max-w-[46ch] text-[16.5px] leading-relaxed" style={{ color: 'var(--soft)' }}>
-        Plug the pen in and import one recording. From the second one on, Juno Pen starts joining
-        them up: what the same people keep asking for, what you keep forgetting, what is still
-        outstanding across everything.
+        {T.emptyBody}
       </p>
     </div>
   )

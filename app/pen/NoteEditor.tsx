@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { postJson, errMessage } from '@/lib/pen/http'
 import { AnimatePresence, motion } from 'motion/react'
 import type { NoteBlock } from '@/lib/pen/store'
+import { useCopy } from './LangContext'
+import type { Copy } from '@/lib/pen/i18n'
 
 // Jot and Enhance.
 //
@@ -16,6 +18,56 @@ import type { NoteBlock } from '@/lib/pen/store'
 // Editing a grey block promotes it to black, because once you have corrected a line you own it.
 
 const SPRING = { type: 'spring' as const, stiffness: 420, damping: 34, mass: 0.7 }
+
+const NE_EN = {
+  nothingBacked: 'Nothing in the recording backed up those notes, so nothing was added.',
+  enhanceFailed: 'Could not enhance those notes.',
+  yourNotes: 'Your notes',
+  saveFailedTitle: 'The last save failed — your text is still here but is not stored yet',
+  notSaved: 'not saved',
+  saving: 'saving…',
+  saved: 'saved',
+  enhanceTitle: 'Expand your shorthand using the recording',
+  writeFirst: 'Write a note first',
+  enhancing: 'Enhancing',
+  enhance: 'Enhance',
+  placeholder: 'Jot it down however you like — “kitchen big win, price still an issue”. Then press Enhance.',
+  greyNote: 'Grey text was written from the recording. Click it to edit — it turns black once you do.',
+}
+
+const NE: Copy<typeof NE_EN> = {
+  en: NE_EN,
+  es: {
+    nothingBacked: 'Nada en la grabación respaldaba esas notas, así que no se agregó nada.',
+    enhanceFailed: 'No se pudieron mejorar esas notas.',
+    yourNotes: 'Tus notas',
+    saveFailedTitle: 'El último guardado falló: tu texto sigue aquí, pero todavía no está guardado',
+    notSaved: 'sin guardar',
+    saving: 'guardando…',
+    saved: 'guardado',
+    enhanceTitle: 'Completa tus apuntes con lo que dice la grabación',
+    writeFirst: 'Primero escribe una nota',
+    enhancing: 'Mejorando',
+    enhance: 'Mejorar',
+    placeholder: 'Anota como quieras: “la cocina les encantó, el precio sigue siendo tema”. Después presiona Mejorar.',
+    greyNote: 'El texto gris se escribió a partir de la grabación. Haz clic para editarlo: se vuelve negro cuando lo cambias.',
+  },
+  pt: {
+    nothingBacked: 'Nada na gravação confirmava essas notas, então nada foi adicionado.',
+    enhanceFailed: 'Não foi possível melhorar essas notas.',
+    yourNotes: 'Suas notas',
+    saveFailedTitle: 'O último salvamento falhou — seu texto continua aqui, mas ainda não foi salvo',
+    notSaved: 'não salvo',
+    saving: 'salvando…',
+    saved: 'salvo',
+    enhanceTitle: 'Complete suas anotações com o que diz a gravação',
+    writeFirst: 'Escreva uma nota primeiro',
+    enhancing: 'Melhorando',
+    enhance: 'Melhorar',
+    placeholder: 'Anote do seu jeito — “adoraram a cozinha, o preço ainda pesa”. Depois aperte Melhorar.',
+    greyNote: 'O texto cinza foi escrito a partir da gravação. Clique para editar — ele fica preto quando você muda.',
+  },
+}
 
 function uid() {
   return Math.random().toString(36).slice(2, 10)
@@ -42,6 +94,7 @@ export default function NoteEditor({
   saveState: 'saved' | 'saving' | 'failed'
   canEnhance: boolean
 }) {
+  const T = useCopy(NE)
   const [enhancing, setEnhancing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [revealing, setRevealing] = useState<Set<string>>(new Set())
@@ -129,7 +182,7 @@ export default function NoteEditor({
       )
 
       if (!Object.keys(expansions).length) {
-        setError('Nothing in the recording backed up those notes, so nothing was added.')
+        setError(T.nothingBacked)
         return
       }
 
@@ -152,7 +205,7 @@ export default function NoteEditor({
       // Word-by-word reveal is a one-off; afterwards the block is an ordinary editable field.
       window.setTimeout(() => setRevealing(new Set()), 2600)
     } catch (e) {
-      setError(errMessage(e, 'Could not enhance those notes.'))
+      setError(errMessage(e, T.enhanceFailed))
     } finally {
       setEnhancing(false)
     }
@@ -163,15 +216,15 @@ export default function NoteEditor({
   return (
     <div>
       <div className="mb-2.5 flex items-center justify-between gap-3">
-        <span className="pen-label">Your notes</span>
+        <span className="pen-label">{T.yourNotes}</span>
         <div className="flex items-center gap-3">
           {/* Never claim a save that did not happen. A failed write is loud. */}
           <span
             className="pen-mono text-[13px] tabular-nums"
             style={{ color: saveState === 'failed' ? 'var(--bad)' : 'var(--faint)' }}
-            title={saveState === 'failed' ? 'The last save failed — your text is still here but is not stored yet' : undefined}
+            title={saveState === 'failed' ? T.saveFailedTitle : undefined}
           >
-            {saveState === 'failed' ? 'not saved' : saveState === 'saving' ? 'saving…' : 'saved'}
+            {saveState === 'failed' ? T.notSaved : saveState === 'saving' ? T.saving : T.saved}
           </span>
           {canEnhance && (
             <motion.button
@@ -180,16 +233,16 @@ export default function NoteEditor({
               whileTap={{ scale: 0.97 }}
               transition={SPRING}
               className="pen-enhance"
-              title={hasUserText ? 'Expand your shorthand using the recording' : 'Write a note first'}
+              title={hasUserText ? T.enhanceTitle : T.writeFirst}
             >
               <AnimatePresence mode="wait" initial={false}>
                 {enhancing ? (
                   <motion.span key="w" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                    Enhancing<span className="pen-dots ml-1"><span /><span /><span /></span>
+                    {T.enhancing}<span className="pen-dots ml-1"><span /><span /><span /></span>
                   </motion.span>
                 ) : (
                   <motion.span key="e" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                    Enhance
+                    {T.enhance}
                   </motion.span>
                 )}
               </AnimatePresence>
@@ -229,7 +282,7 @@ export default function NoteEditor({
                   onKeyDown={(e) => onKeyDown(e, b.id, i)}
                   placeholder={
                     i === 0 && blocks.length === 1
-                      ? 'Jot it down however you like — “kitchen big win, price still an issue”. Then press Enhance.'
+                      ? T.placeholder
                       : undefined
                   }
                   className="pen-block-input"
@@ -257,7 +310,7 @@ export default function NoteEditor({
 
       {blocks.some((b) => b.source === 'ai') && (
         <p className="pen-mono mt-3 text-[13px]" style={{ color: 'var(--faint)' }}>
-          Grey text was written from the recording. Click it to edit — it turns black once you do.
+          {T.greyNote}
         </p>
       )}
     </div>

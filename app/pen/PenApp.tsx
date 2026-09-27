@@ -33,6 +33,9 @@ import UsageBar from './UsageBar'
 import Link from 'next/link'
 import { ACCEPT_DESKTOP, acceptFor } from '@/lib/pen/file-accept'
 import { findRuns } from '@/lib/pen/merge-detect'
+import { LangProvider, useCopy, useLang } from './LangContext'
+import { APP_COPY, type AppCopy } from './PenApp.copy'
+import { typeLabel, bucketLabel, plural, shortDate, fmtDate, LOCALE, type Lang } from '@/lib/pen/i18n'
 
 /**
  * What the main column is showing. Chat and pages are views, not overlays: the whole point
@@ -96,8 +99,8 @@ export default function PenApp({
   appLang = 'en',
   showTour = false,
 }: {
-  /** The app's language; for now it drives the tour (the rest of the app follows). */
-  appLang?: 'en' | 'es' | 'pt'
+  /** The app's language (Profile "App language"). */
+  appLang?: Lang
   /** First sign-in: play the tour once. */
   showTour?: boolean
   /** Juno Pen's WhatsApp number and whether this account has linked a phone. Null when off. */
@@ -111,6 +114,7 @@ export default function PenApp({
   email: string
 }) {
   const [sessions, setSessions] = useState<PenSession[]>(initial)
+  const T = APP_COPY[appLang]
   const accept = useAccept()
   const router = useRouter()
 
@@ -264,7 +268,7 @@ export default function PenApp({
   const removeSession = useCallback(async (id: string) => {
     const r = await fetch(`/api/pen/sessions/${id}`, { method: 'DELETE' })
     if (!r.ok) {
-      setErr((await r.json().catch(() => ({}))).error ?? 'could not delete that recording')
+      setErr((await r.json().catch(() => ({}))).error ?? T.deleteFailed)
       return
     }
     setSessions((prev) => {
@@ -287,7 +291,7 @@ export default function PenApp({
       } catch (e) {
         // A 409 means the webhook claimed it first, which is the normal path now, not an error.
         if (!(auto && e instanceof PenHttpError && e.status === 409)) {
-          setErr(errMessage(e, 'Could not write the notes.'))
+          setErr(errMessage(e, T.notesFailed))
         }
         return
       }
@@ -303,7 +307,7 @@ export default function PenApp({
       })
       router.refresh()
     },
-    [patchLocal, router],
+    [patchLocal, router, T],
   )
 
   // Poll anything mid-transcription, and keep a fallback for a webhook that never arrives.
@@ -350,7 +354,7 @@ export default function PenApp({
         if (entry.kind === 'file' && MEDIA_RE.test(entry.name) && entry.getFile) found.push(await entry.getFile())
       }
       if (!found.length) {
-        setErr(`No recordings in “${dir.name}”. Recorders often keep files in a subfolder — try picking that one.`)
+        setErr(T.noRecordingsIn(dir.name))
         return
       }
       found.sort((a, b) => b.lastModified - a.lastModified)
@@ -363,7 +367,7 @@ export default function PenApp({
 
   function addFiles(files: FileList | File[]) {
     const list = Array.from(files).filter((f) => MEDIA_RE.test(f.name))
-    if (!list.length) return setErr('Those files aren’t audio or video that can be read here.')
+    if (!list.length) return setErr(T.notMedia)
     setPenName(null)
     setPending((prev) => [...prev, ...list.map((f) => ({ file: f, picked: true }))])
   }
@@ -375,21 +379,21 @@ export default function PenApp({
     const picked = pending.filter((p) => p.picked)
     if (!picked.length) return
     if (!consent) {
-      return setErr('Confirm consent first. Florida requires every party to agree to being recorded.')
+      return setErr(T.consentFirst)
     }
 
     for (const { file } of picked) {
       try {
-        setProgress({ name: file.name, phase: 'Preparing audio', pct: 5 })
+        setProgress({ name: file.name, phase: T.phasePreparing, pct: 5 })
         const prep = await prepareAudio(file)
 
-        setProgress({ name: file.name, phase: 'Getting an upload slot', pct: 15 })
+        setProgress({ name: file.name, phase: T.phaseSlot, pct: 15 })
         const urlRes = await fetch('/api/pen/upload-url', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: file.name.replace(/\.[^.]+$/, prep.mime === 'audio/wav' ? '.wav' : '') }),
         })
-        if (!urlRes.ok) throw new Error((await urlRes.json()).error ?? 'could not get an upload URL')
+        if (!urlRes.ok) throw new Error((await urlRes.json()).error ?? T.uploadUrlFailed)
         const { path, signedUrl } = (await urlRes.json()) as { path: string; signedUrl: string }
 
         // Anything compressible has already been compressed by now, so reaching this means
@@ -397,19 +401,15 @@ export default function PenApp({
         // because "split the recording" is useless advice for the second one.
         if (prep.blob.size > SOFT_SIZE_LIMIT) {
           throw new Error(
-            prep.mime === 'audio/ogg'
-              ? `${fmtMB(prep.blob.size)} even after compressing — that's several hours of audio. ` +
-                `Split it into shorter files and upload them separately; they'll be joined back up.`
-              : `${fmtMB(prep.blob.size)} is over the 50 MB per-file limit, and this browser can't ` +
-                `compress audio. Try again in Chrome, which can.`,
+            prep.mime === 'audio/ogg' ? T.tooBigCompressed(fmtMB(prep.blob.size)) : T.tooBigNoCompress(fmtMB(prep.blob.size)),
           )
         }
 
         await putWithProgress(signedUrl, prep.blob, prep.mime, (pct) =>
-          setProgress({ name: file.name, phase: `Uploading · ${prep.note}`, pct: 15 + pct * 0.6 }),
+          setProgress({ name: file.name, phase: T.phaseUploading(prep.note), pct: 15 + pct * 0.6 }),
         )
 
-        setProgress({ name: file.name, phase: 'Saving', pct: 80 })
+        setProgress({ name: file.name, phase: T.phaseSaving, pct: 80 })
         const sRes = await fetch('/api/pen/sessions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -426,14 +426,14 @@ export default function PenApp({
             ...(callPeople.length ? { people: callPeople.map((p) => (p.id ? { id: p.id } : { name: p.name })) } : {}),
           }),
         })
-        if (!sRes.ok) throw new Error((await sRes.json()).error ?? 'could not save the recording')
+        if (!sRes.ok) throw new Error((await sRes.json()).error ?? T.saveRecordingFailed)
         const { session, duplicate } = (await sRes.json()) as { session: PenSession; duplicate: boolean }
 
         setSessions((prev) => [session, ...prev.filter((x) => x.id !== session.id)])
         openSession(session.id)
 
         if (!duplicate) {
-          setProgress({ name: file.name, phase: 'Sending for transcription', pct: 92 })
+          setProgress({ name: file.name, phase: T.phaseSending, pct: 92 })
           const tRes = await fetch('/api/pen/transcribe', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -445,7 +445,7 @@ export default function PenApp({
             if (j.allowance) setAllowance(j.allowance)
             setSessions((prev) => prev.map((x) => (x.id === session.id ? { ...x, status: 'held' as const } : x)))
             setHeldNotice(true)
-          } else if (!tRes.ok) setErr((await tRes.json()).error ?? 'transcription failed to start')
+          } else if (!tRes.ok) setErr((await tRes.json()).error ?? T.transcribeFailed)
           else setSessions((prev) => prev.map((x) => (x.id === session.id ? { ...x, status: 'transcribing' as const } : x)))
         }
       } catch (e) {
@@ -473,7 +473,6 @@ export default function PenApp({
     () => (catFilter ? listed.filter((x) => bucketOf(displayType(x.meeting_type)) === catFilter) : listed),
     [listed, catFilter],
   )
-  const grouped = useMemo(() => groupByDay(visible), [visible])
 
   // What @ can tag: people first, then recordings by the same title the list shows.
   const taggable = useMemo<Taggable[]>(
@@ -482,16 +481,16 @@ export default function PenApp({
         id: p.id,
         kind: 'person' as const,
         title: p.name,
-        sub: p.recordings === 1 ? '1 recording' : `${p.recordings} recordings`,
+        sub: plural(p.recordings, T.recordings),
       })),
       ...listed.map((s) => ({
         id: s.id,
         kind: 'recording' as const,
-        title: s.title || s.client_name || s.source_name || 'Untitled',
-        sub: new Date(s.recorded_at ?? s.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        title: s.title || s.client_name || s.source_name || T.untitled,
+        sub: shortDate(s.recorded_at ?? s.created_at, appLang),
       })),
     ],
-    [people, listed],
+    [people, listed, T, appLang],
   )
 
   /** Every part of a joined meeting, in order. One entry for a recording that stands alone. */
@@ -537,6 +536,7 @@ export default function PenApp({
   }
 
   return (
+    <LangProvider lang={appLang}>
     <main className="pen-page">
       {/* The sidebar is a page-level column running the full height, so the brand sits level
           with the search box rather than a header's height below it. Everything else — the
@@ -547,14 +547,14 @@ export default function PenApp({
         <Image src="/juno_mark.png" alt="" width={34} height={34} className="pen-mark" priority />
         <div>
           <div className="pen-display pen-brand-name">Juno Pen</div>
-          <div className="pen-brand-tag">Capture. Understand. Do.</div>
+          <div className="pen-brand-tag">{T.brandTag}</div>
         </div>
       </div>
 
       {supportsPicker ? (
         <button className="pen-connect" onClick={connectPen}>
           <Icon name="link" size={18} />
-          Connect pen
+          {T.connectPen}
         </button>
       ) : null}
 
@@ -577,14 +577,14 @@ export default function PenApp({
       >
         <Icon name="plus" size={17} />
         <span>
-          <strong>Add audio files</strong>
-          <em>or drag them here</em>
+          <strong>{T.addFiles}</strong>
+          <em>{T.orDrag}</em>
         </span>
       </button>
 
       <button type="button" className="pen-tximp-open" onClick={() => { setNavOpen(false); setTxImport(true) }}>
         <Icon name="quote" size={15} />
-        Import a transcript
+        {T.importTranscript}
       </button>
       {tourOpen && <Tour lang={appLang} onClose={closeTour} onUpload={() => fileInput.current?.click()} />}
       {txImport && (
@@ -605,8 +605,8 @@ export default function PenApp({
         >
           <Icon name="chat" size={17} />
           <span>
-            <strong>{whatsapp.linked ? 'Open WhatsApp' : 'Use WhatsApp'}</strong>
-            <em>{whatsapp.linked ? 'Send recordings, ask questions' : 'Send recordings from your phone'}</em>
+            <strong>{whatsapp.linked ? T.openWhatsApp : T.useWhatsApp}</strong>
+            <em>{whatsapp.linked ? T.waLinkedSub : T.waUnlinkedSub}</em>
           </span>
         </a>
       )}
@@ -619,7 +619,7 @@ export default function PenApp({
             onClick={() => { setView({ k: 'archive' }); setCatFilter(null); setNavOpen(false) }}
           >
             <Icon name="home" size={19} />
-            <span className="pen-cat-label">Home</span>
+            <span className="pen-cat-label">{T.home}</span>
             {!!stats?.actionsOpen && <span className="pen-cat-n">{stats.actionsOpen}</span>}
           </button>
           <button
@@ -628,7 +628,7 @@ export default function PenApp({
             onClick={() => { setCatFilter(null); setNavOpen(false) }}
           >
             <Icon name="recordings" size={19} />
-            <span className="pen-cat-label">All recordings</span>
+            <span className="pen-cat-label">{T.allRecordings}</span>
             <span className="pen-cat-n">{sessions.length}</span>
           </button>
         </div>
@@ -648,7 +648,7 @@ export default function PenApp({
                 onClick={() => { setCatFilter(catFilter === b ? null : b); setNavOpen(false) }}
               >
                 <Icon name={BUCKET_ICON[b] as IconName} size={19} />
-                <span className="pen-cat-label">{b}</span>
+                <span className="pen-cat-label">{bucketLabel(b, appLang)}</span>
                 <span className="pen-cat-n">{n}</span>
               </button>
             ))}
@@ -659,16 +659,16 @@ export default function PenApp({
       {/* --------------------------------- recordings (rail; ordered right in CSS) */}
 
       <div className="pen-quotecard">
-        <p>&ldquo;Small moments.<br />Bigger progress.&rdquo;</p>
+        <p>&ldquo;{T.quote[0]}<br />{T.quote[1]}&rdquo;</p>
       </div>
 
       <nav className="pen-saved">
         {/* ---------------------------------------------------------- chats */}
         <div className="pen-cats-head pen-label pen-cats-head-row">
-          <span>Chats</span>
+          <span>{T.chats}</span>
           <button
             className="pen-cats-new"
-            title="New chat"
+            title={T.newChat}
             onClick={() => {
               setChatSeed(null)
               setView({ k: 'chat', id: null })
@@ -679,7 +679,7 @@ export default function PenApp({
           </button>
         </div>
         {chats.length === 0 ? (
-          <p className="pen-cats-empty">Ask something in the search bar and it lands here.</p>
+          <p className="pen-cats-empty">{T.chatsEmpty}</p>
         ) : (
           <div className="pen-cats-list">
             {chats.slice(0, 4).map((c) => (
@@ -692,9 +692,9 @@ export default function PenApp({
                   setView({ k: 'chat', id: c.id })
                   setNavOpen(false)
                 }}
-                title={c.title ?? 'Untitled chat'}
+                title={c.title ?? T.untitledChat}
               >
-                <span className="pen-cat-label">{c.title ?? 'Untitled chat'}</span>
+                <span className="pen-cat-label">{c.title ?? T.untitledChat}</span>
               </button>
             ))}
           </div>
@@ -703,7 +703,7 @@ export default function PenApp({
         {/* ---------------------------------------------------------- pages */}
         {docs.length > 0 && (
           <>
-            <div className="pen-cats-head pen-label">Pages</div>
+            <div className="pen-cats-head pen-label">{T.pages}</div>
             <div className="pen-cats-list">
               {docs.slice(0, 4).map((d) => (
                 <button
@@ -734,7 +734,7 @@ export default function PenApp({
         <ArchiveSearch
           value={query}
           onChange={setQuery}
-          suggestions={searchSuggestions(stats)}
+          suggestions={searchSuggestions(stats, T, appLang)}
           options={taggable}
           onAsk={(q, mentions) => {
             askArchive(q, mentions)
@@ -747,17 +747,17 @@ export default function PenApp({
             className="pen-browse"
             onClick={() => setNavOpen((v) => !v)}
             aria-expanded={navOpen}
-            aria-label="Browse recordings and categories"
+            aria-label={T.browseAria}
           >
             <svg viewBox="0 0 18 18" aria-hidden>
               <path d="M2.5 4.5h13M2.5 9h13M2.5 13.5h13" fill="none" stroke="currentColor"
                     strokeWidth="1.7" strokeLinecap="round" />
             </svg>
-            <span className="pen-browse-t">Browse</span>
+            <span className="pen-browse-t">{T.browse}</span>
           </button>
           <input ref={fileInput} type="file" multiple accept={accept} className="hidden"
                  onChange={(e) => e.target.files && addFiles(e.target.files)} />
-          <Account email={email} name={name} avatar={avatar} lang={appLang} onTour={() => { setNavOpen(false); setTourOpen(true) }} />
+          <Account email={email} name={name} avatar={avatar} onTour={() => { setNavOpen(false); setTourOpen(true) }} />
         </div>
       </header>
 
@@ -770,8 +770,8 @@ export default function PenApp({
         >
           <Icon name="chat" size={18} />
           <span>
-            <strong>{whatsapp.linked ? 'Send a recording on WhatsApp' : 'Use Juno Pen on WhatsApp'}</strong>
-            <em>{whatsapp.linked ? 'Plug the pen in, then share the file to the chat' : 'Send recordings and ask questions from your phone'}</em>
+            <strong>{whatsapp.linked ? T.waPhoneLinked : T.waPhoneUnlinked}</strong>
+            <em>{whatsapp.linked ? T.waPhoneLinkedSub : T.waPhoneUnlinkedSub}</em>
           </span>
           <Icon name="chevron" size={16} className="pen-wa-phone-go" />
         </a>
@@ -780,7 +780,7 @@ export default function PenApp({
 
       {loadError && (
         <Banner tone="bad">
-          Couldn’t load recordings: {loadError}
+          {T.loadError(loadError)}
           <div className="mt-1 text-[14.5px]" style={{ color: 'var(--soft)' }}>
             If a column is missing, run the ALTER at the bottom of <span className="pen-mono">lib/pen/schema.sql</span>.
           </div>
@@ -789,12 +789,12 @@ export default function PenApp({
       {err && <Banner tone="bad" onClose={() => setErr(null)}>{err}</Banner>}
       {heldNotice && (
         <Banner tone="warn" onClose={() => setHeldNotice(false)}>
-          {"You've passed this month's fair-use limit. Your upload is saved and will be transcribed when the month resets. Reply to any Juno Pen email if you need more."}
+          {T.heldNotice}
         </Banner>
       )}
       {mounted && !supportsPicker && (
         <Banner tone="warn">
-          This browser can’t read a folder directly. Use Chrome or Edge for one-click “Connect pen”, or drag files in below.
+          {T.noPicker}
         </Banner>
       )}
 
@@ -805,11 +805,11 @@ export default function PenApp({
       {runs.map((r) => (
         <Banner key={r.sessions[0].id} tone="warn">
           <strong style={{ color: 'var(--ink)' }}>
-            {r.sessions.length} recordings look like one {fmtDur(r.totalSec)} meeting.
+            {T.runTitle(r.sessions.length, fmtDur(r.totalSec))}
           </strong>{' '}
-          The pen stops at 60 minutes and starts a new file.
+          {T.runBody}
           <div className="pen-mono mt-1 text-[13px]" style={{ color: 'var(--faint)' }}>
-            {r.sessions.map((s) => s.source_name || s.title || 'untitled').join('  →  ')}
+            {r.sessions.map((s) => s.source_name || s.title || T.untitledLower).join('  →  ')}
           </div>
           <button
             className="pen-btn mt-2.5"
@@ -817,14 +817,14 @@ export default function PenApp({
             onClick={() => void joinRun(r.sessions.map((s) => s.id))}
           >
             <Icon name="link" size={15} />
-            {joining ? 'Joining…' : 'Join into one meeting'}
+            {joining ? T.joining : T.join}
           </button>
         </Banner>
       ))}
 
       {(pending.length > 0 || progress || importDone) && (
         <>
-          {isPhone && <button className="pen-scrim pen-scrim-on" aria-label="Close" onClick={closeSheet} />}
+          {isPhone && <button className="pen-scrim pen-scrim-on" aria-label={T.close} onClick={closeSheet} />}
           <ImportTray
             pending={pending} setPending={setPending} penName={penName}
             consent={consent} setConsent={setConsent}
@@ -844,7 +844,7 @@ export default function PenApp({
 
         <button
           className="pen-scrim"
-          aria-label="Close navigation"
+          aria-label={T.closeNav}
           tabIndex={navOpen ? 0 : -1}
           onClick={() => setNavOpen(false)}
         />
@@ -890,7 +890,7 @@ export default function PenApp({
                 onChanged={() => void refresh()}
                 onAskPerson={(p) => {
                   const label = shortLabel(p.name, new Set())
-                  askArchive(`Show me all the conversations with @${label}`, [{ id: p.id, title: p.name, label, kind: 'person' }])
+                  askArchive(T.askPerson(label), [{ id: p.id, title: p.name, label, kind: 'person' }])
                 }}
                 onOpen={(id) => {
                   openSession(id)
@@ -900,7 +900,7 @@ export default function PenApp({
               />
             ) : (
               <div className="pen-panel px-8 py-16 text-center">
-                <p className="text-[16.5px]" style={{ color: 'var(--dim)' }}>Choose a recording on the left.</p>
+                <p className="text-[16.5px]" style={{ color: 'var(--dim)' }}>{T.chooseRecording}</p>
               </div>
             )
           ) : (
@@ -924,7 +924,7 @@ export default function PenApp({
                     body: JSON.stringify(patch),
                   })
                   if (!r.ok) {
-                    const msg = (await r.json().catch(() => ({}))).error ?? `save failed (${r.status})`
+                    const msg = (await r.json().catch(() => ({}))).error ?? T.saveFailed(r.status)
                     setErr(msg)
                     // Rethrow so the editor can show "not saved" rather than a false "saved".
                     throw new Error(msg)
@@ -940,24 +940,24 @@ export default function PenApp({
         {/* --------------------------------------- recent recordings (col 3) */}
         <aside className="pen-rail">
           <div className="pen-rail-head">
-            <span className="pen-rail-title">Recent recordings</span>
+            <span className="pen-rail-title">{T.recent}</span>
             <button className="pen-rail-new" onClick={() => fileInput.current?.click()}>
               <Icon name="plus" size={15} />
-              New
+              {T.new}
             </button>
           </div>
 
           {visible.length === 0 ? (
             <p className="mt-6 text-[14.5px] leading-relaxed" style={{ color: 'var(--dim)' }}>
               {catFilter ? (
-                <>Nothing in this category. <button className="underline" onClick={() => setCatFilter(null)}>Show everything</button>.</>
+                <>{T.emptyCat} <button className="underline" onClick={() => setCatFilter(null)}>{T.showEverything}</button>.</>
               ) : (
-                <>Nothing yet. Plug the pen into USB, press <strong style={{ color: 'var(--soft)' }}>Connect pen</strong>, and choose the drive that appears.</>
+                <>{T.emptyAll[0]}<strong style={{ color: 'var(--soft)' }}>{T.connectPen}</strong>{T.emptyAll[1]}</>
               )}
             </p>
           ) : (
             <div className="mt-6">
-              {grouped.map(([day, rows]) => (
+              {groupByDay(visible, appLang).map(([day, rows]) => (
                 <div key={day} className="mb-5">
                   <div className="pen-label mb-1.5">{day}</div>
                   {rows.map((s) => (
@@ -965,14 +965,14 @@ export default function PenApp({
                          onClick={() => { openSession(s.id); setTab('note'); setChatOpen(false) }}>
                       <div className="flex items-start justify-between gap-2">
                         <span className="pen-row-title min-w-0 flex-1 text-[14.5px] font-medium leading-snug">
-                          {s.title || s.client_name || s.source_name || 'Untitled'}
+                          {s.title || s.client_name || s.source_name || T.untitled}
                         </span>
-                        <span className="pen-pill" data-s={s.status}>{s.status === 'held' ? 'needs hours' : s.status}</span>
+                        <span className="pen-pill" data-s={s.status}>{T.status[s.status] ?? s.status}</span>
                       </div>
                       <div className="pen-mono mt-1.5 text-[13px]" style={{ color: 'var(--faint)' }}>
                         {fmtDur(partsOf(s).reduce((n, x) => n + (x.duration_sec ?? 0), 0))}
-                        {partsOf(s).length > 1 ? ` · ${partsOf(s).length} parts` : ''}
-                        {s.meeting_type ? ` · ${displayType(s.meeting_type).toLowerCase()}` : ''}
+                        {partsOf(s).length > 1 ? ` · ${T.parts(partsOf(s).length)}` : ''}
+                        {s.meeting_type ? ` · ${typeLabel(s.meeting_type, appLang).toLowerCase()}` : ''}
                       </div>
                     </div>
                   ))}
@@ -985,6 +985,7 @@ export default function PenApp({
 
       </div>
     </main>
+    </LangProvider>
   )
 }
 
@@ -1009,9 +1010,8 @@ function useIsPhone(): boolean {
  * Who you are signed in as. The mock shows a photo and a first name; an elided email address
  * is a worse answer to the same question, and Google already gives us both.
  */
-const TOUR_LABEL = { en: 'Take the tour', es: 'Ver el tour', pt: 'Ver o tour' } as const
-
-function Account({ email, name, avatar, lang = 'en', onTour }: { email: string; name?: string | null; avatar?: string | null; lang?: 'en' | 'es' | 'pt'; onTour?: () => void }) {
+function Account({ email, name, avatar, onTour }: { email: string; name?: string | null; avatar?: string | null; onTour?: () => void }) {
+  const T = useCopy(APP_COPY)
   const [open, setOpen] = useState(false)
   const wrap = useRef<HTMLDivElement>(null)
   const label = name?.trim() || email.split('@')[0]
@@ -1039,18 +1039,18 @@ function Account({ email, name, avatar, lang = 'en', onTour }: { email: string; 
           <div className="pen-acct2-email">{email}</div>
           <Link href="/pen/settings" className="pen-acct2-item">
             <Icon name="settings" size={17} />
-            Settings
+            {T.settings}
           </Link>
           {onTour && (
             <button type="button" className="pen-acct2-item" onClick={() => { setOpen(false); onTour() }}>
               <Icon name="sparkle" size={17} />
-              {TOUR_LABEL[lang]}
+              {T.tour}
             </button>
           )}
           {isOwner(email) && (
             <Link href="/pen/customers" className="pen-acct2-item">
               <Icon name="people" size={17} />
-              Customers
+              {T.customers}
             </Link>
           )}
           <SignOut email={email} />
@@ -1067,18 +1067,18 @@ function Account({ email, name, avatar, lang = 'en', onTour }: { email: string; 
  * that names your own client or your own overdue action is worth clicking; "What did we
  * discuss?" is not.
  */
-function searchSuggestions(stats: ArchiveStats | null): string[] {
+function searchSuggestions(stats: ArchiveStats | null, T: AppCopy, lang: Lang): string[] {
   const out: string[] = []
   if (stats?.actionsOpen) {
-    out.push(`What have I still not done? (${stats.actionsOpen} open)`)
+    out.push(T.suggOpen(stats.actionsOpen))
   }
   const client = stats?.clients[0]?.name
-  if (client) out.push(`What does ${client} actually want?`)
+  if (client) out.push(T.suggClient(client))
   const top = stats?.categories.find((c) => c.count > 1)
-  if (top) out.push(`Sum up my ${top.label.toLowerCase()} recordings`)
+  if (top) out.push(T.suggCategory(typeLabel(top.label, lang).toLowerCase()))
   const person = stats?.peopleMet
-  if (out.length < 3 && person) out.push('Who owes me something?')
-  for (const f of ['What did I miss this week?', 'What was left unresolved?', 'What did I commit to?']) {
+  if (out.length < 3 && person) out.push(T.suggOwes)
+  for (const f of T.suggFallback) {
     if (out.length >= 3) break
     if (!out.includes(f)) out.push(f)
   }
@@ -1098,6 +1098,7 @@ function ArchiveSearch({
   options: Taggable[]
   onAsk: (q: string, mentions: Mention[]) => void
 }) {
+  const T = useCopy(APP_COPY)
   const [focused, setFocused] = useState(false)
   const wrap = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLInputElement>(null)
@@ -1157,8 +1158,8 @@ function ArchiveSearch({
           }}
           aria-autocomplete="list"
           aria-expanded={tp.open}
-          placeholder="Ask anything… type @ for a person or recording"
-          aria-label="Ask your archive"
+          placeholder={T.searchPlaceholder}
+          aria-label={T.searchAria}
           className="pen-search-input"
         />
         <kbd className="pen-kbd pen-search-kbd">&#8984;K</kbd>
@@ -1168,7 +1169,7 @@ function ArchiveSearch({
 
       {focused && !tp.open && suggestions.length > 0 && (
         <div className="pen-search-sugg">
-          <div className="pen-label px-1 pb-1.5">Try asking</div>
+          <div className="pen-label px-1 pb-1.5">{T.tryAsking}</div>
           {suggestions.map((q) => (
             <button
               key={q}
@@ -1203,6 +1204,7 @@ function TitleEdit({
   title: string
   onSave: (next: string) => Promise<void>
 }) {
+  const T = useCopy(APP_COPY)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(title)
   const [failed, setFailed] = useState(false)
@@ -1255,7 +1257,7 @@ function TitleEdit({
   if (!editing) {
     return (
       <div>
-        <button className="pen-title" onClick={() => setEditing(true)} title="Click to rename">
+        <button className="pen-title" onClick={() => setEditing(true)} title={T.clickRename}>
           <span>{shown}</span>
           <svg className="pen-title-pen" viewBox="0 0 16 16" aria-hidden>
             <path d="M11.2 2.6l2.2 2.2-7.5 7.5-2.9.7.7-2.9 7.5-7.5z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
@@ -1263,7 +1265,7 @@ function TitleEdit({
         </button>
         {failed && (
           <div className="pen-mono mt-1 text-[13px]" style={{ color: 'var(--bad)' }}>
-            Rename didn&rsquo;t save — the old name is back.
+            {T.renameFailed}
           </div>
         )}
       </div>
@@ -1311,13 +1313,15 @@ function CategoryPicker({
   onPick: (v: string) => void
   busy?: boolean
 }) {
+  const T = useCopy(APP_COPY)
+  const lang = useLang()
   const [open, setOpen] = useState(false)
   const [custom, setCustom] = useState('')
 
   return (
     <div className="pen-catpick">
       <button className="pen-catpick-btn" data-empty={!value} disabled={busy} onClick={() => setOpen((v) => !v)}>
-        {busy ? 'Working…' : value || 'Set a category'}
+        {busy ? T.working : (value && typeLabel(value, lang)) || T.setCategory}
         <span className="pen-catpick-chev" aria-hidden>{open ? '\u2039' : '\u203A'}</span>
       </button>
 
@@ -1337,7 +1341,7 @@ function CategoryPicker({
               className="pen-catpick-input"
               value={custom}
               onChange={(e) => setCustom(e.target.value)}
-              placeholder="Type your own…"
+              placeholder={T.typeOwn}
               maxLength={40}
               autoFocus
             />
@@ -1353,7 +1357,7 @@ function CategoryPicker({
                   onPick(t)
                 }}
               >
-                {t}
+                {typeLabel(t, lang)}
               </button>
             ))}
           </div>
@@ -1383,6 +1387,8 @@ function ImportTray({
   /** Set once the import finished, so the sheet can end on a promise rather than a blank. */
   done?: boolean
 }) {
+  const T = useCopy(APP_COPY)
+  const lang = useLang()
   // On a phone this is a full-screen sheet with one job. The desktop tray assumes you have
   // just plugged the pen in and are triaging a batch; a phone user has finished one meeting
   // and wants that one file in, so the multi-select, the client field and the inline progress
@@ -1390,20 +1396,19 @@ function ImportTray({
   if (phone) {
     const picked = pending.filter((p) => p.picked)
     return (
-      <div className="pen-imp" role="dialog" aria-modal="true" aria-label="Add a recording">
+      <div className="pen-imp" role="dialog" aria-modal="true" aria-label={T.addRecording}>
         <div className="pen-imp-head">
-          <span className="pen-label">Add a recording</span>
-          <button className="pen-imp-x" onClick={onClose} aria-label="Close">&times;</button>
+          <span className="pen-label">{T.addRecording}</span>
+          <button className="pen-imp-x" onClick={onClose} aria-label={T.close}>&times;</button>
         </div>
 
         <div className="pen-imp-body">
           {done ? (
             <div className="pen-imp-done">
               <div className="pen-imp-tick" aria-hidden>&#10003;</div>
-              <h3 className="pen-display text-[26px] leading-tight">We&rsquo;ll email you when it&rsquo;s ready.</h3>
+              <h3 className="pen-display text-[26px] leading-tight">{T.doneTitle}</h3>
               <p className="mt-3 text-[14.5px] leading-relaxed" style={{ color: 'var(--soft)' }}>
-                Transcribing and writing up takes a few minutes. You can close this — the
-                briefing lands in your inbox on its own.
+                {T.doneBody}
               </p>
             </div>
           ) : progress ? (
@@ -1412,7 +1417,7 @@ function ImportTray({
               <div className="pen-meter-bar"><span style={{ width: `${progress.pct}%` }} /></div>
               <p className="mt-3 text-[14.5px]" style={{ color: 'var(--soft)' }}>{progress.phase}</p>
               <p className="pen-mono mt-1 truncate text-[13px]" style={{ color: 'var(--faint)' }}>{progress.name}</p>
-              <p className="pen-imp-warn">Keep this tab open until it finishes &mdash; leaving Safari stops the upload.</p>
+              <p className="pen-imp-warn">{T.keepOpen}</p>
             </div>
           ) : (
             <>
@@ -1422,13 +1427,13 @@ function ImportTray({
                     <div className="min-w-0">
                       <div className="truncate text-[16.5px]">{p.file.name}</div>
                       <div className="pen-mono text-[13px]" style={{ color: 'var(--dim)' }}>
-                        {fmtMB(p.file.size)} &middot; {new Date(p.file.lastModified).toLocaleDateString()}
+                        {fmtMB(p.file.size)} &middot; {new Date(p.file.lastModified).toLocaleDateString(LOCALE[lang])}
                       </div>
                     </div>
                     <button
                       className="pen-imp-drop"
                       onClick={() => setPending((prev) => prev.filter((_, j) => j !== i))}
-                      aria-label={`Remove ${p.file.name}`}
+                      aria-label={T.remove(p.file.name)}
                     >
                       &times;
                     </button>
@@ -1448,7 +1453,7 @@ function ImportTray({
               >
                 <span className="pen-consent-track"><span className="pen-consent-knob" /></span>
                 <span className="pen-consent-text">
-                  Everyone recorded agreed to it, and this contains no patient or medical information.
+                  {T.consentPhone}
                 </span>
               </button>
             </>
@@ -1458,15 +1463,15 @@ function ImportTray({
         {!done && !progress && (
           <div className="pen-imp-foot">
             <button className="pen-btn pen-btn-accent w-full justify-center" onClick={onImport} disabled={!picked.length}>
-              {picked.length > 1 ? `Add ${picked.length} recordings` : 'Add recording'}
+              {T.addN(picked.length)}
             </button>
-            <p className="pen-imp-foot-note">You can name who it was with afterwards.</p>
+            <p className="pen-imp-foot-note">{T.nameLater}</p>
           </div>
         )}
 
         {done && (
           <div className="pen-imp-foot">
-            <button className="pen-btn pen-btn-primary w-full justify-center" onClick={onClose}>Done</button>
+            <button className="pen-btn pen-btn-primary w-full justify-center" onClick={onClose}>{T.done}</button>
           </div>
         )}
       </div>
@@ -1477,11 +1482,11 @@ function ImportTray({
     <section className="pen-panel mt-6 p-6">
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="pen-display text-[21px]">
-          {penName ? `${pending.length} on “${penName}”` : 'Ready to import'}
+          {penName ? T.onPen(pending.length, penName) : T.readyImport}
         </h2>
         {pending.length > 0 && (
           <button className="pen-mono text-[13px] underline" style={{ color: 'var(--dim)' }} onClick={() => setPending([])}>
-            clear
+            {T.clear}
           </button>
         )}
       </div>
@@ -1494,7 +1499,7 @@ function ImportTray({
             <span className="min-w-0 flex-1 truncate text-[14.5px]">{p.file.name}</span>
             <span className="pen-mono text-[13px]" style={{ color: 'var(--dim)' }}>{fmtMB(p.file.size)}</span>
             <span className="pen-mono text-[13px]" style={{ color: 'var(--faint)' }}>
-              {new Date(p.file.lastModified).toLocaleDateString()}
+              {new Date(p.file.lastModified).toLocaleDateString(LOCALE[lang])}
             </span>
           </li>
         ))}
@@ -1502,18 +1507,18 @@ function ImportTray({
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         <div className="block">
-          <span className="pen-label">Who was on this call (optional)</span>
+          <span className="pen-label">{T.whoOnCall}</span>
           <div className="mt-1.5">
             <PeoplePicker people={people} value={callPeople} onChange={setCallPeople} />
           </div>
           <span className="mt-1 block text-[13px]" style={{ color: 'var(--faint)' }}>
-            Leave it empty and the notes will suggest who they heard.
+            {T.whoHint}
           </span>
         </div>
         <label className="flex cursor-pointer items-start gap-3 rounded-lg p-3.5" style={{ background: 'var(--warn-wash)', border: '1px solid #EFE2C4' }}>
           <input type="checkbox" className="pen-act-box mt-0" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
           <span className="text-[14.5px] leading-snug" style={{ color: 'var(--warn)' }}>
-            Everyone recorded agreed to it, and this recording contains no patient or medical information.
+            {T.consentDesk}
           </span>
         </label>
       </div>
@@ -1530,7 +1535,7 @@ function ImportTray({
         </div>
       ) : (
         <button className="pen-btn pen-btn-accent mt-5" onClick={onImport} disabled={!pending.some((p) => p.picked)}>
-          Import {pending.filter((p) => p.picked).length || ''} and transcribe
+          {T.importN(pending.filter((p) => p.picked).length)}
         </button>
       )}
     </section>
@@ -1545,6 +1550,7 @@ function ImportTray({
  * of part one. Merging the overlays would quietly rewrite the wrong sentences.
  */
 function PartTranscript({ part, onUpdateNotes }: { part: PenSession; onUpdateNotes: () => void }) {
+  const T = useCopy(APP_COPY)
   const [edits, setEdits] = useState<Record<string, string>>(part.transcript_edits ?? {})
   const [map, setMap] = useState<SpeakerMap | null>((part.speaker_map as SpeakerMap | null) ?? null)
   const [translation, setTranslation] = useState(part.translation ?? null)
@@ -1581,7 +1587,7 @@ function PartTranscript({ part, onUpdateNotes }: { part: PenSession; onUpdateNot
   if (!utts.length) {
     return part.transcript?.text
       ? <p className="whitespace-pre-wrap text-[16.5px] leading-relaxed">{part.transcript.text}</p>
-      : <Muted>This part has no transcript yet.</Muted>
+      : <Muted>{T.noPartTranscript}</Muted>
   }
   return (
     <>
@@ -1636,6 +1642,8 @@ function Detail({
   onDelete: () => void
   onPatch: (p: Partial<Pick<PenSession, 'user_notes' | 'title' | 'client_name' | 'action_done' | 'note_blocks' | 'transcript_edits' | 'briefing_sent_at'>>) => Promise<void>
 }) {
+  const T = useCopy(APP_COPY)
+  const lang = useLang()
   const [busy, setBusy] = useState(false)
   const [sheet, setSheet] = useState<SheetRequest | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -1724,13 +1732,13 @@ function Detail({
       {/* --------------------------------------------------------- header */}
       <button className="pen-back" onClick={onBack}>
         <Icon name="back" size={17} />
-        All recordings
+        {T.allRecordings}
       </button>
 
       <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1 basis-[280px]">
           <TitleEdit
-            title={session.title || n.headline || session.source_name || 'Untitled'}
+            title={session.title || n.headline || session.source_name || T.untitled}
             onSave={(next) => onPatch({ title: next })}
           />
           {/* Icons rather than a row of interchangeable grey strings — you can tell the
@@ -1738,7 +1746,7 @@ function Detail({
           <div className="pen-meta">
             <span className="pen-meta-bit">
               <Icon name="calendar" size={15} />
-              {session.recorded_at ? new Date(session.recorded_at).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}
+              {session.recorded_at ? fmtDate(session.recorded_at, lang, { dateStyle: 'medium' }) : '—'}
             </span>
             <span className="pen-meta-bit">
               <Icon name="clock" size={15} />
@@ -1747,19 +1755,19 @@ function Detail({
             {joined && (
               <span className="pen-meta-bit">
                 <Icon name="link" size={15} />
-                {parts.length} parts
+                {T.parts(parts.length)}
               </span>
             )}
             {!!displayType(session.meeting_type) && (
               <span className="pen-meta-bit">
                 <Icon name="tag" size={15} />
-                {displayType(session.meeting_type)}
+                {typeLabel(session.meeting_type, lang)}
               </span>
             )}
             {speakerCount > 0 && (
               <span className="pen-meta-bit">
                 <Icon name="people" size={15} />
-                {speakerCount} {speakerCount === 1 ? 'speaker' : 'speakers'}
+                {plural(speakerCount, T.speakers)}
               </span>
             )}
             {session.client_name && (
@@ -1773,36 +1781,35 @@ function Detail({
           {/* State, as labelled chips rather than one status word. */}
           <div className="pen-chips">
             {n.summary && (
-              <span className="pen-chip" data-tone="accent"><Icon name="sparkle" size={14} filled />AI summarised</span>
+              <span className="pen-chip" data-tone="accent"><Icon name="sparkle" size={14} filled />{T.aiSummarised}</span>
             )}
             {utts.length > 0 && (
-              <span className="pen-chip"><Icon name="check" size={14} />{session.source_channel === 'import' ? 'Imported' : 'Transcribed'}</span>
+              <span className="pen-chip"><Icon name="check" size={14} />{session.source_channel === 'import' ? T.imported : T.transcribed}</span>
             )}
             {session.status === 'transcribing' && (
-              <span className="pen-chip" data-tone="warn"><Icon name="clock" size={14} />Transcribing</span>
+              <span className="pen-chip" data-tone="warn"><Icon name="clock" size={14} />{T.chipTranscribing}</span>
             )}
             {session.status === 'noting' && (
-              <span className="pen-chip" data-tone="warn"><Icon name="sparkle" size={14} filled />Writing notes</span>
+              <span className="pen-chip" data-tone="warn"><Icon name="sparkle" size={14} filled />{T.chipNoting}</span>
             )}
             {session.status === 'error' && (
-              <span className="pen-chip" data-tone="bad"><Icon name="alert" size={14} />Something failed</span>
+              <span className="pen-chip" data-tone="bad"><Icon name="alert" size={14} />{T.chipError}</span>
             )}
             {session.status === 'held' && (
-              <span className="pen-chip" data-tone="warn"><Icon name="clock" size={14} />Waiting for hours</span>
+              <span className="pen-chip" data-tone="warn"><Icon name="clock" size={14} />{T.chipHeld}</span>
             )}
           </div>
 
           {joined && (
             <p className="mt-2.5 text-[14.5px] leading-relaxed" style={{ color: 'var(--dim)' }}>
-              The pen hit its 60-minute file limit, so this meeting arrived in {parts.length} pieces.
-              They are read as one — both recordings are still here.{' '}
+              {T.joinedNote(parts.length)}{' '}
               <button
                 className="underline"
                 disabled={splitting}
                 onClick={onSplit}
                 style={{ color: 'var(--soft)' }}
               >
-                {splitting ? 'Separating…' : 'Separate them again'}
+                {splitting ? T.separating : T.separate}
               </button>
             </p>
           )}
@@ -1813,12 +1820,12 @@ function Detail({
               retry on status left it with no way out of the UI. */}
           {utts.length > 0 && (
             <button className="pen-btn" onClick={() => regenerate()} disabled={busy}>
-              {busy ? 'Working…' : session.status === 'noted' ? 'Redo notes' : 'Write the notes'}
+              {busy ? T.working : session.status === 'noted' ? T.redoNotes : T.writeNotes}
             </button>
           )}
           {utts.length > 0 && (
             <button className={`pen-btn ${chatOpen ? 'pen-btn-accent' : ''}`} onClick={onToggleChat}>
-              {chatOpen ? 'Hide chat' : 'Ask this meeting'}
+              {chatOpen ? T.hideChat : T.askMeeting}
             </button>
           )}
           <SendBriefing
@@ -1832,13 +1839,13 @@ function Detail({
               asks — but a modal for one row would be heavier than the action deserves. */}
           {confirmDelete ? (
             <span className="pen-confirm">
-              <span>Delete for good?</span>
-              <button className="pen-confirm-no" onClick={() => setConfirmDelete(false)}>Keep</button>
-              <button className="pen-confirm-yes" onClick={onDelete}>Delete</button>
+              <span>{T.deleteForGood}</span>
+              <button className="pen-confirm-no" onClick={() => setConfirmDelete(false)}>{T.keep}</button>
+              <button className="pen-confirm-yes" onClick={onDelete}>{T.delete}</button>
             </span>
           ) : (
-            <button className="pen-btn pen-btn-quiet" onClick={() => setConfirmDelete(true)} title="Delete this recording and its audio">
-              Delete
+            <button className="pen-btn pen-btn-quiet" onClick={() => setConfirmDelete(true)} title={T.deleteTitle}>
+              {T.delete}
             </button>
           )}
         </div>
@@ -1856,13 +1863,13 @@ function Detail({
                       borderBottom: tab === t ? '2.5px solid var(--accent)' : '2.5px solid transparent',
                       marginBottom: -1,
                     }}>
-              {t}{t === 'transcript' && utts.length ? ` ${utts.length}` : ''}
+              {T.tabs[t]}{t === 'transcript' && utts.length ? ` ${utts.length}` : ''}
             </button>
           ))}
         </div>
         {utts.length > 0 && (
           <div className="pen-tabrow-cat flex items-center gap-2 pb-1.5">
-            <span className="pen-label">Category</span>
+            <span className="pen-label">{T.category}</span>
             <CategoryPicker
               value={displayType(session.meeting_type) || null}
               busy={busy}
@@ -1870,14 +1877,14 @@ function Detail({
             />
             {askCategory && !session.meeting_type && (
               <span className="pen-mono text-[13px]" style={{ color: 'var(--warn)' }}>
-                not sure what this was
+                {T.notSure}
                 {askCategory.length > 0 && (
                   <>
                     {' — '}
                     {askCategory.slice(0, 2).map((a, i) => (
                       <span key={a}>
-                        {i > 0 && ' or '}
-                        <button className="underline" onClick={() => regenerate(a)}>{a}</button>
+                        {i > 0 && T.or}
+                        <button className="underline" onClick={() => regenerate(a)}>{typeLabel(a, lang)}</button>
                       </span>
                     ))}
                     ?
@@ -1917,7 +1924,7 @@ function Detail({
           ) : session.transcript?.text ? (
             <p className="whitespace-pre-wrap text-[16.5px] leading-relaxed">{session.transcript.text}</p>
           ) : (
-            <Muted>No transcript yet.</Muted>
+            <Muted>{T.noTranscript}</Muted>
           )}
 
           {/* The later parts, in place, so the transcript reads straight through. Each one
@@ -1927,12 +1934,11 @@ function Detail({
             <div key={part.id} className="mt-8">
               <div className="pen-seam">
                 <span className="pen-label">
-                  Part {i + 2} · new file at {fmtDur(parts.slice(0, i + 1).reduce((t, x) => t + (x.duration_sec ?? 0), 0))}
+                  {T.partSeam(i + 2, fmtDur(parts.slice(0, i + 1).reduce((t, x) => t + (x.duration_sec ?? 0), 0)))}
                 </span>
               </div>
               <p className="mb-4 mt-2 text-[14px]" style={{ color: 'var(--faint)' }}>
-                Speakers are labelled fresh in each file, so “Speaker A” here may be someone else
-                than “Speaker A” above. The notes above already account for that.
+                {T.partNote}
               </p>
               <PartTranscript part={part} onUpdateNotes={() => regenerate()} />
             </div>
@@ -1951,12 +1957,12 @@ function Detail({
             />
           </div>
 
-          {session.status === 'transcribing' && <div className="pen-sec"><Muted>Transcribing. This runs on its own — you can close the tab.</Muted></div>}
-          {session.status === 'uploaded' && <div className="pen-sec"><Muted>Uploaded, waiting to be sent for transcription.</Muted></div>}
+          {session.status === 'transcribing' && <div className="pen-sec"><Muted>{T.mTranscribing}</Muted></div>}
+          {session.status === 'uploaded' && <div className="pen-sec"><Muted>{T.mUploaded}</Muted></div>}
           {session.status === 'held' && (
             <div className="pen-sec">
               <Muted>
-                {"Saved, and waiting: this month's fair-use limit is used up. It will be transcribed automatically when the month resets."}
+                {T.mHeld}
               </Muted>
             </div>
           )}
@@ -1964,8 +1970,8 @@ function Detail({
             <div className="pen-sec">
               <Muted>
                 {session.status === 'error'
-                  ? 'The transcript came through but the notes failed. Press “Write the notes” to try again.'
-                  : 'Transcript is ready. Press “Write the notes”.'}
+                  ? T.mNotesFailed
+                  : T.mReady}
               </Muted>
             </div>
           )}
@@ -1975,9 +1981,9 @@ function Detail({
               <div className="pen-aicard-head">
                 <span className="pen-aicard-title">
                   <Icon name="sparkle" size={18} filled />
-                  AI meeting summary
+                  {T.aiSummary}
                 </span>
-                <span className="pen-aicard-by">Generated by AI</span>
+                <span className="pen-aicard-by">{T.byAi}</span>
               </div>
               <p className="pen-aicard-body">{n.summary}</p>
             </div>
@@ -1992,7 +1998,7 @@ function Detail({
             <div className="pen-trio">
             {!!n.open_questions?.length && (
               <div className="pen-sec pen-card">
-                <span className="pen-sec-head"><span className="pen-badge" data-tone="warn"><Icon name="question" size={13} /></span>Still open</span>
+                <span className="pen-sec-head"><span className="pen-badge" data-tone="warn"><Icon name="question" size={13} /></span>{T.stillOpen}</span>
                 <ul className="mt-2 list-disc space-y-2.5 pl-5 text-[16.5px]">
                   {n.open_questions.map((q, i) => (
                     <li key={i} className="pen-doable">
@@ -2007,7 +2013,7 @@ function Detail({
             )}
             {!!n.decisions?.length && (
               <div className="pen-sec pen-card">
-                <span className="pen-sec-head"><span className="pen-badge" data-tone="good"><Icon name="check" size={13} /></span>Decided</span>
+                <span className="pen-sec-head"><span className="pen-badge" data-tone="good"><Icon name="check" size={13} /></span>{T.decided}</span>
                 <ul className="mt-2 space-y-2">
                   {n.decisions.map((d, i) => (
                     <li key={i} className="text-[16.5px]">
@@ -2021,9 +2027,9 @@ function Detail({
             {!!n.actions?.length && (
               <div className="pen-sec pen-card">
                 <div className="mb-1 flex items-baseline justify-between">
-                  <span className="pen-sec-head"><span className="pen-badge" data-tone="accent"><Icon name="checklist" size={13} /></span>Next actions</span>
+                  <span className="pen-sec-head"><span className="pen-badge" data-tone="accent"><Icon name="checklist" size={13} /></span>{T.nextActions}</span>
                   <span className="pen-mono text-[13px]" style={{ color: 'var(--faint)' }}>
-                    {done.size}/{n.actions.length} done
+                    {T.nDone(done.size, n.actions.length)}
                   </span>
                 </div>
                 <div className="mt-1.5">
@@ -2035,7 +2041,7 @@ function Detail({
                         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5">
                           {(a.owner || a.due || a.priority === 'high') && (
                             <div className="pen-mono flex flex-wrap items-center gap-x-2 text-[13px]" style={{ color: 'var(--dim)' }}>
-                              {a.priority === 'high' && <span style={{ color: 'var(--bad)' }}>PRIORITY</span>}
+                              {a.priority === 'high' && <span style={{ color: 'var(--bad)' }}>{T.priority}</span>}
                               {a.owner && <span>{a.owner}</span>}
                               {a.due && <span style={{ color: 'var(--accent-ink)' }}>{a.due}</span>}
                             </div>
@@ -2056,7 +2062,7 @@ function Detail({
           {!!n.missed?.length && (
             <div className="pen-sec">
               <div className="pen-missed p-5">
-                <span className="pen-label" style={{ color: 'var(--warn)' }}>You might have missed</span>
+                <span className="pen-label" style={{ color: 'var(--warn)' }}>{T.missed}</span>
                 <ul className="mt-2.5 space-y-3">
                   {n.missed.map((m, i) => (
                     <li key={i} className="pen-doable text-[16.5px] leading-snug">
@@ -2086,17 +2092,18 @@ function Detail({
 }
 
 function ShowingBlock({ showing }: { showing: NonNullable<PenNotes['showing']> }) {
+  const T = useCopy(APP_COPY)
   return (
     <>
       {!!showing.reactions?.length && (
         <div className="pen-sec">
-          <span className="pen-label">Room by room</span>
+          <span className="pen-label">{T.roomByRoom}</span>
           <ul className="mt-2 space-y-2.5">
             {showing.reactions.map((r, i) => (
               <li key={i} className="text-[16.5px]">
                 <span className="font-medium capitalize">{r.feature}</span>
                 <span style={{ color: 'var(--dim)' }}> · {r.who} · </span>
-                <span style={{ color: sentimentColor(r.sentiment) }}>{r.sentiment}</span>
+                <span style={{ color: sentimentColor(r.sentiment) }}>{T.sentiment[r.sentiment] ?? r.sentiment}</span>
                 {r.quote && <div className="mt-0.5 text-[14.5px] italic" style={{ color: 'var(--soft)' }}>“{r.quote}”</div>}
               </li>
             ))}
@@ -2105,7 +2112,7 @@ function ShowingBlock({ showing }: { showing: NonNullable<PenNotes['showing']> }
       )}
       {!!showing.objections?.length && (
         <div className="pen-sec">
-          <span className="pen-label">Objections</span>
+          <span className="pen-label">{T.objections}</span>
           <ul className="mt-2 space-y-2.5">
             {showing.objections.map((o, i) => (
               <li key={i} className="text-[16.5px]">
@@ -2118,11 +2125,11 @@ function ShowingBlock({ showing }: { showing: NonNullable<PenNotes['showing']> }
       )}
       {!!showing.signals?.length && (
         <div className="pen-sec">
-          <span className="pen-label">Buying signals</span>
+          <span className="pen-label">{T.signals}</span>
           <ul className="mt-2 space-y-2">
             {showing.signals.map((s, i) => (
               <li key={i} className="flex items-baseline gap-2 text-[16.5px]">
-                <span className="pen-pill" data-s={s.strength === 'strong' ? 'noted' : 'uploaded'}>{s.strength}</span>
+                <span className="pen-pill" data-s={s.strength === 'strong' ? 'noted' : 'uploaded'}>{T.strength[s.strength] ?? s.strength}</span>
                 <span>{s.signal}</span>
               </li>
             ))}
@@ -2132,9 +2139,9 @@ function ShowingBlock({ showing }: { showing: NonNullable<PenNotes['showing']> }
       {!!showing.revealed_criteria?.length && (
         <div className="pen-sec">
           <div className="rounded-[10px] p-5" style={{ background: 'var(--accent-wash)', border: '1px solid var(--accent-line)' }}>
-            <span className="pen-label" style={{ color: 'var(--accent-ink)' }}>What they actually want</span>
+            <span className="pen-label" style={{ color: 'var(--accent-ink)' }}>{T.wantTitle}</span>
             <p className="mb-2 mt-1 text-[14.5px]" style={{ color: 'var(--soft)' }}>
-              Inferred from what they reacted to, not from what they said.
+              {T.wantNote}
             </p>
             <ul className="list-disc space-y-1 pl-5 text-[16.5px]">
               {showing.revealed_criteria.map((c, i) => <li key={i}>{c}</li>)}
@@ -2149,6 +2156,7 @@ function ShowingBlock({ showing }: { showing: NonNullable<PenNotes['showing']> }
 /* ==================================================================== chat */
 
 function ChatPanel({ session, onChat, onClose }: { session: PenSession; onChat: (s: PenSession) => void; onClose: () => void }) {
+  const T = useCopy(APP_COPY)
   const [q, setQ] = useState('')
   const [thinking, setThinking] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -2160,10 +2168,10 @@ function ChatPanel({ session, onChat, onClose }: { session: PenSession; onChat: 
     // Kept client-side so the panel needs no extra round trip to render its starters.
     // Categories are free-form now, so match on what the words mean rather than on an enum.
     const t = session.meeting_type ?? session.notes?.meeting_type ?? ''
-    if (isViewing(t)) setSuggestions(['What did they actually like?', 'What were the objections?', 'Did they say they’d come back?'])
-    else if (/clinic|patient|ward|admin|round/i.test(t)) setSuggestions(['What needs doing today?', 'Who owes me something?', 'What did I agree to follow up on?'])
-    else setSuggestions(['What did I commit to?', 'What did I miss?', 'Was anything left unresolved?'])
-  }, [session.id, session.meeting_type, session.notes?.meeting_type])
+    if (isViewing(t)) setSuggestions(T.chatViewing)
+    else if (/clinic|patient|ward|admin|round/i.test(t)) setSuggestions(T.chatClinic)
+    else setSuggestions(T.chatDefault)
+  }, [session.id, session.meeting_type, session.notes?.meeting_type, T])
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }, [chat.length, thinking])
 
@@ -2176,7 +2184,7 @@ function ChatPanel({ session, onChat, onClose }: { session: PenSession; onChat: 
       const j = await postJson<{ chat: ChatTurn[] }>('/api/pen/chat', { id: session.id, question })
       onChat({ ...session, chat: j.chat })
     } catch (e) {
-      setError(errMessage(e, 'Could not get an answer.'))
+      setError(errMessage(e, T.noAnswer))
     } finally {
       setThinking(false)
     }
@@ -2193,10 +2201,10 @@ function ChatPanel({ session, onChat, onClose }: { session: PenSession; onChat: 
   return (
     <aside className="pen-panel flex max-h-[76vh] flex-col overflow-hidden xl:sticky xl:top-6">
       <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: 'var(--line)' }}>
-        <span className="pen-label">Ask this meeting</span>
+        <span className="pen-label">{T.askMeeting}</span>
         <div className="flex items-center gap-3">
           {chat.length > 0 && (
-            <button className="pen-mono text-[13px] underline" style={{ color: 'var(--dim)' }} onClick={reset}>clear</button>
+            <button className="pen-mono text-[13px] underline" style={{ color: 'var(--dim)' }} onClick={reset}>{T.clear}</button>
           )}
           <button className="pen-mono text-[14.5px] leading-none xl:hidden" style={{ color: 'var(--dim)' }} onClick={onClose}>×</button>
         </div>
@@ -2205,7 +2213,7 @@ function ChatPanel({ session, onChat, onClose }: { session: PenSession; onChat: 
       <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {chat.length === 0 && (
           <p className="text-[16.5px] leading-relaxed" style={{ color: 'var(--dim)' }}>
-            Answers come only from this recording. If it isn’t in there, it’ll say so rather than guess.
+            {T.chatIntro}
           </p>
         )}
         {chat.map((t, i) => (
@@ -2234,12 +2242,12 @@ function ChatPanel({ session, onChat, onClose }: { session: PenSession; onChat: 
             onSubmit={(e) => { e.preventDefault(); ask(q) }}>
         <textarea
           value={q} onChange={(e) => setQ(e.target.value)} rows={1}
-          placeholder="Ask about this meeting…"
+          placeholder={T.chatPlaceholder}
           className="max-h-28 min-h-[38px] flex-1 resize-none rounded-lg border px-3 py-2 text-[14.5px] outline-none"
           style={{ borderColor: 'var(--line)', background: 'var(--panel)', fontFamily: 'var(--serif)' }}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(q) } }}
         />
-        <button type="submit" className="pen-btn pen-btn-accent" disabled={thinking || !q.trim()}>Ask</button>
+        <button type="submit" className="pen-btn pen-btn-accent" disabled={thinking || !q.trim()}>{T.ask}</button>
       </form>
     </aside>
   )
@@ -2279,12 +2287,10 @@ function sentimentColor(s: string) {
   return 'var(--soft)'
 }
 
-function groupByDay(sessions: PenSession[]): [string, PenSession[]][] {
+function groupByDay(sessions: PenSession[], lang: Lang): [string, PenSession[]][] {
   const map = new Map<string, PenSession[]>()
   for (const s of sessions) {
-    const key = new Date(s.recorded_at ?? s.created_at).toLocaleDateString(undefined, {
-      weekday: 'short', month: 'short', day: 'numeric',
-    })
+    const key = fmtDate(s.recorded_at ?? s.created_at, lang, { weekday: 'short', month: 'short', day: 'numeric' })
     if (!map.has(key)) map.set(key, [])
     map.get(key)!.push(s)
   }

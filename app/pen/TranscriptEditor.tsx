@@ -3,6 +3,14 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { Utterance } from '@/lib/pen/store'
 import { speakerName, type SpeakerMap } from '@/lib/pen/speakers'
+import { useCopy, useLang } from './LangContext'
+import { SPEAKER_WORD, type Copy } from '@/lib/pen/i18n'
+
+const TE: Copy<{ head: string; notSaved: string; saving: string; saved: string }> = {
+  en: { head: 'Transcript · click any line to correct it', notSaved: 'not saved', saving: 'saving…', saved: 'saved' },
+  es: { head: 'Transcripción · haz clic en una línea para corregirla', notSaved: 'sin guardar', saving: 'guardando…', saved: 'guardado' },
+  pt: { head: 'Transcrição · clique numa linha para corrigir', notSaved: 'não salvo', saving: 'salvando…', saved: 'salvo' },
+}
 
 // The transcript is editable, but corrections are stored as an OVERLAY keyed by utterance
 // index rather than written over the original. AssemblyAI's output stays intact, so a bad
@@ -24,6 +32,8 @@ export default function TranscriptEditor({
   onEdit: (index: number, text: string) => void
   saveState: 'saved' | 'saving' | 'failed'
 }) {
+  const T = useCopy(TE)
+  const lang = useLang()
   const refs = useRef<Record<number, HTMLTextAreaElement | null>>({})
 
   const autoGrow = useCallback((el: HTMLTextAreaElement | null) => {
@@ -39,16 +49,16 @@ export default function TranscriptEditor({
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <span className="pen-label">Transcript · click any line to correct it</span>
+        <span className="pen-label">{T.head}</span>
         <span className="pen-mono text-[13px]" style={{ color: saveState === 'failed' ? 'var(--bad)' : 'var(--faint)' }}>
-          {saveState === 'failed' ? 'not saved' : saveState === 'saving' ? 'saving…' : 'saved'}
+          {saveState === 'failed' ? T.notSaved : saveState === 'saving' ? T.saving : T.saved}
         </span>
       </div>
       {utterances.map((u, i) => {
         const edited = typeof edits[String(i)] === 'string' && edits[String(i)] !== u.text
         return (
           <div key={i} className="pen-utt" data-edited={edited}>
-            <div className="pen-label pen-spk-tag pt-0.5">{speakerName(speakerMap, u.speaker)}</div>
+            <div className="pen-label pen-spk-tag pt-0.5">{speakerName(speakerMap, u.speaker, { word: SPEAKER_WORD[lang] })}</div>
             <textarea
               ref={(el) => { refs.current[i] = el; autoGrow(el) }}
               className="pen-utt-input"
