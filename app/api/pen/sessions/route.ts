@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
+import { pausedRefusal } from '@/lib/pen/pause'
 import { createSession, listSessions } from '@/lib/pen/store'
 import { linkPerson, ownedPeople, upsertByName } from '@/lib/pen/people'
 
@@ -19,6 +20,9 @@ export async function GET() {
 export async function POST(req: Request) {
   const email = await authedEmail()
   if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  // Paused: the service is off. Reading stays open; adding doesn't.
+  const paused = await pausedRefusal(email)
+  if (paused) return NextResponse.json({ error: paused }, { status: 403 })
 
   const b = (await req.json().catch(() => ({}))) as Record<string, unknown>
   const storage_path = typeof b.storage_path === 'string' ? b.storage_path : ''

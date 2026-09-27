@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
+import { pausedRefusal } from '@/lib/pen/pause'
 import { createUploadUrl } from '@/lib/pen/store'
 
 export const dynamic = 'force-dynamic'
@@ -10,6 +11,9 @@ export const dynamic = 'force-dynamic'
 export async function POST(req: Request) {
   const email = await authedEmail()
   if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  // Paused: the service is off. Reading stays open; adding doesn't.
+  const paused = await pausedRefusal(email)
+  if (paused) return NextResponse.json({ error: paused }, { status: 403 })
 
   const body = (await req.json().catch(() => ({}))) as { name?: string }
   if (!body.name) return NextResponse.json({ error: 'name required' }, { status: 400 })

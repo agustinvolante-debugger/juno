@@ -2,8 +2,8 @@
 //
 // A monthly subscriber who has paid at least once can pause for 30, 60 or 90 days. Stripe stops
 // charging and restarts by itself on the date; they can also resume early. While paused they
-// keep reading their recordings, notes and search, but new recordings are held (the same
-// 'held' state as running out of hours) and go through when the pause ends.
+// keep reading their recordings, notes and search, but can't add new ones (his call, 27 Sep:
+// a pause means the service is off). Anything that slips through is held, not transcribed.
 // Trials just cancel; 6-month and yearly plans are prepaid, so there is nothing to pause.
 
 import { getAccount, isPaused, isTrialing, setPausedUntil, type PenAccount } from './accounts'
@@ -38,4 +38,12 @@ export async function resume(email: string): Promise<void> {
   if (!a?.stripe_subscription_id || !isPaused(a)) return
   await resumeSubscription(a.stripe_subscription_id)
   await setPausedUntil(a.stripe_subscription_id, null)
+}
+
+/** The refusal for adding a recording while paused, or null. For the upload routes. */
+export async function pausedRefusal(email: string): Promise<string | null> {
+  const a = await getAccount(email).catch(() => null)
+  if (!isPaused(a)) return null
+  const d = new Date(a!.paused_until!).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+  return `Your plan is paused until ${d}. Resume it in Settings → Billing to add recordings.`
 }

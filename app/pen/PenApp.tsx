@@ -240,6 +240,22 @@ export default function PenApp({
     if (r.ok) setAllowance(((await r.json()) as { allowance: Allowance }).allowance)
   }, [])
 
+  // Paused (Settings → Billing): reading stays open, adding a recording doesn't.
+  const paused = allowance?.pausedUntil ?? null
+  const [resuming, setResuming] = useState(false)
+  async function resumePlan() {
+    setResuming(true)
+    setErr(null)
+    try {
+      await postJson('/api/pen/billing/resume', {})
+      await Promise.all([loadAllowance(), refresh()])
+    } catch (e) {
+      setErr(errMessage(e))
+    } finally {
+      setResuming(false)
+    }
+  }
+
   const refresh = useCallback(async () => {
     const r = await fetch('/api/pen/sessions', { cache: 'no-store' })
     if (r.ok) setSessions(((await r.json()) as { sessions: PenSession[] }).sessions)
@@ -346,6 +362,7 @@ export default function PenApp({
   /* ---------------------------------------------------------------- connect */
 
   async function connectPen() {
+    if (paused) return
     setErr(null)
     try {
       const dir = await window.showDirectoryPicker!({ id: 'pen-recorder', mode: 'read' })
@@ -366,6 +383,7 @@ export default function PenApp({
   }
 
   function addFiles(files: FileList | File[]) {
+    if (paused) return
     const list = Array.from(files).filter((f) => MEDIA_RE.test(f.name))
     if (!list.length) return setErr(T.notMedia)
     setPenName(null)
@@ -551,6 +569,16 @@ export default function PenApp({
         </div>
       </div>
 
+      {paused ? (
+        <div className="pen-paused">
+          <strong>{T.pausedTitle(fmtDate(paused, appLang, { day: 'numeric', month: 'long' }))}</strong>
+          <span>{T.pausedSub}</span>
+          <button type="button" className="pen-btn pen-btn-accent" onClick={resumePlan} disabled={resuming}>
+            {resuming ? T.resuming : T.resumeNow}
+          </button>
+        </div>
+      ) : (
+      <>
       {supportsPicker ? (
         <button className="pen-connect" onClick={connectPen}>
           <Icon name="link" size={18} />
@@ -586,6 +614,8 @@ export default function PenApp({
         <Icon name="quote" size={15} />
         {T.importTranscript}
       </button>
+      </>
+      )}
       {tourOpen && <Tour lang={appLang} onClose={closeTour} onUpload={() => fileInput.current?.click()} />}
       {txImport && (
         <TranscriptImport
@@ -941,10 +971,12 @@ export default function PenApp({
         <aside className="pen-rail">
           <div className="pen-rail-head">
             <span className="pen-rail-title">{T.recent}</span>
-            <button className="pen-rail-new" onClick={() => fileInput.current?.click()}>
-              <Icon name="plus" size={15} />
-              {T.new}
-            </button>
+            {!paused && (
+              <button className="pen-rail-new" onClick={() => fileInput.current?.click()}>
+                <Icon name="plus" size={15} />
+                {T.new}
+              </button>
+            )}
           </div>
 
           {visible.length === 0 ? (
