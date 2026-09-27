@@ -11,7 +11,7 @@ import { botNumber, configured as whatsappReady } from '@/lib/pen/whatsapp/vonag
 import Landing from './Landing'
 import { headers, cookies } from 'next/headers'
 import { marketFor } from './landing-copy'
-import { getProfileRaw } from '@/lib/pen/profile'
+import { getProfileRaw, rememberAppLanguage } from '@/lib/pen/profile'
 import { ensureSample } from '@/lib/pen/sample'
 import { appLangFor } from './app-lang'
 
@@ -48,6 +48,8 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
     // the tour still needs to play. None of it may block the page.
     const profile = await getProfileRaw(email).catch(() => null)
     appLang = await appLangFor(email, profile)
+    // Emails and WhatsApp read only the stored setting, so the first resolved language sticks.
+    if (!profile?.appLanguage) await rememberAppLanguage(email, appLang).catch(() => {})
     showTour = !profile?.onboarding?.tour
     await ensureSample(email, appLang, profile?.name ?? session?.user?.name ?? null).catch(() => {})
     sessions = await listSessions(email)

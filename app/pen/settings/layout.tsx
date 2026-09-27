@@ -6,6 +6,7 @@ import SettingsNav from './SettingsNav'
 import { configured as whatsappReady } from '@/lib/pen/whatsapp/vonage'
 import { LangProvider } from '../LangContext'
 import { appLangFor } from '../app-lang'
+import { getAccount } from '@/lib/pen/accounts'
 
 const COPY = {
   en: { back: 'Back to recordings', title: 'Settings' },
@@ -20,7 +21,7 @@ export const dynamic = 'force-dynamic'
 export default async function SettingsLayout({ children }: { children: React.ReactNode }) {
   const email = await authedEmail()
   if (!email) redirect('/pen')
-  const lang = await appLangFor(email)
+  const [lang, account] = await Promise.all([appLangFor(email), getAccount(email)])
   const T = COPY[lang]
 
   return (
@@ -37,7 +38,7 @@ export default async function SettingsLayout({ children }: { children: React.Rea
         <aside className="pen-set-side">
           <h1 className="pen-display pen-set-title">{T.title}</h1>
           <div className="pen-set-email">{email}</div>
-          <SettingsNav whatsapp={whatsappReady()} />
+          <SettingsNav whatsapp={whatsappReady()} billing={Boolean(account?.stripe_customer_id)} />
         </aside>
         <section className="pen-set-main">{children}</section>
       </div>

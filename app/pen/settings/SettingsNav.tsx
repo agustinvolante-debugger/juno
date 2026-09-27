@@ -6,10 +6,10 @@ import Icon, { type IconName } from '../Icon'
 import { useCopy } from '../LangContext'
 import type { Copy } from '@/lib/pen/i18n'
 
-const SN: Copy<{ profile: string; aria: string }> = {
-  en: { profile: 'Profile', aria: 'Settings' },
-  es: { profile: 'Perfil', aria: 'Ajustes' },
-  pt: { profile: 'Perfil', aria: 'Configurações' },
+const SN: Copy<{ profile: string; aria: string; billing: string }> = {
+  en: { profile: 'Profile', aria: 'Settings', billing: 'Billing' },
+  es: { profile: 'Perfil', aria: 'Ajustes', billing: 'Facturación' },
+  pt: { profile: 'Perfil', aria: 'Configurações', billing: 'Cobrança' },
 }
 
 const ITEMS: { href: string; label: 'profile' | 'WhatsApp'; icon: IconName }[] = [
@@ -17,8 +17,12 @@ const ITEMS: { href: string; label: 'profile' | 'WhatsApp'; icon: IconName }[] =
   { href: '/pen/settings/whatsapp', label: 'WhatsApp', icon: 'chat' },
 ]
 
-/** `whatsapp` is false until the Vonage env vars exist, so nobody finds a page that can't work. */
-export default function SettingsNav({ whatsapp = false }: { whatsapp?: boolean }) {
+/**
+ * `whatsapp` is false until the Vonage env vars exist, so nobody finds a page that can't work.
+ * `billing` is true for anyone Stripe knows; it opens Stripe's portal (card, invoices, cancel),
+ * so it is a plain link to the API route rather than a page of ours.
+ */
+export default function SettingsNav({ whatsapp = false, billing = false }: { whatsapp?: boolean; billing?: boolean }) {
   const T = useCopy(SN)
   const path = usePathname()
   return (
@@ -29,6 +33,12 @@ export default function SettingsNav({ whatsapp = false }: { whatsapp?: boolean }
           <span className="pen-cat-label">{i.label === 'profile' ? T.profile : i.label}</span>
         </Link>
       ))}
+      {billing && (
+        <a href="/api/pen/billing" className="pen-cat">
+          <Icon name="lock" size={19} />
+          <span className="pen-cat-label">{T.billing}</span>
+        </a>
+      )}
     </nav>
   )
 }

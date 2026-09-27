@@ -57,7 +57,7 @@ export const TERMS: Record<Lang, LegalDoc> = {
       {
         h: 'Cancelling',
         body: [
-          'You can cancel at any time by writing to [CONTACT EMAIL] or replying to any email from us. Cancelling stops the next renewal; you keep access until the end of the period you have paid for.',
+          'You can cancel at any time from Settings → Billing, from the link in our emails, or by writing to [CONTACT EMAIL]. Cancelling stops the next renewal; you keep access until the end of the period you have paid for.',
         ],
       },
       {
@@ -182,7 +182,7 @@ export const TERMS: Record<Lang, LegalDoc> = {
       {
         h: 'Cancelar',
         body: [
-          'Puedes cancelar cuando quieras escribiendo a [CONTACT EMAIL] o respondiendo cualquier correo nuestro. Cancelar detiene la próxima renovación; mantienes el acceso hasta el final del período que pagaste.',
+          'Puedes cancelar cuando quieras desde Ajustes → Facturación, desde el enlace en nuestros correos, o escribiendo a [CONTACT EMAIL]. Cancelar detiene la próxima renovación; mantienes el acceso hasta el final del período que pagaste.',
         ],
       },
       {
@@ -307,7 +307,7 @@ export const TERMS: Record<Lang, LegalDoc> = {
       {
         h: 'Cancelamento',
         body: [
-          'Você pode cancelar quando quiser escrevendo para [CONTACT EMAIL] ou respondendo a qualquer e-mail nosso. O cancelamento interrompe a próxima renovação; você mantém o acesso até o fim do período já pago.',
+          'Você pode cancelar quando quiser em Configurações → Cobrança, pelo link nos nossos e-mails, ou escrevendo para [CONTACT EMAIL]. O cancelamento interrompe a próxima renovação; você mantém o acesso até o fim do período já pago.',
         ],
       },
       {

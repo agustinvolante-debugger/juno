@@ -156,3 +156,25 @@ export type CheckoutSessionFull = {
 export async function getCheckoutSession(id: string): Promise<CheckoutSessionFull> {
   return stripe<CheckoutSessionFull>(`checkout/sessions/${encodeURIComponent(id)}`)
 }
+
+/**
+ * A one-time link into Stripe's customer portal for someone we already know: change card,
+ * see invoices, cancel (at the end of the period, so a trial cancelled now is never charged).
+ * The portal's look and features are the default configuration in Stripe, made by
+ * .pentest/portal-setup.sh. The link expires quickly, so it is minted on click, never emailed.
+ */
+export async function createPortalSession(opts: { customerId: string; returnUrl: string; locale?: string }): Promise<{ url: string }> {
+  return stripe<{ url: string }>('billing_portal/sessions', {
+    customer: opts.customerId,
+    return_url: opts.returnUrl,
+    ...(opts.locale ? { locale: opts.locale } : {}),
+  })
+}
+
+/**
+ * The portal's own sign-in page (Stripe emails the customer a code). Emails link here: it needs
+ * no Juno session, so it still works for an account on hold after a declined card.
+ */
+export function portalLoginUrl(): string | null {
+  return process.env.STRIPE_PORTAL_LOGIN_URL || null
+}

@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase'
 import type { MeetingType } from '@/lib/pen/categories'
+import { deleteTranscript } from '@/lib/pen/aai'
 
 export const BUCKET = 'pen-audio'
 
@@ -276,6 +277,15 @@ export async function deleteSession(userEmail: string, id: string): Promise<bool
     // Best effort, and deliberately after the row: failing here costs storage, not correctness.
     const { error: se } = await supabaseAdmin.storage.from(BUCKET).remove([session.storage_path])
     if (se) console.warn(`pen: orphaned object ${session.storage_path}: ${se.message}`)
+  }
+  // AssemblyAI's copy of the transcript (and of a WhatsApp file uploaded to them). Same rule:
+  // after the row, best effort. Test and sample rows carry made-up ids, so only real ones
+  // (UUIDs) are sent, and never one another row still points at (translation reads it).
+  if (session.aai_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(session.aai_id)) {
+    const { count } = await supabaseAdmin.from('pen_sessions').select('id', { count: 'exact', head: true }).eq('aai_id', session.aai_id)
+    if (count === 0) {
+      await deleteTranscript(session.aai_id).catch((e) => console.warn(`pen: assemblyai copy of ${id} not deleted: ${(e as Error).message}`))
+    }
   }
   return true
 }

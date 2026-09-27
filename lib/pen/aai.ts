@@ -107,6 +107,16 @@ export async function fetchTranscript(id: string): Promise<AaiTranscript> {
   return res.json()
 }
 
+/**
+ * Deletes AssemblyAI's copy of a transcript (text, words, and the audio if it was uploaded to
+ * them). Without this, "delete" in the app left the transcript at AssemblyAI until their own
+ * 30-day expiry. A transcript already gone (404) counts as deleted.
+ */
+export async function deleteTranscript(id: string): Promise<void> {
+  const res = await fetch(`${BASE}/transcript/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { Authorization: key() } })
+  if (!res.ok && res.status !== 404) throw new Error(`assemblyai delete ${res.status}: ${(await res.text()).slice(0, 300)}`)
+}
+
 /** Speaker-labelled text, which is what the extraction prompt reads. */
 /**
  * `max` is a guard against an absurd input, not a budget: 60k chars was about 70 minutes of

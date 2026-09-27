@@ -158,3 +158,19 @@ export async function markOnboarding(email: string, key: 'sample' | 'tour'): Pro
     .upsert({ user_email: email.toLowerCase(), profile: next, updated_at: new Date().toISOString() }, { onConflict: 'user_email' })
   if (error) throw new Error(error.message)
 }
+
+/**
+ * Saves the language the app first resolved for this account (signup form, landing choice or
+ * country) as Profile "App language", once, and only if they haven't picked one. Emails and
+ * WhatsApp read only the stored setting, so without this a Spanish signup who never opens
+ * Profile gets English briefings. Changing it in Profile still wins.
+ */
+export async function rememberAppLanguage(email: string, lang: 'en' | 'es' | 'pt'): Promise<void> {
+  const current = (await getProfileRaw(email)) ?? {}
+  if (current.appLanguage) return
+  const next = cleanProfile({ ...current, appLanguage: lang })
+  const { error } = await supabaseAdmin
+    .from('pen_profiles')
+    .upsert({ user_email: email.toLowerCase(), profile: next, updated_at: new Date().toISOString() }, { onConflict: 'user_email' })
+  if (error) throw new Error(error.message)
+}
