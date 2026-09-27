@@ -8,6 +8,54 @@
 // party (Resend) and into a mail server. The extraction already strips identifiers and keeps
 // clinical detail out of the notes, which is exactly why that mattered.
 import type { PenNotes } from './store'
+import type { Lang } from './currency'
+
+// The email's own words. The notes inside are already in the recording's (or the chosen) language.
+const EN = {
+  summary: 'Summary',
+  missed: 'You might have missed',
+  priority: 'PRIORITY',
+  actions: (n: number) => `Next actions \u00B7 ${n} outstanding`,
+  open: 'Still open',
+  unknown: 'unknown',
+  room: 'In the room',
+  empty: 'There are no notes on this recording yet, so there is nothing to brief.',
+  kicker: 'Recorder \u2192 notes',
+  cta: 'Open the full note &rarr;',
+  why: 'Sent because you pressed Send briefing on this recording.',
+  check: 'Generated from the recording. Check anything before you act on it.',
+}
+export const BRIEFING_COPY: Record<Lang, typeof EN> = {
+  en: EN,
+  es: {
+    summary: 'Resumen',
+    missed: 'Quizás se te pasó',
+    priority: 'PRIORIDAD',
+    actions: (n) => `Próximos pasos \u00B7 ${n} pendientes`,
+    open: 'Sin resolver',
+    unknown: 'desconocido',
+    room: 'En la reunión',
+    empty: 'Esta grabación todavía no tiene notas, así que no hay nada que resumir.',
+    kicker: 'Grabación \u2192 notas',
+    cta: 'Abrir la nota completa &rarr;',
+    why: 'Te llega porque se envió el resumen de esta grabación.',
+    check: 'Generado a partir de la grabación. Revisa todo antes de actuar.',
+  },
+  pt: {
+    summary: 'Resumo',
+    missed: 'Talvez tenha passado batido',
+    priority: 'PRIORIDADE',
+    actions: (n) => `Próximos passos \u00B7 ${n} pendentes`,
+    open: 'Em aberto',
+    unknown: 'desconhecido',
+    room: 'Na reunião',
+    empty: 'Esta gravação ainda não tem notas, então não há nada para resumir.',
+    kicker: 'Gravação \u2192 notas',
+    cta: 'Abrir a nota completa &rarr;',
+    why: 'Você recebeu porque o resumo desta gravação foi enviado.',
+    check: 'Gerado a partir da gravação. Confira tudo antes de agir.',
+  },
+}
 
 const esc = (s: string) =>
   (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -39,15 +87,17 @@ export function buildBriefingHtml(opts: {
   durationStr: string
   appUrl: string
   actionDone: number[]
+  lang?: Lang
 }): string {
   const { notes: n, title, dateStr, clientName, durationStr, appUrl } = opts
+  const C = BRIEFING_COPY[opts.lang ?? 'en']
   const done = new Set(opts.actionDone)
   const rows: string[] = []
 
   if (n.summary) {
     rows.push(
       section(
-        `${label('Summary')}<div style="font-size:16px;line-height:1.62;color:${INK}">${esc(n.summary)}</div>`,
+        `${label(C.summary)}<div style="font-size:16px;line-height:1.62;color:${INK}">${esc(n.summary)}</div>`,
       ),
     )
   }
@@ -67,7 +117,7 @@ export function buildBriefingHtml(opts: {
     rows.push(
       section(
         `<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;background:${WARN_BG};border:1px solid #EFE2C4;border-radius:10px">
-           <tr><td style="padding:16px 18px">${label('You might have missed', WARN)}${items}</td></tr>
+           <tr><td style="padding:16px 18px">${label(C.missed, WARN)}${items}</td></tr>
          </table>`,
       ),
     )
@@ -77,7 +127,7 @@ export function buildBriefingHtml(opts: {
     const items = n.actions
       .map((a, i) => {
         const struck = done.has(i)
-        const meta = [a.priority === 'high' ? 'PRIORITY' : '', a.owner, a.due].filter(Boolean).join(' &middot; ')
+        const meta = [a.priority === 'high' ? C.priority : '', a.owner, a.due].filter(Boolean).join(' &middot; ')
         return `<tr>
           <td width="18" valign="top" style="padding:8px 0;font-size:14px;color:${struck ? '#B0ABA0' : ACCENT}">${struck ? '&#10003;' : '&#9633;'}</td>
           <td valign="top" style="padding:8px 0;border-bottom:1px solid ${LINE}">
@@ -88,7 +138,7 @@ export function buildBriefingHtml(opts: {
       .join('')
     rows.push(
       section(
-        `${label(`Next actions \u00B7 ${n.actions.length - done.size} outstanding`)}
+        `${label(C.actions(n.actions.length - done.size))}
          <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">${items}</table>`,
       ),
     )
@@ -98,24 +148,24 @@ export function buildBriefingHtml(opts: {
     const items = n.open_questions
       .map((q) => `<li style="font-size:15px;line-height:1.5;color:${INK};margin:0 0 6px">${esc(q)}</li>`)
       .join('')
-    rows.push(section(`${label('Still open')}<ul style="margin:0;padding-left:20px">${items}</ul>`))
+    rows.push(section(`${label(C.open)}<ul style="margin:0;padding-left:20px">${items}</ul>`))
   }
 
   if (n.people?.length) {
     const chips = n.people
       .map((p) => {
-        const who = p.name || p.role || 'unknown'
+        const who = p.name || p.role || C.unknown
         const sub = p.name && p.role ? ` &middot; ${esc(p.role)}` : ''
         return `<span style="display:inline-block;font-size:13px;color:${SOFT};border:1px solid ${LINE};border-radius:999px;padding:4px 11px;margin:0 5px 5px 0">${esc(who)}${sub}</span>`
       })
       .join('')
-    rows.push(section(`${label('In the room')}<div>${chips}</div>`))
+    rows.push(section(`${label(C.room)}<div>${chips}</div>`))
   }
 
   if (!rows.length) {
     rows.push(
       section(
-        `<div style="font-size:15px;color:${SOFT}">There are no notes on this recording yet, so there is nothing to brief.</div>`,
+        `<div style="font-size:15px;color:${SOFT}">${esc(C.empty)}</div>`,
       ),
     )
   }
@@ -129,16 +179,16 @@ export function buildBriefingHtml(opts: {
     <tr><td align="center" style="padding:28px 16px 44px">
       <table width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;border-collapse:collapse;font-family:Georgia,'Iowan Old Style',Palatino,serif;color:${INK}">
         <tr><td style="padding:0 0 20px">
-          ${label('Recorder \u2192 notes')}
+          ${label(C.kicker)}
           <div style="font-size:27px;line-height:1.16;letter-spacing:-0.3px">${esc(title)}</div>
           <div style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:${DIM};margin-top:7px">${meta}</div>
         </td></tr>
         ${rows.join('')}
         <tr><td style="padding:26px 0 0;border-top:1px solid ${LINE}">
-          <a href="${esc(appUrl)}" style="display:inline-block;background:${INK};color:${PAPER};text-decoration:none;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;padding:10px 16px;border-radius:8px">Open the full note &rarr;</a>
+          <a href="${esc(appUrl)}" style="display:inline-block;background:${INK};color:${PAPER};text-decoration:none;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;padding:10px 16px;border-radius:8px">${C.cta}</a>
           <div style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;color:${DIM};margin-top:14px;line-height:1.7">
-            Sent because you pressed Send briefing on this recording.<br>
-            Generated from the recording. Check anything before you act on it.
+            ${esc(C.why)}<br>
+            ${esc(C.check)}
           </div>
         </td></tr>
       </table>

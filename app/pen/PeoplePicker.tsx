@@ -8,6 +8,48 @@
 
 import { useMemo, useRef, useState } from 'react'
 import type { PersonCard } from '@/lib/pen/people'
+import { useCopy } from './LangContext'
+import { plural, type Copy } from '@/lib/pen/i18n'
+
+const PK_EN = {
+  newTag: 'new',
+  remove: (n: string) => `Remove ${n}`,
+  addElse: 'Add someone else',
+  startTyping: 'Start typing a name',
+  typeName: 'Type a name',
+  aria: 'Who was on this call',
+  addPerson: 'Add person',
+  calls: ['call', 'calls'] as [string, string],
+  addNamed: (n: string) => `Add “${n}”`,
+  newPerson: 'new person',
+}
+const PK: Copy<typeof PK_EN> = {
+  en: PK_EN,
+  es: {
+    newTag: 'nueva',
+    remove: (n) => `Quitar a ${n}`,
+    addElse: 'Agregar a alguien más',
+    startTyping: 'Empieza a escribir un nombre',
+    typeName: 'Escribe un nombre',
+    aria: 'Quién estuvo en esta reunión',
+    addPerson: 'Agregar persona',
+    calls: ['reunión', 'reuniones'],
+    addNamed: (n) => `Agregar “${n}”`,
+    newPerson: 'persona nueva',
+  },
+  pt: {
+    newTag: 'nova',
+    remove: (n) => `Remover ${n}`,
+    addElse: 'Adicionar outra pessoa',
+    startTyping: 'Comece a digitar um nome',
+    typeName: 'Digite um nome',
+    aria: 'Quem estava nesta reunião',
+    addPerson: 'Adicionar pessoa',
+    calls: ['reunião', 'reuniões'],
+    addNamed: (n) => `Adicionar “${n}”`,
+    newPerson: 'pessoa nova',
+  },
+}
 
 /** An existing contact carries its id; someone new is only a name until the upload creates them. */
 export type Picked = { id?: string; name: string }
@@ -23,6 +65,7 @@ export default function PeoplePicker({
   value: Picked[]
   onChange: (v: Picked[]) => void
 }) {
+  const T = useCopy(PK)
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(0)
@@ -59,8 +102,8 @@ export default function PeoplePicker({
           {value.map((p) => (
             <span key={p.id ?? p.name} className="pen-pick-chip" data-new={!p.id}>
               {p.name}
-              {!p.id && <span className="pen-pick-new">new</span>}
-              <button type="button" aria-label={`Remove ${p.name}`} onClick={() => onChange(value.filter((x) => x !== p))}>
+              {!p.id && <span className="pen-pick-new">{T.newTag}</span>}
+              <button type="button" aria-label={T.remove(p.name)} onClick={() => onChange(value.filter((x) => x !== p))}>
                 <svg viewBox="0 0 20 20" aria-hidden><path d="M6 6l8 8M14 6l-8 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
               </button>
             </span>
@@ -95,14 +138,14 @@ export default function PeoplePicker({
               setOpen(false)
             }
           }}
-          placeholder={value.length ? 'Add someone else' : people.length ? 'Start typing a name' : 'Type a name'}
-          aria-label="Who was on this call"
+          placeholder={value.length ? T.addElse : people.length ? T.startTyping : T.typeName}
+          aria-label={T.aria}
           aria-autocomplete="list"
           aria-expanded={open && rows > 0}
           className="pen-pick-input"
         />
         <button type="button" className="pen-btn pen-pick-add" disabled={!canAdd} onClick={addTyped}>
-          Add person
+          {T.addPerson}
         </button>
 
         {open && rows > 0 && (
@@ -120,7 +163,7 @@ export default function PeoplePicker({
                 >
                   <span className="pen-pick-name">{p.name}</span>
                   <span className="pen-pick-sub">
-                    {[p.about || p.role, `${p.recordings} ${p.recordings === 1 ? 'call' : 'calls'}`].filter(Boolean).join(' · ')}
+                    {[p.about || p.role, plural(p.recordings, T.calls)].filter(Boolean).join(' · ')}
                   </span>
                 </button>
               </li>
@@ -136,8 +179,8 @@ export default function PeoplePicker({
                   }}
                   onMouseEnter={() => setActive(matches.length)}
                 >
-                  <span className="pen-pick-name">{`Add “${q.trim()}”`}</span>
-                  <span className="pen-pick-sub">new person</span>
+                  <span className="pen-pick-name">{T.addNamed(q.trim())}</span>
+                  <span className="pen-pick-sub">{T.newPerson}</span>
                 </button>
               </li>
             )}

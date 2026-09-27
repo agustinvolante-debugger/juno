@@ -7,6 +7,8 @@
 //
 // No server imports here: this is bundled into the browser.
 
+import { clientLang } from './i18n'
+
 export class PenHttpError extends Error {
   status: number
   constructor(message: string, status: number) {
@@ -16,22 +18,57 @@ export class PenHttpError extends Error {
   }
 }
 
+const FRIENDLY = {
+  en: {
+    expired: 'Your session expired. Reload the page and sign in again.',
+    tooLarge: 'That was too large to send.',
+    tooMany: 'Too many requests at once. Give it a moment and try again.',
+    slowAnswer: 'That took too long to answer. Try a narrower question, or ask again.',
+    timedOut: 'That took too long and timed out. Try again — long recordings can take a couple of minutes.',
+    unavailable: 'The server is temporarily unavailable. Try again in a moment.',
+    serverError: 'The server hit an error answering that. Try again.',
+    unreadable: 'The server sent back something unreadable.',
+    generic: (s: number) => `Something went wrong (${s}).`,
+  },
+  es: {
+    expired: 'Tu sesión expiró. Recarga la página y vuelve a entrar.',
+    tooLarge: 'Era demasiado grande para enviarlo.',
+    tooMany: 'Demasiadas solicitudes a la vez. Espera un momento y vuelve a intentarlo.',
+    slowAnswer: 'La respuesta tardó demasiado. Prueba con una pregunta más específica, o pregunta otra vez.',
+    timedOut: 'Tardó demasiado y se cortó. Vuelve a intentarlo: las grabaciones largas pueden tomar un par de minutos.',
+    unavailable: 'El servidor no está disponible por ahora. Inténtalo de nuevo en un momento.',
+    serverError: 'El servidor tuvo un error al responder. Inténtalo de nuevo.',
+    unreadable: 'El servidor devolvió algo que no se pudo leer.',
+    generic: (s: number) => `Algo salió mal (${s}).`,
+  },
+  pt: {
+    expired: 'Sua sessão expirou. Recarregue a página e entre de novo.',
+    tooLarge: 'Era grande demais para enviar.',
+    tooMany: 'Muitas solicitações ao mesmo tempo. Espere um pouco e tente de novo.',
+    slowAnswer: 'A resposta demorou demais. Tente uma pergunta mais específica, ou pergunte de novo.',
+    timedOut: 'Demorou demais e o tempo esgotou. Tente de novo — gravações longas podem levar alguns minutos.',
+    unavailable: 'O servidor está indisponível no momento. Tente de novo daqui a pouco.',
+    serverError: 'O servidor teve um erro ao responder. Tente de novo.',
+    unreadable: 'O servidor devolveu algo ilegível.',
+    generic: (s: number) => `Algo deu errado (${s}).`,
+  },
+}
+
 /** Plain-text platform failures, translated into something a person can act on. */
 function friendly(status: number, text: string, url = ''): string {
+  const F = FRIENDLY[clientLang()]
   const t = text.trim()
-  if (status === 401) return 'Your session expired. Reload the page and sign in again.'
-  if (status === 413) return 'That was too large to send.'
-  if (status === 429) return 'Too many requests at once. Give it a moment and try again.'
+  if (status === 401) return F.expired
+  if (status === 413) return F.tooLarge
+  if (status === 429) return F.tooMany
   if (status === 504 || /timed? ?out|FUNCTION_INVOCATION_TIMEOUT/i.test(t)) {
-    return /\/(chats|chat|archive)/.test(url)
-      ? 'That took too long to answer. Try a narrower question, or ask again.'
-      : 'That took too long and timed out. Try again — long recordings can take a couple of minutes.'
+    return /\/(chats|chat|archive)/.test(url) ? F.slowAnswer : F.timedOut
   }
-  if (status === 502 || status === 503) return 'The server is temporarily unavailable. Try again in a moment.'
-  if (/An error occurred/i.test(t)) return 'The server hit an error answering that. Try again.'
+  if (status === 502 || status === 503) return F.unavailable
+  if (/An error occurred/i.test(t)) return F.serverError
   // A short server message is usually the useful one; a wall of HTML never is.
   if (t && t.length < 240 && !/^\s*</.test(t)) return t
-  return `Something went wrong (${status}).`
+  return F.generic(status)
 }
 
 async function parse<T>(r: Response, url = ''): Promise<T> {
@@ -41,7 +78,7 @@ async function parse<T>(r: Response, url = ''): Promise<T> {
     data = text ? JSON.parse(text) : null
   } catch {
     // Body was not JSON. Only an error path should ever reach here.
-    if (r.ok) throw new PenHttpError('The server sent back something unreadable.', r.status)
+    if (r.ok) throw new PenHttpError(FRIENDLY[clientLang()].unreadable, r.status)
   }
 
   if (!r.ok) {

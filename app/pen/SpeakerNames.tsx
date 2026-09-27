@@ -11,11 +11,93 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Utterance } from '@/lib/pen/store'
 import { speakersIn, type SpeakerMap, type SpeakerEntry } from '@/lib/pen/speakers'
-import { LANGUAGES, languageName } from '@/lib/pen/profile-fields'
+import { LANGUAGES } from '@/lib/pen/profile-fields'
+import { useCopy, useLang } from './LangContext'
+import { languageLabel, SPEAKER_WORD, type Copy } from '@/lib/pen/i18n'
 import { getJson, patchJson, postJson, del, errMessage } from '@/lib/pen/http'
 
 type Person = { id: string; name: string }
 type Translation = { lang: string; utterances: string[] }
+
+const SN_EN = {
+  saveFailed: 'Could not save the names.',
+  translateFailed: 'Could not translate this transcript.',
+  you: 'You',
+  whosWho: 'Who’s who',
+  spokenIn: (l: string) => `Spoken in ${l}`,
+  share: (n: number) => `${n}% of the talking`,
+  theirName: 'Their name',
+  save: 'Save',
+  whoIs: (s: string) => `Who is ${s}`,
+  notNamed: 'Not named',
+  youAre: (me: string) => `You (${me})`,
+  someoneElse: 'Someone else…',
+  samePerson: (s: string) => `Same person as ${s}`,
+  byVoice: 'matched by voice',
+  oldNames: 'The notes were written with the old names.',
+  updateNotes: 'Update notes with these names',
+  hideTr: 'Hide translation',
+  showTr: (l: string) => `Show ${l} translation`,
+  removeTr: 'Remove translation',
+  translateTo: 'Translate transcript to',
+  translateAria: 'Translate to',
+  translating: 'Translating…',
+  translate: 'Translate',
+}
+
+const SN: Copy<typeof SN_EN> = {
+  en: SN_EN,
+  es: {
+    saveFailed: 'No se pudieron guardar los nombres.',
+    translateFailed: 'No se pudo traducir esta transcripción.',
+    you: 'Tú',
+    whosWho: 'Quién es quién',
+    spokenIn: (l) => `Hablado en ${l.toLowerCase()}`,
+    share: (n) => `${n}% de lo hablado`,
+    theirName: 'Su nombre',
+    save: 'Guardar',
+    whoIs: (s) => `¿Quién es ${s}?`,
+    notNamed: 'Sin nombre',
+    youAre: (me) => `Tú (${me})`,
+    someoneElse: 'Otra persona…',
+    samePerson: (s) => `La misma que ${s}`,
+    byVoice: 'reconocido por la voz',
+    oldNames: 'Las notas se escribieron con los nombres anteriores.',
+    updateNotes: 'Actualizar las notas con estos nombres',
+    hideTr: 'Ocultar traducción',
+    showTr: (l) => `Ver traducción al ${l.toLowerCase()}`,
+    removeTr: 'Quitar traducción',
+    translateTo: 'Traducir la transcripción al',
+    translateAria: 'Traducir al',
+    translating: 'Traduciendo…',
+    translate: 'Traducir',
+  },
+  pt: {
+    saveFailed: 'Não foi possível salvar os nomes.',
+    translateFailed: 'Não foi possível traduzir esta transcrição.',
+    you: 'Você',
+    whosWho: 'Quem é quem',
+    spokenIn: (l) => `Falado em ${l.toLowerCase()}`,
+    share: (n) => `${n}% da conversa`,
+    theirName: 'Nome da pessoa',
+    save: 'Salvar',
+    whoIs: (s) => `Quem é ${s}`,
+    notNamed: 'Sem nome',
+    youAre: (me) => `Você (${me})`,
+    someoneElse: 'Outra pessoa…',
+    samePerson: (s) => `A mesma que ${s}`,
+    byVoice: 'reconhecido pela voz',
+    oldNames: 'As notas foram escritas com os nomes antigos.',
+    updateNotes: 'Atualizar as notas com estes nomes',
+    hideTr: 'Esconder tradução',
+    showTr: (l) => `Ver tradução em ${l.toLowerCase()}`,
+    removeTr: 'Remover tradução',
+    translateTo: 'Traduzir a transcrição para',
+    translateAria: 'Traduzir para',
+    translating: 'Traduzindo…',
+    translate: 'Traduzir',
+  },
+}
 
 export default function SpeakerNames({
   sessionId,
@@ -40,6 +122,10 @@ export default function SpeakerNames({
   onShowTranslation: (v: boolean) => void
   onUpdateNotes: () => void
 }) {
+  const T = useCopy(SN)
+  const appLang = useLang()
+  const spk = (l: string) => `${SPEAKER_WORD[appLang]} ${l}`
+  const langName = (code: string) => languageLabel(code, appLang) ?? LANGUAGES.find((x) => x.code === code)?.name ?? code
   const [map, setMapState] = useState<SpeakerMap>(initialMap ?? {})
   // The latest names, and the save in flight. Two quick picks used to race: the second built on
   // stale names and whichever PATCH landed last won, silently dropping the other change.
@@ -91,7 +177,7 @@ export default function SpeakerNames({
         await patchJson(`/api/pen/sessions/${sessionId}`, { speaker_map: latest.current })
         setChanged(true)
       } catch (e) {
-        setErr(errMessage(e, 'Could not save the names.'))
+        setErr(errMessage(e, T.saveFailed))
       }
     })
   }
@@ -99,7 +185,7 @@ export default function SpeakerNames({
   function pick(label: string, value: string) {
     const next: SpeakerMap = { ...latest.current }
     if (value === '') delete next[label]
-    else if (value === 'me') next[label] = { name: me || 'You', me: true, source: 'user' }
+    else if (value === 'me') next[label] = { name: me || T.you, me: true, source: 'user' }
     else if (value.startsWith('same:')) next[label] = { name: '', same_as: value.slice(5), source: 'user' }
     else if (value.startsWith('p:')) {
       const p = people.find((x) => x.id === value.slice(2))
@@ -129,7 +215,7 @@ export default function SpeakerNames({
       onTranslation(j.translation)
       onShowTranslation(true)
     } catch (e) {
-      setErr(errMessage(e, 'Could not translate this transcript.'))
+      setErr(errMessage(e, T.translateFailed))
     } finally {
       setTranslating(false)
     }
@@ -144,8 +230,8 @@ export default function SpeakerNames({
   return (
     <div className="pen-spkn">
       <div className="pen-spkn-head">
-        <span className="pen-label">Who&rsquo;s who</span>
-        {language && <span className="pen-spkn-lang">{`Spoken in ${languageName(language) ?? language}`}</span>}
+        <span className="pen-label">{T.whosWho}</span>
+        {language && <span className="pen-spkn-lang">{T.spokenIn(langName(language))}</span>}
       </div>
 
       <div className="pen-spkn-rows">
@@ -154,8 +240,8 @@ export default function SpeakerNames({
           return (
             <div key={l} className="pen-spkn-row" title={firstLine(l)}>
               <span className="pen-spkn-label">
-                {`Speaker ${l}`}
-                <em>{`${share[l] ?? 0}% of the talking`}</em>
+                {spk(l)}
+                <em>{T.share(share[l] ?? 0)}</em>
               </span>
               {typing === l ? (
                 <form
@@ -167,24 +253,24 @@ export default function SpeakerNames({
                     if (n) save({ ...latest.current, [l]: { name: n, source: 'user' } })
                   }}
                 >
-                  <input autoFocus value={typed} onChange={(ev) => setTyped(ev.target.value)} placeholder="Their name" />
-                  <button type="submit" className="pen-btn">Save</button>
+                  <input autoFocus value={typed} onChange={(ev) => setTyped(ev.target.value)} placeholder={T.theirName} />
+                  <button type="submit" className="pen-btn">{T.save}</button>
                 </form>
               ) : (
-                <select value={valueOf(e)} onChange={(ev) => pick(l, ev.target.value)} aria-label={`Who is Speaker ${l}`}>
-                  <option value="">Not named</option>
-                  <option value="me">{me ? `You (${me})` : 'You'}</option>
+                <select value={valueOf(e)} onChange={(ev) => pick(l, ev.target.value)} aria-label={T.whoIs(spk(l))}>
+                  <option value="">{T.notNamed}</option>
+                  <option value="me">{me ? T.youAre(me) : T.you}</option>
                   {people.map((p) => (
                     <option key={p.id} value={`p:${p.id}`}>{p.name}</option>
                   ))}
                   {e?.name && !e.me && !e.person_id && !e.same_as && <option value="other">{e.name}</option>}
-                  <option value="other">Someone else…</option>
+                  <option value="other">{T.someoneElse}</option>
                   {labels.filter((x) => x !== l).map((x) => (
-                    <option key={x} value={`same:${x}`}>{`Same person as Speaker ${x}`}</option>
+                    <option key={x} value={`same:${x}`}>{T.samePerson(spk(x))}</option>
                   ))}
                 </select>
               )}
-              {e?.source === 'auto' && <span className="pen-spkn-auto">matched by voice</span>}
+              {e?.source === 'auto' && <span className="pen-spkn-auto">{T.byVoice}</span>}
             </div>
           )
         })}
@@ -192,9 +278,9 @@ export default function SpeakerNames({
 
       {changed && (
         <div className="pen-spkn-update">
-          <span>The notes were written with the old names.</span>
+          <span>{T.oldNames}</span>
           <button type="button" className="pen-btn pen-btn-accent" onClick={() => { setChanged(false); onUpdateNotes() }}>
-            Update notes with these names
+            {T.updateNotes}
           </button>
         </div>
       )}
@@ -203,20 +289,20 @@ export default function SpeakerNames({
         {translation ? (
           <>
             <button type="button" className="pen-btn" onClick={() => onShowTranslation(!showTranslation)}>
-              {showTranslation ? 'Hide translation' : `Show ${languageName(translation.lang)} translation`}
+              {showTranslation ? T.hideTr : T.showTr(langName(translation.lang))}
             </button>
-            <button type="button" className="pen-spkn-link" onClick={dropTranslation}>Remove translation</button>
+            <button type="button" className="pen-spkn-link" onClick={dropTranslation}>{T.removeTr}</button>
           </>
         ) : (
           <>
-            <span className="pen-label">Translate transcript to</span>
-            <select value={lang} onChange={(ev) => setLang(ev.target.value)} aria-label="Translate to">
+            <span className="pen-label">{T.translateTo}</span>
+            <select value={lang} onChange={(ev) => setLang(ev.target.value)} aria-label={T.translateAria}>
               {LANGUAGES.filter((x) => x.code !== language).map((x) => (
-                <option key={x.code} value={x.code}>{x.name}</option>
+                <option key={x.code} value={x.code}>{langName(x.code)}</option>
               ))}
             </select>
             <button type="button" className="pen-btn" onClick={translate} disabled={translating}>
-              {translating ? 'Translating…' : 'Translate'}
+              {translating ? T.translating : T.translate}
             </button>
           </>
         )}

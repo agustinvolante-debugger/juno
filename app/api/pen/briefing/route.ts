@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
 import { renderBriefing, sendBriefing, hasSomethingToSay } from '@/lib/pen/briefing'
+import { userLang } from '@/lib/pen/user-lang'
 import { getSession, updateSession } from '@/lib/pen/store'
 import type { PenSession } from '@/lib/pen/store'
 
@@ -52,7 +53,7 @@ export async function GET(req: Request) {
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
   const session = await getSession(email, id)
   if (!session) return NextResponse.json({ error: 'not found' }, { status: 404 })
-  return new Response(renderBriefing(session), { headers: { 'Content-Type': 'text/html; charset=utf-8' } })
+  return new Response(renderBriefing(session, await userLang(email)), { headers: { 'Content-Type': 'text/html; charset=utf-8' } })
 }
 
 export async function POST(req: Request) {

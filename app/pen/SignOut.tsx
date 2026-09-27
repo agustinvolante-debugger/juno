@@ -2,6 +2,14 @@
 
 import { signOut } from 'next-auth/react'
 import { useState } from 'react'
+import { useCopy } from './LangContext'
+import type { Copy } from '@/lib/pen/i18n'
+
+const SO: Copy<{ going: string; out: string }> = {
+  en: { going: 'Signing out…', out: 'Sign out' },
+  es: { going: 'Cerrando sesión…', out: 'Cerrar sesión' },
+  pt: { going: 'Saindo…', out: 'Sair' },
+}
 
 /**
  * Sign out, back to the landing page.
@@ -24,6 +32,7 @@ function landingUrl(): string {
 }
 
 export default function SignOut({ email }: { email: string }) {
+  const T = useCopy(SO)
   const [going, setGoing] = useState(false)
 
   return (
@@ -39,7 +48,7 @@ export default function SignOut({ email }: { email: string }) {
           void signOut({ callbackUrl: landingUrl() })
         }}
       >
-        {going ? 'Signing out…' : 'Sign out'}
+        {going ? T.going : T.out}
       </button>
     </span>
   )

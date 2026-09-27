@@ -4,6 +4,93 @@ import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { ROLES, LANGUAGES, APP_LANGUAGES, roleOf, type AgentProfile, type Question } from '@/lib/pen/profile-fields'
 import { putJson, errMessage } from '@/lib/pen/http'
+import { useRouter } from 'next/navigation'
+import { useCopy, useLang } from '../LangContext'
+import { languageLabel, type Copy, type Lang } from '@/lib/pen/i18n'
+import { roleText, questionText, optionText } from '@/lib/pen/profile-fields-i18n'
+
+const PF_EN = {
+  saveFailed: 'Could not save your profile.',
+  title: 'Profile',
+  lede: 'Juno Pen reads this before it writes your notes, so it knows what matters to you and how to spell the names you use. Everything here is optional.',
+  name: 'Name',
+  whatDo: 'What do you do?',
+  anything: 'Anything else Juno Pen should know',
+  anythingPh: 'e.g. I record client calls, and voice memos on the drive home',
+  noteStyle: 'How you like your notes',
+  short: 'Short',
+  shortHint: 'Bullets, the fewest words that keep every fact.',
+  detailed: 'Detailed',
+  detailedHint: 'Specifics, numbers, and who said what.',
+  appLanguage: 'App language',
+  speak: 'Languages you speak on recordings',
+  pickAny: 'pick any',
+  notesIn: 'Write my notes in',
+  recLang: 'The language of the recording',
+  always: (l: string) => `Always ${l}`,
+  vocab: 'Names and terms to spell right',
+  perLine: 'one per line',
+  vocabPh: 'People, places, products, jargon\ne.g. Dr. Okonkwo\nEBITDA',
+  saving: 'Saving…',
+  save: 'Save profile',
+  saved: 'Saved. Your next notes will use it.',
+}
+
+const PF: Copy<typeof PF_EN> = {
+  en: PF_EN,
+  es: {
+    saveFailed: 'No se pudo guardar tu perfil.',
+    title: 'Perfil',
+    lede: 'Juno Pen lee esto antes de escribir tus notas, para saber qué te importa y cómo se escriben los nombres que usas. Todo es opcional.',
+    name: 'Nombre',
+    whatDo: '¿A qué te dedicas?',
+    anything: 'Algo más que Juno Pen deba saber',
+    anythingPh: 'p. ej. Grabo reuniones con clientes y notas de voz de camino a casa',
+    noteStyle: 'Cómo te gustan las notas',
+    short: 'Cortas',
+    shortHint: 'Viñetas, las menos palabras que mantengan cada dato.',
+    detailed: 'Detalladas',
+    detailedHint: 'Detalles, cifras y quién dijo qué.',
+    appLanguage: 'Idioma de la app',
+    speak: 'Idiomas que hablas en las grabaciones',
+    pickAny: 'elige los que quieras',
+    notesIn: 'Escribir mis notas en',
+    recLang: 'El idioma de la grabación',
+    always: (l) => `Siempre en ${l.toLowerCase()}`,
+    vocab: 'Nombres y términos que hay que escribir bien',
+    perLine: 'uno por línea',
+    vocabPh: 'Personas, lugares, productos, jerga\np. ej. Dra. Undurraga\nEBITDA',
+    saving: 'Guardando…',
+    save: 'Guardar perfil',
+    saved: 'Guardado. Tus próximas notas lo usarán.',
+  },
+  pt: {
+    saveFailed: 'Não foi possível salvar seu perfil.',
+    title: 'Perfil',
+    lede: 'O Juno Pen lê isto antes de escrever suas notas, para saber o que importa para você e como se escrevem os nomes que você usa. Tudo é opcional.',
+    name: 'Nome',
+    whatDo: 'O que você faz?',
+    anything: 'Algo mais que o Juno Pen deveria saber',
+    anythingPh: 'ex.: Gravo reuniões com clientes e áudios no caminho de casa',
+    noteStyle: 'Como você gosta das notas',
+    short: 'Curtas',
+    shortHint: 'Tópicos, o mínimo de palavras sem perder nenhum fato.',
+    detailed: 'Detalhadas',
+    detailedHint: 'Detalhes, números e quem disse o quê.',
+    appLanguage: 'Idioma do app',
+    speak: 'Idiomas que você fala nas gravações',
+    pickAny: 'escolha quantos quiser',
+    notesIn: 'Escrever minhas notas em',
+    recLang: 'O idioma da gravação',
+    always: (l) => `Sempre em ${l.toLowerCase()}`,
+    vocab: 'Nomes e termos para escrever certo',
+    perLine: 'um por linha',
+    vocabPh: 'Pessoas, lugares, produtos, jargões\nex.: Dra. Figueiredo\nEBITDA',
+    saving: 'Salvando…',
+    save: 'Salvar perfil',
+    saved: 'Salvo. Suas próximas notas vão usar isto.',
+  },
+}
 
 /**
  * What the user tells us about themselves. Broad first: what they do. That answer opens the
@@ -12,10 +99,15 @@ import { putJson, errMessage } from '@/lib/pen/http'
  * notes as before.
  */
 export default function ProfileForm({ initial, loadError }: { initial: AgentProfile; loadError: string | null }) {
+  const T = useCopy(PF)
+  const lang = useLang()
+  const router = useRouter()
+  const langName = (code: string, name: string) => languageLabel(code, lang) ?? name
   const [p, setP] = useState<AgentProfile>(initial)
   const [state, setState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [err, setErr] = useState<string | null>(loadError)
-  const role = roleOf(p.role)
+  const baseRole = roleOf(p.role)
+  const role = baseRole && roleText(baseRole, lang)
 
   const set = <K extends keyof AgentProfile>(k: K, v: AgentProfile[K]) => {
     setP((prev) => ({ ...prev, [k]: v }))
@@ -41,8 +133,10 @@ export default function ProfileForm({ initial, loadError }: { initial: AgentProf
       const j = await putJson<{ profile: AgentProfile }>('/api/pen/profile', { profile: p })
       setP(j.profile)
       setState('saved')
+      // A new app language: re-render Settings (and the app, next time it loads) in it.
+      if ((j.profile.appLanguage ?? 'en') !== lang) router.refresh()
     } catch (e) {
-      setErr(errMessage(e, 'Could not save your profile.'))
+      setErr(errMessage(e, T.saveFailed))
       setState('idle')
     }
   }
@@ -50,24 +144,21 @@ export default function ProfileForm({ initial, loadError }: { initial: AgentProf
   return (
     <form onSubmit={save} className="pen-set-card">
       <div className="pen-set-card-head">
-        <h2 className="pen-set-h2">Profile</h2>
-        <p className="pen-set-lede">
-          Juno Pen reads this before it writes your notes, so it knows what matters to you and how to
-          spell the names you use. Everything here is optional.
-        </p>
+        <h2 className="pen-set-h2">{T.title}</h2>
+        <p className="pen-set-lede">{T.lede}</p>
       </div>
 
       {err && <div className="pen-su-err">{err}</div>}
 
       <label className="pen-su-field">
-        <span className="pen-label">Name</span>
+        <span className="pen-label">{T.name}</span>
         <input value={p.name ?? ''} onChange={(e) => set('name', e.target.value)} autoComplete="name" />
       </label>
 
       <fieldset className="pen-su-choice">
-        <legend className="pen-label">What do you do?</legend>
+        <legend className="pen-label">{T.whatDo}</legend>
         <div className="pen-set-roles">
-          {ROLES.map((r) => (
+          {ROLES.map((r0) => roleText(r0, lang)).map((r) => (
             <button
               type="button"
               key={r.value}
@@ -99,38 +190,38 @@ export default function ProfileForm({ initial, loadError }: { initial: AgentProf
               <input value={p.org ?? ''} onChange={(e) => set('org', e.target.value)} placeholder={role.orgPlaceholder} />
             </label>
             {role.questions.map((q) => (
-              <Field key={q.key} q={q} value={p.answers?.[q.key]} onChange={(v) => answer(q.key, v)} />
+              <Field key={q.key} role={role.value} lang={lang} pickAny={T.pickAny} q={q} value={p.answers?.[q.key]} onChange={(v) => answer(q.key, v)} />
             ))}
           </motion.div>
         )}
       </AnimatePresence>
 
       <label className="pen-su-field">
-        <span className="pen-label">Anything else Juno Pen should know</span>
+        <span className="pen-label">{T.anything}</span>
         <textarea
           rows={2}
           value={p.useFor ?? ''}
           onChange={(e) => set('useFor', e.target.value)}
-          placeholder="e.g. I record client calls, and voice memos on the drive home"
+          placeholder={T.anythingPh}
         />
       </label>
 
       <fieldset className="pen-su-choice">
-        <legend className="pen-label">How you like your notes</legend>
+        <legend className="pen-label">{T.noteStyle}</legend>
         <div className="pen-su-choice-row">
           <button type="button" className="pen-su-opt" data-on={p.noteStyle === 'short'} onClick={() => set('noteStyle', 'short')}>
-            <strong>Short</strong>
-            <span>Bullets, the fewest words that keep every fact.</span>
+            <strong>{T.short}</strong>
+            <span>{T.shortHint}</span>
           </button>
           <button type="button" className="pen-su-opt" data-on={p.noteStyle === 'detailed'} onClick={() => set('noteStyle', 'detailed')}>
-            <strong>Detailed</strong>
-            <span>Specifics, numbers, and who said what.</span>
+            <strong>{T.detailed}</strong>
+            <span>{T.detailedHint}</span>
           </button>
         </div>
       </fieldset>
 
       <label className="pen-su-field">
-        <span className="pen-label">App language</span>
+        <span className="pen-label">{T.appLanguage}</span>
         <select id="profile-app-language" value={p.appLanguage ?? 'en'} onChange={(e) => set('appLanguage', e.target.value)}>
           {APP_LANGUAGES.map((l) => (
             <option key={l.code} value={l.code}>{l.name}</option>
@@ -139,7 +230,7 @@ export default function ProfileForm({ initial, loadError }: { initial: AgentProf
       </label>
 
       <fieldset className="pen-su-choice">
-        <legend className="pen-label">Languages you speak on recordings <em>pick any</em></legend>
+        <legend className="pen-label">{T.speak} <em>{T.pickAny}</em></legend>
         <div className="pen-set-chips">
           {LANGUAGES.map((l) => {
             const on = (p.languages ?? []).includes(l.code)
@@ -152,7 +243,7 @@ export default function ProfileForm({ initial, loadError }: { initial: AgentProf
                 aria-pressed={on}
                 onClick={() => set('languages', on ? (p.languages ?? []).filter((c) => c !== l.code) : [...(p.languages ?? []), l.code])}
               >
-                {l.name}
+                {langName(l.code, l.name)}
               </button>
             )
           })}
@@ -160,42 +251,43 @@ export default function ProfileForm({ initial, loadError }: { initial: AgentProf
       </fieldset>
 
       <label className="pen-su-field">
-        <span className="pen-label">Write my notes in</span>
+        <span className="pen-label">{T.notesIn}</span>
         <select value={p.notesLanguage ?? ''} onChange={(e) => set('notesLanguage', e.target.value || undefined)}>
-          <option value="">The language of the recording</option>
+          <option value="">{T.recLang}</option>
           {LANGUAGES.map((l) => (
-            <option key={l.code} value={l.code}>{`Always ${l.name}`}</option>
+            <option key={l.code} value={l.code}>{T.always(langName(l.code, l.name))}</option>
           ))}
         </select>
       </label>
 
       <label className="pen-su-field">
-        <span className="pen-label">Names and terms to spell right <em>one per line</em></span>
+        <span className="pen-label">{T.vocab} <em>{T.perLine}</em></span>
         <textarea
           rows={4}
           value={p.vocabulary ?? ''}
           onChange={(e) => set('vocabulary', e.target.value)}
-          placeholder={'People, places, products, jargon\ne.g. Dr. Okonkwo\nEBITDA'}
+          placeholder={T.vocabPh}
         />
       </label>
 
       <div className="pen-set-actions">
         <button type="submit" className="pen-btn pen-btn-accent" disabled={state === 'saving'}>
-          {state === 'saving' ? 'Saving…' : 'Save profile'}
+          {state === 'saving' ? T.saving : T.save}
         </button>
-        {state === 'saved' && <span className="pen-set-saved" role="status">Saved. Your next notes will use it.</span>}
+        {state === 'saved' && <span className="pen-set-saved" role="status">{T.saved}</span>}
       </div>
     </form>
   )
 }
 
 /** One role question, drawn from its spec in lib/pen/profile-fields. */
-function Field({ q, value, onChange }: { q: Question; value: string | string[] | undefined; onChange: (v: string | string[]) => void }) {
+function Field({ q, value, onChange, role, lang, pickAny }: { q: Question; value: string | string[] | undefined; onChange: (v: string | string[]) => void; role: string; lang: Lang; pickAny: string }) {
+  const qt = questionText(role, q, lang)
   if (q.kind === 'chips') {
     const picked = Array.isArray(value) ? value : []
     return (
       <fieldset className="pen-su-choice">
-        <legend className="pen-label">{q.label}{!q.single && <em>pick any</em>}</legend>
+        <legend className="pen-label">{qt.label}{!q.single && <em>{pickAny}</em>}</legend>
         <div className="pen-set-chips">
           {q.options.map((o) => (
             <button
@@ -208,7 +300,7 @@ function Field({ q, value, onChange }: { q: Question; value: string | string[] |
                 onChange(picked.includes(o) ? picked.filter((x) => x !== o) : q.single ? [o] : [...picked, o])
               }
             >
-              {o}
+              {optionText(o, lang)}
             </button>
           ))}
         </div>
@@ -218,12 +310,12 @@ function Field({ q, value, onChange }: { q: Question; value: string | string[] |
   if (q.kind === 'choice') {
     return (
       <fieldset className="pen-su-choice">
-        <legend className="pen-label">{q.label}</legend>
+        <legend className="pen-label">{qt.label}</legend>
         <div className="pen-su-choice-row">
           {q.options.map((o) => (
             <button type="button" key={o.value} className="pen-su-opt" data-on={value === o.value} onClick={() => onChange(o.value)}>
-              <strong>{o.title}</strong>
-              <span>{o.hint}</span>
+              <strong>{optionText(o.title, lang)}</strong>
+              <span>{optionText(o.hint, lang)}</span>
             </button>
           ))}
         </div>
@@ -233,11 +325,11 @@ function Field({ q, value, onChange }: { q: Question; value: string | string[] |
   const text = typeof value === 'string' ? value : ''
   return (
     <label className="pen-su-field">
-      <span className="pen-label">{q.label}</span>
+      <span className="pen-label">{qt.label}</span>
       {q.kind === 'textarea' ? (
-        <textarea rows={3} value={text} onChange={(e) => onChange(e.target.value)} placeholder={q.placeholder} />
+        <textarea rows={3} value={text} onChange={(e) => onChange(e.target.value)} placeholder={qt.placeholder} />
       ) : (
-        <input value={text} onChange={(e) => onChange(e.target.value)} placeholder={q.placeholder} />
+        <input value={text} onChange={(e) => onChange(e.target.value)} placeholder={qt.placeholder} />
       )}
     </label>
   )

@@ -5,6 +5,8 @@ import { postJson, errMessage } from '@/lib/pen/http'
 import { AnimatePresence, motion } from 'motion/react'
 import type { Deliverable } from '@/lib/pen/store'
 import EmailOpen from './EmailOpen'
+import { useCopy } from './LangContext'
+import type { Copy } from '@/lib/pen/i18n'
 
 // Apple-sheet presentation: rises from the bottom, backdrop blurs, Escape or a tap outside
 // dismisses. Anchored low rather than centred because it is a response to something you
@@ -12,10 +14,48 @@ import EmailOpen from './EmailOpen'
 
 const SPRING = { type: 'spring' as const, stiffness: 340, damping: 32, mass: 0.9 }
 
-const KIND_LABEL: Record<Deliverable['kind'], string> = {
-  email: 'Draft email',
-  memo: 'Memo',
-  tracker: 'Tracker entry',
+const DS_EN = {
+  kinds: { email: 'Draft email', memo: 'Memo', tracker: 'Tracker entry' } as Record<Deliverable['kind'], string>,
+  buttons: { email: 'Draft email', memo: 'Memo', tracker: 'Tracker' } as Record<Deliverable['kind'], string>,
+  draftFailed: 'Could not draft that.',
+  copyBlocked: 'Copying is blocked here — select the text and copy it manually.',
+  drafting: 'Drafting…',
+  couldnt: 'Couldn’t draft this',
+  close: 'Close',
+  from: (item: string) => `From: “${item}”`,
+  editFirst: 'Edit it before you send — it’s a draft, not a decision.',
+  copied: 'Copied',
+  copy: 'Copy',
+}
+
+const DS: Copy<typeof DS_EN> = {
+  en: DS_EN,
+  es: {
+    kinds: { email: 'Borrador de correo', memo: 'Memo', tracker: 'Registro de seguimiento' },
+    buttons: { email: 'Borrador de correo', memo: 'Memo', tracker: 'Seguimiento' },
+    draftFailed: 'No se pudo redactar.',
+    copyBlocked: 'Aquí no se puede copiar automáticamente: selecciona el texto y cópialo a mano.',
+    drafting: 'Redactando…',
+    couldnt: 'No se pudo redactar',
+    close: 'Cerrar',
+    from: (item) => `De: “${item}”`,
+    editFirst: 'Revísalo antes de enviarlo: es un borrador, no una decisión.',
+    copied: 'Copiado',
+    copy: 'Copiar',
+  },
+  pt: {
+    kinds: { email: 'Rascunho de e-mail', memo: 'Memorando', tracker: 'Registro de acompanhamento' },
+    buttons: { email: 'Rascunho de e-mail', memo: 'Memorando', tracker: 'Acompanhamento' },
+    draftFailed: 'Não foi possível redigir.',
+    copyBlocked: 'Não dá para copiar automaticamente aqui — selecione o texto e copie manualmente.',
+    drafting: 'Redigindo…',
+    couldnt: 'Não foi possível redigir',
+    close: 'Fechar',
+    from: (item) => `De: “${item}”`,
+    editFirst: 'Revise antes de enviar — é um rascunho, não uma decisão.',
+    copied: 'Copiado',
+    copy: 'Copiar',
+  },
 }
 
 export type SheetRequest = { kind: Deliverable['kind']; item: string }
@@ -29,6 +69,7 @@ export default function DeliverableSheet({
   sessionId: string
   onClose: () => void
 }) {
+  const T = useCopy(DS)
   const [deliverable, setDeliverable] = useState<Deliverable | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -65,7 +106,7 @@ export default function DeliverableSheet({
         setDeliverable(j.deliverable)
         setDraft(j.deliverable.body)
       })
-      .catch((e) => alive && setError(errMessage(e, 'Could not draft that.')))
+      .catch((e) => alive && setError(errMessage(e, T.draftFailed)))
       .finally(() => alive && setLoading(false))
     return () => {
       alive = false
@@ -79,7 +120,7 @@ export default function DeliverableSheet({
       setCopied(true)
       window.setTimeout(() => setCopied(false), 2000)
     } else {
-      setError('Copying is blocked here — select the text and copy it manually.')
+      setError(T.copyBlocked)
     }
   }
 
@@ -100,7 +141,7 @@ export default function DeliverableSheet({
               className="pen-sheet"
               role="dialog"
               aria-modal="true"
-              aria-label={KIND_LABEL[request.kind]}
+              aria-label={T.kinds[request.kind]}
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
@@ -110,18 +151,18 @@ export default function DeliverableSheet({
 
               <div className="pen-sheet-head">
                 <div className="min-w-0">
-                  <div className="pen-label">{KIND_LABEL[request.kind]}</div>
+                  <div className="pen-label">{T.kinds[request.kind]}</div>
                   <div className="pen-sheet-title">
-                    {loading ? 'Drafting…' : (deliverable?.title ?? 'Couldn’t draft this')}
+                    {loading ? T.drafting : (deliverable?.title ?? T.couldnt)}
                   </div>
                 </div>
-                <button className="pen-sheet-x" onClick={onClose} aria-label="Close">
+                <button className="pen-sheet-x" onClick={onClose} aria-label={T.close}>
                   ×
                 </button>
               </div>
 
               <div className="pen-sheet-body">
-                <p className="pen-sheet-ref">From: “{request.item}”</p>
+                <p className="pen-sheet-ref">{T.from(request.item)}</p>
 
                 {loading && (
                   <div className="pen-sheet-skeleton">
@@ -162,7 +203,7 @@ export default function DeliverableSheet({
 
               <div className="pen-sheet-foot">
                 <span className="pen-mono text-[13px]" style={{ color: 'var(--faint)' }}>
-                  {deliverable ? 'Edit it before you send — it’s a draft, not a decision.' : ''}
+                  {deliverable ? T.editFirst : ''}
                 </span>
                 <motion.button
                   className="pen-copy"
@@ -218,7 +259,7 @@ export default function DeliverableSheet({
                       exit={{ opacity: 0, y: -4 }}
                       transition={{ duration: 0.14 }}
                     >
-                      {copied ? 'Copied' : 'Copy'}
+                      {copied ? T.copied : T.copy}
                     </motion.span>
                   </AnimatePresence>
                 </motion.button>
@@ -264,10 +305,11 @@ async function writeClipboard(text: string): Promise<boolean> {
 
 /** The hover row that appears beside an action or takeaway. */
 export function DeliverableActions({ onPick }: { onPick: (kind: Deliverable['kind']) => void }) {
+  const T = useCopy(DS)
   const opts: { kind: Deliverable['kind']; label: string }[] = [
-    { kind: 'email', label: 'Draft email' },
-    { kind: 'memo', label: 'Memo' },
-    { kind: 'tracker', label: 'Tracker' },
+    { kind: 'email', label: T.buttons.email },
+    { kind: 'memo', label: T.buttons.memo },
+    { kind: 'tracker', label: T.buttons.tracker },
   ]
   return (
     <div className="pen-do">

@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { postJson, errMessage } from '@/lib/pen/http'
+import { useCopy, useLang } from './LangContext'
+import { LOCALE, type Copy } from '@/lib/pen/i18n'
 
 // Feature 4 — one button, four states, localised. Never a page-level spinner: the work is
 // scoped to this recording, so the feedback should be too.
@@ -12,6 +14,62 @@ const SPRING = { type: 'spring' as const, stiffness: 480, damping: 30 }
 type State = 'idle' | 'sending' | 'sent' | 'failed'
 
 const MAX_EXTRA = 5
+
+const SB_EN = {
+  sendFailed: 'Could not send the briefing.',
+  sending: 'Sending',
+  sentToN: (n: number) => `Sent to ${n}`,
+  sentToYou: 'Sent to you',
+  notSent: 'Not sent',
+  send: 'Send briefing',
+  writeFirst: 'Write the notes first — there is nothing to brief yet',
+  lastSent: (d: string) => `Last sent ${d}`,
+  sendTitle: 'Email yourself the summary, what you missed, and what is still open',
+  alsoTitle: 'Also send to someone else',
+  alsoSendTo: 'Also send to',
+  always: 'always included',
+  remove: (e: string) => `Remove ${e}`,
+  limit: (n: number) => `Limit ${n}`,
+  hint: (n: number) => `Enter to add. Up to ${n}. They receive the same briefing, and replies come back to you.`,
+}
+
+const SB: Copy<typeof SB_EN> = {
+  en: SB_EN,
+  es: {
+    sendFailed: 'No se pudo enviar el resumen.',
+    sending: 'Enviando',
+    sentToN: (n) => `Enviado a ${n}`,
+    sentToYou: 'Enviado a ti',
+    notSent: 'No se envió',
+    send: 'Enviar resumen',
+    writeFirst: 'Primero escribe las notas: todavía no hay nada que resumir',
+    lastSent: (d) => `Último envío: ${d}`,
+    sendTitle: 'Envíate por correo el resumen, lo que se te pasó y lo que sigue pendiente',
+    alsoTitle: 'Enviar también a otra persona',
+    alsoSendTo: 'Enviar también a',
+    always: 'siempre incluido',
+    remove: (e) => `Quitar ${e}`,
+    limit: (n) => `Máximo ${n}`,
+    hint: (n) => `Enter para agregar. Hasta ${n}. Reciben el mismo resumen, y las respuestas te llegan a ti.`,
+  },
+  pt: {
+    sendFailed: 'Não foi possível enviar o resumo.',
+    sending: 'Enviando',
+    sentToN: (n) => `Enviado para ${n}`,
+    sentToYou: 'Enviado para você',
+    notSent: 'Não enviado',
+    send: 'Enviar resumo',
+    writeFirst: 'Escreva as notas primeiro — ainda não há nada para resumir',
+    lastSent: (d) => `Último envio: ${d}`,
+    sendTitle: 'Mande para o seu e-mail o resumo, o que passou batido e o que ainda está em aberto',
+    alsoTitle: 'Enviar também para outra pessoa',
+    alsoSendTo: 'Enviar também para',
+    always: 'sempre incluído',
+    remove: (e) => `Remover ${e}`,
+    limit: (n) => `Máximo ${n}`,
+    hint: (n) => `Enter para adicionar. Até ${n}. Eles recebem o mesmo resumo, e as respostas voltam para você.`,
+  },
+}
 
 export default function SendBriefing({
   sessionId,
@@ -27,6 +85,8 @@ export default function SendBriefing({
   /** Shown as the always-included recipient, so it is clear who gets it. */
   selfEmail?: string
 }) {
+  const T = useCopy(SB)
+  const lang = useLang()
   const [state, setState] = useState<State>('idle')
   const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
@@ -73,7 +133,7 @@ export default function SendBriefing({
       onSent(j.briefing_sent_at ?? new Date().toISOString())
       window.setTimeout(() => setState('idle'), 3600)
     } catch (e) {
-      setError(errMessage(e, 'Could not send the briefing.'))
+      setError(errMessage(e, T.sendFailed))
       setState('failed')
       window.setTimeout(() => setState('idle'), 6000)
     }
@@ -82,14 +142,14 @@ export default function SendBriefing({
   const others = sentTo.length - 1
   const label =
     state === 'sending'
-      ? 'Sending'
+      ? T.sending
       : state === 'sent'
         ? others > 0
-          ? `Sent to ${sentTo.length}`
-          : 'Sent to you'
+          ? T.sentToN(sentTo.length)
+          : T.sentToYou
         : state === 'failed'
-          ? 'Not sent'
-          : 'Send briefing'
+          ? T.notSent
+          : T.send
 
   return (
     <div className="relative flex items-center gap-1.5" ref={wrap}>
@@ -102,10 +162,10 @@ export default function SendBriefing({
         transition={SPRING}
         title={
           disabled
-            ? 'Write the notes first — there is nothing to brief yet'
+            ? T.writeFirst
             : sentAt
-              ? `Last sent ${new Date(sentAt).toLocaleString()}`
-              : 'Email yourself the summary, what you missed, and what is still open'
+              ? T.lastSent(new Date(sentAt).toLocaleString(LOCALE[lang]))
+              : T.sendTitle
         }
       >
         <span className="pen-brief-icon">
@@ -175,7 +235,7 @@ export default function SendBriefing({
         onClick={() => setOpen((v) => !v)}
         disabled={disabled}
         aria-expanded={open}
-        title="Also send to someone else"
+        title={T.alsoTitle}
       >
         {extras.length ? `+${extras.length}` : '+'}
       </button>
@@ -189,10 +249,10 @@ export default function SendBriefing({
             exit={{ opacity: 0, y: -4, scale: 0.99 }}
             transition={SPRING}
           >
-            <div className="pen-label">Also send to</div>
+            <div className="pen-label">{T.alsoSendTo}</div>
             {selfEmail && (
               <p className="pen-brief-self">
-                {selfEmail} <span>always included</span>
+                {selfEmail} <span>{T.always}</span>
               </p>
             )}
 
@@ -201,7 +261,7 @@ export default function SendBriefing({
                 {extras.map((e) => (
                   <span key={e} className="pen-brief-chip">
                     {e}
-                    <button onClick={() => setExtras((p) => p.filter((x) => x !== e))} aria-label={`Remove ${e}`}>
+                    <button onClick={() => setExtras((p) => p.filter((x) => x !== e))} aria-label={T.remove(e)}>
                       ×
                     </button>
                   </span>
@@ -222,12 +282,12 @@ export default function SendBriefing({
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onBlur={addDraft}
-                placeholder={extras.length >= MAX_EXTRA ? `Limit ${MAX_EXTRA}` : 'name@company.com'}
+                placeholder={extras.length >= MAX_EXTRA ? T.limit(MAX_EXTRA) : 'name@company.com'}
                 disabled={extras.length >= MAX_EXTRA}
               />
             </form>
             <p className="pen-brief-hint">
-              Enter to add. Up to {MAX_EXTRA}. They receive the same briefing, and replies come back to you.
+              {T.hint(MAX_EXTRA)}
             </p>
           </motion.div>
         )}

@@ -32,9 +32,10 @@ export function resolve(map: SpeakerMap | null | undefined, label: string): { la
 }
 
 /** How a speaker is written in a prompt or on screen. */
-export function speakerName(map: SpeakerMap | null | undefined, label: string, opts: { forModel?: boolean } = {}): string {
+export function speakerName(map: SpeakerMap | null | undefined, label: string, opts: { forModel?: boolean; word?: string } = {}): string {
   const { label: owner, entry } = resolve(map, label)
-  if (!entry?.name) return `Speaker ${owner}`
+  // `word` is the on-screen word for an unnamed speaker in the app's language; prompts keep "Speaker".
+  if (!entry?.name) return `${opts.word ?? 'Speaker'} ${owner}`
   return opts.forModel && entry.me ? `${entry.name} (the user)` : entry.name
 }
 

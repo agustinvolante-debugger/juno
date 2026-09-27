@@ -13,15 +13,81 @@ import type { ArchiveTurn, Citation, Mention } from '@/lib/pen/store'
 import { useTagPicker, TagMenu, TaggedText, type Taggable } from './TagPicker'
 import type { DocKind } from '@/lib/pen/docs'
 import { postJson, errMessage } from '@/lib/pen/http'
+import { useCopy } from './LangContext'
+import type { Copy } from '@/lib/pen/i18n'
 
 const SPRING = { type: 'spring' as const, stiffness: 420, damping: 34, mass: 0.7 }
 
-/** Kept in sync with ACTIONS in lib/pen/artifact.ts — the server decides what each one writes. */
-const QUICK: { kind: DocKind; label: string; hint: string }[] = [
-  { kind: 'summary', label: 'Build summary', hint: 'Write this up as a standalone summary' },
-  { kind: 'prep', label: 'Draft prep doc', hint: 'What to know walking into the next meeting' },
-  { kind: 'checklist', label: 'Make a checklist', hint: 'The outstanding actions, to tick off' },
-]
+type Quick = { kind: DocKind; label: string; hint: string }[]
+
+const CV_EN = {
+  /** Kept in sync with ACTIONS in lib/pen/artifact.ts — the server decides what each one writes. */
+  quick: [
+    { kind: 'summary', label: 'Build summary', hint: 'Write this up as a standalone summary' },
+    { kind: 'prep', label: 'Draft prep doc', hint: 'What to know walking into the next meeting' },
+    { kind: 'checklist', label: 'Make a checklist', hint: 'The outstanding actions, to tick off' },
+  ] as Quick,
+  loadFailed: 'That conversation could not be loaded.',
+  searchFailed: 'Could not search the archive.',
+  docFailed: 'Could not write that document.',
+  loading: 'Loading…',
+  emptyTitle: 'Ask across everything you have recorded.',
+  emptyBody: 'Not one meeting — all of them. Answers cite the recordings they came from, and you can turn any answer into a page you keep.',
+  reading: 'Reading the archive',
+  dismiss: 'Dismiss',
+  turnInto: 'Turn this into',
+  writing: 'Writing…',
+  followUp: 'Ask a follow-up… type @ to name a recording',
+  askAnything: 'Ask anything across every recording… type @ to name one',
+  asking: 'Asking…',
+  ask: 'Ask',
+}
+
+const CV: Copy<typeof CV_EN> = {
+  en: CV_EN,
+  es: {
+    quick: [
+      { kind: 'summary', label: 'Armar resumen', hint: 'Escribirlo como un resumen independiente' },
+      { kind: 'prep', label: 'Preparar la próxima reunión', hint: 'Lo que hay que saber antes de la próxima reunión' },
+      { kind: 'checklist', label: 'Hacer una lista', hint: 'Las tareas pendientes, para ir marcándolas' },
+    ],
+    loadFailed: 'No se pudo cargar esa conversación.',
+    searchFailed: 'No se pudo buscar en el archivo.',
+    docFailed: 'No se pudo escribir ese documento.',
+    loading: 'Cargando…',
+    emptyTitle: 'Pregunta sobre todo lo que has grabado.',
+    emptyBody: 'No una reunión: todas. Las respuestas citan las grabaciones de donde salen, y puedes convertir cualquier respuesta en una página que se guarda.',
+    reading: 'Leyendo el archivo',
+    dismiss: 'Cerrar',
+    turnInto: 'Convertir en',
+    writing: 'Escribiendo…',
+    followUp: 'Haz otra pregunta… escribe @ para nombrar una grabación',
+    askAnything: 'Pregunta lo que quieras sobre todas tus grabaciones… escribe @ para nombrar una',
+    asking: 'Preguntando…',
+    ask: 'Preguntar',
+  },
+  pt: {
+    quick: [
+      { kind: 'summary', label: 'Montar resumo', hint: 'Escrever como um resumo independente' },
+      { kind: 'prep', label: 'Preparar a próxima reunião', hint: 'O que saber antes da próxima reunião' },
+      { kind: 'checklist', label: 'Fazer uma lista', hint: 'As tarefas pendentes, para ir marcando' },
+    ],
+    loadFailed: 'Não foi possível carregar essa conversa.',
+    searchFailed: 'Não foi possível buscar no arquivo.',
+    docFailed: 'Não foi possível escrever esse documento.',
+    loading: 'Carregando…',
+    emptyTitle: 'Pergunte sobre tudo o que você gravou.',
+    emptyBody: 'Não uma reunião — todas. As respostas citam as gravações de onde vieram, e você pode transformar qualquer resposta numa página que fica salva.',
+    reading: 'Lendo o arquivo',
+    dismiss: 'Fechar',
+    turnInto: 'Transformar em',
+    writing: 'Escrevendo…',
+    followUp: 'Faça outra pergunta… digite @ para citar uma gravação',
+    askAnything: 'Pergunte qualquer coisa sobre todas as gravações… digite @ para citar uma',
+    asking: 'Perguntando…',
+    ask: 'Perguntar',
+  },
+}
 
 export default function ChatView({
   chatId,
@@ -43,6 +109,7 @@ export default function ChatView({
   onThreadChanged: (chatId: string) => void
   onDocCreated: (docId: string) => void
 }) {
+  const T = useCopy(CV)
   const [messages, setMessages] = useState<ArchiveTurn[]>([])
   const [q, setQ] = useState('')
   const [thinking, setThinking] = useState(false)
@@ -76,13 +143,14 @@ export default function ChatView({
       .then((j) => {
         if (!alive) return
         setMessages(j?.chat?.messages ?? [])
-        setError(j ? null : 'That conversation could not be loaded.')
+        setError(j ? null : T.loadFailed)
       })
-      .catch(() => alive && setError('That conversation could not be loaded.'))
+      .catch(() => alive && setError(T.loadFailed))
       .finally(() => alive && setLoading(false))
     return () => {
       alive = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId])
 
   useEffect(() => {
@@ -133,7 +201,7 @@ export default function ChatView({
       setMessages((m) => m.filter((x) => x !== optimistic))
       setQ(text) // Give the question back rather than making them retype it.
       tp.setTags(mentions)
-      setError(errMessage(e, 'Could not search the archive.'))
+      setError(errMessage(e, T.searchFailed))
     } finally {
       inFlight.current = false
       setThinking(false)
@@ -148,7 +216,7 @@ export default function ChatView({
       const j = await postJson<{ doc: { id: string } }>('/api/pen/docs', { chat_id: id, kind })
       onDocCreated(j.doc.id)
     } catch (e) {
-      setError(errMessage(e, 'Could not write that document.'))
+      setError(errMessage(e, T.docFailed))
     } finally {
       setMaking(null)
     }
@@ -161,16 +229,15 @@ export default function ChatView({
       <div className="pen-chatview-body">
         {loading && (
           <p className="pen-mono text-[13px]" style={{ color: 'var(--dim)' }}>
-            Loading…
+            {T.loading}
           </p>
         )}
 
         {!loading && messages.length === 0 && (
           <div className="pen-chat-empty">
-            <h2 className="pen-display text-[26px] leading-tight">Ask across everything you have recorded.</h2>
+            <h2 className="pen-display text-[26px] leading-tight">{T.emptyTitle}</h2>
             <p className="mt-3 max-w-[46ch] text-[14.5px] leading-relaxed" style={{ color: 'var(--dim)' }}>
-              Not one meeting — all of them. Answers cite the recordings they came from, and you can
-              turn any answer into a page you keep.
+              {T.emptyBody}
             </p>
           </div>
         )}
@@ -194,7 +261,7 @@ export default function ChatView({
         {thinking && (
           <div className="pen-turn-a">
             <span className="pen-mono text-[13px]" style={{ color: 'var(--dim)' }}>
-              Reading the archive
+              {T.reading}
             </span>
             <span className="pen-dots" aria-hidden>
               <span /><span /><span />
@@ -213,7 +280,7 @@ export default function ChatView({
               transition={SPRING}
             >
               <span>{error}</span>
-              <button className="pen-chat-error-x" onClick={() => setError(null)} aria-label="Dismiss">
+              <button className="pen-chat-error-x" onClick={() => setError(null)} aria-label={T.dismiss}>
                 ×
               </button>
             </motion.div>
@@ -224,9 +291,9 @@ export default function ChatView({
             conversation, and pinning them to one answer implied otherwise. */}
         {answered && !thinking && (
           <div className="pen-quick">
-            <span className="pen-label">Turn this into</span>
+            <span className="pen-label">{T.turnInto}</span>
             <div className="pen-quick-row">
-              {QUICK.map((a) => (
+              {T.quick.map((a) => (
                 <button
                   key={a.kind}
                   className="pen-quick-btn"
@@ -234,7 +301,7 @@ export default function ChatView({
                   disabled={!!making}
                   onClick={() => make(a.kind)}
                 >
-                  {making === a.kind ? 'Writing…' : a.label}
+                  {making === a.kind ? T.writing : a.label}
                 </button>
               ))}
             </div>
@@ -256,7 +323,7 @@ export default function ChatView({
           className="pen-composer-input"
           value={q}
           rows={1}
-          placeholder={messages.length ? 'Ask a follow-up… type @ to name a recording' : 'Ask anything across every recording… type @ to name one'}
+          placeholder={messages.length ? T.followUp : T.askAnything}
           onChange={(e) => {
             setQ(e.target.value)
             tp.sync(e.target.value, e.target.selectionStart ?? e.target.value.length)
@@ -277,7 +344,7 @@ export default function ChatView({
         />
         <TagMenu open={tp.open} matches={tp.matches} pick={tp.pick} setPick={tp.setPick} choose={tp.choose} up />
         <button className="pen-btn pen-btn-primary" disabled={!q.trim() || thinking}>
-          {thinking ? 'Asking…' : 'Ask'}
+          {thinking ? T.asking : T.ask}
         </button>
       </form>
     </div>
