@@ -30,6 +30,7 @@ import type { ChatSummary } from '@/lib/pen/chats'
 import type { DocSummary } from '@/lib/pen/docs'
 import type { Allowance } from '@/lib/pen/allowance'
 import UsageBar from './UsageBar'
+import PhoneShell, { type PhoneTab } from './PhoneShell'
 import Link from 'next/link'
 import { ACCEPT_DESKTOP, acceptFor } from '@/lib/pen/file-accept'
 import { findRuns } from '@/lib/pen/merge-detect'
@@ -140,6 +141,22 @@ export default function PenApp({
   const [query, setQuery] = useState('')
   const [navOpen, setNavOpen] = useState(false)
   const isPhone = useIsPhone()
+  // Phone tabs. Opening a recording lands on Recordings, a chat or page on Search, wherever it
+  // was opened from (a citation, a Home card), so the back arrow always means one thing.
+  const [phoneTab, setPhoneTab] = useState<PhoneTab>('home')
+  const [mHist, setMHist] = useState(false)
+  const lastChat = useRef<View>({ k: 'chat', id: null })
+  useEffect(() => {
+    if (view.k === 'session') setPhoneTab('recordings')
+    else if (view.k === 'chat' || view.k === 'doc') { setPhoneTab('search'); lastChat.current = view }
+  }, [view])
+  /** A tab tap. Tapping the tab you're on goes back to its first screen, as apps do. */
+  const goTab = (t: PhoneTab) => {
+    if (t === 'home' || (t === 'recordings' && (phoneTab === 'recordings' || view.k !== 'session'))) setView({ k: 'archive' })
+    if (t === 'search' && view.k !== 'chat' && view.k !== 'doc') setView(lastChat.current)
+    if (t === 'search' && phoneTab === 'search') { setChatSeed(null); setView({ k: 'chat', id: null }) }
+    setPhoneTab(t)
+  }
   // The phone sheet ends on a promise ("we'll email you") rather than vanishing, so it needs a
   // state of its own — `pending` and `progress` are both empty by then.
   const [importDone, setImportDone] = useState(false)
@@ -553,9 +570,290 @@ export default function PenApp({
     }
   }
 
+  // ------------------------------------------------------------------ phone
+  // The phone gets its own screens: a bottom tab bar (Home, Upload, Recordings, Search), a
+  // fixed screen that never scrolls as a page, and Search as a real chat. Same state, same
+  // components; only the arrangement differs.
+  if (isPhone) {
+    const openChat = (id: string | null) => { setChatSeed(null); setView({ k: 'chat', id }); setMHist(false) }
+    const sessionTitle = (x: PenSession) => x.title || x.client_name || x.source_name || T.untitled
+    const chatTitle = view.k === 'chat' && view.id ? (chats.find((c) => c.id === view.id)?.title ?? T.untitledChat) : T.newChat
+
+    const banners = (
+      <>
+        {loadError && <Banner tone="bad">{T.loadError(loadError)}</Banner>}
+        {err && <Banner tone="bad" onClose={() => setErr(null)}>{err}</Banner>}
+        {heldNotice && <Banner tone="warn" onClose={() => setHeldNotice(false)}>{T.heldNotice}</Banner>}
+        {phoneTab !== 'search' && runs.map((r) => (
+          <Banner key={r.sessions[0].id} tone="warn">
+            <strong style={{ color: 'var(--ink)' }}>{T.runTitle(r.sessions.length, fmtDur(r.totalSec))}</strong>{' '}
+            {T.runBody}
+            <button className="pen-btn mt-2.5" disabled={joining} onClick={() => void joinRun(r.sessions.map((x) => x.id))}>
+              <Icon name="link" size={15} />
+              {joining ? T.joining : T.join}
+            </button>
+          </Banner>
+        ))}
+      </>
+    )
+
+    let screen: React.ReactNode
+    let title = ''
+    let onBack: (() => void) | undefined
+    let left: React.ReactNode = null
+    let right: React.ReactNode = <Account email={email} name={name} avatar={avatar} onTour={() => setTourOpen(true)} />
+    let fill = false
+
+    if (phoneTab === 'home') {
+      title = T.home
+      screen = stats ? (
+        <Overview
+          stats={stats}
+          people={people}
+          onChanged={() => void refresh()}
+          onAskPerson={(p) => {
+            const label = shortLabel(p.name, new Set())
+            askArchive(T.askPerson(label), [{ id: p.id, title: p.name, label, kind: 'person' }])
+          }}
+          onOpen={(id) => { openSession(id); setTab('note') }}
+        />
+      ) : (
+        <p className="pen-m-empty">{T.chooseRecording}</p>
+      )
+    } else if (phoneTab === 'upload') {
+      title = T.mUploadTitle
+      screen = (
+        <div className="pen-m-upload">
+          {paused ? (
+            <div className="pen-paused">
+              <strong>{T.pausedTitle(fmtDate(paused, appLang, { day: 'numeric', month: 'long' }))}</strong>
+              <span>{T.pausedSub}</span>
+              <button type="button" className="pen-btn pen-btn-accent" onClick={resumePlan} disabled={resuming}>
+                {resuming ? T.resuming : T.resumeNow}
+              </button>
+            </div>
+          ) : (
+            <>
+              <p className="pen-m-lede">{T.mUploadLede}</p>
+              <button type="button" className="pen-m-bigbtn" onClick={() => fileInput.current?.click()}>
+                <Icon name="plus" size={22} />
+                <span><strong>{T.mChoose}</strong><em>{T.mChooseSub}</em></span>
+              </button>
+              {supportsPicker && (
+                <button type="button" className="pen-m-rowbtn" onClick={connectPen}>
+                  <Icon name="usb" size={19} />
+                  <span>{T.connectPen}</span>
+                </button>
+              )}
+              {whatsapp && (
+                <a className="pen-m-rowbtn" href={whatsapp.linked ? `https://wa.me/${whatsapp.number}` : '/pen/settings/whatsapp'}>
+                  <Icon name="chat" size={19} />
+                  <span>
+                    <strong>{whatsapp.linked ? T.waPhoneLinked : T.waPhoneUnlinked}</strong>
+                    <em>{whatsapp.linked ? T.waPhoneLinkedSub : T.waPhoneUnlinkedSub}</em>
+                  </span>
+                </a>
+              )}
+              <button type="button" className="pen-m-rowbtn" onClick={() => setTxImport(true)}>
+                <Icon name="quote" size={19} />
+                <span>{T.importTranscript}</span>
+              </button>
+            </>
+          )}
+          <div className="pen-m-meter"><UsageBar allowance={allowance} /></div>
+        </div>
+      )
+    } else if (phoneTab === 'recordings') {
+      if (active) {
+        title = sessionTitle(active)
+        onBack = () => setView({ k: 'archive' })
+        screen = (
+          <>
+            <Detail
+              selfEmail={email}
+              onPeopleChanged={() => void refreshPeople()}
+              onBack={() => setView({ k: 'archive' })}
+              session={active} tab={tab} setTab={setTab}
+              parts={partsOf(active)}
+              splitting={joining}
+              onSplit={() => active.merge_group && void splitGroup(active.merge_group)}
+              chatOpen={chatOpen} onToggleChat={() => setChatOpen((v) => !v)}
+              onNotes={(type) => makeNotes(active.id, type)}
+              askCategory={catAsk[active.id]}
+              onDelete={() => removeSession(active.id)}
+              onPatch={async (patch) => {
+                const r = await fetch(`/api/pen/sessions/${active.id}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(patch),
+                })
+                if (!r.ok) {
+                  const msg = (await r.json().catch(() => ({}))).error ?? T.saveFailed(r.status)
+                  setErr(msg)
+                  throw new Error(msg)
+                }
+                setSessions((prev) => prev.map((x) => (x.id === active.id ? { ...x, ...patch } : x)))
+              }}
+            />
+            {chatOpen && <ChatPanel session={active} onChat={patchLocal} onClose={() => setChatOpen(false)} />}
+          </>
+        )
+      } else {
+        title = T.recent
+        screen = (
+          <div className="pen-m-list">
+            {bucketCounts.length > 1 && (
+              <div className="pen-m-chips">
+                <button type="button" className="pen-m-chip" data-on={!catFilter} onClick={() => setCatFilter(null)}>{T.mAll}</button>
+                {bucketCounts.map(([b, n]) => (
+                  <button type="button" key={b} className="pen-m-chip" data-on={catFilter === b} onClick={() => setCatFilter(catFilter === b ? null : b)}>
+                    {bucketLabel(b, appLang)} <span>{n}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {visible.length === 0 ? (
+              <p className="pen-m-empty">
+                {catFilter ? T.emptyCat : <>{T.emptyAll[0]}<strong>{T.connectPen}</strong>{T.emptyAll[1]}</>}
+              </p>
+            ) : (
+              groupByDay(visible, appLang).map(([day, rows]) => (
+                <section key={day} className="pen-m-day">
+                  <div className="pen-label">{day}</div>
+                  {rows.map((x) => (
+                    <button type="button" key={x.id} className="pen-m-rec" onClick={() => { openSession(x.id); setTab('note'); setChatOpen(false) }}>
+                      <span className="pen-m-rec-top">
+                        <span className="pen-m-rec-title">{sessionTitle(x)}</span>
+                        <span className="pen-pill" data-s={x.status}>{T.status[x.status] ?? x.status}</span>
+                      </span>
+                      <span className="pen-mono pen-m-rec-meta">
+                        {fmtDur(partsOf(x).reduce((n, y) => n + (y.duration_sec ?? 0), 0))}
+                        {partsOf(x).length > 1 ? ` · ${T.parts(partsOf(x).length)}` : ''}
+                        {x.meeting_type ? ` · ${typeLabel(x.meeting_type, appLang).toLowerCase()}` : ''}
+                      </span>
+                    </button>
+                  ))}
+                </section>
+              ))
+            )}
+          </div>
+        )
+      }
+    } else {
+      left = (
+        <button type="button" className="pen-m-iconbtn" onClick={() => setMHist(true)} aria-label={T.mHistory}>
+          <svg viewBox="0 0 18 18" width="20" height="20" aria-hidden>
+            <path d="M2.5 4.5h13M2.5 9h13M2.5 13.5h8" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+          </svg>
+        </button>
+      )
+      right = (
+        <button type="button" className="pen-m-iconbtn" onClick={() => openChat(null)} aria-label={T.newChat}>
+          <Icon name="plus" size={20} />
+        </button>
+      )
+      if (view.k === 'doc') {
+        title = docs.find((d) => d.id === view.id)?.title ?? T.pages
+        onBack = () => openChat(null)
+        screen = (
+          <DocView docId={view.id} onRenamed={() => void refreshDocs()} onDeleted={() => { openChat(null); void refreshDocs() }} />
+        )
+      } else {
+        title = chatTitle
+        fill = true
+        screen = (
+          <ChatView
+            recordings={taggable}
+            chatId={view.k === 'chat' ? view.id : null}
+            seed={chatSeed}
+            onSeedConsumed={() => setChatSeed(null)}
+            onThreadChanged={(id) => { setView({ k: 'chat', id }); void refreshChats() }}
+            onDocCreated={(id) => { setView({ k: 'doc', id }); void refreshDocs() }}
+            onCite={(sessionId) => { openSession(sessionId); setTab('note'); setChatOpen(false) }}
+          />
+        )
+      }
+    }
+
+    return (
+      <LangProvider lang={appLang}>
+        <input ref={fileInput} type="file" multiple accept={accept} className="hidden"
+               onChange={(e) => e.target.files && addFiles(e.target.files)} />
+        <PhoneShell
+          tab={phoneTab}
+          onTab={goTab}
+          title={title}
+          onBack={onBack}
+          left={left}
+          right={right}
+          banners={banners}
+          fill={fill}
+          scrollKey={`${phoneTab}:${view.k}:${'id' in view ? view.id : ''}`}
+        >
+          {screen}
+        </PhoneShell>
+
+        {mHist && (
+          <>
+            <button className="pen-scrim pen-scrim-on" aria-label={T.close} onClick={() => setMHist(false)} />
+            <aside className="pen-m-hist" aria-label={T.mHistory}>
+              <div className="pen-m-hist-head">
+                <strong>{T.mHistory}</strong>
+                <button type="button" className="pen-btn pen-btn-accent" onClick={() => openChat(null)}>
+                  <Icon name="plus" size={15} /> {T.newChat}
+                </button>
+              </div>
+              <div className="pen-label">{T.chats}</div>
+              {chats.length === 0 ? (
+                <p className="pen-m-empty">{T.chatsEmpty}</p>
+              ) : (
+                chats.map((c) => (
+                  <button type="button" key={c.id} className="pen-m-hist-item" data-on={view.k === 'chat' && view.id === c.id} onClick={() => openChat(c.id)}>
+                    {c.title ?? T.untitledChat}
+                  </button>
+                ))
+              )}
+              {docs.length > 0 && (
+                <>
+                  <div className="pen-label">{T.pages}</div>
+                  {docs.map((d) => (
+                    <button type="button" key={d.id} className="pen-m-hist-item" data-on={view.k === 'doc' && view.id === d.id} onClick={() => { setView({ k: 'doc', id: d.id }); setMHist(false) }}>
+                      {d.title}
+                    </button>
+                  ))}
+                </>
+              )}
+            </aside>
+          </>
+        )}
+
+        {(pending.length > 0 || progress || importDone) && (
+          <>
+            <button className="pen-scrim pen-scrim-on" aria-label={T.close} onClick={closeSheet} />
+            <ImportTray
+              pending={pending} setPending={setPending} penName={penName}
+              consent={consent} setConsent={setConsent}
+              people={people} callPeople={callPeople} setCallPeople={setCallPeople}
+              progress={progress} onImport={importPicked}
+              phone onClose={closeSheet} done={importDone}
+            />
+          </>
+        )}
+        {txImport && (
+          <TranscriptImport
+            people={people}
+            onClose={() => setTxImport(false)}
+            onImported={(id) => { setTxImport(false); void refresh(); openSession(id) }}
+          />
+        )}
+        {tourOpen && <Tour lang={appLang} onClose={closeTour} onUpload={() => { setPhoneTab('upload'); fileInput.current?.click() }} />}
+      </LangProvider>
+    )
+  }
+
   return (
     <LangProvider lang={appLang}>
-    <main className="pen-page">
+    <main className="pen-page" data-ready={mounted}>
       {/* The sidebar is a page-level column running the full height, so the brand sits level
           with the search box rather than a header's height below it. Everything else — the
           header, the banners, the import tray and the note/rail grid — stacks to its right. */}

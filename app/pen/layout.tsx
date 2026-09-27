@@ -46,6 +46,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  // Lets the phone app's tab bar sit above the home indicator (env(safe-area-inset-bottom)).
+  viewportFit: 'cover',
   // The paper ground, so the iOS status bar and the browser chrome match the page instead of
   // sitting as a pale band above it.
   themeColor: '#F2EFE5',

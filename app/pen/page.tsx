@@ -14,6 +14,7 @@ import { marketFor } from './landing-copy'
 import { getProfileRaw, rememberAppLanguage } from '@/lib/pen/profile'
 import { ensureSample } from '@/lib/pen/sample'
 import { appLangFor } from './app-lang'
+import { parseLang } from '@/lib/pen/currency'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,8 +49,11 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
     // the tour still needs to play. None of it may block the page.
     const profile = await getProfileRaw(email).catch(() => null)
     appLang = await appLangFor(email, profile)
-    // Emails and WhatsApp read only the stored setting, so the first resolved language sticks.
-    if (!profile?.appLanguage) await rememberAppLanguage(email, appLang).catch(() => {})
+    // Emails and WhatsApp read only the stored setting, so an explicit language choice on the
+    // landing page (the juno_lang cookie, set only by its language switch) is kept. A guess from
+    // the visitor's country is not: it pinned Spanish on the founder while he was in Chile.
+    const chosen = (await cookies()).get('juno_lang')?.value
+    if (!profile?.appLanguage && chosen) await rememberAppLanguage(email, parseLang(chosen)).catch(() => {})
     showTour = !profile?.onboarding?.tour
     await ensureSample(email, appLang, profile?.name ?? session?.user?.name ?? null).catch(() => {})
     sessions = await listSessions(email)
