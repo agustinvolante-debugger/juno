@@ -123,7 +123,7 @@ export const TERMS: Record<Lang, LegalDoc> = {
       {
         h: 'Law and disputes',
         body: [
-          'These terms are governed by [GOVERNING LAW]. If you are a consumer, you also keep the protection of the mandatory laws of the country you live in, and you can bring a claim in its courts. Please write to [CONTACT EMAIL] first: most problems can be solved directly.',
+          'These terms are governed by the laws of the State of California, USA. If you are a consumer, you also keep the protection of the mandatory laws of the country you live in, and you can bring a claim in its courts. Please write to [CONTACT EMAIL] first: most problems can be solved directly.',
         ],
       },
       {
@@ -248,7 +248,7 @@ export const TERMS: Record<Lang, LegalDoc> = {
       {
         h: 'Ley aplicable y disputas',
         body: [
-          'Estos términos se rigen por [GOVERNING LAW]. Si eres consumidor, mantienes además la protección de las leyes obligatorias del país donde vives y puedes presentar un reclamo ante sus tribunales. Antes, escríbenos a [CONTACT EMAIL]: la mayoría de los problemas se resuelven directamente.',
+          'Estos términos se rigen por las leyes del Estado de California, EE. UU. Si eres consumidor, mantienes además la protección de las leyes obligatorias del país donde vives y puedes presentar un reclamo ante sus tribunales. Antes, escríbenos a [CONTACT EMAIL]: la mayoría de los problemas se resuelven directamente.',
         ],
       },
       {
@@ -373,7 +373,7 @@ export const TERMS: Record<Lang, LegalDoc> = {
       {
         h: 'Lei aplicável e disputas',
         body: [
-          'Estes termos são regidos por [GOVERNING LAW]. Se você é consumidor, mantém também a proteção das leis obrigatórias do país onde mora e pode fazer uma reclamação nos tribunais de lá. Antes, escreva para [CONTACT EMAIL]: a maioria dos problemas se resolve diretamente.',
+          'Estes termos são regidos pelas leis do Estado da Califórnia, EUA. Se você é consumidor, mantém também a proteção das leis obrigatórias do país onde mora e pode fazer uma reclamação nos tribunais de lá. Antes, escreva para [CONTACT EMAIL]: a maioria dos problemas se resolve diretamente.',
         ],
       },
       {

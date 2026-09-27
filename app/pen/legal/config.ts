@@ -7,10 +7,10 @@
 // been read by someone who knows the law in the markets we sell in.
 
 export const LEGAL_FACTS = {
-  ENTITY: '[ENTITY]',
-  ADDRESS: '[ADDRESS]',
-  'GOVERNING LAW': '[GOVERNING LAW]',
-  'CONTACT EMAIL': '[CONTACT EMAIL]',
+  ENTITY: 'JunoProducts LLC',
+  ADDRESS: '2138 Jones St, San Francisco, CA, USA',
+  'GOVERNING LAW': 'the State of California, USA',
+  'CONTACT EMAIL': 'avolantesilva@gmail.com',
 } as const
 
 export type LegalFact = keyof typeof LEGAL_FACTS
