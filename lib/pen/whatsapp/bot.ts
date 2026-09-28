@@ -21,7 +21,7 @@ import { startTranscription, AAI_PREFIX } from '../transcribe'
 import { fmtHours } from '../plan'
 import type { Lang } from '../currency'
 import { userLang } from '../user-lang'
-import { sendText, sendButtons, openMedia, markRead, type Inbound } from './vonage'
+import { sendText, sendButtons, openMedia, markRead, type Inbound } from './provider'
 import {
   claimCode,
   getLinkByEmail,

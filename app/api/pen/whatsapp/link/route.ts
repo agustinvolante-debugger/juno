@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import QRCode from 'qrcode'
 import { authedEmail } from '@/lib/news/auth'
 import { getLinkByEmail, newCode, unlink } from '@/lib/pen/whatsapp/store'
-import { botNumber, configured } from '@/lib/pen/whatsapp/vonage'
+import { botNumber, configured } from '@/lib/pen/whatsapp/provider'
 
 export const dynamic = 'force-dynamic'
 

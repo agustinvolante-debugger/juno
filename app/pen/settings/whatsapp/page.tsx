@@ -1,6 +1,6 @@
 import { authedEmail } from '@/lib/news/auth'
 import { getLinkByEmail } from '@/lib/pen/whatsapp/store'
-import { botNumber, configured } from '@/lib/pen/whatsapp/vonage'
+import { botNumber, configured } from '@/lib/pen/whatsapp/provider'
 import WhatsAppLink from './WhatsAppLink'
 
 export const dynamic = 'force-dynamic'
