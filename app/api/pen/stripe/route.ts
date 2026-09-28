@@ -10,7 +10,8 @@ import { notifyPaid, notifyHours } from '@/lib/pen/notify-owner'
 import { customerEmail, portalLoginUrl } from '@/lib/pen/stripe'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+// A purchase can release held recordings, and a pieced one is stitched into AssemblyAI on the way.
+export const maxDuration = 300
 
 // Stripe tells us who paid. Without this the funnel has no middle: someone signs up, pays, and
 // the product still has no idea who they are.

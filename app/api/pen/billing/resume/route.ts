@@ -4,6 +4,8 @@ import { resume } from '@/lib/pen/pause'
 import { resumeHeld } from '@/lib/pen/transcribe'
 
 export const dynamic = 'force-dynamic'
+// Releasing held recordings can include stitching a pieced upload into AssemblyAI.
+export const maxDuration = 300
 
 // Ends a pause early. Charging restarts on Stripe's normal cycle, and anything recorded during
 // the pause is sent for transcription straight away.

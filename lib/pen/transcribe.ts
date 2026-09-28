@@ -4,8 +4,8 @@
 // way: the upload itself, the app resuming held recordings when it opens, and a purchase
 // landing through the Stripe webhook.
 
-import { getSession, updateSession, createReadUrl, listSessions, type PenSession } from './store'
-import { submit, hasKey } from './aai'
+import { getSession, updateSession, createReadUrl, listSessions, partPaths, removeParts, PARTS_PREFIX, type PenSession } from './store'
+import { submit, hasKey, uploadStream } from './aai'
 import { getAllowance, type Allowance } from './allowance'
 import { hintsFor } from './hints'
 
@@ -18,6 +18,38 @@ export type StartResult =
  * follows the prefix is the upload URL. Nothing to delete on our side for these.
  */
 export const AAI_PREFIX = 'aai:'
+
+/**
+ * A recording uploaded in pieces: streams them, in order, into one AssemblyAI upload (the bytes
+ * joined are the original file, nothing re-encoded), points the recording at that upload the way
+ * WhatsApp files are, and deletes the pieces. Nothing is held in memory beyond one read chunk.
+ */
+async function stitchParts(session: PenSession): Promise<string> {
+  const paths = partPaths(session.storage_path)
+  if (!paths.length) throw new Error('this upload has no pieces')
+  let i = 0
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null
+  const body = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      for (;;) {
+        if (!reader) {
+          if (i >= paths.length) return controller.close()
+          const res = await fetch(await createReadUrl(paths[i++], 60 * 30))
+          if (!res.ok || !res.body) throw new Error(`piece ${i} of ${paths.length} is missing (${res.status}); upload it again`)
+          reader = res.body.getReader()
+        }
+        const { done, value } = await reader.read()
+        if (done) { reader = null; continue }
+        controller.enqueue(value)
+        return
+      }
+    },
+  })
+  const url = await uploadStream(body)
+  await updateSession(session.id, { storage_path: `${AAI_PREFIX}${url}` })
+  await removeParts(session.storage_path)
+  return url
+}
 
 export async function startTranscription(email: string, session: PenSession): Promise<StartResult> {
   if (!hasKey()) throw new Error('ASSEMBLYAI_API_KEY is not set. Add it to .env.local and to the Vercel project env.')
@@ -32,9 +64,11 @@ export async function startTranscription(email: string, session: PenSession): Pr
 
   // AssemblyAI fetches the audio itself, so it needs a URL it can reach. Short-lived.
   // A WhatsApp file was streamed into AssemblyAI's storage instead of ours; see AAI_PREFIX.
-  const audioUrl = session.storage_path.startsWith(AAI_PREFIX)
-    ? session.storage_path.slice(AAI_PREFIX.length)
-    : await createReadUrl(session.storage_path)
+  const audioUrl = session.storage_path.startsWith(PARTS_PREFIX)
+    ? await stitchParts(session)
+    : session.storage_path.startsWith(AAI_PREFIX)
+      ? session.storage_path.slice(AAI_PREFIX.length)
+      : await createReadUrl(session.storage_path)
   const secret = process.env.PEN_WEBHOOK_SECRET
   const base = process.env.PEN_PUBLIC_URL || process.env.NEXTAUTH_URL
   // Only a public https address. AssemblyAI refuses localhost and LAN addresses outright ("webhook_url

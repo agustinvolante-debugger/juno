@@ -5,7 +5,8 @@ import { hasKey } from '@/lib/pen/aai'
 import { startTranscription } from '@/lib/pen/transcribe'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+// A pieced upload is stitched into AssemblyAI here (up to a few hundred MB), so give it room.
+export const maxDuration = 300
 
 export async function POST(req: Request) {
   const email = await authedEmail()

@@ -31,6 +31,11 @@ export async function POST(req: Request) {
   if (!storage_path || !source_name || !bytes) {
     return NextResponse.json({ error: 'storage_path, source_name and bytes required' }, { status: 400 })
   }
+  // Only a path handed to this account by /api/pen/upload-url (whole file or pieces), so nobody
+  // can point a recording at someone else's audio.
+  if (!storage_path.replace(/^parts:\d+:/, '').startsWith(`${email}/`)) {
+    return NextResponse.json({ error: 'unknown upload' }, { status: 400 })
+  }
 
   // Fla. Stat. § 934.03 is all-party consent and a third-degree felony, and he is a licensed
   // agent, so the downside is his licence. This is refused rather than defaulted.

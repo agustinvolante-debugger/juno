@@ -140,7 +140,8 @@ export async function prepareAudio(file: File, opts: { compressAbove?: number } 
     }
   }
 
-  // Too big to decode safely on this device: say so instead of letting the tab die.
+  // Too big to decode safely on this device. The app uploads these in pieces instead (see
+  // needsPiecedUpload); reaching here means a caller didn't, so say so rather than crash.
   if (tight && (isCompressed(file) || file.size > SAFARI_DECODE_MAX_WAV)) {
     throw new Error(
       `this recording is too long to prepare on this phone or browser (${fmtMB(file.size)}). Upload it from a computer using Chrome, or send it on WhatsApp.`,
@@ -381,4 +382,44 @@ export function fmtDur(sec: number) {
   const s = Math.round(sec % 60)
   if (m < 60) return `${m}:${String(s).padStart(2, '0')}`
   return `${Math.floor(m / 60)}h ${m % 60}m`
+}
+
+/* ------------------------------------------------------------- pieced upload */
+
+/** Each piece stays well under Supabase's 50 MiB object limit. */
+export const PIECE_BYTES = 40 * 1024 * 1024
+
+/**
+ * A file this device can't prepare safely (decoding it whole would crash a phone): it goes up
+ * as it is, in pieces, and AssemblyAI reads the original. Same test prepareAudio refuses on.
+ */
+export function needsPiecedUpload(file: File): boolean {
+  const tight = isMobileDevice() || !hasAudioEncoder()
+  if (!tight || isVideo(file)) return false
+  return isCompressed(file) ? file.size > PASS_MAX : file.size > SAFARI_DECODE_MAX_WAV
+}
+
+/**
+ * The length without decoding: from the WAV header (first 64 KB), or the browser's own metadata
+ * for compressed audio. 0 when unknown; AssemblyAI reports the real one either way.
+ */
+export async function durationWithoutDecoding(file: File): Promise<number> {
+  try {
+    const head = await file.slice(0, 64 * 1024).arrayBuffer()
+    const info = readWavInfo(head)
+    if (info && info.sampleRate > 0 && info.blockAlign > 0) {
+      const v = new DataView(head)
+      const declared = info.dataOffset >= 4 ? v.getUint32(info.dataOffset - 4, true) : 0
+      const bytes = Math.min(declared || Infinity, file.size - info.dataOffset)
+      const blocks = bytes / info.blockAlign
+      // IMA ADPCM (the pen): each block holds a header sample plus 2 samples per byte after it.
+      const perBlock = info.formatTag === 0x11 ? ((info.blockAlign - 4 * info.channels) * 2) / info.channels + 1 : 1
+      return (blocks * perBlock) / info.sampleRate
+    }
+  } catch {}
+  try {
+    return await probeDuration(file)
+  } catch {
+    return 0
+  }
 }

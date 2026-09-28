@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
 import { pausedRefusal } from '@/lib/pen/pause'
-import { createUploadUrl } from '@/lib/pen/store'
+import { createUploadUrl, createUploadParts, MAX_PARTS } from '@/lib/pen/store'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,8 +15,19 @@ export async function POST(req: Request) {
   const paused = await pausedRefusal(email)
   if (paused) return NextResponse.json({ error: paused }, { status: 403 })
 
-  const body = (await req.json().catch(() => ({}))) as { name?: string }
+  const body = (await req.json().catch(() => ({}))) as { name?: string; parts?: number }
   if (!body.name) return NextResponse.json({ error: 'name required' }, { status: 400 })
+
+  // A big file from a phone, uploaded as it is in pieces (see createUploadParts).
+  if (body.parts !== undefined) {
+    const n = Math.floor(Number(body.parts))
+    if (!Number.isFinite(n) || n < 1 || n > MAX_PARTS) return NextResponse.json({ error: 'That file is too big to upload.' }, { status: 400 })
+    try {
+      return NextResponse.json(await createUploadParts(email, body.name, n))
+    } catch (e) {
+      return NextResponse.json({ error: (e as Error).message }, { status: 500 })
+    }
+  }
 
   try {
     const out = await createUploadUrl(email, body.name)

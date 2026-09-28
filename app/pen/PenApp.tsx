@@ -24,7 +24,7 @@ import PeoplePicker, { type Picked } from './PeoplePicker'
 import type { ArchiveStats } from '@/lib/pen/stats'
 import DeliverableSheet, { DeliverableActions, type SheetRequest } from './DeliverableSheet'
 import SendBriefing from './SendBriefing'
-import { prepareAudio, fmtMB, fmtDur, SOFT_SIZE_LIMIT } from '@/lib/pen/encode'
+import { prepareAudio, fmtMB, fmtDur, SOFT_SIZE_LIMIT, needsPiecedUpload, durationWithoutDecoding, PIECE_BYTES } from '@/lib/pen/encode'
 import { postJson, getJson, patchJson, del, errMessage, PenHttpError } from '@/lib/pen/http'
 import type { ChatSummary } from '@/lib/pen/chats'
 import type { DocSummary } from '@/lib/pen/docs'
@@ -419,41 +419,69 @@ export default function PenApp({
 
     for (const { file } of picked) {
       try {
-        setProgress({ name: file.name, phase: T.phasePreparing, pct: 5 })
-        const prep = await prepareAudio(file)
+        // What goes up, and where it lands. Normally the audio is prepared (compressed) in the
+        // browser first. A file too big to prepare safely on this device (a long recording on a
+        // phone) goes up exactly as it is, in pieces, and the server joins them for AssemblyAI.
+        let up: { storage_path: string; mime: string; bytes: number; durationSec: number }
+        if (needsPiecedUpload(file)) {
+          setProgress({ name: file.name, phase: T.phaseSlot, pct: 5 })
+          const durationSec = await durationWithoutDecoding(file)
+          const n = Math.ceil(file.size / PIECE_BYTES)
+          const urlRes = await fetch('/api/pen/upload-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: file.name, parts: n }),
+          })
+          if (!urlRes.ok) throw new Error((await urlRes.json()).error ?? T.uploadUrlFailed)
+          const { storage_path, parts } = (await urlRes.json()) as { storage_path: string; parts: { path: string; signedUrl: string }[] }
+          const mime = file.type || (/\.wav$/i.test(file.name) ? 'audio/wav' : 'application/octet-stream')
+          for (let i = 0; i < parts.length; i++) {
+            const piece = file.slice(i * PIECE_BYTES, (i + 1) * PIECE_BYTES)
+            // One retry per piece: a phone on the move drops a request now and then.
+            const put = () => putWithProgress(parts[i].signedUrl, piece, 'application/octet-stream', (pct) =>
+              setProgress({ name: file.name, phase: T.phasePiece(i + 1, parts.length, fmtMB(file.size)), pct: 5 + ((i + pct / 100) / parts.length) * 70 }),
+            )
+            await put().catch(put)
+          }
+          up = { storage_path, mime, bytes: file.size, durationSec }
+        } else {
+          setProgress({ name: file.name, phase: T.phasePreparing, pct: 5 })
+          const prep = await prepareAudio(file)
 
-        setProgress({ name: file.name, phase: T.phaseSlot, pct: 15 })
-        const urlRes = await fetch('/api/pen/upload-url', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: file.name.replace(/\.[^.]+$/, prep.mime === 'audio/wav' ? '.wav' : '') }),
-        })
-        if (!urlRes.ok) throw new Error((await urlRes.json()).error ?? T.uploadUrlFailed)
-        const { path, signedUrl } = (await urlRes.json()) as { path: string; signedUrl: string }
+          setProgress({ name: file.name, phase: T.phaseSlot, pct: 15 })
+          const urlRes = await fetch('/api/pen/upload-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: file.name.replace(/\.[^.]+$/, prep.mime === 'audio/wav' ? '.wav' : '') }),
+          })
+          if (!urlRes.ok) throw new Error((await urlRes.json()).error ?? T.uploadUrlFailed)
+          const { path, signedUrl } = (await urlRes.json()) as { path: string; signedUrl: string }
 
-        // Anything compressible has already been compressed by now, so reaching this means
-        // either a genuinely enormous recording or a browser with no Opus encoder. Say which,
-        // because "split the recording" is useless advice for the second one.
-        if (prep.blob.size > SOFT_SIZE_LIMIT) {
-          throw new Error(
-            prep.mime === 'audio/ogg' ? T.tooBigCompressed(fmtMB(prep.blob.size)) : T.tooBigNoCompress(fmtMB(prep.blob.size)),
+          // Anything compressible has already been compressed by now, so reaching this means
+          // either a genuinely enormous recording or a browser with no Opus encoder. Say which,
+          // because "split the recording" is useless advice for the second one.
+          if (prep.blob.size > SOFT_SIZE_LIMIT) {
+            throw new Error(
+              prep.mime === 'audio/ogg' ? T.tooBigCompressed(fmtMB(prep.blob.size)) : T.tooBigNoCompress(fmtMB(prep.blob.size)),
+            )
+          }
+
+          await putWithProgress(signedUrl, prep.blob, prep.mime, (pct) =>
+            setProgress({ name: file.name, phase: T.phaseUploading(prep.note), pct: 15 + pct * 0.6 }),
           )
+          up = { storage_path: path, mime: prep.mime, bytes: prep.blob.size, durationSec: prep.durationSec }
         }
-
-        await putWithProgress(signedUrl, prep.blob, prep.mime, (pct) =>
-          setProgress({ name: file.name, phase: T.phaseUploading(prep.note), pct: 15 + pct * 0.6 }),
-        )
 
         setProgress({ name: file.name, phase: T.phaseSaving, pct: 80 })
         const sRes = await fetch('/api/pen/sessions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            storage_path: path,
+            storage_path: up.storage_path,
             source_name: file.name,
-            mime: prep.mime,
-            bytes: prep.blob.size,
-            duration_sec: prep.durationSec,
+            mime: up.mime,
+            bytes: up.bytes,
+            duration_sec: up.durationSec,
             recorded_at: new Date(file.lastModified).toISOString(),
             consent: true,
             // The first person also names the call, which older parts of the app read.

@@ -4,7 +4,8 @@ import { resumeHeld } from '@/lib/pen/transcribe'
 import { getAllowance } from '@/lib/pen/allowance'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+// Held recordings may be pieced uploads, stitched into AssemblyAI on the way out.
+export const maxDuration = 300
 
 // Sends recordings that were held for lack of time, if there is time now. The app calls this
 // when it opens with anything held, which is what releases them after the monthly reset.

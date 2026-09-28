@@ -5,7 +5,8 @@ import { settleHoursCheckout } from '@/lib/pen/hours'
 import { getAllowance } from '@/lib/pen/allowance'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+// Held recordings may be pieced uploads, stitched into AssemblyAI on the way out.
+export const maxDuration = 300
 
 // The success page calls this with the Checkout Session id Stripe put in the return URL.
 //

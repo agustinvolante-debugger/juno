@@ -124,6 +124,58 @@ export async function createUploadUrl(userEmail: string, filename: string) {
   return { path, token: data.token, signedUrl: data.signedUrl }
 }
 
+/**
+ * A recording uploaded in pieces (phones, big files): storage_path is `parts:<n>:<base>` and the
+ * pieces are `<base>.part0` … `<base>.part<n-1>`, each under the 50 MiB object limit. They are
+ * stitched into AssemblyAI when transcription starts, then deleted (see lib/pen/transcribe).
+ */
+export const PARTS_PREFIX = 'parts:'
+export const MAX_PARTS = 40
+
+export function partPaths(storagePath: string): string[] {
+  const m = /^parts:(\d+):(.+)$/.exec(storagePath)
+  if (!m) return []
+  const n = Math.min(Number(m[1]), MAX_PARTS)
+  return Array.from({ length: n }, (_, i) => `${m[2]}.part${i}`)
+}
+
+export async function createUploadParts(userEmail: string, filename: string, parts: number) {
+  // Tidy first: pieces from an upload abandoned halfway (tab closed) are never stitched. Anything
+  // over a day old that no recording points at goes. Best effort; never blocks the upload.
+  await sweepOrphanParts(userEmail).catch(() => {})
+  const safe = filename.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-80)
+  const base = `${userEmail}/${Date.now()}-${safe}`
+  const storage_path = `${PARTS_PREFIX}${parts}:${base}`
+  const urls = await Promise.all(
+    partPaths(storage_path).map(async (path) => {
+      const { data, error } = await supabaseAdmin.storage.from(BUCKET).createSignedUploadUrl(path)
+      if (error) throw new Error(`signed upload url: ${error.message}`)
+      return { path, signedUrl: data.signedUrl }
+    }),
+  )
+  return { storage_path, parts: urls }
+}
+
+async function sweepOrphanParts(userEmail: string): Promise<void> {
+  const { data: files } = await supabaseAdmin.storage.from(BUCKET).list(userEmail, { limit: 1000 })
+  const dayAgo = Date.now() - 86400000
+  const old = (files ?? []).filter((f) => /\.part\d+$/.test(f.name) && f.created_at && Date.parse(f.created_at) < dayAgo)
+  if (!old.length) return
+  // A held recording (out of hours) still needs its pieces.
+  const { data: rows } = await supabaseAdmin.from('pen_sessions').select('storage_path').eq('user_email', userEmail).like('storage_path', `${PARTS_PREFIX}%`)
+  const keep = new Set((rows ?? []).flatMap((r) => partPaths((r as { storage_path: string }).storage_path)))
+  const drop = old.map((f) => `${userEmail}/${f.name}`).filter((p) => !keep.has(p))
+  if (drop.length) await supabaseAdmin.storage.from(BUCKET).remove(drop)
+}
+
+/** Best effort: pieces that outlive their use only cost storage. */
+export async function removeParts(storagePath: string): Promise<void> {
+  const paths = partPaths(storagePath)
+  if (!paths.length) return
+  const { error } = await supabaseAdmin.storage.from(BUCKET).remove(paths)
+  if (error) console.warn(`pen: parts not removed for ${storagePath}: ${error.message}`)
+}
+
 /** A URL AssemblyAI can fetch the audio from. Short-lived on purpose. */
 export async function createReadUrl(path: string, expiresInSec = 60 * 60 * 4) {
   const { data, error } = await supabaseAdmin.storage.from(BUCKET).createSignedUrl(path, expiresInSec)
@@ -271,9 +323,11 @@ export async function deleteSession(userEmail: string, id: string): Promise<bool
     .eq('id', id)
   if (error) throw new Error(error.message)
 
-  // 'aai:' paths live in AssemblyAI's storage (WhatsApp files) and 'text:' imports have no
-  // audio at all; neither is in our bucket.
-  if (session.storage_path && !/^(aai|text|sample):/.test(session.storage_path)) {
+  // Pieces not yet handed to AssemblyAI (a held recording, or one that failed first).
+  if (session.storage_path?.startsWith(PARTS_PREFIX)) await removeParts(session.storage_path)
+  // 'aai:' paths live in AssemblyAI's storage (WhatsApp files, pieced uploads) and 'text:'
+  // imports have no audio at all; neither is in our bucket.
+  if (session.storage_path && !/^(aai|text|sample|parts):/.test(session.storage_path)) {
     // Best effort, and deliberately after the row: failing here costs storage, not correctness.
     const { error: se } = await supabaseAdmin.storage.from(BUCKET).remove([session.storage_path])
     if (se) console.warn(`pen: orphaned object ${session.storage_path}: ${se.message}`)
