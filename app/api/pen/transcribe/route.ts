@@ -52,6 +52,14 @@ export async function GET(req: Request) {
 
   const session = await getSession(email, id)
   if (!session) return NextResponse.json({ error: 'not found' }, { status: 404 })
+  // Transcript saved but the notes never started (the request that saved it was cut off, as a
+  // phone does when it sleeps): start them now. Any later check heals it; the claim inside keeps
+  // this from running twice alongside the webhook.
+  if (session.status === 'transcribed' && !session.notes?.summary) {
+    const { runUnattended } = await import('@/lib/pen/unattended')
+    after(() => runUnattended(session.id, email))
+    return NextResponse.json({ session })
+  }
   if (session.status !== 'transcribing' || !session.aai_id) return NextResponse.json({ session })
 
   try {

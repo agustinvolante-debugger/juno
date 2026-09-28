@@ -188,11 +188,15 @@ export function TagMenu({
                 type="button"
                 className="pen-tagpick-row"
                 data-active={i === pick}
-                // mousedown, so the pick lands before the field's blur closes the list.
-                onMouseDown={(e) => {
+                // On press, so the pick lands before the field's blur closes the list. Pointer
+                // events fire at the finger's touch on a phone (iOS sends mousedown late, after
+                // the blur may already have closed it); mousedown is still stopped so a mouse
+                // click doesn't take focus away from the field.
+                onPointerDown={(e) => {
                   e.preventDefault()
                   choose(o)
                 }}
+                onMouseDown={(e) => e.preventDefault()}
                 onMouseEnter={() => setPick(i)}
               >
                 <Icon name={o.kind === 'person' ? 'person' : 'recordings'} size={15} className="pen-tagpick-icon" />

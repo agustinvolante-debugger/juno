@@ -3554,3 +3554,9 @@ html.pen-m-lock, html.pen-m-lock body { height: 100%; overflow: hidden; overscro
 .pen-m-howto p { margin: 0 0 8px; font-size: 14.5px; line-height: 1.5; color: var(--soft); }
 .pen-m-howto ol { list-style: decimal; margin: 0 0 12px; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; font-size: 15px; line-height: 1.45; color: var(--ink); }
 .pen-m-howto .pen-m-howto-tip { font-size: 13.5px; color: var(--dim); padding-bottom: 8px; }
+
+/* The @ list rises out of the composer, so the composer must stay a positioning box even where
+   the phone chat pins it (position: static above made the list open off-screen). */
+.pen-m-body[data-fill='true'] .pen-composer { position: relative; }
+.pen-m-body[data-fill='true'] .pen-tagpick { left: 12px; right: 12px; max-height: 45vh; }
+.pen-m-body[data-fill='true'] .pen-tagpick-row { min-height: 44px; align-items: center; }
