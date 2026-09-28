@@ -7,7 +7,7 @@
 // Purely layout. PenApp owns the state and hands in the screen to show, so the phone and the
 // desktop share every piece of behaviour: data, uploads, chat, billing, translations.
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Icon, { type IconName } from './Icon'
 import { useCopy } from './LangContext'
 import type { Copy } from '@/lib/pen/i18n'
@@ -67,8 +67,33 @@ export default function PhoneShell({
     return () => html.classList.remove('pen-m-lock')
   }, [])
 
+  // The iPhone keyboard doesn't resize the page; it slides over it, hiding the chat's text box
+  // and the @ list that rises from it. Size the app to the part of the screen still visible
+  // (visualViewport), as messaging apps do, so the composer sits right above the keyboard.
+  const shell = useRef<HTMLDivElement>(null)
+  const [kb, setKb] = useState(false)
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    const fit = () => {
+      const el = shell.current
+      if (!el) return
+      const open = window.innerHeight - vv.height > 120
+      setKb(open)
+      el.style.height = open ? `${vv.height}px` : ''
+      el.style.top = open ? `${vv.offsetTop}px` : ''
+    }
+    vv.addEventListener('resize', fit)
+    vv.addEventListener('scroll', fit)
+    fit()
+    return () => {
+      vv.removeEventListener('resize', fit)
+      vv.removeEventListener('scroll', fit)
+    }
+  }, [])
+
   return (
-    <div className="pen-m">
+    <div className="pen-m" ref={shell} data-kb={kb}>
       <header className="pen-m-top">
         <div className="pen-m-top-side">
           {onBack ? (

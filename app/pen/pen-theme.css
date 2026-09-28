@@ -3560,3 +3560,8 @@ html.pen-m-lock, html.pen-m-lock body { height: 100%; overflow: hidden; overscro
 .pen-m-body[data-fill='true'] .pen-composer { position: relative; }
 .pen-m-body[data-fill='true'] .pen-tagpick { left: 12px; right: 12px; max-height: 45vh; }
 .pen-m-body[data-fill='true'] .pen-tagpick-row { min-height: 44px; align-items: center; }
+
+/* Keyboard open (PhoneShell sizes .pen-m to the visible area): the tab bar steps aside so the
+   conversation and the text box get the space, as in a messaging app. */
+.pen-m[data-kb='true'] .pen-m-tabs { display: none; }
+.pen-m[data-kb='true'] .pen-m-top { padding-top: 8px; }
