@@ -40,17 +40,8 @@ const VIDEO_EXT = /\.(mp4|m4v|mov|qt)$/i
 
 /** Warn above this. The bucket has no explicit cap so it inherits the project global,
  *  which is 50 MB on Supabase's free plan. Kept as a soft warning, not a hard block. */
-export const SOFT_SIZE_LIMIT = 45 * 1024 * 1024
+export const SOFT_SIZE_LIMIT = 49.5 * 1024 * 1024
 
-// An already-compressed file this big gets re-encoded rather than passed through.
-//
-// Passing compressed audio through untouched is right almost always — re-encoding only loses
-// information. It stops being right at the bucket ceiling, where the choice is not "lose a
-// little fidelity" but "lose the whole recording": a 45 MB voice memo was refused outright
-// with advice to go and split it up, when 24 kbps Opus takes the same audio to about 5 MB and
-// transcribes just as well. Set below SOFT_SIZE_LIMIT so the re-encode happens before the
-// warning can fire.
-const RECOMPRESS_ABOVE = 40 * 1024 * 1024
 
 // Supabase refuses anything over exactly 50 MiB (probed 28 Sep: 50 MiB + 1 byte is a 400).
 // A compressed file up to here can always go up as-is.
@@ -64,6 +55,13 @@ const SAFARI_DECODE_MAX_WAV = 60 * 1024 * 1024
 
 function hasAudioEncoder(): boolean {
   return typeof (globalThis as { AudioEncoder?: unknown }).AudioEncoder === 'function'
+}
+
+/** Phones and tablets: tight per-tab memory whatever the browser supports. An iPad reports
+ *  itself as a Mac, so touch points give it away. */
+function isMobileDevice(): boolean {
+  if (typeof navigator === 'undefined') return false
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 }
 
 export type Prepared = {
@@ -120,12 +118,13 @@ function bufferToWav(buf: AudioBuffer): Blob {
 export async function prepareAudio(file: File, opts: { compressAbove?: number } = {}): Promise<Prepared> {
   const originalBytes = file.size
 
-  const encoder = hasAudioEncoder()
+  // Decoding means holding the whole recording in memory, which a phone can't do for a long
+  // one (and newer iPhones do have AudioEncoder, so its presence says nothing about memory).
+  const tight = isMobileDevice() || !hasAudioEncoder()
 
-  // Already compressed and small enough to store: untouched is the best answer. Without an
-  // encoder (iPhone) that holds right up to the storage ceiling, because shrinking it would
-  // mean decoding it whole, which is what crashed the page.
-  if (isCompressed(file) && (file.size <= RECOMPRESS_ABOVE || (!encoder && file.size <= PASS_MAX))) {
+  // Already compressed and fits in storage: untouched, on every browser. Shrinking it would mean
+  // decoding it whole, which is what blanked the page on an iPhone (47.5 MB m4a, 28 Sep).
+  if (isCompressed(file) && file.size <= PASS_MAX) {
     let durationSec = 0
     try {
       durationSec = await probeDuration(file)
@@ -141,8 +140,8 @@ export async function prepareAudio(file: File, opts: { compressAbove?: number } 
     }
   }
 
-  // Too big to decode safely on this browser: say so instead of letting the tab die.
-  if (!encoder && (isCompressed(file) || file.size > SAFARI_DECODE_MAX_WAV)) {
+  // Too big to decode safely on this device: say so instead of letting the tab die.
+  if (tight && (isCompressed(file) || file.size > SAFARI_DECODE_MAX_WAV)) {
     throw new Error(
       `this recording is too long to prepare on this phone or browser (${fmtMB(file.size)}). Upload it from a computer using Chrome, or send it on WhatsApp.`,
     )
