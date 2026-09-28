@@ -2952,8 +2952,9 @@ body:has(.pen-root) {
 /* Phone fixes, landing second pass. */
 .pen-lp-wordmark, .pen-lp-navlink { white-space: nowrap; }
 @media (max-width: 460px) {
-  /* Sign in stays in the footer and on the sign-up page; the nav keeps the brand and the CTA. */
-  .pen-lp-nav .pen-lp-navlink { display: none; }
+  /* Sign in stays in the nav next to the CTA (returning users land here on a phone too);
+     it's the only nav link left at this width, made compact. */
+  .pen-lp-nav .pen-lp-navlink { padding: 8px 10px; font-size: 14.5px; }
   .pen-lp2-h1 { font-size: 44px; }
 }
 /* Five roles do not fit a phone. The track scrolls inside itself; the pill moves with it. */
@@ -3537,3 +3538,6 @@ html.pen-m-lock, html.pen-m-lock body { height: 100%; overflow: hidden; overscro
 .pen-m-body .pen-d-actions::-webkit-scrollbar { display: none; }
 .pen-m-body .pen-d-actions > * { flex: none; }
 .pen-m-body .pen-d-actions .pen-btn { min-height: 44px; white-space: nowrap; }
+
+/* Phones: the mark alone carries the brand so Sign in and the CTA both fit. */
+@media (max-width: 460px) { .pen-lp-nav .pen-lp-wordmark { display: none; } .pen-lp-nav nav { gap: 8px; } }
