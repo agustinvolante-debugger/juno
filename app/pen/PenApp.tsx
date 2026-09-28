@@ -349,11 +349,14 @@ export default function PenApp({
   // tab being closed. The browser only steps in if a transcript has been sitting untouched
   // for a while, and when it does it takes the same claim, so the two cannot both run.
   const seenTranscribed = useRef<Record<string, number>>({})
-  const WEBHOOK_GRACE_MS = 90_000
+  // The server starts the notes the moment the transcript lands (webhook or poll). This is the
+  // last-resort nudge if that somehow didn't happen.
+  const WEBHOOK_GRACE_MS = 150_000
 
   const busyKey = sessions.map((s) => `${s.id}:${s.status}`).join(',')
   useEffect(() => {
-    const watching = sessions.filter((s) => s.status === 'transcribing' || s.status === 'transcribed')
+    // 'noting' too: the notes are being written on the server, and this is how they appear.
+    const watching = sessions.filter((s) => s.status === 'transcribing' || s.status === 'transcribed' || s.status === 'noting')
     if (!watching.length) return
     const t = setInterval(async () => {
       for (const s of watching) {

@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
 import { getSession, updateSession } from '@/lib/pen/store'
 import { hasKey } from '@/lib/pen/aai'
@@ -60,6 +60,11 @@ export async function GET(req: Request) {
     if (t.status === 'completed') {
       const { storeTranscript } = await import('@/lib/pen/store-transcript')
       await storeTranscript(session, t)
+      // This poll found the transcript first (localhost, or a webhook that hasn't come): start
+      // the notes and the email now rather than waiting on either. The claim inside makes it a
+      // no-op if the webhook is already doing it.
+      const { runUnattended } = await import('@/lib/pen/unattended')
+      after(() => runUnattended(session.id, email))
     } else if (t.status === 'error') {
       // A recording that could not be transcribed costs the user nothing.
       await updateSession(session.id, { status: 'error', error_text: t.error ?? 'assemblyai error', metered_sec: 0 })
