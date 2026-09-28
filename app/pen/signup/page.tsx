@@ -28,7 +28,7 @@ const SU = {
     doneH: 'You’re on the list.', doneWait: 'We’ll email you as soon as the pen is available where you are.',
     doneBody: 'There’s a confirmation in your inbox. We’ll send a link to start your free trial, and get the recorder in the post.',
     back: 'Back to the site', err: 'Something went wrong. Try again.', home: 'Back to Juno Pen',
-    ph: { name: 'Chris Dyas', email: 'you@company.com', phone: '(305) 555 0142', line1: '1200 Brickell Ave', city: 'Miami', state: 'FL', postcode: '33131', country: 'United States' },
+    ph: { name: 'Mark Ellis', email: 'you@company.com', phone: '(305) 555 0142', line1: '1200 Brickell Ave', city: 'Miami', state: 'FL', postcode: '33131', country: 'United States' },
   },
   es: {
     eyebrow: 'Empieza', h1: 'Graba la reunión. Lee el resumen.',

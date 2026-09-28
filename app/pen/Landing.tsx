@@ -173,7 +173,7 @@ function Hero() {
           {/* What comes out of it, as the app draws it. Three small cards, each one feature. */}
           <div className="pen-lp2-float pen-lp2-float-a">
             <span className="pen-lp2-float-label">{t.hero.float.detected}</span>
-            <span className="pen-lp2-chip"><span className="pen-lp2-av">CD</span>Chris Dyas <em>{t.hero.float.buyer}</em></span>
+            <span className="pen-lp2-chip"><span className="pen-lp2-av">ME</span>Mark Ellis <em>{t.hero.float.buyer}</em></span>
           </div>
           <div className="pen-lp2-float pen-lp2-float-b">
             <span className="pen-lp2-tick" />
