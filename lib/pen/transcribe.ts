@@ -37,7 +37,10 @@ export async function startTranscription(email: string, session: PenSession): Pr
     : await createReadUrl(session.storage_path)
   const secret = process.env.PEN_WEBHOOK_SECRET
   const base = process.env.PEN_PUBLIC_URL || process.env.NEXTAUTH_URL
-  const webhookUrl = secret && base ? `${base.replace(/\/$/, '')}/api/pen/webhook?k=${secret}` : undefined
+  // Only a public https address. AssemblyAI refuses localhost and LAN addresses outright ("webhook_url
+  // is invalid or points to a disallowed address", 28 Sep); without one the app polls instead.
+  const publicBase = base && /^https:\/\//.test(base) && !/localhost|127\.0\.0\.1|\.local\b|\/\/(10|192\.168|172\.(1[6-9]|2\d|3[01]))\./.test(base) ? base : null
+  const webhookUrl = secret && publicBase ? `${publicBase.replace(/\/$/, '')}/api/pen/webhook?k=${secret}` : undefined
 
   // Names, vocabulary, languages and who was on the call. A failure here must not stop the
   // recording being transcribed; it just goes without the extra context.
