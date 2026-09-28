@@ -41,6 +41,10 @@ export const metadata: Metadata = {
   description: 'Plug in the recorder, get the meeting written up.',
   applicationName: 'Juno Pen',
   appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Juno Pen' },
+  // Its own manifest and icon, so Add to Home Screen opens Juno Pen (the site-wide manifest is
+  // the Daily Brief's, start_url /news).
+  manifest: '/pen-manifest.webmanifest',
+  icons: { apple: '/juno_mark.png' },
 }
 
 export const viewport: Viewport = {
