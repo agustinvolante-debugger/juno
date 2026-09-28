@@ -102,7 +102,8 @@ function bufferToWav(buf: AudioBuffer): Blob {
   return new Blob([out], { type: 'audio/wav' })
 }
 
-export async function prepareAudio(file: File): Promise<Prepared> {
+/** `compressAbove` overrides the size at which a WAV gets compressed (tests use 0). */
+export async function prepareAudio(file: File, opts: { compressAbove?: number } = {}): Promise<Prepared> {
   const originalBytes = file.size
 
   // Already compressed and small enough to store: untouched is the best answer.
@@ -174,7 +175,7 @@ export async function prepareAudio(file: File): Promise<Prepared> {
 
   // WAV is the pen's native format and the one that gets no smaller here — 16 kHz mono PCM is
   // 256 kbps, so half an hour is ~55MB and Supabase refuses anything over 50MB. Compress.
-  if (wav.size > COMPRESS_ABOVE) {
+  if (wav.size > (opts.compressAbove ?? COMPRESS_ABOVE)) {
     try {
       const ogg = await toOpus(rendered)
       return {
@@ -185,8 +186,22 @@ export async function prepareAudio(file: File): Promise<Prepared> {
         note: `${transcodedFrom ? `${transcodedFrom} → ` : ''}${fmtMB(originalBytes)} → ${fmtMB(ogg.size)} (Opus)`,
       }
     } catch {
-      // Safari has no AudioEncoder. Fall through to WAV and let the size check speak if it
-      // is genuinely too big — a worse-compressed upload beats a failed one.
+      // Safari has no AudioEncoder, so no Opus. MP3 instead, encoded in WebAssembly, which
+      // every browser runs: 32 kbps mono at 16 kHz is ~0.24 MB a minute, so an hour of pen
+      // WAV (~115 MB) lands near 15 MB and about 3 hours fits under the 50 MB ceiling.
+      try {
+        const mp3 = await toMp3(rendered)
+        return {
+          blob: mp3,
+          mime: 'audio/mpeg',
+          durationSec: decoded.duration,
+          originalBytes,
+          note: `${transcodedFrom ? `${transcodedFrom} → ` : ''}${fmtMB(originalBytes)} → ${fmtMB(mp3.size)} (MP3)`,
+        }
+      } catch {
+        // No WebAssembly either (very old browser). Fall through to WAV and let the size check
+        // speak if it is genuinely too big — a worse-compressed upload beats a failed one.
+      }
     }
   }
 
@@ -212,6 +227,27 @@ export async function prepareAudio(file: File): Promise<Prepared> {
       ? `audio extracted, ${fmtMB(originalBytes)} → ${fmtMB(wav.size)}`
       : `${fmtMB(originalBytes)} → ${fmtMB(wav.size)} (mono 16 kHz)`,
   }
+}
+
+/**
+ * MP3 for browsers without WebCodecs (Safari). LAME compiled to WebAssembly, loaded only when
+ * needed so nobody else downloads it. Encoded in 10-second slices with a yield between them so
+ * a long recording doesn't freeze the page.
+ */
+async function toMp3(buf: AudioBuffer): Promise<Blob> {
+  const { createMp3Encoder } = await import('wasm-media-encoders')
+  const enc = await createMp3Encoder()
+  enc.configure({ sampleRate: buf.sampleRate, channels: 1, bitrate: 32 })
+  const pcm = buf.getChannelData(0)
+  const step = buf.sampleRate * 10
+  const parts: BlobPart[] = []
+  for (let i = 0; i < pcm.length; i += step) {
+    // encode() returns a view into the encoder's memory, reused on the next call: copy it.
+    parts.push(enc.encode([pcm.subarray(i, i + step)]).slice())
+    if ((i / step) % 12 === 11) await new Promise((r) => setTimeout(r, 0))
+  }
+  parts.push(enc.finalize().slice())
+  return new Blob(parts, { type: 'audio/mpeg' })
 }
 
 type AudioEncoderCtor = new (init: {
