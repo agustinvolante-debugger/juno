@@ -52,6 +52,20 @@ export const SOFT_SIZE_LIMIT = 45 * 1024 * 1024
 // warning can fire.
 const RECOMPRESS_ABOVE = 40 * 1024 * 1024
 
+// Supabase refuses anything over exactly 50 MiB (probed 28 Sep: 50 MiB + 1 byte is a 400).
+// A compressed file up to here can always go up as-is.
+const PASS_MAX = 49.5 * 1024 * 1024
+
+// Browsers without WebCodecs (Safari, every iPhone browser) have to decode the WHOLE file into
+// memory to compress it, and an iPhone kills the tab past roughly a gigabyte: a 45 MB m4a call
+// went blank on 28 Sep. Above these sizes they don't try; they upload as-is if it fits, or say
+// so plainly. ~60 MB of pen WAV is ~30 minutes.
+const SAFARI_DECODE_MAX_WAV = 60 * 1024 * 1024
+
+function hasAudioEncoder(): boolean {
+  return typeof (globalThis as { AudioEncoder?: unknown }).AudioEncoder === 'function'
+}
+
 export type Prepared = {
   blob: Blob
   mime: string
@@ -106,8 +120,12 @@ function bufferToWav(buf: AudioBuffer): Blob {
 export async function prepareAudio(file: File, opts: { compressAbove?: number } = {}): Promise<Prepared> {
   const originalBytes = file.size
 
-  // Already compressed and small enough to store: untouched is the best answer.
-  if (isCompressed(file) && file.size <= RECOMPRESS_ABOVE) {
+  const encoder = hasAudioEncoder()
+
+  // Already compressed and small enough to store: untouched is the best answer. Without an
+  // encoder (iPhone) that holds right up to the storage ceiling, because shrinking it would
+  // mean decoding it whole, which is what crashed the page.
+  if (isCompressed(file) && (file.size <= RECOMPRESS_ABOVE || (!encoder && file.size <= PASS_MAX))) {
     let durationSec = 0
     try {
       durationSec = await probeDuration(file)
@@ -121,6 +139,13 @@ export async function prepareAudio(file: File, opts: { compressAbove?: number } 
       originalBytes,
       note: 'already compressed, uploaded as-is',
     }
+  }
+
+  // Too big to decode safely on this browser: say so instead of letting the tab die.
+  if (!encoder && (isCompressed(file) || file.size > SAFARI_DECODE_MAX_WAV)) {
+    throw new Error(
+      `this recording is too long to prepare on this phone or browser (${fmtMB(file.size)}). Upload it from a computer using Chrome, or send it on WhatsApp.`,
+    )
   }
 
   // Uncompressed audio, lossless audio, or video: decode → mono → 16 kHz → 16-bit WAV.
@@ -144,7 +169,14 @@ export async function prepareAudio(file: File, opts: { compressAbove?: number } 
 
   const AC: typeof AudioContext =
     window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-  const decodeCtx = new AC()
+  // Decoding at 16 kHz where the browser allows it holds a third of the samples a default
+  // 48 kHz context would, which is the difference on a phone.
+  let decodeCtx: AudioContext
+  try {
+    decodeCtx = new AC({ sampleRate: TARGET_RATE })
+  } catch {
+    decodeCtx = new AC()
+  }
   let decoded: AudioBuffer
   try {
     decoded = await decodeCtx.decodeAudioData(raw.slice(0))
