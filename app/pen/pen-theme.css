@@ -3541,3 +3541,16 @@ html.pen-m-lock, html.pen-m-lock body { height: 100%; overflow: hidden; overscro
 
 /* Phones: the mark alone carries the brand so Sign in and the CTA both fit. */
 @media (max-width: 460px) { .pen-lp-nav .pen-lp-wordmark { display: none; } .pen-lp-nav nav { gap: 8px; } }
+
+/* iPhone: how to upload a pen recording (copy it to the phone first). */
+.pen-m-howto { border-radius: 16px; background: var(--warn-wash); border: 1px solid var(--warn-line); padding: 0 16px; }
+.pen-m-howto summary {
+  min-height: 48px; display: flex; align-items: center; cursor: pointer; list-style: none;
+  font-size: 15px; font-weight: 600; color: var(--ink);
+}
+.pen-m-howto summary::-webkit-details-marker { display: none; }
+.pen-m-howto summary::after { content: '›'; margin-left: auto; font-size: 20px; color: var(--warn); transition: transform .15s; }
+.pen-m-howto[open] summary::after { transform: rotate(90deg); }
+.pen-m-howto p { margin: 0 0 8px; font-size: 14.5px; line-height: 1.5; color: var(--soft); }
+.pen-m-howto ol { list-style: decimal; margin: 0 0 12px; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; font-size: 15px; line-height: 1.45; color: var(--ink); }
+.pen-m-howto .pen-m-howto-tip { font-size: 13.5px; color: var(--dim); padding-bottom: 8px; }

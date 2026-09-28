@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
 import { getSession } from '@/lib/pen/store'
 import { writeNotes } from '@/lib/pen/pipeline'
+import { briefOnce } from '@/lib/pen/briefing'
 
 export const dynamic = 'force-dynamic'
 // Two model calls over the whole transcript — categorise, then extract. A 75-minute recording
@@ -28,6 +29,11 @@ export async function POST(req: Request) {
     // sets `auto` and does take the claim, so it cannot duplicate the webhook's work.
     const r = await writeNotes({ email, session, forceType, claim: Boolean(b.auto) })
     if (r === 'taken') return NextResponse.json({ error: 'already being written' }, { status: 409 })
+    // The upload screen promised an email when it's ready. The webhook usually sends it; this
+    // covers the notes written here instead (the browser's fallback when the webhook didn't
+    // arrive, or a first "Write the notes" after a failure). Already sent means nothing new.
+    // Only for FIRST notes: a Redo on an old recording that predates the email must not send one.
+    if (r.session && session.status !== 'noted') await briefOnce({ email, session: r.session }).catch(() => {})
     return NextResponse.json({ session: r.session, category: r.category })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })

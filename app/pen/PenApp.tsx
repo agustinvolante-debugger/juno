@@ -664,6 +664,17 @@ export default function PenApp({
             </div>
           ) : (
             <>
+              {/* iOS can't hand a file from a USB drive to Safari (the picker's Open spins and
+                  gives up, 28 Sep); copying it to the phone first works. `accept` is undefined
+                  exactly on iOS (see useAccept). */}
+              {mounted && accept === undefined && (
+                <details className="pen-m-howto">
+                  <summary>{T.iosPenTitle}</summary>
+                  <p>{T.iosPenLede}</p>
+                  <ol>{T.iosPenSteps.map((st) => <li key={st}>{st}</li>)}</ol>
+                  <p className="pen-m-howto-tip">{T.iosPenTip}</p>
+                </details>
+              )}
               <p className="pen-m-lede">{T.mUploadLede}</p>
               {supportsPicker && (
                 <button type="button" className="pen-m-rowbtn" onClick={connectPen}>

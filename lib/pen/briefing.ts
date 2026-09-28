@@ -144,3 +144,24 @@ export async function sendReadyNotice(opts: { to: string; title: string }): Prom
       `</body></html>`,
   })
 }
+
+/**
+ * The one email a recording gets once its first notes exist: the briefing, or the short
+ * "ready" one when there's nothing to brief. Never twice: briefing_sent_at is the record, and a
+ * "Redo notes" later finds it set. The tail part of a joined meeting sends nothing; the
+ * meeting's first part carries the combined briefing.
+ */
+export async function briefOnce(opts: { email: string; session: PenSession; parts?: number }): Promise<'sent' | 'skipped' | 'failed'> {
+  const s = opts.session
+  if (s.briefing_sent_at || (s.merge_group && (s.merge_index ?? 0) > 0)) return 'skipped'
+  const r = hasSomethingToSay(s)
+    ? await sendBriefing({ session: s, to: [opts.email], replyTo: opts.email, parts: opts.parts ?? 1 })
+    : await sendReadyNotice({ to: opts.email, title: s.title || s.source_name || 'your recording' })
+  if (!r.ok) {
+    console.warn(`pen: briefing not sent for ${s.id}: ${r.error}`)
+    return 'failed'
+  }
+  const { updateSession } = await import('./store')
+  await updateSession(s.id, { briefing_sent_at: new Date().toISOString() })
+  return 'sent'
+}
