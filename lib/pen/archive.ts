@@ -187,6 +187,10 @@ export async function askArchive(opts: {
   people?: string[]
   /** What each tag looks like in the question ("@Recruiter…"), by id. */
   labels?: Record<string, string>
+  /** Overrides the model for both stages. WhatsApp uses Sonnet 5.5; the web chat stays on Haiku. */
+  model?: string
+  /** Effort for an overriding model. Haiku takes none. */
+  effort?: 'low' | 'medium' | 'high'
 }): Promise<{ answer: string; citations: { marker: number; session_id: string; title: string; quote: string }[]; mentioned: Mention[] }> {
   const { data, error } = await supabaseAdmin
     .from('pen_sessions')
@@ -249,7 +253,7 @@ export async function askArchive(opts: {
   }
 
   const sel = await anthropic.messages.parse({
-    model: MODEL,
+    model: opts.model ?? MODEL,
     // max_tokens is a budget for thinking AND output, not just output. Opus 5 reasons by
     // default, and on a long input it happily spends thousands of tokens doing it — a
     // measured 2,197 of a 3,000 ceiling — leaving too few to finish the JSON, which then
@@ -278,7 +282,7 @@ export async function askArchive(opts: {
           `Question: ${opts.question}`,
       },
     ],
-    output_config: { format: jsonSchemaOutputFormat(SELECT_SCHEMA) },
+    output_config: { format: jsonSchemaOutputFormat(SELECT_SCHEMA), ...(opts.model && opts.effort ? { effort: opts.effort } : {}) },
   })
 
   const picked = (sel.parsed_output?.session_ids ?? []).filter((id) => rows.some((r) => r.id === id))
@@ -323,7 +327,7 @@ async function ownedMentions(userEmail: string, ids: string[]): Promise<Mention[
 async function answerFrom(
   wanted: string[],
   rows: IndexRow[],
-  opts: { userEmail: string; question: string; history: ArchiveTurn[]; agent?: string; mentioned?: Mention[]; personTags?: PersonTag[]; allMentions?: Mention[] },
+  opts: { userEmail: string; question: string; history: ArchiveTurn[]; agent?: string; model?: string; effort?: 'low' | 'medium' | 'high'; mentioned?: Mention[]; personTags?: PersonTag[]; allMentions?: Mention[] },
   today: string,
 ): Promise<{ answer: string; citations: { marker: number; session_id: string; title: string; quote: string }[]; mentioned: Mention[] }> {
   wanted = wanted.slice(0, MAX_ANSWER_ROWS)
@@ -389,7 +393,7 @@ async function answerFrom(
     .join('\n')
 
   const ans = await anthropic.messages.parse({
-    model: MODEL,
+    model: opts.model ?? MODEL,
     max_tokens: 16000,
     system:
       `You answer questions about someone's own archive of recorded meetings. Today is ${today}.\n\n` +
@@ -418,7 +422,7 @@ async function answerFrom(
       ...opts.history.slice(-6).map((t) => ({ role: t.role, content: t.content })),
       { role: 'user' as const, content: `Recordings:\n\n${corpus}\n\n${taggedNote}Question: ${inQuestionLanguage(opts.question)}` },
     ],
-    output_config: { format: jsonSchemaOutputFormat(ANSWER_SCHEMA) },
+    output_config: { format: jsonSchemaOutputFormat(ANSWER_SCHEMA), ...(opts.model && opts.effort ? { effort: opts.effort } : {}) },
   })
 
   const parsed = ans.parsed_output

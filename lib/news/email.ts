@@ -19,22 +19,31 @@ export async function sendEmailResult({
   subject,
   html,
   replyTo,
+  from,
+  bcc,
+  text,
 }: {
   to: string | string[]
   subject: string
   html: string
   replyTo?: string
+  /** Overrides the display name or address; defaults to RESEND_FROM_EMAIL. */
+  from?: string
+  bcc?: string | string[]
+  text?: string
 }): Promise<SendResult> {
   if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) {
     return { ok: false, error: 'Email is not configured (RESEND_API_KEY / RESEND_FROM_EMAIL).' }
   }
   try {
     const { error } = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL,
+      from: from || process.env.RESEND_FROM_EMAIL,
       to,
       subject,
       html,
+      ...(text ? { text } : {}),
       ...(replyTo ? { replyTo } : {}),
+      ...(bcc ? { bcc } : {}),
     })
     if (error) return { ok: false, error: error.message || 'The mail provider rejected it.' }
     return { ok: true }

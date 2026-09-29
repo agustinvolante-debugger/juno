@@ -121,3 +121,39 @@ export async function moveMessage(id: string, from: MessageState, to: MessageSta
   if (error) throw new Error(error.message)
   return Boolean(data?.length)
 }
+
+/* ----------------------------------------------------------------- drafts */
+
+/**
+ * The follow-up email waiting for "send it". One per account: a new draft replaces the last.
+ * `msgId` is the inbound message that created it, so a draft can never be sent by the same
+ * message that wrote it: the user always sees exactly what goes out before it goes.
+ */
+export type Draft = {
+  msgId: string
+  toName: string
+  toEmail: string | null
+  subject: string
+  body: string
+  sessionId: string | null
+  createdAt: string
+}
+
+/** A draft older than this is gone: "send it" a day later is more likely a different email. */
+export const DRAFT_TTL_MS = 24 * 60 * 60 * 1000
+
+export async function getDraft(email: string): Promise<Draft | null> {
+  const { data, error } = await supabaseAdmin.from('pen_whatsapp_links').select('draft').eq('email', email.toLowerCase()).maybeSingle()
+  if (error) throw new Error(error.message)
+  const d = (data?.draft ?? null) as Draft | null
+  if (!d || Date.now() - new Date(d.createdAt).getTime() > DRAFT_TTL_MS) return null
+  return d
+}
+
+export async function setDraft(email: string, draft: Draft | null): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('pen_whatsapp_links')
+    .update({ draft, updated_at: new Date().toISOString() })
+    .eq('email', email.toLowerCase())
+  if (error) throw new Error(error.message)
+}

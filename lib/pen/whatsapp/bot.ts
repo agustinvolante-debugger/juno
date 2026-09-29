@@ -4,7 +4,8 @@
 //   a file             asks for the all-party consent tap, then streams the file to
 //                      AssemblyAI and runs the same pipeline as a web upload. The briefing
 //                      comes back here (and by email) from the AssemblyAI webhook.
-//   any other text     a question for the archive, answered from the user's own recordings.
+//   any other text     the assistant (agent.ts): answers from the user's own recordings, lists and
+//                      ticks off to-dos, drafts follow-up emails and sends them on "send it".
 //
 // Meta bars general-purpose AI chatbots on the business platform, so the agent answers from
 // the recordings and nothing else. askArchive already refuses to go outside them.
@@ -13,10 +14,11 @@ import { ALLOWED_EMAILS } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabase'
 import { isActive } from '../accounts'
 import { getAllowance } from '../allowance'
+import { runAgent } from './agent'
 import { askArchive } from '../archive'
 import { uploadStream } from '../aai'
 import { briefFor } from '../profile'
-import { createSession, updateSession, type PenSession } from '../store'
+import { createSession, updateSession, type Citation, type PenSession } from '../store'
 import { startTranscription, AAI_PREFIX } from '../transcribe'
 import { fmtHours } from '../plan'
 import type { Lang } from '../currency'
@@ -75,6 +77,7 @@ const EN = {
   open: '*Still open*',
   full: (home: string) => `Full note: ${home}\nAsk me anything about this call.`,
   writeFailed: (name: string, home: string) => `I couldn't write up ${name}. Nothing is lost: open it at ${home} and press "Write the notes" to try again.`,
+  agentFailed: 'Sorry, something went wrong on my side and I couldn\'t answer that. Try again in a minute.',
 }
 
 const BOT: Record<Lang, typeof EN> = {
@@ -112,6 +115,7 @@ const BOT: Record<Lang, typeof EN> = {
     open: '*Sin resolver*',
     full: (home) => `Nota completa: ${home}\nPregúntame lo que quieras de esta reunión.`,
     writeFailed: (name, home) => `No pude escribir las notas de ${name}. No se perdió nada: ábrela en ${home} y presiona "Escribir las notas" para intentarlo otra vez.`,
+    agentFailed: 'Perdón, algo falló de mi lado y no pude responder eso. Inténtalo de nuevo en un minuto.',
   },
   pt: {
     help:
@@ -146,6 +150,7 @@ const BOT: Record<Lang, typeof EN> = {
     open: '*Em aberto*',
     full: (home) => `Nota completa: ${home}\nPergunte qualquer coisa sobre esta reunião.`,
     writeFailed: (name, home) => `Não consegui escrever as notas de ${name}. Nada se perdeu: abra em ${home} e aperte "Escrever as notas" para tentar de novo.`,
+    agentFailed: 'Desculpe, algo deu errado do meu lado e não consegui responder. Tente de novo em um minuto.',
   },
 }
 
@@ -388,13 +393,18 @@ export function wavSeconds(head: Uint8Array, totalBytes: number): number | null 
 async function onText(msg: Inbound, link: Link, L: typeof EN): Promise<void> {
   const q = msg.text.trim()
   if (!q) return
+  // Answered text moves to 'done', so the health check can tell a question that never got a
+  // reply (still 'received' minutes later) from one that did.
+  const answered = () => moveMessage(msg.id, 'received', 'done').catch(() => false)
   if (/^(help|ayuda|ajuda|\?|hi|hello|hola|oi|olá)$/i.test(q)) {
     await sendText(msg.from, L.help)
+    await answered()
     return
   }
   if (/^(new|reset|nuevo|novo)$/i.test(q)) {
     await setChat(link.email, [])
     await sendText(msg.from, L.fresh)
+    await answered()
     return
   }
 
@@ -402,13 +412,33 @@ async function onText(msg: Inbound, link: Link, L: typeof EN): Promise<void> {
   // first sandbox test: without this the archive picked two unrelated calls. The recent one is
   // read first; everything else is still searchable.
   const recent = await latestWhatsAppRecording(link.email)
-  const { answer, citations } = await askArchive({
-    userEmail: link.email,
-    question: q.slice(0, 2000),
-    history: link.chat ?? [],
-    agent: await briefFor(link.email).catch(() => undefined),
-    ...(recent ? { mentions: [recent] } : {}),
-  })
+  let answer: string
+  let citations: Citation[]
+  try {
+    ;({ text: answer, citations } = agentFor(msg.from)
+      ? await runAgent({
+          email: link.email,
+          msgId: msg.id,
+          question: q.slice(0, 2000),
+          history: link.chat ?? [],
+          agentBrief: await briefFor(link.email).catch(() => undefined),
+          recent,
+          lang: await userLang(link.email),
+          phone: msg.from,
+        })
+      : await askArchive({
+          userEmail: link.email,
+          question: q.slice(0, 2000),
+          history: link.chat ?? [],
+          agent: await briefFor(link.email).catch(() => undefined),
+          ...(recent ? { mentions: [recent] } : {}),
+        }).then((r) => ({ text: r.answer, citations: r.citations })))
+  } catch (e) {
+    console.warn(`pen whatsapp: answer failed for ${msg.id}: ${(e as Error).message}`)
+    await moveMessage(msg.id, 'received', 'failed').catch(() => {})
+    await sendText(msg.from, L.agentFailed)
+    return
+  }
   const now = Date.now()
   await setChat(link.email, [
     ...(link.chat ?? []),
@@ -427,6 +457,16 @@ async function onText(msg: Inbound, link: Link, L: typeof EN): Promise<void> {
     ? '\n\n' + [...byRecording.values()].map((r) => `${r.markers.map((m) => `[${m}]`).join('')} ${r.title}`).join('\n')
     : ''
   await sendText(msg.from, answer + sources)
+  await answered()
+}
+
+/**
+ * Who gets the assistant (agent.ts) rather than the plain Q&A. PEN_AGENT_PHONES is a comma list
+ * of numbers (digits only) while it is being tried out; unset means everyone.
+ */
+function agentFor(phone: string): boolean {
+  const list = (process.env.PEN_AGENT_PHONES ?? '').split(',').map((p) => p.replace(/\D/g, '')).filter(Boolean)
+  return !list.length || list.includes(phone.replace(/\D/g, ''))
 }
 
 /** How long a recording sent here stays "the call" for follow-up questions. */
