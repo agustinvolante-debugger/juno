@@ -44,7 +44,7 @@ export const metadata: Metadata = {
   // Its own manifest and icon, so Add to Home Screen opens Juno Pen (the site-wide manifest is
   // the Daily Brief's, start_url /news).
   manifest: '/pen-manifest.webmanifest',
-  icons: { apple: '/juno_mark.png' },
+  icons: { icon: [{ url: '/juno_mark.png', type: 'image/png', sizes: '256x256' }], apple: '/juno_mark.png' },
 }
 
 export const viewport: Viewport = {
