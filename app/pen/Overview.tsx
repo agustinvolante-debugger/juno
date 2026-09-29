@@ -17,6 +17,8 @@ import type { ArchiveStats, OpenAction, OpenMissed, ClientCard } from '@/lib/pen
 import type { PersonCard } from '@/lib/pen/people'
 import { postJson, errMessage } from '@/lib/pen/http'
 import Icon, { type IconName } from './Icon'
+import DeliverableSheet, { type SheetRequest } from './DeliverableSheet'
+import { isMine } from '@/lib/pen/todo-labels'
 import { useCopy, useLang } from './LangContext'
 import { shortDate as fmtShort, ago as fmtAgo, plural, type Copy } from '@/lib/pen/i18n'
 
@@ -84,6 +86,18 @@ const OV_EN = {
   undo: 'Undo',
   dismiss: 'Dismiss',
   emptyTitle: 'Nothing recorded yet',
+  today: 'Today',
+  dueNow: 'Due',
+  waitingOnYou: 'Waiting on you',
+  nothingDue: 'Nothing due today.',
+  nobodyWaiting: 'Nobody waiting on you.',
+  overdue: 'Overdue',
+  dueToday: 'Today',
+  dueTomorrow: 'Tomorrow',
+  waits: (who: string) => `Waiting: ${who}`,
+  draftFollowUp: 'Draft follow-up',
+  everyoneElse: (n: number) => `Everyone else ${n}`,
+  mine: 'Mine',
   emptyBody: 'Plug the pen in and import one recording. From the second one on, Juno Pen starts joining them up: what the same people keep asking for, what you keep forgetting, what is still outstanding across everything.',
 }
 
@@ -144,6 +158,18 @@ const OV: Copy<typeof OV_EN> = {
     undo: 'Deshacer',
     dismiss: 'Cerrar',
     emptyTitle: 'Todavía no hay grabaciones',
+    today: 'Hoy',
+    dueNow: 'Vence',
+    waitingOnYou: 'Esperan algo de ti',
+    nothingDue: 'Nada vence hoy.',
+    nobodyWaiting: 'Nadie está esperando algo de ti.',
+    overdue: 'Atrasado',
+    dueToday: 'Hoy',
+    dueTomorrow: 'Mañana',
+    waits: (who) => `Espera: ${who}`,
+    draftFollowUp: 'Redactar seguimiento',
+    everyoneElse: (n) => `De otros ${n}`,
+    mine: 'Mías',
     emptyBody: 'Conecta el lápiz e importa una grabación. Desde la segunda, Juno Pen empieza a conectarlas: lo que las mismas personas siguen pidiendo, lo que se te sigue olvidando, lo que sigue pendiente en todo.',
   },
   pt: {
@@ -201,6 +227,18 @@ const OV: Copy<typeof OV_EN> = {
     undo: 'Desfazer',
     dismiss: 'Fechar',
     emptyTitle: 'Nada gravado ainda',
+    today: 'Hoje',
+    dueNow: 'Vence',
+    waitingOnYou: 'Esperando por você',
+    nothingDue: 'Nada vence hoje.',
+    nobodyWaiting: 'Ninguém esperando por você.',
+    overdue: 'Atrasado',
+    dueToday: 'Hoje',
+    dueTomorrow: 'Amanhã',
+    waits: (who) => `Aguarda: ${who}`,
+    draftFollowUp: 'Escrever follow-up',
+    everyoneElse: (n) => `De outros ${n}`,
+    mine: 'Minhas',
     emptyBody: 'Conecte a caneta e importe uma gravação. A partir da segunda, o Juno Pen começa a ligar os pontos: o que as mesmas pessoas continuam pedindo, o que você continua esquecendo, o que ainda está pendente em tudo.',
   },
 }
@@ -243,6 +281,7 @@ export default function Overview({
   }, [stats])
 
   const [open, setOpen] = useState<Kind | null>(null)
+  const [sheet, setSheet] = useState<{ sessionId: string; req: SheetRequest } | null>(null)
   const [toast, setToast] = useState<{ text: string; undo?: () => void; tone?: 'bad' } | null>(null)
   const settle = useRef<ReturnType<typeof setTimeout> | null>(null)
   const changed = useCallback(() => {
@@ -352,6 +391,9 @@ export default function Overview({
           due: '',
           priority: 'normal',
           index: r.actionIndex ?? 0,
+          mine: 'me',
+          dueDate: null,
+          waiting: null,
         }
         setActions((xs) => [added, ...xs])
         setToast({ text: T.addedTodo })
@@ -374,7 +416,10 @@ export default function Overview({
   if (!stats.recordings) return <EmptyArchive />
 
   const hours = stats.minutes / 60
-  const openCount = actions.length + Math.max(0, stats.actionsOpen - stats.openActions.length)
+  // Only the user's own to-dos count and show; everyone else's sit behind a filter in the panel.
+  const mineList = actions.filter((a) => isMine(a))
+  const othersList = actions.filter((a) => !isMine(a))
+  const openCount = mineList.length + Math.max(0, stats.actionsOpen - stats.openActions.filter((a) => isMine(a)).length)
   const doneCount = Math.max(0, stats.actionsTotal - stats.actionsOpen + doneExtra)
   const missedCount = missed.length + Math.max(0, (stats.missedOpen ?? 0) - (stats.openMissed?.length ?? 0))
 
@@ -389,6 +434,8 @@ export default function Overview({
           {stats.lastAt && T.latest(fmtShort(stats.lastAt, lang))}
         </p>
       </header>
+
+      <Today actions={mineList} onTick={tick} onOpen={onOpen} onDraft={(a) => setSheet({ sessionId: a.sessionId, req: { kind: 'email', item: a.action } })} />
 
       <LayoutGroup>
         <div className="pen-home-cards">
@@ -406,7 +453,7 @@ export default function Overview({
             seeAll={openCount}
           >
             <AnimatePresence initial={false}>
-              {actions.slice(0, PREVIEW).map((a) => (
+              {mineList.slice(0, PREVIEW).map((a) => (
                 <ActionRow key={`${a.sessionId}:${a.index}`} a={a} onTick={tick} onOpen={onOpen} />
               ))}
             </AnimatePresence>
@@ -449,7 +496,7 @@ export default function Overview({
 
         <Panel open={open} onClose={() => setOpen(null)}>
           {open === 'todo' && (
-            <TodoPanel actions={actions} count={openCount} onTick={tick} onOpen={(id) => { setOpen(null); onOpen(id) }} />
+            <TodoPanel actions={mineList} others={othersList} count={openCount} onTick={tick} onOpen={(id) => { setOpen(null); onOpen(id) }} />
           )}
           {open === 'missed' && (
             <MissedPanel missed={missed} count={missedCount} onHandle={handle} onPromote={promote} onOpen={(id) => { setOpen(null); onOpen(id) }} />
@@ -461,6 +508,7 @@ export default function Overview({
       </LayoutGroup>
 
       <Toast toast={toast} onClose={() => setToast(null)} />
+      <DeliverableSheet request={sheet?.req ?? null} sessionId={sheet?.sessionId ?? ''} onClose={() => setSheet(null)} />
     </div>
   )
 }
@@ -624,7 +672,7 @@ function Peek({ on, children }: { on: boolean; children: React.ReactNode }) {
   )
 }
 
-function ActionRow({ a, onTick, onOpen, full = false }: { a: OpenAction; onTick: (a: OpenAction) => void; onOpen: (id: string) => void; full?: boolean }) {
+function ActionRow({ a, onTick, onOpen, onDraft, full = false }: { a: OpenAction; onTick: (a: OpenAction) => void; onOpen: (id: string) => void; onDraft?: (a: OpenAction) => void; full?: boolean }) {
   const T = useCopy(OV)
   const lang = useLang()
   const peek = usePeek()
@@ -667,10 +715,21 @@ function ActionRow({ a, onTick, onOpen, full = false }: { a: OpenAction; onTick:
           <span className="pen-row2-text" data-done={ticking}>{a.action}</span>
           <span className="pen-row2-meta">
             {a.priority === 'high' && <span className="pen-row2-flag">{T.priority}</span>}
-            {a.due && <span className="pen-row2-due">{a.due}</span>}
+            {a.dueDate ? (
+              <span className="pen-row2-due" data-late={a.dueDate < todayIso()}>{dueLabel(a.dueDate, T, lang)}</span>
+            ) : (
+              a.due && <span className="pen-row2-due">{a.due}</span>
+            )}
+            {!isMine(a) && a.owner && <span className="pen-row2-owner">{a.owner}</span>}
+            {a.waiting && isMine(a) && <span className="pen-row2-wait">{T.waits(a.waiting)}</span>}
             <span>{a.sessionTitle}</span>
           </span>
         </button>
+        {onDraft && (
+          <button type="button" className="pen-row2-act" aria-label={T.draftFollowUp} title={T.draftFollowUp} onClick={() => onDraft(a)}>
+            <Icon name="mail" size={16} />
+          </button>
+        )}
       </div>
       {!full && (
         <Peek on={peek.on}>
@@ -683,6 +742,81 @@ function ActionRow({ a, onTick, onOpen, full = false }: { a: OpenAction; onTick:
         </Peek>
       )}
     </motion.li>
+  )
+}
+
+/* ================================================================= today */
+
+/** How far back an overdue item still counts as "due" in Today. */
+const STALE_DAYS = 14
+
+/** Today in the viewer's own timezone, as YYYY-MM-DD. */
+function todayIso(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function dueLabel(iso: string, T: typeof OV_EN, lang: ReturnType<typeof useLang>): string {
+  const today = todayIso()
+  const tomorrow = new Date(Date.now() + 86_400_000)
+  const tIso = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`
+  if (iso === today) return T.dueToday
+  if (iso === tIso) return T.dueTomorrow
+  // Noon UTC, so the label is the stored day whatever the viewer's timezone.
+  const day = fmtShort(`${iso}T12:00:00Z`, lang, 'UTC')
+  return iso < today ? `${T.overdue} · ${day}` : day
+}
+
+/**
+ * The top of Home: what is due today (or overdue), and who is waiting on the user. Both come
+ * from action_meta; until a recording has been labelled its to-dos have no date and no
+ * "waiting", so an archive with no labels at all shows nothing here rather than a false
+ * "nothing due".
+ */
+function Today({ actions, onTick, onOpen, onDraft }: { actions: OpenAction[]; onTick: (a: OpenAction) => void; onOpen: (id: string) => void; onDraft: (a: OpenAction) => void }) {
+  const T = useCopy(OV)
+  const lang = useLang()
+  if (!actions.some((a) => a.mine !== null)) return null
+  const today = todayIso()
+  // Overdue by more than two weeks is history, not today's list; it stays in Still to do.
+  const floor = new Date(Date.now() - STALE_DAYS * 86_400_000).toISOString().slice(0, 10)
+  const due = actions
+    .filter((a) => a.dueDate && a.dueDate <= today && a.dueDate >= floor)
+    .sort((a, b) => a.dueDate!.localeCompare(b.dueDate!))
+  const dueKeys = new Set(due.map((a) => `${a.sessionId}:${a.index}`))
+  // Oldest promise first: someone waiting two weeks outranks someone waiting since this morning.
+  const waiting = actions
+    .filter((a) => a.waiting && !dueKeys.has(`${a.sessionId}:${a.index}`))
+    .sort((a, b) => a.when.localeCompare(b.when))
+    .slice(0, 5)
+  return (
+    <section className="pen-today" aria-labelledby="pen-today-title">
+      <header className="pen-today-head">
+        <span className="pen-card-icon" data-kind="today"><Icon name="calendar" size={16} /></span>
+        <h3 id="pen-today-title" className="pen-card-title">{T.today}</h3>
+        <span className="pen-today-date">{new Date().toLocaleDateString(lang === 'pt' ? 'pt-BR' : lang === 'es' ? 'es' : 'en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</span>
+      </header>
+      <div className="pen-today-cols">
+        <div className="pen-today-col">
+          <h4 className="pen-today-sub">{T.dueNow}{due.length ? ` · ${due.length}` : ''}</h4>
+          <ul className="pen-card-list">
+            <AnimatePresence initial={false}>
+              {due.map((a) => <ActionRow key={`${a.sessionId}:${a.index}`} a={a} onTick={onTick} onOpen={onOpen} onDraft={a.waiting ? onDraft : undefined} />)}
+            </AnimatePresence>
+            {!due.length && <li className="pen-card-empty">{T.nothingDue}</li>}
+          </ul>
+        </div>
+        <div className="pen-today-col">
+          <h4 className="pen-today-sub">{T.waitingOnYou}{waiting.length ? ` · ${waiting.length}` : ''}</h4>
+          <ul className="pen-card-list">
+            <AnimatePresence initial={false}>
+              {waiting.map((a) => <ActionRow key={`${a.sessionId}:${a.index}`} a={a} onTick={onTick} onOpen={onOpen} onDraft={onDraft} />)}
+            </AnimatePresence>
+            {!waiting.length && <li className="pen-card-empty">{T.nobodyWaiting}</li>}
+          </ul>
+        </div>
+      </div>
+    </section>
   )
 }
 
@@ -899,12 +1033,15 @@ const match = (q: string, ...xs: (string | null | undefined)[]) => {
   return !n || xs.some((x) => x?.toLowerCase().includes(n))
 }
 
-function TodoPanel({ actions, count, onTick, onOpen }: { actions: OpenAction[]; count: number; onTick: (a: OpenAction) => void; onOpen: (id: string) => void }) {
+function TodoPanel({ actions, others, count, onTick, onOpen }: { actions: OpenAction[]; others: OpenAction[]; count: number; onTick: (a: OpenAction) => void; onOpen: (id: string) => void }) {
   const T = useCopy(OV)
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState('all')
-  const list = actions.filter(
-    (a) => match(q, a.action, a.sessionTitle, a.owner, a.due) && (filter === 'all' || (filter === 'priority' ? a.priority === 'high' : !!a.due)),
+  const source = filter === 'others' ? others : actions
+  const list = source.filter(
+    (a) =>
+      match(q, a.action, a.sessionTitle, a.owner, a.due, a.waiting ?? '') &&
+      (filter === 'all' || filter === 'others' || (filter === 'priority' ? a.priority === 'high' : !!(a.dueDate || a.due))),
   )
   return (
     <>
@@ -912,7 +1049,12 @@ function TodoPanel({ actions, count, onTick, onOpen }: { actions: OpenAction[]; 
         q={q}
         setQ={setQ}
         placeholder={T.todoFilter}
-        filters={[{ key: 'all', label: T.all(count) }, { key: 'priority', label: T.priority }, { key: 'due', label: T.hasDate }]}
+        filters={[
+          { key: 'all', label: T.all(count) },
+          { key: 'priority', label: T.priority },
+          { key: 'due', label: T.hasDate },
+          ...(others.length ? [{ key: 'others', label: T.everyoneElse(others.length) }] : []),
+        ]}
         filter={filter}
         setFilter={setFilter}
         count={list.length}

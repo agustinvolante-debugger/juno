@@ -15,6 +15,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { isActive } from '../accounts'
 import { getAllowance } from '../allowance'
 import { runAgent } from './agent'
+import { isMine } from '../todo-labels'
 import { askArchive } from '../archive'
 import { uploadStream } from '../aai'
 import { briefFor } from '../profile'
@@ -497,7 +498,9 @@ export function briefingText(session: PenSession, lang: Lang = 'en'): string {
   const parts = [`*${title}*`]
   if (session.duration_sec) parts[0] += ` (${fmtHours(session.duration_sec)})`
   if (n.summary) parts.push(n.summary)
-  const actions = (n.actions ?? []).filter((_, i) => !done.has(i))
+  // The user's own to-dos only (todo-meta.ts); unlabelled ones count as theirs.
+  const meta = Array.isArray(session.action_meta) && session.action_meta.length === (n.actions?.length ?? 0) ? session.action_meta : null
+  const actions = (n.actions ?? []).filter((_, i) => !done.has(i) && isMine(meta?.[i]))
   if (actions.length) parts.push(`${L.todo}\n` + list(actions.map((a) => [a.action, a.owner, a.due].filter(Boolean).join(' · '))))
   if (n.missed?.length) parts.push(`${L.missed}\n` + list(n.missed.map((m) => m.item)))
   if (n.open_questions?.length) parts.push(`${L.open}\n` + list(n.open_questions))

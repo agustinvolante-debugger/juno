@@ -48,7 +48,11 @@ export async function POST(req: Request) {
       const m = n.missed?.[index]
       if (!m) return NextResponse.json({ error: 'no such item' }, { status: 404 })
       const actions = [...(n.actions ?? []), { action: m.item, owner: '', due: '', priority: 'normal' as const }]
-      await updateSession(session.id, { notes: { ...n, actions }, missed_done: toggle(missedDone, true) })
+      // The user chose to take this on, so it is theirs. Labels stay parallel to actions.
+      const meta = Array.isArray(session.action_meta) && session.action_meta.length === actions.length - 1
+        ? [...session.action_meta, { mine: 'me' as const, due_date: null, waiting: null }]
+        : session.action_meta ?? null
+      await updateSession(session.id, { notes: { ...n, actions }, missed_done: toggle(missedDone, true), action_meta: meta })
       return NextResponse.json({ ok: true, actionIndex: actions.length - 1 })
     } else {
       return NextResponse.json({ error: 'unknown op' }, { status: 400 })

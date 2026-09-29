@@ -64,6 +64,7 @@ export function renderBriefing(session: PenSession, lang: Lang = 'en'): string {
     durationStr: fmtDurServer(session.duration_sec ?? 0),
     appUrl: base || 'https://pen.tryjunoapp.com',
     actionDone: Array.isArray(session.action_done) ? session.action_done : [],
+    actionMeta: session.action_meta ?? null,
     lang,
   })
 }

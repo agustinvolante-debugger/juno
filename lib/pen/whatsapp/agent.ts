@@ -29,6 +29,7 @@ import { sendFollowUp } from '../follow-up'
 import { getProfile } from '../profile'
 import { addReminder, cancelReminder, pendingReminders, MAX_AHEAD_MS } from '../reminders'
 import type { Lang } from '../currency'
+import { isMine, type ActionMeta } from '../todo-labels'
 import { getDraft, setDraft, type Draft } from './store'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -71,12 +72,16 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: 'open_todos',
     description:
-      'List open to-dos (action items not yet ticked off) across the user\'s recordings. Pass a person or client name to ' +
-      'narrow to recordings with them or actions mentioning them. Each item has a ref for mark_todo and an owner: ' +
-      '"what do I owe X" means items owned by the user, not by X.',
+      'List the user\'s open to-dos (not yet ticked off) across their recordings. By default only the ones that are ' +
+      'the user\'s own (or shared); set include_others to see what other people on the calls owe. Pass a person or ' +
+      'client name to narrow to recordings with them. Each item has a ref for mark_todo, due_date (resolved) and ' +
+      'waiting (who is waiting on the user for it).',
     input_schema: {
       type: 'object',
-      properties: { person: { type: 'string', description: 'Name to filter by, e.g. "Garcia". Omit for all open to-dos.' } },
+      properties: {
+        person: { type: 'string', description: 'Name to filter by, e.g. "Garcia". Omit for all.' },
+        include_others: { type: 'boolean', description: 'Also list items other people owe. Default false.' },
+      },
       additionalProperties: false,
     },
   },
@@ -214,19 +219,19 @@ type SessionRow = {
   client_name: string | null
   notes: PenNotes | null
   action_done: number[] | null
+  action_meta?: ActionMeta[] | null
   recorded_at: string | null
   created_at: string
 }
 
-async function openTodos(ctx: Ctx, person?: string): Promise<unknown> {
-  const { data, error } = await supabaseAdmin
-    .from('pen_sessions')
-    .select('id,title,client_name,notes,action_done,recorded_at,created_at')
-    .eq('user_email', ctx.email)
-    .order('created_at', { ascending: false })
-    .limit(400)
-  if (error) throw new Error(error.message)
-  const rows = (data ?? []) as SessionRow[]
+async function openTodos(ctx: Ctx, person?: string, includeOthers = false): Promise<unknown> {
+  const query = (cols: string) =>
+    supabaseAdmin.from('pen_sessions').select(cols).eq('user_email', ctx.email).order('created_at', { ascending: false }).limit(400)
+  let res = await query('id,title,client_name,notes,action_done,action_meta,recorded_at,created_at')
+  // Before the action_meta ALTER runs: no labels, so everything counts as the user's.
+  if (res.error && /action_meta/.test(res.error.message)) res = await query('id,title,client_name,notes,action_done,recorded_at,created_at')
+  if (res.error) throw new Error(res.error.message)
+  const rows = (res.data ?? []) as unknown as SessionRow[]
 
   // A person matches a recording by client, by a name the notes heard, by a linked contact, or
   // by a mention in the action itself. Folded, so "Garcia" finds "García".
@@ -246,26 +251,42 @@ async function openTodos(ctx: Ctx, person?: string): Promise<unknown> {
   const has = (s: string | null | undefined) => !!s && foldName(s).includes(want)
 
   const items: Record<string, unknown>[] = []
+  let othersSkipped = 0
   for (const r of rows) {
     const n = r.notes ?? {}
     const done = new Set(Array.isArray(r.action_done) ? r.action_done : [])
+    const acts = n.actions ?? []
+    const meta = Array.isArray(r.action_meta) && r.action_meta.length === acts.length ? r.action_meta : null
     const onRecording =
       !want || linked.has(r.id) || has(r.client_name) || has(r.title) || (n.people ?? []).some((p) => has(p.name))
-    ;(n.actions ?? []).forEach((a, i) => {
+    acts.forEach((a, i) => {
       if (done.has(i)) return
-      if (!onRecording && !has(a.action) && !has(a.owner)) return
+      if (!onRecording && !has(a.action) && !has(a.owner) && !has(meta?.[i]?.waiting)) return
+      const m = meta?.[i] ?? null
+      if (!includeOthers && !isMine(m)) {
+        othersSkipped++
+        return
+      }
       items.push({
         ref: `${r.id}#${i}`,
         action: a.action,
+        whose: m?.mine ?? 'unlabelled',
         owner: a.owner || '',
-        due: a.due || '',
+        due_date: m?.due_date ?? null,
+        due_said: a.due || '',
+        waiting: m?.waiting ?? null,
         priority: a.priority ?? 'normal',
         recording: r.title ?? 'Untitled',
         date: (r.recorded_at ?? r.created_at).slice(0, 10),
       })
     })
   }
-  return { count: items.length, todos: items.slice(0, 40), ...(items.length > 40 ? { note: `showing 40 of ${items.length}` } : {}) }
+  return {
+    count: items.length,
+    todos: items.slice(0, 40),
+    ...(items.length > 40 ? { note: `showing 40 of ${items.length}` } : {}),
+    ...(othersSkipped ? { others_not_shown: othersSkipped } : {}),
+  }
 }
 
 async function markTodo(ctx: Ctx, ref: string, done: boolean): Promise<unknown> {
@@ -429,7 +450,7 @@ async function runTool(ctx: Ctx, name: string, input: Record<string, unknown>): 
     case 'search_recordings':
       return searchRecordings(ctx, str('question') || ctx.question)
     case 'open_todos':
-      return openTodos(ctx, str('person') || undefined)
+      return openTodos(ctx, str('person') || undefined, input.include_others === true)
     case 'mark_todo':
       return markTodo(ctx, str('ref'), input.done !== false)
     case 'get_recording':

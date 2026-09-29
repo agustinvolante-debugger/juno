@@ -290,3 +290,8 @@ create index if not exists pen_clients_user on pen_clients(user_email);
 -- create table if not exists public.pen_reminders (id uuid primary key default gen_random_uuid(), user_email text not null, phone text not null, text text not null, lang text not null default 'en', due_at timestamptz not null, sent_at timestamptz, error text, created_at timestamptz not null default now());
 -- create index if not exists pen_reminders_due on public.pen_reminders(due_at) where sent_at is null;
 -- alter table public.pen_reminders enable row level security;
+
+-- To-do labels (2026-09-30). action_meta: per action, parallel to notes.actions like
+-- action_done: [{ mine: me|shared|other|unclear, due_date: YYYY-MM-DD|null, waiting: name|null }].
+-- Written after every notes write by lib/pen/todo-meta.ts. Feeds Home's Today and "only mine".
+-- alter table public.pen_sessions add column if not exists action_meta jsonb;

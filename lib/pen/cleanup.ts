@@ -16,7 +16,11 @@ import type { Utterance } from './store'
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 // Sonnet, not Haiku: measured 24 Sep on a Chilean-Spanish call, Haiku made 11-14 changes of which
 // ~5 were guesses (vocabulary forced in, slang "standardised"); Sonnet made 4, all correct.
-const MODEL = process.env.PEN_CLEANUP_MODEL || 'claude-sonnet-5'
+// Sonnet 5.5 from 30 Sep: on two Chilean-Spanish calls it made no wrong edits and ran 3-4x faster
+// (6-8 s vs 21-38 s per 160 utterances), but is more conservative: on one call it caught 2
+// mishearings to Sonnet 5's 5 (missed "para LatAm", "fire in the belly", "NotCo, Matías").
+// Higher effort did not change that. PEN_CLEANUP_MODEL=claude-sonnet-5 goes back.
+const MODEL = process.env.PEN_CLEANUP_MODEL || 'claude-sonnet-5-5'
 /** Utterances per request. Small and parallel: one 120-utterance call took 28 s. */
 const CHUNK = 80
 

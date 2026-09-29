@@ -9,6 +9,7 @@
 // clinical detail out of the notes, which is exactly why that mattered.
 import type { PenNotes } from './store'
 import type { Lang } from './currency'
+import { isMine, type ActionMeta } from './todo-labels'
 
 // The email's own words. The notes inside are already in the recording's (or the chosen) language.
 const EN = {
@@ -87,6 +88,8 @@ export function buildBriefingHtml(opts: {
   durationStr: string
   appUrl: string
   actionDone: number[]
+  /** To-do labels (todo-meta.ts). When present, only the user's own actions are listed. */
+  actionMeta?: ActionMeta[] | null
   lang?: Lang
 }): string {
   const { notes: n, title, dateStr, clientName, durationStr, appUrl } = opts
@@ -123,9 +126,13 @@ export function buildBriefingHtml(opts: {
     )
   }
 
-  if (n.actions?.length) {
-    const items = n.actions
-      .map((a, i) => {
+  // Only the user's own to-dos: what Chris or the client promised is not the user's to finish.
+  const labels = opts.actionMeta && opts.actionMeta.length === (n.actions?.length ?? 0) ? opts.actionMeta : null
+  const mineIdx = (n.actions ?? []).map((_, i) => i).filter((i) => isMine(labels?.[i]))
+  if (mineIdx.length) {
+    const items = mineIdx
+      .map((i) => {
+        const a = n.actions![i]
         const struck = done.has(i)
         const meta = [a.priority === 'high' ? C.priority : '', a.owner, a.due].filter(Boolean).join(' &middot; ')
         return `<tr>
@@ -138,7 +145,7 @@ export function buildBriefingHtml(opts: {
       .join('')
     rows.push(
       section(
-        `${label(C.actions(n.actions.length - done.size))}
+        `${label(C.actions(mineIdx.filter((i) => !done.has(i)).length))}
          <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">${items}</table>`,
       ),
     )

@@ -18,6 +18,7 @@ import { toDialogue } from './aai'
 import { namedDialogue, type SpeakerMap } from './speakers'
 import { groupSessions, combinedDialogue } from './merge'
 import { briefFor, getProfile } from './profile'
+import { refreshActionMeta } from './todo-meta'
 import { languageName } from './profile-fields'
 import { peopleOnSession } from './people'
 import { hintsFor } from './hints'
@@ -159,6 +160,7 @@ export async function writeNotes(opts: {
       status: 'noted',
       error_text: null,
       action_done: [],
+      action_meta: null,
       ...(session.client_name ? {} : clientName ? { client_name: clientName } : {}),
       ...(session.title ? {} : notes.headline ? { title: notes.headline.slice(0, 90) } : {}),
     })
@@ -167,6 +169,11 @@ export async function writeNotes(opts: {
       const merged = await updateClientProfile(prior, notes)
       await upsertClientProfile(email, clientName, merged)
     }
+
+    // Whose each to-do is and when it is really due, before the briefing reads the notes.
+    // New notes mean new actions, so the old labels no longer line up; cleared either way.
+    const noted = await getSession(email, session.id)
+    if (noted) await refreshActionMeta(email, noted)
 
     return {
       session: await getSession(email, session.id),

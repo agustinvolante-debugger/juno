@@ -91,6 +91,8 @@ export type PenSession = {
   meeting_type: MeetingType | null
   chat: ChatTurn[]
   action_done: number[]
+  /** Per action, parallel to notes.actions: is it the user's, real due date, who waits. See todo-meta.ts. */
+  action_meta?: import('./todo-labels').ActionMeta[] | null
   note_blocks: NoteBlock[]
   transcript_edits: Record<string, string>
   deliverables: Deliverable[]
@@ -284,6 +286,13 @@ export async function updateSession(id: string, patch: Record<string, unknown>) 
     void _a
     void _s
     console.warn(`pen: pen_sessions is missing the metering columns. Run the 2026-09-23 ALTER in lib/pen/schema.sql. (${error.message})`)
+    ;({ error } = await write(rest))
+  }
+  // Same for action_meta (2026-09-30 ALTER): the notes matter more than their to-do labels.
+  if (error && 'action_meta' in patch && /action_meta/.test(error.message)) {
+    const { action_meta: _m, ...rest } = patch
+    void _m
+    console.warn(`pen: pen_sessions is missing action_meta. Run the 2026-09-30 ALTER in lib/pen/schema.sql. (${error.message})`)
     ;({ error } = await write(rest))
   }
   if (error) throw new Error(error.message)

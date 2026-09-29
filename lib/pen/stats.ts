@@ -13,6 +13,7 @@ import { isMissingSchema } from './allowance'
 import { monthStart, nextMonthStart, type Usage } from './plan'
 import { slugType, displayType } from './store'
 import type { PenNotes, MeetingType } from './store'
+import { isMine, type ActionMeta, type Mine } from './todo-labels'
 
 export type OpenAction = {
   sessionId: string
@@ -24,6 +25,12 @@ export type OpenAction = {
   priority: 'high' | 'normal' | 'low'
   /** Position in the recording's notes.actions, which is what action_done records. */
   index: number
+  /** From action_meta (todo-meta.ts). Null = not classified yet, treated as the user's. */
+  mine: Mine | null
+  /** YYYY-MM-DD, the deadline resolved against the recording date. */
+  dueDate: string | null
+  /** Who is waiting on it, when it is the user's. */
+  waiting: string | null
 }
 
 /** Something the notes flagged as nearly missed, not yet marked handled. */
@@ -64,7 +71,10 @@ export type ArchiveStats = {
   peopleMet: number
   /** One row per distinct category, newest-first by last use. Drives the left nav. */
   categories: { slug: string; label: string; count: number }[]
+  /** Every open action, the user's and everyone else's; `mine` tells them apart. */
   openActions: OpenAction[]
+  /** Open actions that belong to someone else on the recordings. Not in actionsOpen. */
+  othersOpen: number
   clients: ClientCard[]
   firstAt: string | null
   lastAt: string | null
@@ -79,6 +89,7 @@ type Row = {
   notes: PenNotes
   action_done: number[] | null
   missed_done?: number[] | null
+  action_meta?: ActionMeta[] | null
   recorded_at: string | null
   created_at: string
 }
@@ -87,8 +98,10 @@ export async function archiveStats(userEmail: string): Promise<ArchiveStats> {
   const cols = 'id,title,status,duration_sec,meeting_type,notes,action_done,recorded_at,created_at'
   const query = (select: string) =>
     supabaseAdmin.from('pen_sessions').select(select).eq('user_email', userEmail).order('created_at', { ascending: false })
-  let res = await query(`${cols},missed_done`)
-  // missed_done needs an ALTER. Before it runs, Home still loads; nothing counts as handled.
+  let res = await query(`${cols},missed_done,action_meta`)
+  // missed_done and action_meta need ALTERs. Before they run, Home still loads: nothing counts
+  // as handled, and every to-do counts as the user's.
+  if (res.error && isMissingSchema(res.error.message)) res = await query(`${cols},missed_done`)
   if (res.error && isMissingSchema(res.error.message)) res = await query(cols)
   if (res.error) throw new Error(res.error.message)
   const rows = (res.data ?? []) as unknown as Row[]
@@ -105,6 +118,7 @@ export async function archiveStats(userEmail: string): Promise<ArchiveStats> {
   const since = monthStart().getTime()
   let actionsTotal = 0
   let actionsOpen = 0
+  let othersOpen = 0
   let missedSurfaced = 0
 
   for (const r of rows) {
@@ -133,10 +147,16 @@ export async function archiveStats(userEmail: string): Promise<ArchiveStats> {
 
     const done = new Set(Array.isArray(r.action_done) ? r.action_done : [])
     const acts = n.actions ?? []
-    actionsTotal += acts.length
+    // Labels only count when they line up with the actions they describe.
+    const meta = Array.isArray(r.action_meta) && r.action_meta.length === acts.length ? r.action_meta : null
     acts.forEach((a, i) => {
+      const m = meta?.[i] ?? null
+      const mine = isMine(m)
+      // The follow-through numbers are about the user: someone else's to-do isn't theirs to finish.
+      if (mine) actionsTotal += 1
       if (done.has(i)) return
-      actionsOpen += 1
+      if (mine) actionsOpen += 1
+      else othersOpen += 1
       openActions.push({
         sessionId: r.id,
         sessionTitle: r.title ?? 'Untitled',
@@ -146,6 +166,9 @@ export async function archiveStats(userEmail: string): Promise<ArchiveStats> {
         due: a.due ?? '',
         priority: a.priority ?? 'normal',
         index: i,
+        mine: m?.mine ?? null,
+        dueDate: m?.due_date ?? null,
+        waiting: m?.waiting ?? null,
       })
     })
   }
@@ -195,6 +218,7 @@ export async function archiveStats(userEmail: string): Promise<ArchiveStats> {
     categories: Array.from(cats.values()).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label)),
     // The Home panel lists every open action, so this is a guard, not a page size.
     openActions: openActions.slice(0, 300),
+    othersOpen,
     clients,
     firstAt: stamps[0] ?? null,
     lastAt: stamps[stamps.length - 1] ?? null,
