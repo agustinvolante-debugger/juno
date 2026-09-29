@@ -18,6 +18,7 @@
 // Meta bars general-purpose AI chatbots on WhatsApp Business (§4.7), so the system prompt keeps
 // it to the user's recordings, to-dos and follow-ups.
 
+import crypto from 'node:crypto'
 import Anthropic from '@anthropic-ai/sdk'
 import { supabaseAdmin } from '@/lib/supabase'
 import { askArchive } from '../archive'
@@ -335,6 +336,7 @@ async function saveDraft(
 
   const sessionId = /^[0-9a-f-]{36}$/i.test(i.session_id) && (await getSession(ctx.email, i.session_id)) ? i.session_id : null
   const draft: Draft = {
+    id: crypto.randomBytes(12).toString('base64url'),
     msgId: ctx.msgId,
     toName,
     toEmail,
@@ -457,17 +459,23 @@ async function runTool(ctx: Ctx, name: string, input: Record<string, unknown>): 
 
 /* ------------------------------------------------------------------- loop */
 
-const HINT: Record<Lang, { to: string; subject: string; send: string; noEmail: string }> = {
-  en: { to: 'To', subject: 'Subject', send: 'Reply *send it* to send, or tell me what to change.', noEmail: 'Send me their email and I\'ll add it.' },
-  es: { to: 'Para', subject: 'Asunto', send: 'Responde *envíalo* para mandarlo, o dime qué cambiar.', noEmail: 'Mándame su email y lo agrego.' },
-  pt: { to: 'Para', subject: 'Assunto', send: 'Responda *enviar* para mandar, ou me diga o que mudar.', noEmail: 'Me mande o email e eu adiciono.' },
+const HINT: Record<Lang, { to: string; subject: string; send: string; noEmail: string; own: string }> = {
+  en: { to: 'To', subject: 'Subject', send: 'Reply *send it* to send, or tell me what to change.', noEmail: 'Send me their email and I\'ll add it.', own: 'Or send it from your own email:' },
+  es: { to: 'Para', subject: 'Asunto', send: 'Responde *envíalo* para mandarlo, o dime qué cambiar.', noEmail: 'Mándame su email y lo agrego.', own: 'O mándalo desde tu propio correo:' },
+  pt: { to: 'Para', subject: 'Assunto', send: 'Responda *enviar* para mandar, ou me diga o que mudar.', noEmail: 'Me mande o email e eu adiciono.', own: 'Ou envie do seu próprio email:' },
+}
+
+function openLink(id: string): string {
+  const base = (process.env.PEN_PUBLIC_URL || process.env.NEXTAUTH_URL || 'https://www.tryjunoapp.com').replace(/\/$/, '')
+  return `${base}/api/pen/open/${id}`
 }
 
 export function draftPreview(d: Draft, lang: Lang = 'en'): string {
   const h = HINT[lang]
   return (
     `✉️ *${h.to}:* ${d.toName}${d.toEmail ? ` <${d.toEmail}>` : ''}\n*${h.subject}:* ${d.subject}\n\n${d.body}\n\n` +
-    `_${d.toEmail ? h.send : h.noEmail}_`
+    `_${d.toEmail ? h.send : h.noEmail}_` +
+    (d.toEmail ? `\n${h.own} ${openLink(d.id)}` : '')
   )
 }
 

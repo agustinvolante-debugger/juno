@@ -273,7 +273,7 @@ create index if not exists pen_clients_user on pen_clients(user_email);
 -- pen_sent_emails            every follow-up sent on a user's behalf: the audit trail, the daily
 --                            cap, and what the health check reads for "are emails sending?"
 -- alter table public.pen_whatsapp_links add column if not exists draft jsonb;
--- create table if not exists public.pen_sent_emails (id uuid primary key default gen_random_uuid(), user_email text not null, to_email text not null, subject text not null, body text not null, session_id uuid, channel text not null default 'whatsapp', ok boolean not null, error text, created_at timestamptz not null default now());
+-- create table if not exists public.pen_sent_emails (id uuid primary key default gen_random_uuid(), user_email text not null, to_email text not null, session_id uuid, channel text not null default 'whatsapp', ok boolean not null, error text, created_at timestamptz not null default now());
 -- create index if not exists pen_sent_emails_user on public.pen_sent_emails(user_email, created_at desc);
 -- alter table public.pen_sent_emails enable row level security;
 

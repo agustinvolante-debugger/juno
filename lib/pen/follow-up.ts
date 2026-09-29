@@ -4,8 +4,10 @@
 // the user so the answer lands in their inbox, and a BCC to them because it will never appear
 // in their Sent folder otherwise. No footer: it is their email to their client.
 //
-// Every attempt is logged in pen_sent_emails. The log is also the daily cap (a linked phone
-// must not become a way to send mail at volume) and what the health check reads.
+// Every attempt is logged in pen_sent_emails: who it went to, when, and whether it worked. Never
+// the subject or body; the user has their BCC copy and we don't need to hold it. The log is
+// also the daily cap (a linked phone must not become a way to send mail at volume) and what
+// the health check reads.
 
 import { supabaseAdmin } from '@/lib/supabase'
 import { sendEmailResult } from '@/lib/news/email'
@@ -63,8 +65,6 @@ export async function sendFollowUp(opts: {
   await supabaseAdmin.from('pen_sent_emails').insert({
     user_email: opts.userEmail,
     to_email: opts.toEmail,
-    subject: opts.subject.slice(0, 300),
-    body: opts.body.slice(0, 20000),
     session_id: opts.sessionId,
     channel: 'whatsapp',
     ok: r.ok,

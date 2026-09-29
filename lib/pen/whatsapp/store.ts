@@ -130,6 +130,8 @@ export async function moveMessage(id: string, from: MessageState, to: MessageSta
  * message that wrote it: the user always sees exactly what goes out before it goes.
  */
 export type Draft = {
+  /** Random and unguessable: the "open in my email" link carries it, with no sign-in. */
+  id: string
   msgId: string
   toName: string
   toEmail: string | null
@@ -144,6 +146,16 @@ export const DRAFT_TTL_MS = 24 * 60 * 60 * 1000
 
 export async function getDraft(email: string): Promise<Draft | null> {
   const { data, error } = await supabaseAdmin.from('pen_whatsapp_links').select('draft').eq('email', email.toLowerCase()).maybeSingle()
+  if (error) throw new Error(error.message)
+  const d = (data?.draft ?? null) as Draft | null
+  if (!d || Date.now() - new Date(d.createdAt).getTime() > DRAFT_TTL_MS) return null
+  return d
+}
+
+/** For the "open in my email" link. Expired or already-sent drafts are gone. */
+export async function getDraftById(id: string): Promise<Draft | null> {
+  if (!/^[A-Za-z0-9_-]{16}$/.test(id)) return null
+  const { data, error } = await supabaseAdmin.from('pen_whatsapp_links').select('draft').eq('draft->>id', id).maybeSingle()
   if (error) throw new Error(error.message)
   const d = (data?.draft ?? null) as Draft | null
   if (!d || Date.now() - new Date(d.createdAt).getTime() > DRAFT_TTL_MS) return null
