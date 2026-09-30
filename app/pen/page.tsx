@@ -26,13 +26,19 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
 
   // Signed out gets the landing page; signed in goes straight to the app. Same URL, so a
   // shared link works for someone who has never seen it and for someone who lives in it.
-  if (!email) {
+  // Localhost signs you in automatically (NEWS_DEV_EMAIL), which hides the landing page.
+  // ?landing=1 shows it anyway; never in production.
+  const sp0 = await searchParams
+  const devLanding = process.env.NODE_ENV !== 'production' && sp0.landing === '1'
+  if (!email || devLanding) {
     // Which version of the landing page: ?m= (the footer switch) wins, then the remembered
     // choice, then the country Vercel reports for the visitor.
     const sp = await searchParams
     const m = typeof sp.m === 'string' ? sp.m : null
     const [h, c] = await Promise.all([headers(), cookies()])
-    return <Landing market={marketFor(h.get('x-vercel-ip-country'), m ?? c.get('juno_lang')?.value ?? null)} />
+    // ?for= picks the audience whose examples the page shows (landing-audiences.ts).
+    const forParam = typeof sp.for === 'string' ? sp.for : null
+    return <Landing market={marketFor(h.get('x-vercel-ip-country'), m ?? c.get('juno_lang')?.value ?? null)} audience={forParam} />
   }
 
   let sessions: Awaited<ReturnType<typeof listSessions>> = []

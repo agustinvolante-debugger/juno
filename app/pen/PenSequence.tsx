@@ -33,16 +33,18 @@ function bars(count: number): number[] {
 
 const WAVE = bars(72)
 
-const TURNS = [
-  { who: 'A', text: 'We love the kitchen. The parking is the thing.' },
-  { who: 'B', text: 'There is a covered spot with the unit, round the back.' },
-  { who: 'A', text: 'Then we would want to move on it this week.' },
-]
+export type SeqScript = {
+  title: string
+  turns: [string, string][]
+  decided: string
+  missed: string
+  labels: { recording: string; decided: string; missed: string }
+}
 
 // One easing for the whole sequence, so it reads as one gesture.
 const EASE = [0.16, 1, 0.3, 1] as const
 
-export default function PenSequence() {
+export default function PenSequence({ script }: { script: SeqScript }) {
   const reduce = useReducedMotion()
 
   // Reduced motion gets the final frame, immediately. Not a shortened animation: none.
@@ -58,10 +60,10 @@ export default function PenSequence() {
   return (
     <div className="pen-seq" aria-label="A recording turning into notes">
       <div className="pen-seq-head">
-        <span className="pen-mono pen-t-micro">Ridgewood walk-through</span>
+        <span className="pen-mono pen-t-micro">{script.title}</span>
         <span className="pen-mono pen-t-micro pen-seq-live">
           <i aria-hidden />
-          recording
+          {script.labels.recording}
         </span>
       </div>
 
@@ -93,10 +95,10 @@ export default function PenSequence() {
       </div>
 
       <div className="pen-seq-turns">
-        {TURNS.map((t, i) => (
-          <motion.p key={t.text} className="pen-seq-turn" {...enter(1.5 + i * 0.6)}>
-            <span className="pen-mono pen-seq-who">{t.who}</span>
-            <span>{t.text}</span>
+        {script.turns.map(([who, text], i) => (
+          <motion.p key={text} className="pen-seq-turn" {...enter(1.5 + i * 0.6)}>
+            <span className="pen-mono pen-seq-who">{who}</span>
+            <span>{text}</span>
           </motion.p>
         ))}
       </div>
@@ -111,15 +113,15 @@ export default function PenSequence() {
       />
 
       <motion.div className="pen-seq-out" {...enter(3.9)}>
-        <span className="pen-mono pen-t-micro pen-seq-tag">Decided</span>
-        <p>They will offer this week, subject to seeing the covered parking.</p>
+        <span className="pen-mono pen-t-micro pen-seq-tag">{script.labels.decided}</span>
+        <p>{script.decided}</p>
       </motion.div>
 
       <motion.div className="pen-seq-out" {...enter(4.5)}>
         <span className="pen-mono pen-t-micro pen-seq-tag" data-tone="warn">
-          Nearly missed
+          {script.labels.missed}
         </span>
-        <p>Covered parking has now come up at all three viewings.</p>
+        <p>{script.missed}</p>
       </motion.div>
     </div>
   )

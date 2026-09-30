@@ -16,11 +16,14 @@ export default function PenArt({
   className,
   variant = 'closed',
   title,
+  press = 0,
 }: {
   id?: string
   className?: string
   variant?: 'closed' | 'open'
   title?: string
+  /** 0 to 1: how far the clicker is pushed in. The film animates it; everywhere else it is 0. */
+  press?: number
 }) {
   const g = (n: string) => `${id}-${n}`
   const open = variant === 'open'
@@ -71,7 +74,7 @@ export default function PenArt({
 
       {/* ---- upper half: clicker, cap, clip ---- */}
       {/* Clicker button */}
-      <rect x="14" y="51" width="18" height="18" rx="4" fill={`url(#${g('chrome')})`} />
+      <rect x={14 + press * 7} y="51" width="18" height="18" rx="4" fill={`url(#${g('chrome')})`} />
       <rect x="28" y="47" width="10" height="26" rx="2.5" fill={`url(#${g('chrome')})`} />
       {/* Upper barrel */}
       <path d="M44 42 H304 V78 H44 Q36 78 36 70 V50 Q36 42 44 42 Z" fill={`url(#${g('barrel')})`} />
