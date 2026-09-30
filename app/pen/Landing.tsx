@@ -1001,7 +1001,7 @@ function Pricing() {
   const P = t.pricing
   return (
     <section id="pricing" className="pen-lp-dark pen-lp2-pricing">
-      <div className="pen-lp-wrap py-24 sm:py-28">
+      <div className="pen-lp-wrap py-16 sm:py-20">
         <Reveal>
           <h2 className="pen-lp-h2 pen-lp-h2-tight pen-od-paper">{P.h2}</h2>
           <p className="pen-od-soft mt-5 pen-t-lede-sm text-balance">{P.sub}</p>

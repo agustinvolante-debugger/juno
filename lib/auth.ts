@@ -1,5 +1,6 @@
 import { NextAuthOptions } from 'next-auth'
 import GoogleProvider from 'next-auth/providers/google'
+import CredentialsProvider from 'next-auth/providers/credentials'
 
 /**
  * Break-glass override, not the customer list.
@@ -28,6 +29,18 @@ export const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    }),
+    // Any email address: a one-time link sent by email (lib/auth-link.ts). The signIn callback
+    // below still decides who gets in, exactly as for Google.
+    CredentialsProvider({
+      id: 'email-link',
+      name: 'Email link',
+      credentials: { token: { type: 'text' } },
+      async authorize(creds) {
+        const { consumeLink } = await import('@/lib/auth-link')
+        const email = creds?.token ? await consumeLink(creds.token) : null
+        return email ? { id: email, email } : null
+      },
     }),
   ],
   session: {

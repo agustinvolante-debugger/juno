@@ -302,3 +302,17 @@ create index if not exists pen_clients_user on pen_clients(user_email);
 -- create table if not exists public.pen_whatsapp_failures (message_id text primary key, recipient text not null, code int, title text, detail text, failed_at timestamptz not null default now());
 -- create index if not exists pen_whatsapp_failures_at on public.pen_whatsapp_failures(failed_at desc);
 -- alter table public.pen_whatsapp_failures enable row level security;
+
+-- "What's new" emails (2026-09-30). lib/pen/announce.ts, scripts/pen-announce.mts.
+-- pen_email_prefs          per person: product updates on/off, and the unsubscribe token.
+-- pen_announcement_sends   one row per (announcement, email): the never-twice guarantee.
+-- create table if not exists public.pen_email_prefs (email text primary key, product_updates boolean not null default true, unsub_token uuid not null unique default gen_random_uuid(), updated_at timestamptz not null default now());
+-- create table if not exists public.pen_announcement_sends (announcement text not null, email text not null, ok boolean not null default false, error text, sent_at timestamptz, created_at timestamptz not null default now(), primary key (announcement, email));
+-- alter table public.pen_email_prefs enable row level security;
+-- alter table public.pen_announcement_sends enable row level security;
+
+-- Sign in with an email link (2026-09-30, lib/auth-link.ts). Only the SHA-256 of each token is
+-- stored; a link works once and for 15 minutes.
+-- create table if not exists public.pen_login_links (token_hash text primary key, email text not null, created_at timestamptz not null default now(), expires_at timestamptz not null, used_at timestamptz);
+-- create index if not exists pen_login_links_email on public.pen_login_links(email, created_at desc);
+-- alter table public.pen_login_links enable row level security;

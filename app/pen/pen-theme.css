@@ -2727,8 +2727,9 @@ body:has(.pen-root) {
    shows the pen and the software together, one card vocabulary for every feature (the
    Home page's), and each act of the page given its own rhythm. */
 .pen-lp2 { overflow-x: clip; }
-.pen-lp2-sec { padding-top: 120px; }
-@media (max-width: 720px) { .pen-lp2-sec { padding-top: 84px; } }
+/* 30 Sep: 120/84 read as dead air between sections; tightened by a third. */
+.pen-lp2-sec { padding-top: 80px; }
+@media (max-width: 720px) { .pen-lp2-sec { padding-top: 56px; } }
 .pen-lp2-h2 { max-width: 22ch; }
 .pen-lp2-sub {
   margin: 18px 0 0; max-width: 56ch;
@@ -2902,8 +2903,8 @@ body:has(.pen-root) {
 .pen-lp2-seq { margin-top: 36px; }
 
 /* ---- the pen: its own act, on a slightly deeper ground ---- */
-.pen-lp2-pen { margin-top: 120px; padding: 96px 0 104px; background: var(--side); }
-@media (max-width: 720px) { .pen-lp2-pen { margin-top: 84px; padding: 64px 0 72px; } }
+.pen-lp2-pen { margin-top: 80px; padding: 72px 0 80px; background: var(--side); }
+@media (max-width: 720px) { .pen-lp2-pen { margin-top: 56px; padding: 52px 0 56px; } }
 .pen-lp2-pen-top { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); align-items: center; gap: 40px; }
 @media (max-width: 960px) { .pen-lp2-pen-top { grid-template-columns: 1fr; } }
 .pen-lp2-pen-art { position: relative; min-height: 220px; display: flex; align-items: center; }
@@ -2919,7 +2920,7 @@ body:has(.pen-root) {
 
 /* ---- pricing and close ---- */
 .pen-lp2-pricing { margin-top: 0; }
-.pen-lp2-close { padding-top: 110px; padding-bottom: 40px; }
+.pen-lp2-close { padding-top: 80px; padding-bottom: 40px; }
 .pen-lp2-close-card {
   display: flex; flex-direction: column; align-items: center; text-align: center;
   padding: 56px 28px 60px; border-radius: 24px;
@@ -3578,7 +3579,9 @@ html.pen-m-lock, html.pen-m-lock body { height: 100%; overflow: hidden; overscro
 }
 
 /* WhatsApp: the copy on the left, a tall phone playing the thread on the right. */
-.pen-lp2-wasec { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; align-items: center; }
+/* Copy at the top, not centred on the tall phone: centred, it sat ~370px below the section above. */
+.pen-lp2-wasec { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; align-items: start; }
+.pen-lp2-wasec-copy { padding-top: 24px; }
 .pen-lp2-wasec-phone { display: flex; justify-content: center; }
 .pen-ph-tall { width: 320px; aspect-ratio: 9 / 19.5; transform: rotate(0deg); }
 .pen-ph-chat-live { justify-content: flex-end; }

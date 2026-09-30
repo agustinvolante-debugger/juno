@@ -1,0 +1,48 @@
+/* Sign-in pages. Pen's tokens (app/pen/pen-theme.css), restated here because these pages sit
+   outside /pen and don't load its stylesheet. */
+.auth-root {
+  --paper: #F2EFE5; --panel: #FFFFFF; --line: #DCD5C4; --hair: #E8E3D6;
+  --ink: #16150F; --soft: #514E45; --dim: #646158; --faint: #8E8A80;
+  --accent: #0B6B44; --accent-ink: #08482E; --accent-wash: #DCEDE3;
+  --warn: #8A6516; --warn-wash: #F7EFDC; --bad: #9E3229;
+  min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 32px 16px;
+  background: var(--paper); color: var(--ink); font-family: var(--font-ui), system-ui, -apple-system, sans-serif;
+}
+.auth-card {
+  width: 100%; max-width: 400px; background: var(--panel); border: 1px solid var(--line); border-radius: 20px;
+  padding: 32px 28px 26px; box-shadow: 0 1px 2px rgba(34,30,18,.05), 0 18px 40px -24px rgba(34,30,18,.28);
+}
+.auth-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
+.auth-mark { width: 36px; height: 36px; border-radius: 9px; }
+.auth-word { font-family: var(--font-display), Georgia, serif; font-size: 24px; line-height: 1; }
+.auth-title { margin: 26px 0 6px; font-family: var(--font-display), Georgia, serif; font-weight: 400; font-size: 34px; line-height: 1.05; letter-spacing: -0.01em; }
+.auth-sub { margin: 0 0 24px; font-size: 15px; line-height: 1.5; color: var(--soft); }
+.auth-btn {
+  width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px;
+  padding: 0 18px; border-radius: 12px; font: 600 15px/1 var(--font-ui), system-ui, sans-serif; cursor: pointer;
+  text-decoration: none; transition: background .15s ease, border-color .15s ease, opacity .15s ease;
+}
+.auth-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.auth-btn-google { background: var(--panel); color: var(--ink); border: 1px solid var(--line); }
+.auth-btn-google:hover { border-color: var(--dim); }
+.auth-btn-primary { background: var(--accent); color: #fff; border: 1px solid var(--accent); }
+.auth-btn-primary:hover { background: var(--accent-ink); }
+.auth-btn-primary[disabled] { opacity: .6; cursor: default; }
+.auth-btn-quiet { background: transparent; color: var(--soft); border: 1px solid var(--line); }
+.auth-or { display: flex; align-items: center; gap: 12px; margin: 18px 0; color: var(--faint); font-size: 13px; }
+.auth-or::before, .auth-or::after { content: ''; flex: 1; height: 1px; background: var(--hair); }
+.auth-label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: var(--soft); }
+.auth-input {
+  width: 100%; min-height: 48px; padding: 0 14px; margin-bottom: 10px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--ink); font: 16px var(--font-ui), system-ui, sans-serif;
+}
+.auth-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-wash); }
+.auth-note { margin: 18px 0 0; font-size: 13px; line-height: 1.55; color: var(--faint); text-align: center; }
+.auth-note a { color: var(--soft); }
+.auth-alert { margin: 0 0 20px; padding: 12px 14px; border-radius: 12px; background: var(--warn-wash); color: var(--warn); font-size: 14px; line-height: 1.5; }
+.auth-alert strong { display: block; margin-bottom: 2px; }
+.auth-sent { text-align: center; }
+.auth-sent-icon { width: 52px; height: 52px; margin: 8px auto 14px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-wash); color: var(--accent); }
+.auth-foot { margin-top: 22px; display: flex; justify-content: center; gap: 16px; font-size: 12px; }
+.auth-foot a { color: var(--faint); text-decoration: none; }
+.auth-foot a:hover { color: var(--soft); }
