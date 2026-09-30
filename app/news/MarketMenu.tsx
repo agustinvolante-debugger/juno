@@ -46,13 +46,15 @@ export default function MarketMenu({
   }
 
   return (
-    <div className="relative flex items-center self-center pl-3">
+    <div className="db-pop">
       <button
+        type="button"
         onClick={() => setOpen((o) => !o)}
-        title={es ? 'Mercados por país' : 'Markets by country'}
-        className="whitespace-nowrap rounded-md border border-neutral-300 px-2.5 py-1 text-xs font-bold transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+        aria-expanded={open}
+        title={es ? 'Elegir mercados por país' : 'Choose markets by country'}
+        className="db-textbtn"
       >
-        🌍 {es ? 'Mercados' : 'Markets'} ▾
+        {es ? 'Editar' : 'Edit'}
       </button>
       {open && (
         <>
@@ -60,7 +62,7 @@ export default function MarketMenu({
           <div className="absolute right-0 top-full z-50 mt-1 max-h-[78vh] w-80 overflow-auto rounded-lg border border-neutral-300 bg-white text-neutral-900 shadow-2xl dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100">
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-neutral-200 bg-white px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900">
               <span className="text-[11px] font-bold uppercase tracking-wide">{es ? 'Mercados por país' : 'Markets by country'}</span>
-              <span className="text-[10px] text-neutral-400">{es ? '★ fija al ticker' : '★ pins to ticker'}</span>
+              <span className="text-[10px] text-neutral-400">{es ? '★ fija al panel' : '★ pins to the rail'}</span>
             </div>
 
             {countries.map((co, ci) => {
@@ -98,7 +100,7 @@ export default function MarketMenu({
             })}
 
             <div className="border-t border-neutral-200 px-3 py-2 dark:border-neutral-800">
-              <div className="mb-1 text-[9.5px] font-bold uppercase tracking-wide text-neutral-400">📈 {es ? 'Agregar acción' : 'Add a ticker'}</div>
+              <div className="mb-1 text-[9.5px] font-bold uppercase tracking-wide text-neutral-400">{es ? 'Agregar acción' : 'Add a ticker'}</div>
               <div className="flex gap-1.5">
                 <input
                   value={ticker}

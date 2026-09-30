@@ -67,15 +67,16 @@ export default function MonitorControls({ query, lang = 'en', alerts = false }: 
   }
 
   return (
-    <span className="inline-flex items-center gap-1 font-normal normal-case">
+    <span className="db-mon-ctl">
       <button
         onClick={toggleBell}
         disabled={bellBusy}
         title={on ? (es ? 'Alertas activadas — tocar para desactivar' : 'Alerts on — tap to turn off') : (es ? 'Avisarme de novedades (notificación push)' : 'Alert me on new developments (push notification)')}
-        className="db-pill disabled:opacity-50"
-        style={on ? { color: 'var(--red, #b91c1c)' } : undefined}
-      >{bellBusy ? '…' : on ? '⚑' : '⚐'}</button>
-      <button onClick={remove} title={es ? 'Dejar de monitorear' : 'Stop monitoring'} className="db-pill">✕</button>
+        type="button"
+        aria-pressed={on}
+        className={`db-textbtn${on ? ' is-accent' : ''}`}
+      >{bellBusy ? '…' : on ? (es ? 'Alertas activas' : 'Alerts on') : (es ? 'Alertas' : 'Alerts')}</button>
+      <button type="button" onClick={remove} title={es ? 'Dejar de monitorear' : 'Stop monitoring'} className="db-textbtn">{es ? 'Quitar' : 'Stop'}</button>
     </span>
   )
 }

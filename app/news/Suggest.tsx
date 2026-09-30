@@ -20,12 +20,12 @@ export default function Suggest({ lang = 'en' }: { lang?: string }) {
   }
 
   if (state === 'done') {
-    return <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3.5 py-2.5 text-[13px] text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900/40 dark:text-neutral-400">✓ {es ? '¡Gracias! Lo recibimos.' : 'Thanks — got it. We read every request.'}</div>
+    return <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3.5 py-2.5 text-[13px] text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900/40 dark:text-neutral-400">{es ? '¡Gracias! Lo recibimos.' : 'Thanks, got it. Every request gets read.'}</div>
   }
 
   return (
     <form onSubmit={submit} className="flex flex-wrap items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50/60 px-3.5 py-2.5 dark:border-neutral-800 dark:bg-neutral-900/40">
-      <span className="text-[13px] font-semibold">💡 {es ? '¿Qué más te gustaría ver?' : 'What else would you like to see?'}</span>
+      <span className="text-[13px] font-semibold">{es ? '¿Qué más te gustaría ver?' : 'What else would you like to see?'}</span>
       <input
         value={text}
         onChange={(e) => setText(e.target.value)}

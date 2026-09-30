@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
+import { PlayIcon, StopIcon } from './Icons'
 
 // "▶ Listen" — reads a brief aloud with the browser's speechSynthesis (free, works
 // offline on iOS; no server or AI cost). Long text is chunked by sentence because
@@ -54,11 +55,14 @@ export default function ListenButton({ text, lang = 'en', small }: { text: strin
   if (!supported || !text.trim()) return null
   return (
     <button
+      type="button"
       onClick={() => (playing ? stop() : play())}
+      aria-pressed={playing}
       title={playing ? (es ? 'Detener' : 'Stop') : (es ? 'Escuchar el resumen' : 'Listen to the brief')}
-      className={small
-        ? 'font-normal normal-case text-[11px] text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'
-        : 'rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-bold transition-colors hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800'}
-    >{playing ? '■ ' + (es ? 'Detener' : 'Stop') : '▶ ' + (es ? 'Escuchar' : 'Listen')}</button>
+      className={small ? 'db-listen is-small' : 'db-listen'}
+    >
+      {playing ? <StopIcon size={12} /> : <PlayIcon size={12} />}
+      <span>{playing ? (es ? 'Detener' : 'Stop') : (es ? 'Escuchar' : 'Listen')}</span>
+    </button>
   )
 }

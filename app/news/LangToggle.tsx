@@ -7,10 +7,9 @@ export default function LangToggle({ lang }: { lang: string }) {
     location.reload()
   }
   return (
-    <span className="text-sm text-neutral-500">
-      <button onClick={() => set('en')} className={lang === 'en' ? 'font-bold underline' : ''}>EN</button>
-      {' · '}
-      <button onClick={() => set('es')} className={lang === 'es' ? 'font-bold underline' : ''}>ES</button>
+    <span className="db-seg db-lang" role="group" aria-label="Language">
+      <button type="button" aria-pressed={lang === 'en'} onClick={() => set('en')}>EN</button>
+      <button type="button" aria-pressed={lang === 'es'} onClick={() => set('es')}>ES</button>
     </span>
   )
 }

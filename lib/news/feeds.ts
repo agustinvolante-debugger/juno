@@ -34,13 +34,14 @@ export const SECTIONS: Section[] = [
   { key: 'ai', label: 'AI & Future Tech' },
   { key: 'funding', label: 'Funding · VC · IPOs' },
   { key: 'markets', label: 'Markets & Breaking' },
+  { key: 'geopolitics', label: 'Geopolitics' },
   { key: 'longread', label: 'Long Reads' },
   { key: 'chile', label: 'Chile / LatAm' },
   { key: 'founder', label: 'Founder · Launches' },
   { key: 'reddit', label: 'Reddit / HN' },
-  { key: 'watch_ai', label: '🎬 AI/Tech — just dropped' },
-  { key: 'watch_vc', label: '🚀 VC & Startups — just dropped' },
-  { key: 'watch_golf', label: '⛳ Golf — just dropped' },
+  { key: 'watch_ai', label: 'AI/Tech — just dropped' },
+  { key: 'watch_vc', label: 'VC & Startups — just dropped' },
+  { key: 'watch_golf', label: 'Golf — just dropped' },
 ]
 
 export const ES_NATIVE = new Set(['chile'])
@@ -65,6 +66,12 @@ export const SECTION_QUERIES: Record<string, { query: string; when: string; maxA
   markets: {
     query: '(stock market OR "S&P 500" OR Nasdaq OR Fed OR "interest rates" OR earnings OR inflation OR recession OR "Treasury yields")',
     when: '2d', maxAgeDays: 2, limit: 25,
+  },
+  geopolitics: {
+    query:
+      '(war OR ceasefire OR sanctions OR summit OR diplomacy OR "foreign minister" OR NATO OR "security council" OR election OR coup OR tariffs) ' +
+      '(China OR Russia OR Ukraine OR Israel OR Iran OR Taiwan OR "European Union" OR India OR "Middle East" OR Venezuela)',
+    when: '2d', maxAgeDays: 3, limit: 20,
   },
 }
 
@@ -91,6 +98,16 @@ const SOURCES: { section: string; name: string; url: string }[] = [
   { section: 'markets', name: 'Yahoo Finance', url: 'https://finance.yahoo.com/news/rssindex' },
   { section: 'markets', name: 'Semafor', url: 'https://www.semafor.com/rss.xml' },
   { section: 'markets', name: 'BI Markets', url: 'https://markets.businessinsider.com/rss/news' },
+  // Geopolitics — quality world desks (each verified to return fresh items, Sep 30 2026).
+  // Reuters and AP dropped public RSS, so they come through Google News site-scoped feeds.
+  { section: 'geopolitics', name: 'Reuters', url: 'https://news.google.com/rss/search?q=site:reuters.com/world+when:2d&hl=en-US&gl=US&ceid=US:en' },
+  { section: 'geopolitics', name: 'AP News', url: 'https://news.google.com/rss/search?q=site:apnews.com+world+when:2d&hl=en-US&gl=US&ceid=US:en' },
+  { section: 'geopolitics', name: 'FT World', url: 'https://www.ft.com/world?format=rss' },
+  { section: 'geopolitics', name: 'The Economist', url: 'https://www.economist.com/international/rss.xml' },
+  { section: 'geopolitics', name: 'Foreign Affairs', url: 'https://www.foreignaffairs.com/rss.xml' },
+  { section: 'geopolitics', name: 'Foreign Policy', url: 'https://foreignpolicy.com/feed/' },
+  { section: 'geopolitics', name: 'BBC World', url: 'https://feeds.bbci.co.uk/news/world/rss.xml' },
+  { section: 'geopolitics', name: 'NYT World', url: 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml' },
   { section: 'longread', name: 'FT Big Read', url: 'https://www.ft.com/rss/home' },
   { section: 'longread', name: 'WSJ Features', url: 'https://feeds.a.dj.com/rss/RSSWorldNews.xml' },
   { section: 'longread', name: 'The Economist', url: 'https://www.economist.com/latest/rss.xml' },

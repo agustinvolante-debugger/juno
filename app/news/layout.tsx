@@ -17,20 +17,21 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: 'cover',
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#FAF7F0' },
-    { media: '(prefers-color-scheme: dark)', color: '#14110C' },
+    { media: '(prefers-color-scheme: light)', color: '#F5F2EA' },
+    { media: '(prefers-color-scheme: dark)', color: '#13110D' },
   ],
 }
 
 export default function NewsLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="db-root">
-      {/* React hoists these into <head>; Newsreader (headlines) + Spline Sans Mono (kickers/meta) */}
+      {/* React hoists these into <head>. Newsreader for headlines + briefs; Geist / Geist Mono
+          come from the root layout (next/font) for UI chrome and numbers. */}
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       <link
         rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..600&family=Spline+Sans+Mono:wght@400;500;600&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..600&display=swap"
       />
       {children}
     </div>

@@ -12,7 +12,7 @@ export default function ResetForYou() {
         await fetch('/api/news/profile', { method: 'DELETE' })
         location.reload()
       }}
-      className="db-pill font-normal normal-case tracking-normal"
+      type="button" className="db-textbtn"
     >
       reset
     </button>

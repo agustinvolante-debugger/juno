@@ -24,7 +24,7 @@ export default function LastUpdated({ iso, lang = 'en' }: { iso: string | null; 
   }, [iso, es])
 
   return (
-    <span suppressHydrationWarning className="text-xs text-neutral-400" title={iso || undefined}>
+    <span suppressHydrationWarning className="db-updated" title={iso || undefined}>
       {txt}
     </span>
   )

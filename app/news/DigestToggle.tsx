@@ -27,13 +27,13 @@ export default function DigestToggle({ on, lang = 'en' }: { on: boolean; lang?: 
 
   return (
     <span className="inline-flex items-center gap-2">
-      <span>📧 {es ? 'Email diario:' : 'Daily email:'}</span>
-      <button onClick={toggle} disabled={busy} className={`rounded-md px-2 py-0.5 text-[11px] font-bold ${enabled ? 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900' : 'border border-neutral-300 dark:border-neutral-700'}`}>
-        {enabled ? (es ? 'Activado' : 'On') : (es ? 'Desactivado' : 'Off')}
+      <span>{es ? 'Email diario' : 'Daily email'}</span>
+      <button onClick={toggle} disabled={busy} role="switch" aria-checked={enabled} className="db-toggle">
+        <span className="db-switch" data-on={enabled ? '1' : '0'} aria-hidden /><span>{enabled ? (es ? 'Activado' : 'On') : (es ? 'Desactivado' : 'Off')}</span>
       </button>
       {enabled && (
-        <button onClick={test} disabled={busy} className="text-[11px] underline hover:text-neutral-900 dark:hover:text-neutral-100">
-          {sent ? (es ? '✓ enviado' : '✓ sent') : busy ? '…' : es ? 'enviar prueba' : 'send test'}
+        <button onClick={test} disabled={busy} className="db-textbtn">
+          {sent ? (es ? 'enviado' : 'sent') : busy ? '…' : es ? 'enviar prueba' : 'send test'}
         </button>
       )}
     </span>

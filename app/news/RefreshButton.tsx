@@ -19,10 +19,11 @@ export default function RefreshButton({ label }: { label?: string }) {
           location.reload()
         }
       }}
-      className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-semibold disabled:opacity-50 dark:border-neutral-700"
-      title="refresh news"
+      type="button"
+      className={label ? 'db-btn is-ink' : 'db-textbtn'}
+      title="Refresh the news now"
     >
-      {busy ? '…' : label || '↻'}
+      {busy ? 'Refreshing…' : label || 'Refresh'}
     </button>
   )
 }

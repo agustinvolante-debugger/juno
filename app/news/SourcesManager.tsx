@@ -28,7 +28,7 @@ export default function SourcesManager({
     } finally { setBusy(false) }
   }
 
-  const icon = (t: Tier) => (t === 'top' ? '⭐' : t === 'muted' ? '🚫' : '–')
+  const icon = (t: Tier) => (t === 'top' ? (es ? 'arriba' : 'top') : t === 'muted' ? (es ? 'oculta' : 'muted') : '–')
   const nTop = Object.values(tiers).filter((t) => t === 'top').length
   const nMuted = Object.values(tiers).filter((t) => t === 'muted').length
 
@@ -37,21 +37,21 @@ export default function SourcesManager({
       <button
         onClick={() => setOpen((o) => !o)}
         title={es ? 'Prioriza o silencia fuentes' : 'Prioritise or mute sources'}
-        className="rounded-md border border-neutral-300 px-2 py-0.5 text-[11px] font-bold hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+        type="button" className="db-textbtn"
       >
-        ⚙ {es ? 'Fuentes' : 'Sources'}{nTop || nMuted ? ` (${nTop ? '⭐' + nTop : ''}${nMuted ? ' 🚫' + nMuted : ''})` : ''}
+        {es ? 'Fuentes' : 'Sources'}{nTop || nMuted ? ` (${nTop ? nTop + (es ? ' arriba' : ' top') : ''}${nTop && nMuted ? ', ' : ''}${nMuted ? nMuted + (es ? ' ocultas' : ' muted') : ''})` : ''}
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div className="absolute bottom-full left-0 z-50 mb-1 max-h-[60vh] w-72 overflow-auto rounded-lg border border-neutral-300 bg-white text-neutral-900 shadow-2xl dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100">
             <div className="sticky top-0 border-b border-neutral-200 bg-white px-3 py-2 text-[11px] text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900">
-              {es ? 'Toca para alternar: ⭐ arriba · 🚫 oculta' : 'Tap to cycle: ⭐ top · 🚫 hide'}
+              {es ? 'Toca para alternar: arriba · oculta · normal' : 'Tap to cycle: top · muted · normal'}
             </div>
             {sources.map((s) => (
               <button key={s} onClick={() => cycle(s)} className="flex w-full items-center justify-between px-3 py-1.5 text-left text-[13px] hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
                 <span className={tiers[s] === 'muted' ? 'text-neutral-400 line-through' : ''}>{s}</span>
-                <span className="w-5 text-center text-[13px]">{icon(tiers[s])}</span>
+                <span className="w-14 text-right text-[11px] text-neutral-500">{icon(tiers[s])}</span>
               </button>
             ))}
             <div className="sticky bottom-0 flex gap-2 border-t border-neutral-200 bg-white px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900">
