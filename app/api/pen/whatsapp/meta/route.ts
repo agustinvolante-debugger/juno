@@ -1,6 +1,7 @@
 import { NextResponse, after } from 'next/server'
 import { parseFailedStatuses, parseInboundAll, verifySignature } from '@/lib/pen/whatsapp/meta'
 import { supabaseAdmin } from '@/lib/supabase'
+import { notifyUnreachable } from '@/lib/pen/whatsapp/unreachable'
 import { handleInbound } from '@/lib/pen/whatsapp/bot'
 
 export const dynamic = 'force-dynamic'
@@ -41,6 +42,8 @@ export async function POST(req: Request) {
         .from('pen_whatsapp_failures')
         .upsert(failed.map((f) => ({ message_id: f.messageId, recipient: f.recipient, code: f.code, title: f.title, detail: f.detail, failed_at: f.at })), { onConflict: 'message_id' })
         .then(({ error }) => error && console.warn(`pen whatsapp (meta): could not store failures: ${error.message}`))
+      // Someone who will never hear back on this number gets told by email, once.
+      await notifyUnreachable(failed)
     })
   }
 
