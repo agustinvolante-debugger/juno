@@ -92,7 +92,7 @@ type Payload = {
 }
 
 /**
- * A Meta webhook can carry several messages (and delivery statuses, which are ignored here).
+ * A Meta webhook can carry several messages, and delivery statuses (failed ones: parseFailedStatuses).
  * Media comes as an id, not a URL; it is kept as `meta:<id>` so openMedia knows to resolve it.
  */
 export function parseInboundAll(body: unknown): Inbound[] {
@@ -114,6 +114,43 @@ export function parseInboundAll(body: unknown): Inbound[] {
         else if (m.type === 'interactive' && m.interactive?.button_reply) out.push({ ...base, kind: 'reply', replyId: m.interactive.button_reply.id ?? null, text: m.interactive.button_reply.title ?? '' })
         else if (m.type === 'button') out.push({ ...base, kind: 'reply', replyId: m.button?.payload ?? null, text: m.button?.text ?? '' })
         else out.push({ ...base, kind: 'other' })
+      }
+    }
+  }
+  return out
+}
+
+export type FailedStatus = { messageId: string; recipient: string; code: number | null; title: string; detail: string; at: string }
+
+/**
+ * Delivery statuses that came back "failed". A send that Meta accepts (HTTP 200) can still
+ * never arrive, and this is the only place that says so and why: found on 30 Sep, when every
+ * reply to a Brazilian number was accepted and none was delivered.
+ */
+export function parseFailedStatuses(body: unknown): FailedStatus[] {
+  const b = (body ?? {}) as Payload
+  if (b.object !== 'whatsapp_business_account') return []
+  const out: FailedStatus[] = []
+  for (const e of b.entry ?? []) {
+    for (const c of e.changes ?? []) {
+      for (const raw of c.value?.statuses ?? []) {
+        const st = raw as {
+          id?: string
+          status?: string
+          recipient_id?: string
+          timestamp?: string
+          errors?: { code?: number; title?: string; message?: string; error_data?: { details?: string } }[]
+        }
+        if (st.status !== 'failed' || !st.id) continue
+        const err = st.errors?.[0]
+        out.push({
+          messageId: st.id,
+          recipient: String(st.recipient_id ?? '').replace(/\D/g, ''),
+          code: typeof err?.code === 'number' ? err.code : null,
+          title: String(err?.title ?? err?.message ?? 'unknown').slice(0, 200),
+          detail: String(err?.error_data?.details ?? '').slice(0, 500),
+          at: st.timestamp ? new Date(Number(st.timestamp) * 1000).toISOString() : new Date().toISOString(),
+        })
       }
     }
   }

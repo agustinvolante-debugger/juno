@@ -86,13 +86,15 @@ async function whatsappReplies(): Promise<CheckResult> {
   const name = 'WhatsApp replies'
   // A linked user's text still 'received' 5 minutes on never got its reply (bot.ts marks
   // answered ones 'done'). Two hours back only: older rows predate that marking.
-  const [unanswered, failed, stuckFiles] = await Promise.all([
+  const [unanswered, failed, stuckFiles, undelivered] = await Promise.all([
     supabaseAdmin.from('pen_whatsapp_messages').select('id', { count: 'exact', head: true })
       .eq('kind', 'text').eq('state', 'received').not('email', 'is', null).lt('created_at', ago(5 * MIN)).gt('created_at', ago(120 * MIN)),
     supabaseAdmin.from('pen_whatsapp_messages').select('id', { count: 'exact', head: true })
       .eq('state', 'failed').gt('created_at', ago(60 * MIN)),
     supabaseAdmin.from('pen_whatsapp_messages').select('id', { count: 'exact', head: true })
       .eq('state', 'accepted').lt('created_at', ago(15 * MIN)).gt('created_at', ago(24 * 60 * MIN)),
+    // Sent, accepted by Meta, never delivered (the webhook's failed statuses).
+    supabaseAdmin.from('pen_whatsapp_failures').select('code,title').gt('failed_at', ago(60 * MIN)).limit(50),
   ])
   const err = unanswered.error ?? failed.error ?? stuckFiles.error
   if (err) return { name, ok: false, detail: `query failed: ${err.message}`, probe: false }
@@ -100,6 +102,10 @@ async function whatsappReplies(): Promise<CheckResult> {
     unanswered.count ? `${unanswered.count} message(s) with no reply after 5 min` : '',
     failed.count ? `${failed.count} failed in the last hour` : '',
     stuckFiles.count ? `${stuckFiles.count} file(s) accepted but never sent to transcription` : '',
+    // Before its table exists the query errors; that is not an outage.
+    !undelivered.error && undelivered.data?.length
+      ? `${undelivered.data.length} repl${undelivered.data.length === 1 ? 'y' : 'ies'} not delivered (${[...new Set(undelivered.data.map((r) => `${r.code} ${r.title}`))].join('; ')})`
+      : '',
   ].filter(Boolean)
   return { name, ok: !bad.length, detail: bad.join('; ') || 'all answered', probe: false }
 }

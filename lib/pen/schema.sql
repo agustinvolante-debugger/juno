@@ -295,3 +295,10 @@ create index if not exists pen_clients_user on pen_clients(user_email);
 -- action_done: [{ mine: me|shared|other|unclear, due_date: YYYY-MM-DD|null, waiting: name|null }].
 -- Written after every notes write by lib/pen/todo-meta.ts. Feeds Home's Today and "only mine".
 -- alter table public.pen_sessions add column if not exists action_meta jsonb;
+
+-- WhatsApp delivery failures (2026-09-30). Meta accepts a send (HTTP 200) and reports that it
+-- could not deliver it later, in a "failed" status webhook. app/api/pen/whatsapp/meta keeps them;
+-- health.ts alerts on any in the last hour.
+-- create table if not exists public.pen_whatsapp_failures (message_id text primary key, recipient text not null, code int, title text, detail text, failed_at timestamptz not null default now());
+-- create index if not exists pen_whatsapp_failures_at on public.pen_whatsapp_failures(failed_at desc);
+-- alter table public.pen_whatsapp_failures enable row level security;

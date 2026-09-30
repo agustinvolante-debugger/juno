@@ -1,5 +1,6 @@
 import { NextResponse, after } from 'next/server'
-import { parseInboundAll, verifySignature } from '@/lib/pen/whatsapp/meta'
+import { parseFailedStatuses, parseInboundAll, verifySignature } from '@/lib/pen/whatsapp/meta'
+import { supabaseAdmin } from '@/lib/supabase'
 import { handleInbound } from '@/lib/pen/whatsapp/bot'
 
 export const dynamic = 'force-dynamic'
@@ -30,6 +31,19 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ ok: true, note: 'not json' })
   }
+  // Replies Meta accepted but could not deliver. Logged and kept (health.ts alerts on them),
+  // because a 200 from the send API says nothing about whether it arrived.
+  const failed = parseFailedStatuses(body)
+  if (failed.length) {
+    after(async () => {
+      for (const f of failed) console.warn(`pen whatsapp (meta): delivery failed to …${f.recipient.slice(-4)}: ${f.code} ${f.title} ${f.detail}`)
+      await supabaseAdmin
+        .from('pen_whatsapp_failures')
+        .upsert(failed.map((f) => ({ message_id: f.messageId, recipient: f.recipient, code: f.code, title: f.title, detail: f.detail, failed_at: f.at })), { onConflict: 'message_id' })
+        .then(({ error }) => error && console.warn(`pen whatsapp (meta): could not store failures: ${error.message}`))
+    })
+  }
+
   const msgs = parseInboundAll(body)
   if (msgs.length) {
     after(async () => {
