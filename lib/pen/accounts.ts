@@ -75,7 +75,7 @@ export async function activate(opts: {
   currentPeriodEnd?: string | null
   trialEndsAt?: string | null
   offer?: string | null
-}): Promise<void> {
+}): Promise<boolean> {
   const email = opts.email.toLowerCase()
   const patch = {
     email,
@@ -97,10 +97,26 @@ export async function activate(opts: {
     ...(opts.offer ? { offer: opts.offer } : {}),
   }
 
-  const write = async (body: Record<string, unknown>) =>
-    existing
-      ? await supabaseAdmin.from('pen_accounts').update(body).eq('id', existing.id)
-      : await supabaseAdmin.from('pen_accounts').insert({ ...body, source: 'stripe' })
+  // Stripe sends checkout.session.completed and customer.subscription.created within moments of
+  // each other, in either order. Whichever flips the row to active first "claims" the signup, and
+  // only that one returns true, so the welcome and the owners' email go out exactly once.
+  let claimed = false
+  const write = async (body: Record<string, unknown>) => {
+    if (!existing) {
+      const r = await supabaseAdmin.from('pen_accounts').insert({ ...body, source: 'stripe' })
+      if (!r.error) claimed = true
+      return r
+    }
+    if (existing.status !== 'active') {
+      const r = await supabaseAdmin.from('pen_accounts').update(body).eq('id', existing.id).neq('status', 'active').select('id')
+      if (r.error) return r
+      if (r.data?.length) {
+        claimed = true
+        return r
+      }
+    }
+    return await supabaseAdmin.from('pen_accounts').update(body).eq('id', existing.id)
+  }
 
   let { error } = await write({ ...patch, ...extras })
 
@@ -113,6 +129,7 @@ export async function activate(opts: {
     ;({ error } = await write(patch))
   }
   if (error) throw new Error(error.message)
+  return claimed
 }
 
 /** Subscription ended. The row stays so the history and the recordings survive. */

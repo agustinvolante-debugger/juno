@@ -115,7 +115,7 @@ export async function POST(req: Request) {
           break
         }
         if (!email) break
-        await activate({
+        const first = await activate({
           email,
           stripeCustomerId: typeof o.customer === 'string' ? o.customer : null,
           stripeSubscriptionId: typeof o.subscription === 'string' ? o.subscription : null,
@@ -124,12 +124,11 @@ export async function POST(req: Request) {
         })
         // The subscription.created event that follows carries the trial dates; this one only
         // has to open the door, which it should do immediately rather than wait for it.
-        await welcome(email, o.metadata?.offer ?? null, o.metadata?.plan ?? null, o.metadata?.lang).catch(() => {})
         // The language they signed up in becomes their App language unless they already chose
         // one, so briefings and WhatsApp replies match from the first recording.
         if (o.metadata?.lang) await rememberAppLanguage(email, parseLang(o.metadata.lang)).catch(() => {})
-        // The owners' "new customer" email, now that there is one.
-        await notifyPaid({ email, plan: o.metadata?.plan ?? null, offer: o.metadata?.offer ?? null, amountCents: o.amount_total ?? null }).catch(() => {})
+        console.log(`pen stripe: checkout completed for ${email} (${o.metadata?.offer ?? '?'}), first=${first}`)
+        if (first) await greet(email, o.metadata ?? {}, o.amount_total ?? null)
         break
       }
 
@@ -143,7 +142,7 @@ export async function POST(req: Request) {
         const live = sub.status === 'active' || sub.status === 'trialing'
         const subEmail = email || (await emailForSubscription(sub))
         if (live && subEmail) {
-          await activate({
+          const first = await activate({
             email: subEmail,
             stripeCustomerId: typeof sub.customer === 'string' ? sub.customer : null,
             stripeSubscriptionId: sub.id ?? null,
@@ -152,6 +151,10 @@ export async function POST(req: Request) {
             offer: sub.metadata?.offer ?? null,
             plan: sub.metadata?.plan ?? undefined,
           })
+          // If this event beat checkout.session.completed (or that one never comes), the
+          // signup is greeted here instead. Nothing is charged today on a trial.
+          console.log(`pen stripe: ${event.type} for ${subEmail} (${sub.status}), first=${first}`)
+          if (first) await greet(subEmail, sub.metadata ?? {}, sub.status === 'trialing' ? 0 : null)
         } else if (!live && sub.id) {
           await deactivate(sub.id)
         }
@@ -203,6 +206,13 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ received: true })
+}
+
+/** A new customer: their welcome email, and the owners' "new customer" email with the address. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function greet(email: string, meta: Record<string, any>, amountCents: number | null) {
+  await welcome(email, meta.offer ?? null, meta.plan ?? null, meta.lang).catch((e) => console.warn(`pen welcome failed: ${(e as Error).message}`))
+  await notifyPaid({ email, plan: meta.plan ?? null, offer: meta.offer ?? null, amountCents }).catch((e) => console.warn(`pen notify failed: ${(e as Error).message}`))
 }
 
 const shell = (body: string) =>

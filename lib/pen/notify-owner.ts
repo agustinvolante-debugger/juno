@@ -39,15 +39,22 @@ async function signupRow(email: string) {
 
 async function send(subject: string, rows: [string, string][]) {
   const to = recipient()
-  if (!to) return
-  await sendEmailResult({
+  if (!to) {
+    console.warn('pen notify: no recipient (PEN_SIGNUP_NOTIFY / RESEND_FROM_EMAIL unset)')
+    return
+  }
+  const r = await sendEmailResult({
     to,
     subject,
     html:
       `<!doctype html><html><head><meta charset="utf-8"></head><body style="font-family:ui-monospace,Menlo,monospace;font-size:13px;padding:20px">` +
       rows.map(([k, v]) => `<div><strong>${k}:</strong> ${esc(v)}</div>`).join('') +
       `</body></html>`,
+    text: rows.map(([k, v]) => `${k}: ${v}`).join('\n'),
   })
+  // A failure used to vanish here; the Vercel log is the only place it can show up.
+  if (!r.ok) console.warn(`pen notify: "${subject}" not sent: ${r.error}`)
+  else console.log(`pen notify: "${subject}" sent to ${to.length} recipient(s)`)
 }
 
 /** A checkout completed. `amountCents` is what was charged today (0 on a trial). */
