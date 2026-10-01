@@ -27,7 +27,8 @@ const T = {
     send: 'Email me a sign-in link',
     sending: 'Sending…',
     sentTitle: 'Check your email',
-    sentBody: (e: string) => `If ${e} has an account, a sign-in link is on its way. It works once, for 15 minutes. Check spam if it doesn’t show up.`,
+    sentBody: (e: string) => `If ${e} has an account, a sign-in link is on its way. It works once, for 15 minutes.`,
+    spam: 'Not in your inbox? Check your Spam or Promotions folder, and search for “Juno sign-in link”. It only goes to the email you signed up with.',
     other: 'Use a different email',
     newHere: 'New to Juno Pen?',
     start: 'Start free',
@@ -54,7 +55,8 @@ const T = {
     send: 'Envíame un enlace para entrar',
     sending: 'Enviando…',
     sentTitle: 'Revisa tu correo',
-    sentBody: (e: string) => `Si ${e} tiene una cuenta, te enviamos un enlace para entrar. Sirve una vez, durante 15 minutos. Revisa spam si no aparece.`,
+    sentBody: (e: string) => `Si ${e} tiene una cuenta, te enviamos un enlace para entrar. Sirve una vez, durante 15 minutos.`,
+    spam: '¿No está en tu bandeja de entrada? Revisa Spam o Promociones, y busca “enlace para entrar a Juno”. Solo llega al correo con el que te registraste.',
     other: 'Usar otro correo',
     newHere: '¿Nuevo en Juno Pen?',
     start: 'Pruébalo gratis',
@@ -81,7 +83,8 @@ const T = {
     send: 'Me envie um link para entrar',
     sending: 'Enviando…',
     sentTitle: 'Confira seu e-mail',
-    sentBody: (e: string) => `Se ${e} tem uma conta, um link para entrar está a caminho. Ele funciona uma vez, por 15 minutos. Veja o spam se não aparecer.`,
+    sentBody: (e: string) => `Se ${e} tem uma conta, um link para entrar está a caminho. Ele funciona uma vez, por 15 minutos.`,
+    spam: 'Não está na caixa de entrada? Veja o Spam ou Promoções, e procure “link para entrar no Juno”. Ele só vai para o e-mail que você usou no cadastro.',
     other: 'Usar outro e-mail',
     newHere: 'Novo no Juno Pen?',
     start: 'Teste grátis',
@@ -173,6 +176,7 @@ function SignInContent() {
           </div>
           <h1 className="auth-title" style={{ marginTop: 0 }}>{L.sentTitle}</h1>
           <p className="auth-sub">{L.sentBody(email.trim())}</p>
+          <p className="auth-alert" style={{ textAlign: 'left' }}>{L.spam}</p>
           <button type="button" className="auth-btn auth-btn-quiet" onClick={() => setState('idle')}>
             {L.other}
           </button>
