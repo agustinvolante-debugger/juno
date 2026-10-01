@@ -34,8 +34,10 @@ export async function GET(req: NextRequest) {
     sb.from('vc_firms').select('id,slug,name').limit(10000),
     sb.from('vc_people').select('id,full_name,firm_id,title,bio,profile_url,linkedin,x_url').limit(10000),
     Promise.resolve(coQ as any),
-    sb.from('vc_investments').select('firm_id,company_id,partner_id,round,amount_text,amount_num,date,lead,confidence,source_text').limit(50000),
-    sb.from('vc_board_seats').select('person_id,company_id,firm_id,person_name,as_of,confidence,source_text,source_url,source_kind,is_published').eq('is_published', true).limit(50000),
+    // PostgREST caps every response at 1000 rows — page through the growing tables
+    allRows((a, b) => sb.from('vc_investments').select('id,firm_id,company_id,partner_id,round,amount_text,amount_num,date,lead,confidence,source_text').order('id').range(a, b)),
+    // only firm-attributed seats can render (Form D related persons without a firm are skipped below anyway)
+    allRows((a, b) => sb.from('vc_board_seats').select('id,person_id,company_id,firm_id,person_name,as_of,created_at,confidence,source_text,source_url,source_kind,is_published').eq('is_published', true).not('firm_id', 'is', null).order('id').range(a, b)),
   ])
   for (const r of [firmsR, peopleR, coR, invR, seatsR]) {
     if (r.error) return NextResponse.json({ error: r.error.message }, { status: 500, headers: CORS })
@@ -78,7 +80,7 @@ export async function GET(req: NextRequest) {
   for (const e of investments) {
     const k = `${e.vc}|${e.company}|${e.partner || ''}`
     const hit = seatByKey.get(k)
-    if (hit) { e.boardSeat = true; e.sourceKind = hit.s.source_kind; e.sourceUrl = hit.s.source_url; seatByKey.delete(k) }
+    if (hit) { e.boardSeat = true; e.sourceKind = hit.s.source_kind; e.sourceUrl = hit.s.source_url; (e as any).seatAsOf = hit.s.as_of || null; (e as any).seatAdded = hit.s.created_at || null; seatByKey.delete(k) }
   }
   // remaining board seats had no matching investment (e.g. Form D-sourced) → add gold edges
   for (const { s, fSlug, cSlug } of seatByKey.values()) {
@@ -88,7 +90,8 @@ export async function GET(req: NextRequest) {
       round: null, date: s.as_of ? String(s.as_of).slice(0, 7) : null, lead: false,
       confidence: s.confidence, source: s.source_text,
       sourceKind: s.source_kind, sourceUrl: s.source_url,
-    })
+      seatAsOf: s.as_of || null, seatAdded: s.created_at || null,
+    } as any)
   }
 
   // bios keyed "<Name>@<firmSlug>" (frontend lookup key)
@@ -130,6 +133,18 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json({ graph: { vcs, companies, investments }, bios }, { headers: CORS })
+}
+
+// fetch every page of a query (1000-row PostgREST pages); returns a {data,error} like a single call
+async function allRows(page: (from: number, to: number) => any): Promise<{ data: any[] | null; error: any }> {
+  const out: any[] = []
+  for (let from = 0; from < 200000; from += 1000) {
+    const r = await page(from, from + 999)
+    if (r.error) return { data: null, error: r.error }
+    out.push(...(r.data || []))
+    if (!r.data || r.data.length < 1000) break
+  }
+  return { data: out, error: null }
 }
 
 function parseTotal(s: string | null): number {
