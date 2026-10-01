@@ -49,20 +49,25 @@ export const INCLUDED_HOURS = 100
  */
 export const TRIAL_DAYS = 7
 export const TRIAL_DAYS_POSTED = 21
+/** The invited-agent offer (Orlando cold email, 30 Sep 2026): the pen free, 30 days free,
+ *  then the monthly plan. Capped, because a forwarded link must not post unlimited hardware. */
+export const FREE_PEN_TRIAL_DAYS = 30
+export const FREE_PEN_CAP = 25
 
-export type Offer = 'own-recorder' | 'posted-pen'
+export type Offer = 'own-recorder' | 'posted-pen' | 'free-pen'
 export type Plan = 'monthly' | 'halfyear' | 'annual'
 
 export function parsePlan(v: unknown): Plan {
   return v === 'annual' ? 'annual' : v === 'halfyear' ? 'halfyear' : 'monthly'
 }
 export function parseOffer(v: unknown): Offer {
-  return v === 'own-recorder' ? 'own-recorder' : 'posted-pen'
+  return v === 'own-recorder' ? 'own-recorder' : v === 'free-pen' ? 'free-pen' : 'posted-pen'
 }
 
 /** Free days before the first charge. Prepaid plans have none. */
 export function trialDaysFor(offer: Offer, plan: Plan = 'monthly'): number {
   if (plan !== 'monthly') return 0
+  if (offer === 'free-pen') return FREE_PEN_TRIAL_DAYS
   return offer === 'posted-pen' ? TRIAL_DAYS_POSTED : TRIAL_DAYS
 }
 
@@ -71,6 +76,8 @@ export function trialDaysFor(offer: Offer, plan: Plan = 'monthly'): number {
  * no yearly plan; asking for one is refused rather than quietly charged as something else.
  */
 export function planPrice(offer: Offer, plan: Plan): { usd: number; months: number; env: string } | null {
+  // Free pen: monthly only, the same price as the pen plan; the pen itself is never charged.
+  if (offer === 'free-pen') return plan === 'monthly' ? { usd: PLAN_MONTHLY_USD, months: 1, env: 'STRIPE_PRICE_MONTHLY' } : null
   if (offer === 'posted-pen') {
     if (plan === 'monthly') return { usd: PLAN_MONTHLY_USD, months: 1, env: 'STRIPE_PRICE_MONTHLY' }
     if (plan === 'halfyear') return { usd: PLAN_HALFYEAR_USD, months: 6, env: 'STRIPE_PRICE_HALFYEAR' }

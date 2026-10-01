@@ -1,4 +1,5 @@
-import { parsePlan, parseOffer } from '@/lib/pen/plan'
+import { parsePlan, parseOffer, FREE_PEN_CAP } from '@/lib/pen/plan'
+import { supabaseAdmin } from '@/lib/supabase'
 import { parseCurrency, parseLang } from '@/lib/pen/currency'
 import { NextResponse } from 'next/server'
 import { validate, saveSignup } from '@/lib/pen/signup'
@@ -30,6 +31,24 @@ function rateLimited(ip: string): boolean {
   return recent.length > MAX_PER_WINDOW
 }
 
+/** Free pens claimed so far: accounts that completed the free-pen checkout (trial started). */
+async function freePensClaimed(): Promise<number> {
+  const { count } = await supabaseAdmin
+    .from('pen_accounts')
+    .select('id', { count: 'exact', head: true })
+    .eq('offer', 'free-pen')
+    .neq('status', 'pending')
+  return count ?? 0
+}
+
+// The signup page asks how many free pens are left, so a full campaign says so before anyone
+// fills the form in.
+export async function GET(req: Request) {
+  if (new URL(req.url).searchParams.get('status') !== 'free-pen') return NextResponse.json({ error: 'not found' }, { status: 404 })
+  const claimed = await freePensClaimed().catch(() => 0)
+  return NextResponse.json({ cap: FREE_PEN_CAP, claimed, remaining: Math.max(0, FREE_PEN_CAP - claimed) })
+}
+
 export async function POST(req: Request) {
   const ip =
     req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
@@ -54,8 +73,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Too many attempts. Try again in a few minutes.' }, { status: 429 })
   }
 
-  const v = validate(b, { needsAddress: parseOffer(b.offer) === 'posted-pen' && b.waitlist !== 'pen', lang: parseLang(b.lang) })
+  const offerIn = parseOffer(b.offer)
+  const v = validate(b, { needsAddress: (offerIn === 'posted-pen' || offerIn === 'free-pen') && b.waitlist !== 'pen', lang: parseLang(b.lang) })
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
+
+  // The free-pen link is capped: a forwarded link must not post unlimited hardware.
+  if (offerIn === 'free-pen' && (await freePensClaimed().catch(() => 0)) >= FREE_PEN_CAP) {
+    return NextResponse.json({ error: 'All the free pens for this offer have been claimed. You can still start a free trial from tryjunoapp.com.' }, { status: 409 })
+  }
 
   try {
     const { created } = await saveSignup(v.value)
@@ -82,8 +107,9 @@ export async function POST(req: Request) {
 
     let checkoutUrl: string | null = null
     try {
-      const plan: Plan = parsePlan(b.plan)
-      const offer: Offer = parseOffer(b.offer)
+      const offer: Offer = offerIn
+      // The free pen is a monthly plan only, whatever the link says.
+      const plan: Plan = offer === 'free-pen' ? 'monthly' : parsePlan(b.plan)
       const r = await startPlanCheckout({
         email: v.value.email,
         plan,

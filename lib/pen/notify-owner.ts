@@ -11,14 +11,18 @@ import { planPrice, parseOffer, parsePlan } from './plan'
 
 const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-function recipient(): string | null {
+/** PEN_SIGNUP_NOTIFY may list several addresses, comma-separated (the founder + Chris). */
+function recipient(): string[] | null {
   const to = process.env.PEN_SIGNUP_NOTIFY || process.env.RESEND_FROM_EMAIL
-  return to ? to.replace(/^.*<|>.*$/g, '') : null
+  if (!to) return null
+  const list = to.split(',').map((a) => a.trim().replace(/^.*<|>.*$/g, '')).filter(Boolean)
+  return list.length ? list : null
 }
 
 function planLabel(plan: string | null, offer: string | null): string {
   const o = parseOffer(offer)
   const p = parsePlan(plan)
+  if (o === 'free-pen') return 'FREE PEN (invited agent), 30-day trial, then $15/month'
   const len = p === 'annual' ? 'yearly' : p === 'halfyear' ? '6 months' : 'monthly'
   const price = planPrice(o, p)
   return `${o === 'own-recorder' ? 'Own recorder' : 'With pen'}, ${len}${price ? ` ($${price.usd})` : ''}`
@@ -51,7 +55,7 @@ export async function notifyPaid(opts: { email: string; plan: string | null; off
   const s = await signupRow(opts.email).catch(() => null)
   const today = opts.amountCents ? `$${(opts.amountCents / 100).toFixed(2)} charged today` : 'Free trial started, card on file'
   const shipTo = s ? [s.ship_line1, s.ship_line2, s.ship_city, s.ship_state, s.ship_postcode, s.ship_country].filter(Boolean).join(', ') : ''
-  const pen = parseOffer(opts.offer) === 'posted-pen'
+  const pen = parseOffer(opts.offer) !== 'own-recorder'
   await send(`${opts.amountCents ? 'Paid' : 'Trial'}: Juno Pen, ${s?.name ?? opts.email} (${planLabel(opts.plan, opts.offer)})`, [
     ['Name', s?.name ?? '(no signup form)'],
     ['Email', opts.email],

@@ -28,6 +28,13 @@ const SU = {
     doneH: 'You’re on the list.', doneWait: 'We’ll email you as soon as the pen is available where you are.',
     doneBody: 'There’s a confirmation in your inbox. We’ll send a link to start your free trial, and get the recorder in the post.',
     back: 'Back to the site', err: 'Something went wrong. Try again.', home: 'Back to Juno Pen',
+    free: {
+      eyebrow: 'Your free Juno pen', h1: 'Your Juno pen is on us.',
+      lede: 'Tell us where to send it. The pen is free, and so are your first 30 days of Juno. We save a card for after the trial: nothing is charged today.',
+      terms: ['$0 today', 'Pen free', '30 days free', 'Then $15/month', 'Cancel anytime'],
+      submit: 'Claim my free pen', fine: 'Your card is saved for after the trial and charged only if you keep Juno past 30 days. We email you before the trial ends. Cancel anytime in Settings, Billing.',
+      gone: 'All the free pens for this offer have been claimed.',
+    },
     ph: { name: 'Mark Ellis', email: 'you@company.com', phone: '(305) 555 0142', line1: '1200 Brickell Ave', city: 'Miami', state: 'FL', postcode: '33131', country: 'United States' },
   },
   es: {
@@ -45,6 +52,13 @@ const SU = {
     doneH: 'Estás en la lista.', doneWait: 'Te escribimos apenas el lápiz esté disponible donde estás.',
     doneBody: 'Te llegó una confirmación al correo. Te enviaremos un enlace para empezar tu prueba gratis.',
     back: 'Volver al sitio', err: 'Algo salió mal. Inténtalo de nuevo.', home: 'Volver a Juno Pen',
+    free: {
+      eyebrow: 'Tu lápiz Juno gratis', h1: 'Tu lápiz Juno va por nuestra cuenta.',
+      lede: 'Dinos dónde enviarlo. El lápiz es gratis, y también tus primeros 30 días de Juno. Guardamos una tarjeta para después de la prueba: hoy no se cobra nada.',
+      terms: ['$0 hoy', 'Lápiz gratis', '30 días gratis', 'Luego US$15/mes', 'Cancela cuando quieras'],
+      submit: 'Pedir mi lápiz gratis', fine: 'Tu tarjeta queda guardada para después de la prueba y solo se cobra si sigues con Juno pasados los 30 días. Te escribimos antes de que termine. Cancela cuando quieras en Configuración, Facturación.',
+      gone: 'Ya se reclamaron todos los lápices gratis de esta oferta.',
+    },
     ph: { name: 'Sofía Henríquez', email: 'tu@empresa.cl', phone: '+56 9 1234 5678', line1: 'Av. Apoquindo 3000', city: 'Santiago', state: 'RM', postcode: '7550000', country: 'Chile' },
   },
   pt: {
@@ -62,6 +76,13 @@ const SU = {
     doneH: 'Você está na lista.', doneWait: 'Avisamos por e-mail assim que a caneta estiver disponível onde você está.',
     doneBody: 'Enviamos uma confirmação para o seu e-mail. Mandaremos um link para começar seu teste grátis.',
     back: 'Voltar ao site', err: 'Algo deu errado. Tente de novo.', home: 'Voltar ao Juno Pen',
+    free: {
+      eyebrow: 'Sua caneta Juno grátis', h1: 'Sua caneta Juno é por nossa conta.',
+      lede: 'Diga onde enviá-la. A caneta é grátis, e seus primeiros 30 dias de Juno também. Guardamos um cartão para depois do teste: nada é cobrado hoje.',
+      terms: ['US$0 hoje', 'Caneta grátis', '30 dias grátis', 'Depois US$15/mês', 'Cancele quando quiser'],
+      submit: 'Pedir minha caneta grátis', fine: 'Seu cartão fica salvo para depois do teste e só é cobrado se você continuar com o Juno após 30 dias. Avisamos antes de o teste acabar. Cancele quando quiser em Configurações, Cobrança.',
+      gone: 'Todas as canetas grátis desta oferta já foram resgatadas.',
+    },
     ph: { name: 'Sofia Henriques', email: 'voce@empresa.com.br', phone: '+55 11 91234 5678', line1: 'Av. Paulista 1000', city: 'São Paulo', state: 'SP', postcode: '01310-100', country: 'Brasil' },
   },
 } as const
@@ -78,12 +99,24 @@ export default function SignupPage() {
   const [waitlist, setWaitlist] = useState(false)
   const [lang, setLang] = useState<SuLang>('en')
   const T = SU[lang]
+  // The invited-agent link (?offer=free-pen): pen free, 30 days free, capped at 25 claims.
+  const [freePen, setFreePen] = useState(false)
+  const [remaining, setRemaining] = useState<number | null>(null)
+  // The offer is read from the URL after mount; until then the header stays invisible so an
+  // invited agent never sees the paid-plan copy flash before "Your Juno pen is on us".
+  const [ready, setReady] = useState(false)
+  const F = T.free
 
   useEffect(() => {
     firstField.current?.focus()
     const q = new URLSearchParams(window.location.search)
     setShipsPen(q.get('offer') !== 'own-recorder' && q.get('waitlist') !== 'pen')
     setWaitlist(q.get('waitlist') === 'pen')
+    setReady(true)
+    if (q.get('offer') === 'free-pen') {
+      setFreePen(true)
+      fetch('/api/pen/signup?status=free-pen').then((r) => r.json()).then((j) => setRemaining(typeof j.remaining === 'number' ? j.remaining : null)).catch(() => {})
+    }
     const l = q.get('lang')
     if (l === 'es' || l === 'pt') {
       setLang(l)
@@ -104,7 +137,7 @@ export default function SignupPage() {
         // on ?offer=posted-pen and gets the longer trial; someone who already owns a recorder
         // starts today and gets fourteen days.
         plan: url.get('plan') === 'annual' ? 'annual' : url.get('plan') === 'halfyear' ? 'halfyear' : 'monthly',
-        offer: url.get('offer') === 'own-recorder' ? 'own-recorder' : 'posted-pen',
+        offer: url.get('offer') === 'own-recorder' ? 'own-recorder' : url.get('offer') === 'free-pen' ? 'free-pen' : 'posted-pen',
         name: f.get('name'),
         email: f.get('email'),
         phone: f.get('phone'),
@@ -158,16 +191,22 @@ export default function SignupPage() {
   return (
     <div className="pen-root">
       <main className="pen-su-wrap">
-        <header className="pen-su-head">
+        <header className="pen-su-head" style={{ opacity: ready ? 1 : 0, transition: 'opacity .15s' }}>
           <Link href="/pen" className="pen-su-back" aria-label={T.home}>
             <Image src="/juno_mark.png" alt="Juno" width={24} height={24} className="pen-mark" />
             <span aria-hidden>&larr;</span>
           </Link>
-          <div className="pen-lp-eyebrow pen-su-eyebrow">{T.eyebrow}</div>
-          <h1 className="pen-display pen-su-h1">{T.h1}</h1>
+          <div className="pen-lp-eyebrow pen-su-eyebrow">{freePen ? F.eyebrow : T.eyebrow}</div>
+          <h1 className="pen-display pen-su-h1">{freePen ? F.h1 : T.h1}</h1>
           <p className="mt-4 max-w-[52ch] text-[16.5px] leading-relaxed" style={{ color: 'var(--soft)' }}>
-            {waitlist ? T.ledeWait : shipsPen ? T.ledePen : T.ledeOwn}
+            {freePen ? F.lede : waitlist ? T.ledeWait : shipsPen ? T.ledePen : T.ledeOwn}
           </p>
+          {freePen && (
+            <ul className="pen-su-terms" aria-label="Offer terms">
+              {F.terms.map((t) => <li key={t}>{t}</li>)}
+            </ul>
+          )}
+          {freePen && remaining === 0 && <p className="pen-su-gone" role="status">{F.gone}</p>}
         </header>
 
         <form className="pen-su-form" onSubmit={submit} noValidate>
@@ -248,11 +287,11 @@ export default function SignupPage() {
           {error && <div className="pen-su-err" role="alert">{error}</div>}
 
           <button className="pen-lp-btn pen-lp-btn-primary pen-su-submit" disabled={state === 'sending'}>
-            {state === 'sending' ? T.sending : T.submit}
+            {state === 'sending' ? T.sending : freePen ? F.submit : T.submit}
           </button>
 
           <p className="pen-su-fine">
-            {shipsPen ? T.finePen : T.fineOwn}
+            {freePen ? F.fine : shipsPen ? T.finePen : T.fineOwn}
           </p>
           {/* Relative links: this page is /signup on the Pen domain (→ /privacy) and /pen/signup
               elsewhere (→ /pen/privacy), and both resolve to the Pen versions. */}

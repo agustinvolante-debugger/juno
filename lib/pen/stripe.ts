@@ -69,6 +69,8 @@ export async function createCheckoutSession(opts: {
   metadata?: Record<string, string>
   /** Stripe's payment page language, e.g. 'es-419'. Unset: the browser's. */
   locale?: string
+  /** A line under the pay button, e.g. the free-pen offer's "cancel anytime" promise. */
+  submitMessage?: string
 }): Promise<CheckoutSession> {
   return stripe<CheckoutSession>('checkout/sessions', {
     mode: 'subscription',
@@ -80,6 +82,7 @@ export async function createCheckoutSession(opts: {
     payment_method_collection: 'always',
     allow_promotion_codes: true,
     ...(opts.locale ? { locale: opts.locale } : {}),
+    ...(opts.submitMessage ? { custom_text: { submit: { message: opts.submitMessage.slice(0, 1200) } } } : {}),
     subscription_data: {
       // trialDays 0 means charge now: the yearly plan, where the recorder is included and
       // shipping it before any payment would hand out free hardware to anyone who cancels.

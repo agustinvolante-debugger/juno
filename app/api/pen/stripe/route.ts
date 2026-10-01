@@ -235,6 +235,7 @@ const MAIL = {
     welcomePrepaid: (len: string) => `<p>Your ${len} started, and your recorder goes in the post shortly. In the meantime you can upload anything you already have; a voice memo works.</p>`,
     year: 'year', half: 'six months',
     welcomeMonthlyPen: '<p>Your recorder goes in the post shortly, and your 21 free days have started. Upload anything you already have while it&rsquo;s on its way; a voice memo works.</p>',
+    welcomeFreePen: '<p>Your free Juno pen goes in the post shortly, and your 30 free days have started. Nothing is charged until the trial ends, and you can cancel anytime in Settings. Upload anything you already have while the pen is on its way; a voice memo works.</p>',
     reply: 'Reply to this and it reaches a person.',
   },
   es: {
@@ -255,6 +256,7 @@ const MAIL = {
     welcomePrepaid: (len: string) => `<p>Empezaron tus ${len}, y te enviaremos el lápiz pronto. Mientras tanto puedes subir cualquier audio que ya tengas.</p>`,
     year: '12 meses', half: 'seis meses',
     welcomeMonthlyPen: '<p>Te enviaremos el lápiz pronto, y tus 21 días gratis ya empezaron. Mientras llega, sube cualquier audio que ya tengas.</p>',
+    welcomeFreePen: '<p>Tu lápiz Juno gratis sale por correo muy pronto, y tus 30 días gratis ya empezaron. No se cobra nada hasta que termine la prueba, y puedes cancelar cuando quieras en Configuración. Mientras llega, sube cualquier audio que ya tengas; una nota de voz sirve.</p>',
     reply: 'Responde este correo y te contesta una persona.',
   },
   pt: {
@@ -275,6 +277,7 @@ const MAIL = {
     welcomePrepaid: (len: string) => `<p>Seus ${len} começaram, e enviaremos a caneta em breve. Enquanto isso, você pode enviar qualquer áudio que já tenha.</p>`,
     year: '12 meses', half: 'seis meses',
     welcomeMonthlyPen: '<p>Enviaremos a caneta em breve, e seus 21 dias grátis já começaram. Enquanto ela chega, envie qualquer áudio que já tenha.</p>',
+    welcomeFreePen: '<p>Sua caneta Juno grátis sai pelo correio em breve, e seus 30 dias grátis já começaram. Nada é cobrado até o fim do teste, e você pode cancelar quando quiser em Configurações. Enquanto ela chega, envie qualquer áudio que já tiver; uma mensagem de voz serve.</p>',
     reply: 'Responda este e-mail e uma pessoa vai ler.',
   },
 } as const
@@ -347,7 +350,9 @@ async function welcome(email: string, offer: string | null, plan: string | null,
         `<p><a href="${base}" style="color:#0B6B44">${base.replace(/^https?:\/\//, '')}</a></p>` +
         (offer === 'own-recorder'
           ? M.welcomeOwn
-          : plan === 'annual' || plan === 'halfyear'
+          : offer === 'free-pen'
+            ? M.welcomeFreePen
+            : plan === 'annual' || plan === 'halfyear'
             ? M.welcomePrepaid(plan === 'annual' ? M.year : M.half)
             // The trial counts from sign-up, not delivery, so the email must not say otherwise.
             : M.welcomeMonthlyPen) +

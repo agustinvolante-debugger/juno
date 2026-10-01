@@ -8,6 +8,13 @@ import { createCheckoutSession } from './stripe'
 import { planPrice, trialDaysFor, type Offer, type Plan } from './plan'
 import { stripeLocale, type Currency, type Lang } from './currency'
 
+/** Under the pay button on the free-pen checkout: the promise, with the actual date. */
+function freePenMessage(usd: number): string {
+  const end = new Date(Date.now() + trialDaysFor('free-pen') * 86_400_000)
+  const day = end.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  return `Your Juno pen is free and the first 30 days are free. You won't be charged until ${day}, then $${usd}/month. Cancel anytime before then and you pay nothing. We'll email you before your trial ends.`
+}
+
 export type PlanCheckout = { url: string } | { error: string }
 
 export async function startPlanCheckout(opts: {
@@ -49,6 +56,7 @@ export async function startPlanCheckout(opts: {
     reference: opts.reference,
     metadata: { plan: opts.plan, offer: opts.offer, lang: opts.lang ?? 'en', currency: charged },
     locale: stripeLocale(opts.lang ?? 'en'),
+    ...(opts.offer === 'free-pen' ? { submitMessage: freePenMessage(price.usd) } : {}),
   })
   return { url: session.url }
 }

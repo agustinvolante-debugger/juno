@@ -3679,3 +3679,12 @@ html.pen-m-lock, html.pen-m-lock body { height: 100%; overflow: hidden; overscro
 }
 .pen-film-toggle:hover { color: var(--ink); }
 .pen-film-toggle:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 2px; }
+
+/* Free-pen offer (signup ?offer=free-pen): the terms as a calm row of facts, not fine print. */
+.pen-su-terms { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; padding: 0; }
+.pen-su-terms li {
+  padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel);
+  font-size: 14px; font-weight: 600; color: var(--ink);
+}
+.pen-su-terms li:first-child { background: var(--accent-wash); border-color: var(--accent-line); color: var(--accent-ink); }
+.pen-su-gone { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: var(--warn-wash); color: var(--warn); font-size: 15px; }
