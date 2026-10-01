@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { collectSections, getStats, tickerDef, SECTION_QUERIES, SECTIONS } from '@/lib/news/feeds'
 import { curateSection } from '@/lib/news/ai'
 import { setFeedCache, setStatsCache, getStatsCache, getSectionInstructions, getCustomTickers, feedCacheAgeMs } from '@/lib/news/store'
 import { checkMonitorsAndPush } from '@/lib/news/push'
+import { runNewsFunding } from '@/lib/vc/news-funding'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120 // feed refresh + scheduled monitor re-check for push alerts
@@ -52,6 +53,16 @@ export async function GET(req: Request) {
     let alerts: { checked: number; pushed: number; users: number } | { error: string } | null = null
     if (scheduled) {
       try { alerts = await checkMonitorsAndPush() } catch (e: any) { alerts = { error: String(e?.message || e).slice(0, 120) } }
+    }
+    // Scheduled runs only: hand today's funding headlines to VC Constellation (reported rounds).
+    // after() = fire-and-forget once the response is sent; no extra Vercel cron (Hobby plan).
+    if (scheduled) {
+      after(async () => {
+        try {
+          const r = await runNewsFunding({ days: 3 })
+          console.log('[news-cron] news-funding:', JSON.stringify({ dry: r.dry, sent: r.sentToModel, events: r.events.length, written: r.written, cost: r.costUsd, notes: r.notes.slice(0, 3) }))
+        } catch (e: any) { console.warn('[news-cron] news-funding failed:', String(e?.message || e).slice(0, 160)) }
+      })
     }
     return NextResponse.json({ ok: true, sections: Object.keys(bySection).length, feedsLive: `${live}/${total}`, curated: Object.keys(briefs).length, stats: Object.keys(stats).length, fresh: Object.keys(freshStats).length, alerts })
   } catch (e: any) {

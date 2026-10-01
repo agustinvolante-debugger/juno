@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { vcCors, vcSessionEmail } from '@/lib/vc/vc-auth'
+import { listFundingEvents } from '@/lib/vc/news-funding'
 
 export const dynamic = 'force-dynamic'
 
@@ -62,6 +63,16 @@ export async function GET(req: NextRequest) {
     })
   }
 
+  // press-reported rounds (reported, never SEC-verified); [] until the migration is applied
+  const events = await listFundingEvents(limit)
+  const funding = events.map((e: any) => ({
+    id: e.id, company: e.company_slug, companyName: e.company_name, date: e.announced_on, round: e.round,
+    amount: e.amount_usd != null ? Number(e.amount_usd) : null, valuation: e.valuation_usd != null ? Number(e.valuation_usd) : null,
+    leads: ((e.investors || []) as any[]).filter((v) => v.lead).map((v) => ({ name: v.name, firm: v.firm_slug || null })),
+    investors: e.investors || [], url: e.source_url, sourceName: e.source_name, others: (e.other_sources || []).length,
+    createdCompany: !!e.created_company,
+  }))
+
   const meta = Object.fromEntries((metaR.data || []).map((m: any) => [m.key, m.value]))
-  return NextResponse.json({ seats, filings, asOf: meta.formd_as_of || meta.formd_synced_through || null }, { headers: CORS })
+  return NextResponse.json({ seats, filings, funding, asOf: meta.formd_as_of || meta.formd_synced_through || null }, { headers: CORS })
 }

@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import { vcCors, vcSessionEmail } from '@/lib/vc/vc-auth'
+import { listFundingEvents } from '@/lib/vc/news-funding'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
   // profile columns arrive with migration 012 — fall back to the original list until it's applied
   let coQ: any = await sb.from('vc_companies').select('id,slug,name,sector,location,total_raised,last_round,last_round_amount,last_round_date,website,description,founded_year,headcount,founders').limit(10000)
   if (coQ.error) coQ = await sb.from('vc_companies').select('id,slug,name,sector,location,total_raised,last_round,last_round_amount,last_round_date').limit(10000)
-  const [firmsR, peopleR, coR, invR, seatsR] = await Promise.all([
+  const [firmsR, peopleR, coR, invR, seatsR, fundingEvents] = await Promise.all([
     sb.from('vc_firms').select('id,slug,name').limit(10000),
     sb.from('vc_people').select('id,full_name,firm_id,title,bio,profile_url,linkedin,x_url').limit(10000),
     Promise.resolve(coQ as any),
@@ -38,6 +39,8 @@ export async function GET(req: NextRequest) {
     allRows((a, b) => sb.from('vc_investments').select('id,firm_id,company_id,partner_id,round,amount_text,amount_num,date,lead,confidence,source_text').order('id').range(a, b)),
     // only firm-attributed seats can render (Form D related persons without a firm are skipped below anyway)
     allRows((a, b) => sb.from('vc_board_seats').select('id,person_id,company_id,firm_id,person_name,as_of,created_at,confidence,source_text,source_url,source_kind,is_published').eq('is_published', true).not('firm_id', 'is', null).order('id').range(a, b)),
+    // press-reported rounds (vc_funding_events; [] until the migration is applied)
+    listFundingEvents(),
   ])
   for (const r of [firmsR, peopleR, coR, invR, seatsR]) {
     if (r.error) return NextResponse.json({ error: r.error.message }, { status: 500, headers: CORS })
@@ -51,11 +54,24 @@ export async function GET(req: NextRequest) {
   const partnersByFirm: Record<string, string[]> = {}
   for (const p2 of peopleR.data!) if (p2.firm_id) (partnersByFirm[p2.firm_id] ||= []).push(p2.full_name)
   const vcs = firmsR.data!.map((f) => ({ id: f.slug, name: f.name, partners: partnersByFirm[f.id] || [] }))
+  // reported-by-press rounds per company (newest first). Kept apart from the SEC/override
+  // figures — the frontend shows them in their own "reported" block, never as lastRound.
+  const reportedBySlug: Record<string, any[]> = {}
+  for (const e of fundingEvents) {
+    if (!e.company_slug) continue
+    ;(reportedBySlug[e.company_slug] ||= []).push({
+      id: e.id, round: e.round, amount: e.amount_usd != null ? Number(e.amount_usd) : null,
+      valuation: e.valuation_usd != null ? Number(e.valuation_usd) : null, date: e.announced_on,
+      investors: e.investors || [], sourceUrl: e.source_url, sourceName: e.source_name, sourceTier: e.source_tier,
+      headline: e.headline, otherSources: e.other_sources || [], createdCompany: !!e.created_company,
+    })
+  }
   const companies = coR.data!.map((c: any) => ({
     id: c.slug, name: c.name, sector: c.sector, totalRaised: c.total_raised,
     lastRound: c.last_round, lastRoundAmount: c.last_round_amount, lastRoundDate: c.last_round_date,
     location: c.location ?? null, website: c.website ?? null, description: c.description ?? null, foundedYear: c.founded_year ?? null,
     headcount: c.headcount ?? null, founders: c.founders ?? null,
+    ...(reportedBySlug[c.slug] ? { reported: { latest: reportedBySlug[c.slug][0], rounds: reportedBySlug[c.slug] } } : {}),
   }))
 
   // investments — merge board-seat flag; synthesize edges for board seats without an investment row
@@ -92,6 +108,27 @@ export async function GET(req: NextRequest) {
       sourceKind: s.source_kind, sourceUrl: s.source_url,
       seatAsOf: s.as_of || null, seatAdded: s.created_at || null,
     } as any)
+  }
+
+  // reported investor → company links (matched firms only; rounds, not IPOs/acquisitions),
+  // flagged reported:true so the frontend can draw them dashed and label them
+  const coSlugs = new Set(companies.map((c: any) => c.id))
+  const firmSlugs = new Set(vcs.map((v) => v.id))
+  const edgeKey = new Set(investments.map((e) => `${e.vc}|${e.company}|${(e.round || '').toLowerCase()}`))
+  for (const e of fundingEvents) {
+    if (!e.company_slug || !coSlugs.has(e.company_slug) || /^(ipo|acquisition)$/i.test(e.round || '')) continue
+    for (const v of (e.investors || []) as any[]) {
+      if (!v.firm_slug || !firmSlugs.has(v.firm_slug)) continue
+      const k = `${v.firm_slug}|${e.company_slug}|${(e.round || '').toLowerCase()}`
+      if (edgeKey.has(k)) continue
+      edgeKey.add(k)
+      investments.push({
+        vc: v.firm_slug, company: e.company_slug, partner: null, boardSeat: false, amount: null,
+        round: e.round, date: e.announced_on ? String(e.announced_on).slice(0, 7) : null, lead: !!v.lead,
+        confidence: 'reported', source: `${e.source_name}: ${e.headline || ''}`.slice(0, 200),
+        sourceKind: 'press', sourceUrl: e.source_url, reported: true,
+      } as any)
+    }
   }
 
   // bios keyed "<Name>@<firmSlug>" (frontend lookup key)
