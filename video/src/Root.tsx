@@ -7,6 +7,7 @@ import { loadFont as loadMono } from '@remotion/google-fonts/IBMPlexMono'
 import { loadFont as loadSerif } from '@remotion/google-fonts/Literata'
 import PenFilmScene, { FILM_SECONDS, FILM_SIZE, type FilmFormat } from '../../app/pen/film/PenFilmScene'
 import { KITS, PLUS } from '../../app/pen/landing-audiences'
+import HowToScene, { HOWTO_SECONDS, HOWTO_SIZE, type HowToFormat } from '../../app/pen/film/HowToScene'
 
 // Only the weights and scripts the film uses (Latin covers EN, ES and PT).
 const subsets: ('latin' | 'latin-ext')[] = ['latin', 'latin-ext']
@@ -39,12 +40,40 @@ function Film({ lang, aud, format }: Props) {
   )
 }
 
+/** The how-to-use-the-pen video (app/pen/film/HowToScene.tsx, also at /pen/how-to). */
+function HowTo({ format }: { format: HowToFormat }) {
+  const frame = useCurrentFrame()
+  const { fps } = useVideoConfig()
+  const base = HOWTO_SIZE[format]
+  const scale = OUT[format].w / base.w
+  const vars = { '--font-display': display, '--font-ui': ui, '--mono': mono, '--serif': serif } as React.CSSProperties
+  return (
+    <AbsoluteFill style={{ background: '#F2EFE5', ...vars }}>
+      <div style={{ width: base.w, height: base.h, transform: `scale(${scale})`, transformOrigin: '0 0' }}>
+        <HowToScene t={frame / fps} format={format} />
+      </div>
+    </AbsoluteFill>
+  )
+}
+
 export function Root() {
   const list: Props[] = []
   for (const lang of ['en', 'es', 'pt'] as const)
     for (let aud = 0; aud < KITS[lang].length; aud++) for (const format of ['landscape', 'portrait'] as const) list.push({ lang, aud, format })
   return (
     <>
+      {(['landscape', 'portrait'] as const).map((format) => (
+        <Composition
+          key={`howto-${format}`}
+          id={`juno-howto-en-${format}`}
+          component={HowTo}
+          durationInFrames={HOWTO_SECONDS * FPS}
+          fps={FPS}
+          width={OUT[format].w}
+          height={OUT[format].h}
+          defaultProps={{ format }}
+        />
+      ))}
       {list.map((p) => (
         <Composition
           key={`${p.lang}-${p.aud}-${p.format}`}
