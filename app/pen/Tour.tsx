@@ -10,9 +10,11 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
+import HowToPlayer from './how-to/HowToPlayer'
 
 type Lang = 'en' | 'es' | 'pt'
-type Step = { target?: string; title: string; body: string }
+// `video` shows the how-to (film/HowToScene.tsx) in the card: English only until it's translated.
+type Step = { target?: string; title: string; body: string; video?: boolean }
 
 const UI = {
   en: { next: 'Next', back: 'Back', skip: 'Skip tour', upload: 'Upload a recording', later: 'I’ll do it later', of: 'of' },
@@ -22,6 +24,7 @@ const UI = {
 
 const STEPS: Record<Lang, Step[]> = {
   en: [
+    { video: true, title: 'See it in under a minute', body: 'From plugging in the pen to asking about a call on WhatsApp. Then Next walks you through your own screen.' },
     { title: 'Welcome to Juno Pen', body: 'In one minute: how to add a recording, and everything you get back from it.' },
     { target: '.pen-drop-side', title: 'Add a recording', body: 'Drop in audio from the pen, your phone or any recorder. With the pen plugged in, Connect pen finds new recordings for you.' },
     { target: '.pen-tximp-open', title: 'Already have a transcript?', body: 'Paste text from Pocket, Otter or Plaud and get the same notes, people and search.' },
@@ -135,13 +138,18 @@ export default function Tour({ lang, onClose, onUpload }: { lang: Lang; onClose:
   // Where the card goes: under the target if it fits, otherwise above; centred when there is
   // no target. Always inside the screen.
   const card = useMemo(() => {
+    if (step.video) {
+      // Wide enough to watch; centred, and tall screens get it a little above the middle.
+      const w = Math.min(860, vw - 32)
+      return { left: (vw - w) / 2, top: Math.max(16, Math.min(80, vh * 0.06)), w }
+    }
     const w = Math.min(CARD_W, vw - 32)
     if (!rect) return { left: (vw - w) / 2, top: Math.max(24, vh / 2 - 130), w }
     const left = Math.max(16, Math.min(rect.left + rect.width / 2 - w / 2, vw - w - 16))
     const below = rect.bottom + PAD + GAP
     const top = below + 230 < vh ? below : Math.max(16, rect.top - PAD - GAP - 230)
     return { left, top, w }
-  }, [rect, vw, vh])
+  }, [rect, vw, vh, step.video])
 
   if (!host) return null
   // Whole pixels, so the four panels meet with no hairline of undimmed page between them.
@@ -170,6 +178,11 @@ export default function Tour({ lang, onClose, onUpload }: { lang: Lang; onClose:
         <div className="pen-tour-count">{`${i + 1} ${ui.of} ${steps.length}`}</div>
         <h2 className="pen-tour-title">{step.title}</h2>
         <p className="pen-tour-body">{step.body}</p>
+        {step.video && (
+          <div className="pen-tour-video">
+            <HowToPlayer chapters={false} />
+          </div>
+        )}
         <div className="pen-tour-actions">
           {last ? (
             <>

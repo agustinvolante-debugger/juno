@@ -9,6 +9,8 @@ import PenSequence from './PenSequence'
 import PenArt from './PenArt'
 import PhoneChat from './PhoneChat'
 import PenFilm from './film/PenFilm'
+import HowToPlayer from './how-to/HowToPlayer'
+import type { HowToKitKey } from './film/HowToScene'
 import Icon, { type IconName } from './Icon'
 import { PLAN_MONTHLY_USD, PLAN_HALFYEAR_USD, PLAN_ANNUAL_USD, PEN_USD, SOFTWARE_MONTHLY_USD, SOFTWARE_HALFYEAR_USD, TRIAL_DAYS, TRIAL_DAYS_POSTED } from '@/lib/pen/plan'
 import { COPY, LOCAL_PRICES, money, type Copy, type Market, type RoleDemo } from './landing-copy'
@@ -240,9 +242,11 @@ function HeroChat() {
 
 /* ------------------------------------------------------------------ film */
 
-/** The fifteen-second film (film/PenFilmScene.tsx), for the chosen audience. */
+/** The film. In English, the how-to (film/HowToScene.tsx) for the chosen audience: the pen
+ *  plugged in through to WhatsApp, under a minute; picking another audience starts its story
+ *  from the top. Spanish and Portuguese keep the fifteen-second film (film/PenFilmScene.tsx). */
 function Film() {
-  const { p, kit } = useL()
+  const { p, kit, market } = useL()
   return (
     <section id="film" className="pen-lp-wrap pen-lp2-sec">
       <Reveal>
@@ -250,7 +254,11 @@ function Film() {
         <p className="pen-lp2-sub">{p.film.sub}</p>
       </Reveal>
       <Reveal delay={0.08}>
-        <PenFilm kit={kit} plus={p} labels={{ pause: p.film.pause, play: p.film.play }} />
+        {market.lang === 'en' ? (
+          <HowToPlayer autoplay="visible" loop kit={kit.key as HowToKitKey} key={kit.key} />
+        ) : (
+          <PenFilm kit={kit} plus={p} labels={{ pause: p.film.pause, play: p.film.play }} />
+        )}
       </Reveal>
     </section>
   )

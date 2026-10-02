@@ -78,25 +78,155 @@ function path(t: number, keys: [number, number, number][]): [number, number] {
 
 /* ------------------------------------------------------------- the story */
 
-// A real-estate day, for the Orlando agents this was made for. One showing, one buyer.
-const REC = {
-  title: 'Showing at 412 Oak St with Mark and Sarah',
-  meta: '38:12 · property showing',
-  file: 'REC_0412.WAV',
+// One story per landing-page audience (landing-audiences.ts keys). Same steps, same timing;
+// only the call changes. Family is a parent-teacher conference, not the landing's doctor's
+// visit: the import step ticks "contains no patient or medical information", and showing a
+// medical recording there would contradict it.
+export type HowToKitKey = 'sales' | 'students' | 'family' | 'founders'
+type HowKit = {
+  title: string
+  meta: string
+  /** The two people typed in at import, in order, with who they are (People panel). */
+  people: [string, string][]
+  /** Who's who: the speakers as the notes name them. */
+  speakers: { name: string; share: number; you?: boolean }[]
+  recent: [string, string, string][]
+  summary: string[]
+  todos: [string, string][]
+  email: { to: string; subject: string; body: string }
+  wa: { ask: string; answer: string; remind: string; done: string }
 }
-const SUMMARY = [
-  'Mark and Sarah loved the kitchen and the backyard; the second bathroom needs work.',
-  'Pre-approved with Chase up to $520K. They want to close by Nov 15.',
-  'Main worry: the HOA fee. Mark heard $280 a month.',
-]
-const TODOS: [string, string][] = [
-  ['Send Mark the HOA documents', 'Today'],
-  ['Confirm the HOA fee with the listing agent', 'Tomorrow'],
-  ['Call Chase about the Nov 15 closing', 'Fri, Oct 3'],
-]
-const EMAIL = {
-  subject: 'Great seeing you at 412 Oak St',
-  body: 'Hi Mark and Sarah, thanks for coming out today! As promised, I’m attaching the HOA documents, and I’m confirming the monthly fee with the listing agent…',
+
+const FILE = 'REC_0412.WAV'
+const KITS: Record<HowToKitKey, HowKit> = {
+  sales: {
+    title: 'Showing at 412 Oak St with Mark and Sarah',
+    meta: '38:12 · property showing',
+    people: [['Mark Ellis', 'Buyer · 412 Oak St'], ['Sarah Ellis', 'Buyer · 412 Oak St']],
+    speakers: [{ name: 'You', share: 46, you: true }, { name: 'Mark Ellis', share: 38 }, { name: 'Sarah Ellis', share: 16 }],
+    recent: [
+      ['Buyer consult: the Patels', '24:05 · consultation', 'MON, SEP 29'],
+      ['Listing walkthrough, 88 Pine Ave', '41:30 · walkthrough', 'FRI, SEP 26'],
+      ['Team meeting', '18:44 · team meeting', 'THU, SEP 25'],
+    ],
+    summary: [
+      'Mark and Sarah loved the kitchen and the backyard; the second bathroom needs work.',
+      'Pre-approved with Chase up to $520K. They want to close by Nov 15.',
+      'Main worry: the HOA fee. Mark heard $280 a month.',
+    ],
+    todos: [
+      ['Send Mark the HOA documents', 'Today'],
+      ['Confirm the HOA fee with the listing agent', 'Tomorrow'],
+      ['Call Chase about the Nov 15 closing', 'Fri, Oct 3'],
+    ],
+    email: {
+      to: 'Mark Ellis, Sarah Ellis',
+      subject: 'Great seeing you at 412 Oak St',
+      body: 'Hi Mark and Sarah, thanks for coming out today! As promised, I’m attaching the HOA documents, and I’m confirming the monthly fee with the listing agent…',
+    },
+    wa: {
+      ask: 'What did Mark say about the closing date?',
+      answer: 'Mark wants to close by *Nov 15*. He’s pre-approved with Chase up to $520K, and asked you to confirm the HOA fee (he heard $280 a month).\n\nFrom: Showing at 412 Oak St, today',
+      remind: 'Remind me tomorrow at 9 to call the lender',
+      done: 'Done ✅  I’ll remind you *tomorrow at 9:00 AM*: call the lender about Mark’s Nov 15 closing.',
+    },
+  },
+  students: {
+    title: 'Corporate Finance, lecture 6',
+    meta: '52:40 · lecture',
+    people: [['Prof. Ruiz', 'Professor · Corporate Finance'], ['Ana Torres', 'Classmate · study group']],
+    speakers: [{ name: 'Prof. Ruiz', share: 78 }, { name: 'Ana Torres', share: 14 }, { name: 'You', share: 8, you: true }],
+    recent: [
+      ['Study group: problem set 4', '1:02:10 · study group', 'MON, SEP 29'],
+      ['Corporate Finance, lecture 5', '50:12 · lecture', 'FRI, SEP 26'],
+      ['Office hours with Prof. Ruiz', '14:30 · office hours', 'THU, SEP 25'],
+    ],
+    summary: [
+      'WACC: weight each source of capital by its market value, not its book value.',
+      'The midterm will look like the second worked example. One page of formulas allowed.',
+      'The exam moved to Oct 24. Said once, at the very end.',
+    ],
+    todos: [
+      ['Make the one-page formula sheet', 'Today'],
+      ['Redo the second worked example', 'This week'],
+      ['Swap lecture 5 notes with Ana', 'Fri, Oct 3'],
+    ],
+    email: {
+      to: 'Ana Torres',
+      subject: 'Notes from lecture 6',
+      body: 'Hi Ana, here are my notes from today. Heads up: the midterm moved to Oct 24, and we can bring one page of formulas. Want to go over the second example on Thursday?…',
+    },
+    wa: {
+      ask: 'When is the midterm, and what can I bring?',
+      answer: 'The midterm moved to *Oct 24*. Prof. Ruiz said it will look like the second worked example, and you can bring *one page* of formulas.\n\nFrom: Corporate Finance, lecture 6',
+      remind: 'Remind me Sunday at 6 about the formula sheet',
+      done: 'Done ✅  I’ll remind you *Sunday at 6:00 PM*: make the one-page formula sheet for the Oct 24 midterm.',
+    },
+  },
+  family: {
+    title: 'Parent-teacher conference with Ms. Brooks',
+    meta: '24:18 · school meeting',
+    people: [['Ms. Brooks', 'Lily’s teacher · 3rd grade'], ['Alex Rivera', 'Lily’s dad']],
+    speakers: [{ name: 'Ms. Brooks', share: 52 }, { name: 'You', share: 34, you: true }, { name: 'Alex Rivera', share: 14 }],
+    recent: [
+      ['Call with the summer camp', '12:05 · phone call', 'MON, SEP 29'],
+      ['Family meeting: holiday plans', '31:40 · family meeting', 'FRI, SEP 26'],
+      ['Contractor walkthrough, kitchen', '22:15 · walkthrough', 'THU, SEP 25'],
+    ],
+    summary: [
+      'Lily is reading above grade level; her math facts need practice at home.',
+      'Ms. Brooks suggests ten minutes of flashcards a night and the library reading challenge.',
+      'The field trip permission slip and $15 are due Friday.',
+    ],
+    todos: [
+      ['Sign the field trip slip and send $15', 'Today'],
+      ['Start ten minutes of flashcards a night', 'This week'],
+      ['Sign Lily up for the reading challenge', 'Fri, Oct 3'],
+    ],
+    email: {
+      to: 'Ms. Brooks',
+      subject: 'Thank you for today',
+      body: 'Hi Ms. Brooks, thank you for the time today. We’ll start the flashcards tonight, and the permission slip will be in Lily’s folder tomorrow…',
+    },
+    wa: {
+      ask: 'What did Ms. Brooks say about math?',
+      answer: 'Lily’s math facts need practice: Ms. Brooks suggested *ten minutes of flashcards a night*. Her reading is above grade level.\n\nFrom: Parent-teacher conference, today',
+      remind: 'Remind me tomorrow at 7 to sign the slip',
+      done: 'Done ✅  I’ll remind you *tomorrow at 7:00 AM*: sign Lily’s field trip slip and send $15.',
+    },
+  },
+  founders: {
+    title: 'Northbeam Ventures: partner follow-up',
+    meta: '41:05 · investor call',
+    people: [['Priya Shah', 'Partner · Northbeam Ventures'], ['Dan Kim', 'Associate · Northbeam Ventures']],
+    speakers: [{ name: 'You', share: 52, you: true }, { name: 'Priya Shah', share: 36 }, { name: 'Dan Kim', share: 12 }],
+    recent: [
+      ['Weekly team sync', '45:10 · team meeting', 'MON, SEP 29'],
+      ['Customer call: Acme', '28:44 · sales call', 'FRI, SEP 26'],
+      ['Board prep with Leo', '33:02 · one-on-one', 'THU, SEP 25'],
+    ],
+    summary: [
+      'Priya likes the retention story; market size is the open question for her partners.',
+      'She wants month-6 retention by channel by Wednesday, for Monday’s partner meeting.',
+      'She asked who else is in the round. Nobody answered.',
+    ],
+    todos: [
+      ['Send Priya month-6 retention by channel', 'Today'],
+      ['Answer who else is in the round', 'Tomorrow'],
+      ['Prep the market-size slide for Monday', 'Fri, Oct 3'],
+    ],
+    email: {
+      to: 'Priya Shah, Dan Kim',
+      subject: 'Retention by channel, as promised',
+      body: 'Hi Priya, thanks for the time today. Attached is month-6 retention by channel. On your question about the round: we’re talking to two other funds…',
+    },
+    wa: {
+      ask: 'What does Priya need before Monday?',
+      answer: 'Priya wants *month-6 retention by channel* by Wednesday, so she can take it to Monday’s partner meeting. Market size is her partners’ main question.\n\nFrom: Northbeam Ventures, today',
+      remind: 'Remind me Wednesday at 9 to send Priya the numbers',
+      done: 'Done ✅  I’ll remind you *Wednesday at 9:00 AM*: send Priya month-6 retention by channel.',
+    },
+  },
 }
 
 /* ---------------------------------------------------------------- pieces */
@@ -177,7 +307,7 @@ function Face({ w, h, x, y, z, turn = '', style, children }: { w: number; h: num
  * it left and right (about -44 shows its right side, 0 faces us), `gx` tips it towards us.
  * `pen` is drawn in the plane of the port, so it turns with the laptop once it is plugged in.
  */
-function Laptop3D({ t, lapW, gx, gy, pen }: { t: number; lapW: number; gx: number; gy: number; pen: React.ReactNode }) {
+function Laptop3D({ t, lapW, gx, gy, pen, k }: { t: number; lapW: number; gx: number; gy: number; pen: React.ReactNode; k: HowToKitKey }) {
   const { sh, SW, SH, yh, zh, D, T, BW, port } = lapGeo(lapW)
   const s = lapW / WIN.w
   const connected = seg(t, 3.9, 4.3)
@@ -204,7 +334,7 @@ function Laptop3D({ t, lapW, gx, gy, pen }: { t: number; lapW: number; gx: numbe
       {/* Screen */}
       <Face w={SW} h={SH} x={0} y={0} z={0} turn={`rotateX(${TILT}deg)`} style={{ boxSizing: 'border-box', padding: 14, paddingBottom: 18, borderRadius: '16px 16px 4px 4px', background: '#1C1D20' }}>
         <div style={{ position: 'relative', width: lapW, height: sh, overflow: 'hidden', borderRadius: 4, background: C.paper }}>
-          <div style={{ width: WIN.w, height: WIN.h, transform: `scale(${s})`, transformOrigin: '0 0' }}>{HOME_SCREEN}</div>
+          <div style={{ width: WIN.w, height: WIN.h, transform: `scale(${s})`, transformOrigin: '0 0' }}>{HOME_SCREENS[k]}</div>
           {/* The system's "drive connected" notice */}
           <div style={{ position: 'absolute', right: 10, top: 10, display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 10, background: 'rgba(255,255,255,.96)', boxShadow: '0 6px 16px -6px rgba(0,0,0,.35)', fontFamily: FONT.ui, fontSize: 11, color: C.ink, opacity: toast, transform: `translateX(${(1 - out(toast)) * 30}px)` }}>
             <DriveIcon size={22} />
@@ -286,7 +416,7 @@ const AT = {
   email: [1023, 449] as [number, number],
 }
 
-function AppWindow({ t }: { t: number }) {
+function AppWindow({ t, k }: { t: number; k: HowKit }) {
   // Which screen: home with the import (before 21), the recording (after).
   const onRecording = t >= 21.0
   return (
@@ -328,7 +458,7 @@ function AppWindow({ t }: { t: number }) {
           <div style={{ height: 38, borderRadius: 12, background: C.panel, border: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', padding: '0 14px', fontFamily: FONT.serif, fontSize: 14, color: C.faint, marginBottom: 18 }}>
             ⌕&nbsp;&nbsp;Ask anything… type @ for a person or recording
           </div>
-          {onRecording ? <RecordingView t={t} /> : <HomeView t={t} />}
+          {onRecording ? <RecordingView t={t} k={k} /> : <HomeView t={t} k={k} />}
         </div>
       </div>
       {/* The browser's folder picker, over everything */}
@@ -339,16 +469,17 @@ function AppWindow({ t }: { t: number }) {
 
 /** The app's home screen as the laptop shows it before anything happens: built once, since
  *  the 3D laptop redraws every frame and this never changes. */
-const HOME_SCREEN = <AppWindow t={0} />
+const HOME_SCREENS = Object.fromEntries((Object.keys(KITS) as HowToKitKey[]).map((key) => [key, <AppWindow key={key} t={0} k={KITS[key]} />])) as Record<HowToKitKey, React.ReactNode>
 
 // The import, as the app does it after Connect pen: the file from the pen, who was on the call,
-// the consent box (Florida needs every party's agreement), then Import and transcribe.
+// the consent box (in Florida and other states every party must agree), then Import and transcribe.
 const IMP = { open: 12.8, mark: 14.1, sarah: 15.2, consent: 16.8, go: 17.7, landed: 19.8 }
 
-function ImportPanel({ t }: { t: number }) {
-  const markTyped = typed('Mark Ellis', t, IMP.mark, 12)
-  const sarahTyped = typed('Sarah Ellis', t, IMP.sarah, 12)
-  const chips = [t >= IMP.mark + 0.9 && 'Mark Ellis', t >= IMP.sarah + 1.0 && 'Sarah Ellis'].filter(Boolean) as string[]
+function ImportPanel({ t, k }: { t: number; k: HowKit }) {
+  const [one, two] = [k.people[0][0], k.people[1][0]]
+  const markTyped = typed(one, t, IMP.mark, 12)
+  const sarahTyped = typed(two, t, IMP.sarah, 12)
+  const chips = [t >= IMP.mark + 0.9 && one, t >= IMP.sarah + 1.0 && two].filter(Boolean) as string[]
   const typing = t < IMP.mark + 0.9 ? markTyped : t >= IMP.sarah && t < IMP.sarah + 1.0 ? sarahTyped : ''
   const focused = t >= 14.0 && t < 16.4
   const consent = t >= IMP.consent
@@ -362,7 +493,7 @@ function ImportPanel({ t }: { t: number }) {
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', marginTop: 10, borderTop: `1px solid #EEE9DD` }}>
         <span style={{ width: 17, height: 17, borderRadius: 4, background: C.accent, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 11 }}>✓</span>
-        <span style={{ flex: 1, fontSize: 14.5 }}>{REC.file}</span>
+        <span style={{ flex: 1, fontSize: 14.5 }}>{FILE}</span>
         <span style={{ fontFamily: FONT.mono, fontSize: 12.5, color: C.dim }}>36.4 MB</span>
         <span style={{ fontFamily: FONT.mono, fontSize: 12.5, color: C.faint }}>10/1/2026</span>
       </div>
@@ -392,7 +523,7 @@ function ImportPanel({ t }: { t: number }) {
       ) : (
         <div style={{ marginTop: 18 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: FONT.mono, fontSize: 12.5, color: C.soft }}>
-            <span>{REC.file}</span>
+            <span>{FILE}</span>
             <span>{phase}</span>
           </div>
           <div style={{ marginTop: 7, height: 4, borderRadius: 2, background: C.line }}>
@@ -404,25 +535,21 @@ function ImportPanel({ t }: { t: number }) {
   )
 }
 
-function HomeView({ t }: { t: number }) {
+function HomeView({ t, k }: { t: number; k: HowKit }) {
   const landed = t >= IMP.landed
-  const rows: [string, string, string][] = [
-    ['Buyer consult: the Patels', '24:05 · consultation', 'MON, SEP 29'],
-    ['Listing walkthrough, 88 Pine Ave', '41:30 · walkthrough', 'FRI, SEP 26'],
-    ['Team meeting', '18:44 · team meeting', 'THU, SEP 25'],
-  ]
+  const rows = k.recent
   return (
     <div>
       <div style={{ fontFamily: FONT.display, fontSize: 28, marginBottom: 14 }}>{landed ? 4 : 3} recordings, and what came out of them</div>
-      {t >= IMP.open && !landed && <ImportPanel t={t} />}
+      {t >= IMP.open && !landed && <ImportPanel t={t} k={k} />}
       <Label style={{ marginBottom: 8 }}>Recent recordings</Label>
       <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, overflow: 'hidden' }}>
         {landed && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderBottom: `1px solid ${C.line}`, background: '#F4FAF6', ...enter(t, IMP.landed, 0.5, 10) }}>
             <span style={{ width: 36, height: 36, borderRadius: 9, background: C.accentWash, color: C.accent, display: 'grid', placeItems: 'center', fontSize: 16 }}>♪</span>
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: 15 }}>{REC.title}</div>
-              <div style={{ fontFamily: FONT.mono, fontSize: 11.5, color: C.dim, marginTop: 3 }}>{REC.meta} · with Mark Ellis, Sarah Ellis</div>
+              <div style={{ fontWeight: 600, fontSize: 15 }}>{k.title}</div>
+              <div style={{ fontFamily: FONT.mono, fontSize: 11.5, color: C.dim, marginTop: 3 }}>{k.meta} · with {k.people.map((p) => p[0]).join(', ')}</div>
             </div>
             <span style={{ fontFamily: FONT.mono, fontSize: 11, letterSpacing: '.06em', padding: '3px 8px', borderRadius: 6, background: C.accentWash, color: '#08482E' }}>NOTED</span>
           </div>
@@ -476,29 +603,25 @@ function FolderPicker({ t }: { t: number }) {
   )
 }
 
-function RecordingView({ t }: { t: number }) {
+function RecordingView({ t, k }: { t: number; k: HowKit }) {
   // 21.0 Who's who, matched to the names given at import · 22.0 People · 24.3 Add all · 27.6 notes
   const added = t >= 24.6
   const notes = t >= 27.6
   return (
     <div style={{ position: 'relative' }}>
-      <div style={{ fontFamily: FONT.mono, fontSize: 11, color: C.dim, letterSpacing: '.06em' }}>WED, OCT 1 · {REC.meta}</div>
-      <div style={{ fontFamily: FONT.display, fontSize: 30, margin: '4px 0 14px' }}>{REC.title}</div>
+      <div style={{ fontFamily: FONT.mono, fontSize: 11, color: C.dim, letterSpacing: '.06em' }}>WED, OCT 1 · {k.meta}</div>
+      <div style={{ fontFamily: FONT.display, fontSize: 30, margin: '4px 0 14px' }}>{k.title}</div>
 
       {!notes ? (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           {/* Who's who */}
           <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: 16, alignSelf: 'start', ...enter(t, 21.0, 0.5) }}>
             <Label style={{ marginBottom: 12 }}>Who’s who</Label>
-            {[
-              { sp: 'Speaker A', name: 'You (Diane)', share: 46, note: '' },
-              { sp: 'Speaker B', name: 'Mark Ellis', share: 38, note: 'matched by voice' },
-              { sp: 'Speaker C', name: 'Sarah Ellis', share: 16, note: 'matched by voice' },
-            ].map((r, i) => (
+            {k.speakers.map((x, i) => ({ sp: `Speaker ${'ABC'[i]}`, name: x.name, share: x.share, you: !!x.you, note: x.you ? '' : 'matched by voice' })).map((r, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderTop: i ? `1px solid #EEE9DD` : 'none', ...enter(t, 21.3 + i * 0.25, 0.4, 6) }}>
                 <span style={{ width: 82, fontFamily: FONT.mono, fontSize: 11.5, color: C.dim }}>{r.sp}</span>
                 <span style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Avatar name={r.name.replace(/^You \((.*)\)$/, '$1')} size={24} tone={i === 0 ? C.ink : C.accent} />
+                  <Avatar name={r.name} size={24} tone={r.you ? C.ink : C.accent} />
                   <span style={{ fontSize: 14.5, fontWeight: 600 }}>{r.name}</span>
                   {r.note && <span style={{ fontFamily: FONT.mono, fontSize: 10.5, color: C.faint }}>{r.note}</span>}
                 </span>
@@ -512,7 +635,7 @@ function RecordingView({ t }: { t: number }) {
             {!added ? (
               <>
                 <div style={{ fontSize: 13, color: C.dim, marginBottom: 10 }}>Detected on this call · not saved yet</div>
-                {['Mark Ellis', 'Sarah Ellis'].map((n) => (
+                {k.people.map(([n]) => (
                   <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0' }}>
                     <Avatar name={n} size={26} tone="#B9B3A3" />
                     <span style={{ flex: 1, fontSize: 14.5 }}>{n}</span>
@@ -524,10 +647,7 @@ function RecordingView({ t }: { t: number }) {
               </>
             ) : (
               <>
-                {[
-                  ['Mark Ellis', 'Buyer · 412 Oak St'],
-                  ['Sarah Ellis', 'Buyer · 412 Oak St'],
-                ].map(([n, about], i) => (
+                {k.people.map(([n, about], i) => (
                   <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', ...enter(t, 24.6 + i * 0.15, 0.4, 8) }}>
                     <Avatar name={n} size={30} />
                     <span style={{ flex: 1 }}>
@@ -538,27 +658,27 @@ function RecordingView({ t }: { t: number }) {
                   </div>
                 ))}
                 <div style={{ marginTop: 10, fontSize: 12.5, color: C.dim, ...enter(t, 25.2, 0.4, 6) }}>
-                  Now ask about them anywhere with <strong style={{ color: C.accent }}>@Mark</strong>
+                  Now ask about them anywhere with <strong style={{ color: C.accent }}>@{k.people[0][0].replace(/^(Prof\.|Ms\.|Mr\.|Dr\.) /, '').split(' ')[0]}</strong>
                 </div>
               </>
             )}
           </div>
         </div>
       ) : (
-        <NotesView t={t - 3} />
+        <NotesView t={t - 3} k={k} />
       )}
     </div>
   )
 }
 
-function NotesView({ t }: { t: number }) {
+function NotesView({ t, k }: { t: number; k: HowKit }) {
   const ticked = out(seg(t, 30.6, 30.95))
   const emailIn = out(seg(t, 32.3, 32.8))
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 1fr', gap: 16 }}>
       <div style={{ alignSelf: 'start', background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: 16, ...enter(t, 24.6, 0.5) }}>
         <Label style={{ marginBottom: 10 }}>Summary</Label>
-        {SUMMARY.map((s, i) => {
+        {k.summary.map((s, i) => {
           const at = 25.1 + i * 1.25
           return (
             <div key={i} style={{ display: 'flex', gap: 9, marginBottom: 9, fontFamily: FONT.serif, fontSize: 14.5, lineHeight: 1.5, minHeight: t >= at ? undefined : 0 }}>
@@ -571,7 +691,7 @@ function NotesView({ t }: { t: number }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: 16, ...enter(t, 28.6, 0.5) }}>
           <Label style={{ marginBottom: 10 }}>To-dos</Label>
-          {TODOS.map(([what, when], i) => {
+          {k.todos.map(([what, when], i) => {
             const on = i === 0 ? ticked : 0
             return (
               <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '6px 0', ...enter(t, 28.9 + i * 0.3, 0.4, 8) }}>
@@ -591,9 +711,9 @@ function NotesView({ t }: { t: number }) {
           </div>
           {emailIn > 0 && (
             <div style={{ opacity: emailIn }}>
-              <div style={{ fontSize: 13, color: C.dim, marginBottom: 4 }}>To: Mark Ellis, Sarah Ellis</div>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>{EMAIL.subject}</div>
-              <div style={{ fontFamily: FONT.serif, fontSize: 13, lineHeight: 1.5, color: C.soft }}>{typed(EMAIL.body, t, 32.7, 70)}</div>
+              <div style={{ fontSize: 13, color: C.dim, marginBottom: 4 }}>To: {k.email.to}</div>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>{k.email.subject}</div>
+              <div style={{ fontFamily: FONT.serif, fontSize: 13, lineHeight: 1.5, color: C.soft }}>{typed(k.email.body, t, 32.7, 70)}</div>
             </div>
           )}
         </div>
@@ -624,17 +744,16 @@ function Bubble({ me, children, style }: { me?: boolean; children: React.ReactNo
   )
 }
 
-const ASK = 'What did Mark say about the closing date?'
-const REMIND = 'Remind me tomorrow at 9 to call the lender'
-function Phone({ t, width }: { t: number; width: number }) {
+function Phone({ t, width, k }: { t: number; width: number; k: HowKit }) {
+  const { ask, answer, remind, done } = k.wa
   // The question is typed in the input, then sent; Juno answers; then the reminder.
   const plan: { at: number; me: boolean; text: string }[] = [
-    { at: 38.4, me: true, text: ASK },
-    { at: 39.8, me: false, text: 'Mark wants to close by *Nov 15*. He’s pre-approved with Chase up to $520K, and asked you to confirm the HOA fee (he heard $280 a month).\n\nFrom: _Showing at 412 Oak St_, today' },
-    { at: 43.2, me: true, text: REMIND },
-    { at: 44.3, me: false, text: 'Done ✅\u00a0 I’ll remind you *tomorrow at 9:00 AM*: call the lender about Mark’s Nov 15 closing.' },
+    { at: 38.4, me: true, text: ask },
+    { at: 39.8, me: false, text: answer },
+    { at: 43.2, me: true, text: remind },
+    { at: 44.3, me: false, text: done },
   ]
-  const typing = t >= 36.6 && t < 38.4 ? typed(ASK, t, 36.6, 24) : t >= 41.6 && t < 43.2 ? typed(REMIND, t, 41.6, 27) : ''
+  const typing = t >= 36.6 && t < 38.4 ? typed(ask, t, 36.6, ask.length / 1.6) : t >= 41.6 && t < 43.2 ? typed(remind, t, 41.6, remind.length / 1.4) : ''
   const thinking = (t >= 38.8 && t < 39.8) || (t >= 43.5 && t < 44.3)
   const h = width * 2.05
   return (
@@ -681,7 +800,7 @@ function Phone({ t, width }: { t: number; width: number }) {
 const STEPS: { at: number; until: number; n: string; text: string; sub?: string }[] = [
   { at: 0.4, until: 6.6, n: '1', text: 'Plug the pen into your computer', sub: 'Pull off the cap: the USB-C plug is underneath' },
   { at: 8.2, until: 12.6, n: '2', text: 'Click Connect pen, then choose JUNO PEN', sub: 'On Safari? Drag the files into “Add audio files”' },
-  { at: 12.9, until: 20.6, n: '3', text: 'Add who was there, and confirm everyone agreed', sub: 'Florida requires every person recorded to agree' },
+  { at: 12.9, until: 20.6, n: '3', text: 'Add who was there, and confirm everyone agreed', sub: 'In Florida and many states, everyone recorded must agree' },
   { at: 21.0, until: 27.2, n: '4', text: 'Check who’s who, and save the people', sub: 'Juno matches each voice to a name' },
   { at: 27.6, until: 37.6, n: '5', text: 'Your summary, to-dos and follow-up are ready', sub: 'Tick to-dos off as you go' },
   { at: 38.4, until: 49.2, n: '6', text: 'On the go? Ask on WhatsApp', sub: 'Questions about any call, and reminders' },
@@ -706,7 +825,8 @@ function Caption({ t, portrait }: { t: number; portrait: boolean }) {
 
 /* ---------------------------------------------------------------- scene */
 
-export default function HowToScene({ t, format = 'landscape' }: { t: number; format?: HowToFormat }) {
+export default function HowToScene({ t, format = 'landscape', kit = 'sales' }: { t: number; format?: HowToFormat; kit?: HowToKitKey }) {
+  const k = KITS[kit] ?? KITS.sales
   const { w, h } = HOWTO_SIZE[format]
   const portrait = format === 'portrait'
 
@@ -803,7 +923,7 @@ export default function HowToScene({ t, format = 'landscape' }: { t: number; for
         <div style={{ position: 'absolute', inset: 0, opacity: (1 - seg(t, 7.7, 8.1)) * out(seg(t, 0, 0.6)), transform: `translate(${lapDx}px, ${lapDy}px) scale(${lapScale})`, transformOrigin: `${P.x}px ${P.y}px` }}>
           <div style={{ position: 'absolute', inset: 0, perspective: 3200, perspectiveOrigin: `${P.x}px ${P.y}px` }}>
             <div style={{ position: 'absolute', left: P.x, top: P.y, width: 0, height: 0, transformStyle: 'preserve-3d' }}>
-              <Laptop3D t={t} lapW={lapW} gx={gx} gy={gy} pen={<PenPlug width={penW} capOff={capOff} x={tipX} y={tipY} opacity={out(seg(t, 0.3, 0.9))} />} />
+              <Laptop3D t={t} k={KITS[kit] ? kit : 'sales'} lapW={lapW} gx={gx} gy={gy} pen={<PenPlug width={penW} capOff={capOff} x={tipX} y={tipY} opacity={out(seg(t, 0.3, 0.9))} />} />
             </div>
           </div>
         </div>
@@ -825,7 +945,7 @@ export default function HowToScene({ t, format = 'landscape' }: { t: number; for
               borderRadius: 14,
             }}
           >
-            <AppWindow t={t} />
+            <AppWindow t={t} k={k} />
             {t >= 8.2 && t < 37.8 && <Cursor x={cur[0]} y={cur[1]} down={down} />}
           </div>
         </div>
@@ -834,7 +954,7 @@ export default function HowToScene({ t, format = 'landscape' }: { t: number; for
       {/* ---- 6. the phone ---- */}
       {t >= 37.8 && (
         <div style={{ position: 'absolute', left: phoneX, top: phoneY, opacity: 1 - endIn, transform: `scale(${phoneZ})`, transformOrigin: '0 0' }}>
-          <Phone t={t - 3} width={phoneW} />
+          <Phone t={t - 3} width={phoneW} k={k} />
         </div>
       )}
 

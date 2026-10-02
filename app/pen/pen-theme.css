@@ -3702,3 +3702,6 @@ html.pen-m-lock, html.pen-m-lock body { height: 100%; overflow: hidden; overscro
 .howto-chips { width: 100%; max-width: 1100px; display: flex; flex-wrap: wrap; gap: 8px; }
 .howto-chip { padding: 7px 12px; border-radius: 999px; border: 1px solid #DCD5C4; background: #fff; font: 600 13px var(--font-ui), system-ui, sans-serif; color: #514E45; cursor: pointer; }
 .howto-chip[data-on="true"] { background: #DCEDE3; border-color: #0B6B44; color: #08482E; }
+/* The how-to inside the tour's Welcome card */
+.pen-tour-video { margin-top: 4px; max-height: calc(100vh - 260px); overflow: auto; }
+.pen-tour-video .howto-frame { border-radius: 12px; box-shadow: none; }

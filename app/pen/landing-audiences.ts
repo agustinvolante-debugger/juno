@@ -279,7 +279,7 @@ const EN_PLUS: Plus = {
     seeWa: 'See it on WhatsApp',
     draft: 'Draft ready',
   },
-  film: { h2: 'Fifteen seconds, start to finish.', sub: 'Click, talk, and the notes are on your phone before you reach the car.', pause: 'Pause', play: 'Play' },
+  film: { h2: 'From the box to your first notes.', sub: 'Plug in the pen, add a recording, and ask about it on WhatsApp. Under a minute.', pause: 'Pause', play: 'Play' },
   aud: { h2: 'Made for whoever you talk to.', sub: 'Pick yours. Every example on this page changes with it.' },
   how: {
     h2: 'Three steps. Nothing to set up.',

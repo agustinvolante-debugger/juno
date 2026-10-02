@@ -13,7 +13,7 @@ export default function HowToPage() {
     <main className="howto-page">
       <p className="howto-eyebrow">Juno Pen</p>
       <h1 className="howto-h1">How to use your Juno Pen</h1>
-      <HowToPlayer />
+      <HowToPlayer review />
     </main>
   )
 }
