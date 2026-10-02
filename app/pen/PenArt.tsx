@@ -17,6 +17,7 @@ export default function PenArt({
   variant = 'closed',
   title,
   press = 0,
+  shadow = true,
 }: {
   id?: string
   className?: string
@@ -24,6 +25,8 @@ export default function PenArt({
   title?: string
   /** 0 to 1: how far the clicker is pushed in. The film animates it; everywhere else it is 0. */
   press?: number
+  /** The soft contact shadow under it. Off where the pen is cut into parts (the how-to). */
+  shadow?: boolean
 }) {
   const g = (n: string) => `${id}-${n}`
   const open = variant === 'open'
@@ -70,7 +73,7 @@ export default function PenArt({
       </defs>
 
       {/* Contact shadow */}
-      <ellipse cx={open ? 400 : 360} cy="96" rx={open ? 350 : 320} ry="7" fill="#16150F" opacity="0.18" filter={`url(#${g('soft')})`} />
+      {shadow && <ellipse cx={open ? 400 : 360} cy="96" rx={open ? 350 : 320} ry="7" fill="#16150F" opacity="0.18" filter={`url(#${g('soft')})`} />}
 
       {/* ---- upper half: clicker, cap, clip ---- */}
       {/* Clicker button */}

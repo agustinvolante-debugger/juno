@@ -3688,3 +3688,17 @@ html.pen-m-lock, html.pen-m-lock body { height: 100%; overflow: hidden; overscro
 }
 .pen-su-terms li:first-child { background: var(--accent-wash); border-color: var(--accent-line); color: var(--accent-ink); }
 .pen-su-gone { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: var(--warn-wash); color: var(--warn); font-size: 15px; }
+
+/* ---- /pen/how-to: the how-to animation and its player ---- */
+.howto-page { min-height: 100vh; background: var(--paper, #F2EFE5); padding: 40px 16px 64px; display: flex; flex-direction: column; align-items: center; }
+.howto-eyebrow { font-family: var(--font-mono), ui-monospace, monospace; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: #0B6B44; margin: 0 0 6px; }
+.howto-h1 { font-family: var(--font-display), Georgia, serif; font-weight: 400; font-size: clamp(32px, 5vw, 48px); line-height: 1.05; margin: 0 0 24px; text-align: center; color: #16150F; }
+.howto { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.howto-frame { position: relative; width: 100%; overflow: hidden; border-radius: 16px; border: 1px solid #DCD5C4; background: #F2EFE5; box-shadow: 0 30px 60px -36px rgba(22,21,15,.45); }
+.howto-bar { width: 100%; display: flex; align-items: center; gap: 12px; }
+.howto-play { flex: none; width: 40px; height: 40px; border-radius: 50%; border: 0; background: #0B6B44; color: #fff; display: grid; place-items: center; cursor: pointer; }
+.howto-scrub { flex: 1; accent-color: #0B6B44; }
+.howto-time { flex: none; font-family: var(--font-mono), ui-monospace, monospace; font-size: 12px; color: #646158; min-width: 72px; text-align: right; }
+.howto-chips { width: 100%; max-width: 1100px; display: flex; flex-wrap: wrap; gap: 8px; }
+.howto-chip { padding: 7px 12px; border-radius: 999px; border: 1px solid #DCD5C4; background: #fff; font: 600 13px var(--font-ui), system-ui, sans-serif; color: #514E45; cursor: pointer; }
+.howto-chip[data-on="true"] { background: #DCEDE3; border-color: #0B6B44; color: #08482E; }
