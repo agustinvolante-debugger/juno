@@ -6,10 +6,10 @@ import Icon, { type IconName } from '../Icon'
 import { useCopy } from '../LangContext'
 import type { Copy } from '@/lib/pen/i18n'
 
-const SN: Copy<{ profile: string; aria: string; billing: string }> = {
-  en: { profile: 'Profile', aria: 'Settings', billing: 'Billing' },
-  es: { profile: 'Perfil', aria: 'Ajustes', billing: 'Facturación' },
-  pt: { profile: 'Perfil', aria: 'Configurações', billing: 'Cobrança' },
+const SN: Copy<{ profile: string; aria: string; billing: string; invite: string }> = {
+  en: { profile: 'Profile', aria: 'Settings', billing: 'Billing', invite: 'Invite friends' },
+  es: { profile: 'Perfil', aria: 'Ajustes', billing: 'Facturación', invite: 'Invitar amigos' },
+  pt: { profile: 'Perfil', aria: 'Configurações', billing: 'Cobrança', invite: 'Convidar amigos' },
 }
 
 const ITEMS: { href: string; label: 'profile' | 'WhatsApp'; icon: IconName }[] = [
@@ -32,6 +32,10 @@ export default function SettingsNav({ whatsapp = false, billing = false }: { wha
           <span className="pen-cat-label">{i.label === 'profile' ? T.profile : i.label}</span>
         </Link>
       ))}
+      <Link href="/pen/settings/invite" className="pen-cat" data-active={path === '/pen/settings/invite'} aria-current={path === '/pen/settings/invite' ? 'page' : undefined}>
+        <Icon name="link" size={19} />
+        <span className="pen-cat-label">{T.invite}</span>
+      </Link>
       {billing && (
         <Link href="/pen/settings/billing" className="pen-cat" data-active={path === '/pen/settings/billing'} aria-current={path === '/pen/settings/billing' ? 'page' : undefined}>
           <Icon name="lock" size={19} />

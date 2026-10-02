@@ -3758,3 +3758,41 @@ html.pen-m-lock, html.pen-m-lock body { height: 100%; overflow: hidden; overscro
 }
 .pen-composer-off .pen-btn { text-decoration: none; display: inline-flex; align-items: center; }
 .pen-readonly .pen-btn, .pen-clock { line-height: 1.2; }
+
+/* Arrived through a friend's referral link: who invited them, and the first month free. */
+.pen-invited {
+  padding: 10px 16px; text-align: center; font-size: 15px; line-height: 1.45;
+  background: var(--accent-wash); color: var(--accent-ink); border-bottom: 1px solid var(--accent-line);
+}
+.pen-invited strong { font-weight: 600; }
+.pen-invited-inline { margin-top: 14px; text-align: left; border: 1px solid var(--accent-line); border-radius: 12px; max-width: 52ch; }
+
+/* Settings → Invite friends */
+.pen-invite-link { font-family: var(--mono, ui-monospace, monospace) !important; font-size: 15px !important; }
+.pen-invite-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.pen-invite-stats > div { display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: 12px; background: var(--sunk); min-width: 0; }
+.pen-invite-stats strong { font-family: var(--display); font-weight: 400; font-size: 34px; line-height: 1; font-variant-numeric: tabular-nums; }
+.pen-invite-stats span { font-size: var(--t-label); line-height: var(--t-label-lh); color: var(--faint); }
+.pen-invite-bonus { margin: -8px 0 0; color: var(--accent-ink); }
+.pen-invite-friends { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.pen-invite-friends li { display: flex; flex-direction: column; gap: 2px; padding: 12px 0; border-top: 1px solid var(--hair); font-size: var(--t-small); line-height: var(--t-small-lh); color: var(--soft); }
+.pen-invite-friends li:first-child { border-top: 0; padding-top: 0; }
+.pen-invite-friends strong { color: var(--ink); font-size: 15.5px; }
+.pen-invite-friends li[data-status='credited'] span { color: var(--good); }
+.pen-invite-rules { list-style: disc; margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: var(--t-small); line-height: var(--t-small-lh); color: var(--soft); max-width: 62ch; }
+@media (max-width: 520px) { .pen-invite-stats strong { font-size: 28px; } }
+
+/* Customers → Referrals (owners) */
+.pen-ref { margin-top: 44px; display: flex; flex-direction: column; gap: 14px; }
+.pen-ref-title { font-size: 30px; margin: 0; }
+.pen-ref-sub { font-size: 13px; color: var(--faint); }
+.pen-ref-ok { margin-top: 6px; font-size: 13px; color: var(--good); max-width: 32ch; }
+.pen-ref-err { margin-top: 6px; font-size: 13px; color: var(--bad); max-width: 32ch; }
+.pen-ref-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.pen-ref-void { color: var(--bad); }
+/* Actions stay whole: the table scrolls sideways before a button gets clipped. */
+.pen-ref .pen-cust-table td:last-child { min-width: 130px; }
+.pen-ref .pen-cust-wrap { overflow-x: auto; }
+.pen-ref-actions { flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 6px; }
+.pen-ref-actions .pen-btn { white-space: nowrap; padding: 6px 12px; font-size: 14.5px; }
+.pen-ref-void { border-color: transparent; background: transparent; padding-inline: 4px !important; text-decoration: underline; text-underline-offset: 2px; }

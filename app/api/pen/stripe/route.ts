@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server'
 import crypto from 'node:crypto'
 import { activate, deactivate, getAccountByStripe, setCancelAt, setPausedUntil } from '@/lib/pen/accounts'
 import { sendCancelScheduled, sendEnded, sendWelcomeBack } from '@/lib/pen/cancel-mail'
+import { referralCheckout, referralInvoicePaid, referralRefund } from '@/lib/pen/referral-events'
 import { settleHoursCheckout } from '@/lib/pen/hours'
 import { sendEmailResult } from '@/lib/news/email'
 import { planPrice, parsePlan, parseOffer } from '@/lib/pen/plan'
 import { LOCAL_PRICES, money, parseCurrency, parseLang } from '@/lib/pen/currency'
 import { rememberAppLanguage } from '@/lib/pen/profile'
 import { notifyPaid, notifyHours } from '@/lib/pen/notify-owner'
-import { cancelAtOf, customerEmail, portalLoginUrl, type Subscription } from '@/lib/pen/stripe'
+import { cancelAtOf, chargeCustomer, customerEmail, portalLoginUrl, type Subscription } from '@/lib/pen/stripe'
 
 export const dynamic = 'force-dynamic'
 // A purchase can release held recordings, and a pieced one is stitched into AssemblyAI on the way.
@@ -130,6 +131,8 @@ export async function POST(req: Request) {
         if (o.metadata?.lang) await rememberAppLanguage(email, parseLang(o.metadata.lang)).catch(() => {})
         console.log(`pen stripe: checkout completed for ${email} (${o.metadata?.offer ?? '?'}), first=${first}`)
         if (first) await greet(email, o.metadata ?? {}, o.amount_total ?? null)
+        // A friend's referral: their first month, and the count if they paid just now.
+        await referralCheckout(o, email)
         break
       }
 
@@ -195,6 +198,24 @@ export async function POST(req: Request) {
       // The card declined when the trial ended. Stripe will retry, and the subscription goes
       // past_due, then canceled — the subscription.updated handler above closes the door. This
       // is here to tell them before that happens, while it is still fixable.
+      // Any paid invoice. Only referrals care, and only about a friend's first real payment.
+      case 'invoice.paid': {
+        await referralInvoicePaid(o)
+        break
+      }
+
+      // A referred friend's payment refunded (at least half of it) or disputed: the referral
+      // is void, and unused credit is taken back from the referrer (lib/pen/referral-events.ts).
+      case 'charge.refunded': {
+        if ((o.amount_refunded ?? 0) * 2 >= (o.amount ?? 0)) await referralRefund(typeof o.customer === 'string' ? o.customer : null, 'refund')
+        break
+      }
+      case 'charge.dispute.created': {
+        const charge = typeof o.charge === 'string' ? o.charge : null
+        if (charge) await referralRefund(await chargeCustomer(charge).catch(() => null), 'chargeback')
+        break
+      }
+
       case 'invoice.payment_failed': {
         if (email) await paymentFailed(email, invoiceLang(o)).catch(() => {})
         break
@@ -278,6 +299,7 @@ const MAIL = {
     year: 'year', half: 'six months',
     welcomeMonthlyPen: '<p>Your recorder goes in the post shortly, and your 21 free days have started. Upload anything you already have while it&rsquo;s on its way; a voice memo works.</p>',
     welcomeFreePen: '<p>Your free Juno pen goes in the post shortly, and your 30 free days have started. Nothing is charged until the trial ends, and you can cancel anytime in Settings. Upload anything you already have while the pen is on its way; a voice memo works.</p>',
+    invite: (url: string) => `<p>Know someone who’d use it? <a href="${url}" style="color:#0B6B44">Your invite link</a> gives them their first month free, and you a free month when they pay.</p>`,
     reply: 'Reply to this and it reaches a person.',
   },
   es: {
@@ -299,6 +321,7 @@ const MAIL = {
     year: '12 meses', half: 'seis meses',
     welcomeMonthlyPen: '<p>Te enviaremos el lápiz pronto, y tus 21 días gratis ya empezaron. Mientras llega, sube cualquier audio que ya tengas.</p>',
     welcomeFreePen: '<p>Tu lápiz Juno gratis sale por correo muy pronto, y tus 30 días gratis ya empezaron. No se cobra nada hasta que termine la prueba, y puedes cancelar cuando quieras en Configuración. Mientras llega, sube cualquier audio que ya tengas; una nota de voz sirve.</p>',
+    invite: (url: string) => `<p>¿Conoces a alguien a quien le sirva? <a href="${url}" style="color:#0B6B44">Tu enlace de invitación</a> le da su primer mes gratis, y a ti un mes gratis cuando pague.</p>`,
     reply: 'Responde este correo y te contesta una persona.',
   },
   pt: {
@@ -320,6 +343,7 @@ const MAIL = {
     year: '12 meses', half: 'seis meses',
     welcomeMonthlyPen: '<p>Enviaremos a caneta em breve, e seus 21 dias grátis já começaram. Enquanto ela chega, envie qualquer áudio que já tenha.</p>',
     welcomeFreePen: '<p>Sua caneta Juno grátis sai pelo correio em breve, e seus 30 dias grátis já começaram. Nada é cobrado até o fim do teste, e você pode cancelar quando quiser em Configurações. Enquanto ela chega, envie qualquer áudio que já tiver; uma mensagem de voz serve.</p>',
+    invite: (url: string) => `<p>Conhece alguém que usaria? <a href="${url}" style="color:#0B6B44">Seu link de convite</a> dá a essa pessoa o primeiro mês grátis, e a você um mês grátis quando ela pagar.</p>`,
     reply: 'Responda este e-mail e uma pessoa vai ler.',
   },
 } as const
@@ -398,6 +422,7 @@ async function welcome(email: string, offer: string | null, plan: string | null,
             ? M.welcomePrepaid(plan === 'annual' ? M.year : M.half)
             // The trial counts from sign-up, not delivery, so the email must not say otherwise.
             : M.welcomeMonthlyPen) +
+        M.invite(`${base}/settings/invite`) +
         `<p style="color:#514E45">${M.reply}</p>`,
     ),
   })

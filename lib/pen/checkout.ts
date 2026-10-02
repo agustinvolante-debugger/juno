@@ -4,9 +4,9 @@
 // direct /api/pen/checkout. They used to each build the session themselves and drifted: the
 // $50 recorder was charged by neither, and a change to the yearly trial landed in only one.
 
-import { createCheckoutSession } from './stripe'
+import { createCheckoutSession, ensureFriendCoupon } from './stripe'
 import { planPrice, trialDaysFor, type Offer, type Plan } from './plan'
-import { stripeLocale, type Currency, type Lang } from './currency'
+import { LOCAL_PRICES, stripeLocale, type Currency, type Lang } from './currency'
 
 /** Under the pay button on the free-pen checkout: the promise, with the actual date. */
 function freePenMessage(usd: number): string {
@@ -33,6 +33,8 @@ export async function startPlanCheckout(opts: {
    * (they kept theirs), and the Stripe customer they already have.
    */
   returning?: { customerId: string | null }
+  /** A friend's referral code (lib/pen/referrals.ts), already checked as eligible. */
+  referral?: string | null
 }): Promise<PlanCheckout> {
   const price = planPrice(opts.offer, opts.plan)
   if (!price) return { error: 'That plan is not available. Software only comes monthly or every 6 months.' }
@@ -51,6 +53,10 @@ export async function startPlanCheckout(opts: {
   const penPrice = process.env.STRIPE_PRICE_PEN
   if (chargePen && !penPrice) return { error: "Checkout isn't configured yet — STRIPE_PRICE_PEN is not set." }
 
+  // A referred friend's first month: off at checkout on prepaid plans (nothing is charged
+  // monthly there); on monthly plans it's credit after checkout, so the pen keeps its price.
+  const coupon = opts.referral && opts.plan !== 'monthly' ? await ensureFriendCoupon({ clp: LOCAL_PRICES.clp.monthly, brl: LOCAL_PRICES.brl.monthly }) : null
+
   const session = await createCheckoutSession({
     priceId,
     oneTimePriceIds: chargePen && penPrice ? [penPrice] : [],
@@ -60,7 +66,8 @@ export async function startPlanCheckout(opts: {
     cancelUrl: opts.returning ? `${opts.origin}/pen/settings/billing` : `${opts.origin}/pen/signup?cancelled=1`,
     reference: opts.reference,
     customerId: opts.returning?.customerId ?? null,
-    metadata: { plan: opts.plan, offer: opts.offer, lang: opts.lang ?? 'en', currency: charged, ...(opts.returning ? { returning: '1' } : {}) },
+    coupon,
+    metadata: { plan: opts.plan, offer: opts.offer, lang: opts.lang ?? 'en', currency: charged, ...(opts.returning ? { returning: '1' } : {}), ...(opts.referral ? { ref: opts.referral } : {}) },
     locale: stripeLocale(opts.lang ?? 'en'),
     ...(opts.offer === 'free-pen' && !opts.returning ? { submitMessage: freePenMessage(price.usd) } : {}),
   })

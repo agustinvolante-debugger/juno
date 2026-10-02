@@ -73,6 +73,9 @@ export async function createCheckoutSession(opts: {
   submitMessage?: string
   /** A returning customer: Stripe already has them (and maybe their card). Replaces `email`. */
   customerId?: string | null
+  /** A coupon applied up front (a referred friend on a prepaid plan). Stripe then refuses
+   *  promotion codes on the same checkout, so they're switched off. */
+  coupon?: string | null
 }): Promise<CheckoutSession> {
   return stripe<CheckoutSession>('checkout/sessions', {
     mode: 'subscription',
@@ -82,7 +85,7 @@ export async function createCheckoutSession(opts: {
     success_url: opts.successUrl,
     cancel_url: opts.cancelUrl,
     payment_method_collection: 'always',
-    allow_promotion_codes: true,
+    ...(opts.coupon ? { discounts: [{ coupon: opts.coupon }] } : { allow_promotion_codes: true }),
     ...(opts.locale ? { locale: opts.locale } : {}),
     ...(opts.submitMessage ? { custom_text: { submit: { message: opts.submitMessage.slice(0, 1200) } } } : {}),
     subscription_data: {
@@ -190,7 +193,7 @@ export type Subscription = {
   pause_collection: { resumes_at: number | null } | null
   cancel_at?: number | null
   cancel_at_period_end?: boolean
-  items?: { data?: { current_period_end?: number; price?: { currency?: string } }[] }
+  items?: { data?: { current_period_end?: number; price?: { currency?: string; unit_amount?: number | null; recurring?: { interval?: string; interval_count?: number } | null } }[] }
 }
 
 /**
@@ -243,4 +246,88 @@ export function cancelAtOf(sub: Subscription): string | null {
 export async function customerEmail(id: string): Promise<string | null> {
   const c = await stripe<{ email?: string | null; deleted?: boolean }>(`customers/${encodeURIComponent(id)}`)
   return c.deleted ? null : (c.email ?? null)
+}
+
+/** One month of a subscription, in its own currency's smallest unit (cents; whole pesos for CLP). */
+export function monthlyAmount(sub: Subscription): { amount: number; currency: string } | null {
+  const price = sub.items?.data?.[0]?.price
+  if (!price?.unit_amount || !price.currency) return null
+  const r = price.recurring
+  const months = r?.interval === 'year' ? 12 * (r.interval_count ?? 1) : r?.interval === 'month' ? r.interval_count ?? 1 : 1
+  return { amount: Math.round(price.unit_amount / months), currency: price.currency }
+}
+
+/**
+ * A change to a customer's Stripe balance. Negative is credit (taken off their next invoices,
+ * never paid out); positive takes credit back. `idempotencyKey` makes a retried call return the
+ * first result instead of doing it twice.
+ */
+async function balanceTxn(customerId: string, amount: number, currency: string, description: string, idempotencyKey: string): Promise<{ id: string }> {
+  const key = process.env.STRIPE_SECRET_KEY
+  if (!key) throw new Error('STRIPE_SECRET_KEY is not set')
+  const res = await fetch(`https://api.stripe.com/v1/customers/${encodeURIComponent(customerId)}/balance_transactions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${key}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Stripe-Version': '2025-03-31.basil',
+      'Idempotency-Key': idempotencyKey,
+    },
+    body: encode({ amount, currency, description }).join('&'),
+  })
+  const json = (await res.json()) as { id: string; error?: { message?: string } }
+  if (!res.ok) throw new Error(json?.error?.message ?? `stripe balance change failed (${res.status})`)
+  return json
+}
+
+export async function addCredit(customerId: string, amount: number, currency: string, description: string, idempotencyKey: string): Promise<{ id: string }> {
+  return balanceTxn(customerId, -Math.abs(amount), currency, description, idempotencyKey)
+}
+
+export async function takeBackCredit(customerId: string, amount: number, currency: string, description: string, idempotencyKey: string): Promise<{ id: string }> {
+  return balanceTxn(customerId, Math.abs(amount), currency, description, idempotencyKey)
+}
+
+/** The customer's balance: negative means unused credit. */
+export async function customerBalance(customerId: string): Promise<number> {
+  const c = await stripe<{ balance?: number }>(`customers/${encodeURIComponent(customerId)}`)
+  return c.balance ?? 0
+}
+
+/** Fingerprints of the cards saved on a customer: the same physical card has the same one everywhere. */
+export async function cardFingerprints(customerId: string): Promise<string[]> {
+  const r = await stripe<{ data: { card?: { fingerprint?: string } }[] }>(`customers/${encodeURIComponent(customerId)}/payment_methods?type=card&limit=20`)
+  return [...new Set(r.data.map((p) => p.card?.fingerprint).filter((f): f is string => !!f))]
+}
+
+/** The customer a charge belongs to (disputes only carry the charge). */
+export async function chargeCustomer(chargeId: string): Promise<string | null> {
+  const c = await stripe<{ customer?: string | null }>(`charges/${encodeURIComponent(chargeId)}`)
+  return c.customer ?? null
+}
+
+export const FRIEND_COUPON = 'juno-friend-month'
+
+/**
+ * The friend's month off on a prepaid plan, made in Stripe the first time it's needed (test and
+ * live each get their own). A month of the monthly price in each currency checkout can charge.
+ */
+export async function ensureFriendCoupon(local: { clp: number; brl: number }): Promise<string> {
+  try {
+    await stripe(`coupons/${FRIEND_COUPON}`)
+    return FRIEND_COUPON
+  } catch {
+    await stripe('coupons', {
+      id: FRIEND_COUPON,
+      name: 'First month free (invited by a friend)',
+      duration: 'once',
+      amount_off: 1500,
+      currency: 'usd',
+      currency_options: { clp: { amount_off: Math.round(local.clp) }, brl: { amount_off: Math.round(local.brl * 100) } },
+    }).catch((e) => {
+      // Two checkouts racing to make it: the other one won, which is fine.
+      if (!/already exists/i.test((e as Error).message)) throw e
+    })
+    return FRIEND_COUPON
+  }
 }

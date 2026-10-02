@@ -1431,6 +1431,10 @@ function Account({ email, name, avatar, onTour }: { email: string; name?: string
             <Icon name="settings" size={17} />
             {T.settings}
           </Link>
+          <Link href="/pen/settings/invite" className="pen-acct2-item">
+            <Icon name="link" size={17} />
+            {T.inviteFriends}
+          </Link>
           {onTour && (
             <button type="button" className="pen-acct2-item" onClick={() => { setOpen(false); onTour() }}>
               <Icon name="sparkle" size={17} />

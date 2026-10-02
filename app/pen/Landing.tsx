@@ -65,7 +65,13 @@ function Reveal({ children, delay = 0, className }: { children: React.ReactNode;
   )
 }
 
-export default function Landing({ market = { lang: 'en', currency: 'usd' }, audience = null }: { market?: Market; audience?: string | null }) {
+const INVITED = {
+  en: (n: string) => [`${n} invited you to Juno Pen.`, 'Sign up through this page and your first month is free.'],
+  es: (n: string) => [`${n} te invitó a Juno Pen.`, 'Regístrate desde esta página y tu primer mes es gratis.'],
+  pt: (n: string) => [`${n} convidou você para o Juno Pen.`, 'Cadastre-se por esta página e seu primeiro mês é grátis.'],
+} as const
+
+export default function Landing({ market = { lang: 'en', currency: 'usd' }, audience = null, invitedBy = null }: { market?: Market; audience?: string | null; invitedBy?: string | null }) {
   const t = COPY[market.lang]
   const p = PLUS[market.lang]
   const kits = KITS[market.lang]
@@ -92,6 +98,11 @@ export default function Landing({ market = { lang: 'en', currency: 'usd' }, audi
   return (
     <L.Provider value={{ t, p, kits, kit: kits[aud], aud, setAud, market, latam }}>
       <div className="pen-lp pen-lp2">
+        {invitedBy && (
+          <div className="pen-invited" role="status">
+            <strong>{INVITED[market.lang](invitedBy)[0]}</strong> <span>{INVITED[market.lang](invitedBy)[1]}</span>
+          </div>
+        )}
         <Nav />
         {latam ? <HeroChat /> : <Hero />}
         <Film />

@@ -327,3 +327,24 @@ create index if not exists pen_clients_user on pen_clients(user_email);
 -- and a read-only account counts its 12 months from updated_at.
 -- ---------------------------------------------------------------------------
 -- alter table public.pen_accounts add column if not exists cancel_at timestamptz, add column if not exists ended_at timestamptz, add column if not exists cancel_reason text;
+
+-- ---------------------------------------------------------------------------
+-- 2026-10-02 (b) — referrals, stage 1. Run each line separately, in order.
+--
+-- pen_referral_codes  each customer's code: tryjunoapp.com/r/<code>.
+-- pen_referrals       one row per invited friend, ever (unique on their email). status
+--                     signed_up → paid (their first real payment; this is the count) or void.
+--                     friend_credit_at: their first month was credited. rewarded_at /
+--                     reward_months / reward_txn: the owners credited the referrer.
+-- ---------------------------------------------------------------------------
+-- create table if not exists public.pen_referral_codes (email text primary key, code text not null, created_at timestamptz not null default now());
+-- create unique index if not exists pen_referral_codes_code on public.pen_referral_codes(code);
+-- create table if not exists public.pen_referrals (id uuid primary key default gen_random_uuid(), code text not null, referrer_email text not null, referee_email text not null, referee_name text, plan text, offer text, status text not null default 'signed_up', referee_customer_id text, paid_at timestamptz, paid_amount int, paid_currency text, friend_credit_at timestamptz, rewarded_at timestamptz, reward_months int, reward_txn text, void_reason text, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+-- create unique index if not exists pen_referrals_referee on public.pen_referrals(lower(referee_email));
+-- create index if not exists pen_referrals_referrer on public.pen_referrals(lower(referrer_email));
+-- create index if not exists pen_referrals_customer on public.pen_referrals(referee_customer_id);
+-- alter table public.pen_referral_codes enable row level security;
+-- alter table public.pen_referrals enable row level security;
+
+-- 2026-10-02 (c) — referrals, stage 2: fraud checks, automatic credit, clawback. One line.
+-- alter table public.pen_referrals add column if not exists referee_card text, add column if not exists reward_amount int, add column if not exists reward_currency text, add column if not exists reward_reversed_at timestamptz, add column if not exists reward_error text;

@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server'
 import { startPlanCheckout } from '@/lib/pen/checkout'
 import type { Offer, Plan } from '@/lib/pen/plan'
 import { createPending } from '@/lib/pen/accounts'
+import { cookies } from 'next/headers'
+import { REF_COOKIE, cleanCode, eligibleReferral, recordSignup } from '@/lib/pen/referrals'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,7 +36,11 @@ export async function POST(req: Request) {
     // someone we know signed up rather than someone who never happened.
     await createPending(email, `checkout:${plan}:${offer}`).catch(() => {})
     // Back to wherever checkout started: localhost while testing, the subdomain in production.
-    const r = await startPlanCheckout({ email, plan, offer, origin: new URL(req.url).origin, reference: b.reference })
+    // Same referral handling as the signup form (app/api/pen/signup/route.ts).
+    const code = cleanCode((await cookies()).get(REF_COOKIE)?.value)
+    const referrer = await eligibleReferral(code, email, offer).catch(() => null)
+    if (code && referrer) await recordSignup({ code, referrerEmail: referrer, refereeEmail: email, refereeName: null, plan, offer }).catch(() => {})
+    const r = await startPlanCheckout({ email, plan, offer, origin: new URL(req.url).origin, reference: b.reference, referral: code && referrer ? code : null })
     if ('error' in r) return NextResponse.json({ error: r.error }, { status: 503 })
     return NextResponse.json({ url: r.url })
   } catch (e) {

@@ -15,6 +15,7 @@ import { getProfileRaw, rememberAppLanguage } from '@/lib/pen/profile'
 import { ensureSample } from '@/lib/pen/sample'
 import { appLangFor } from './app-lang'
 import { parseLang } from '@/lib/pen/currency'
+import { REF_COOKIE, cleanCode, referrerFor } from '@/lib/pen/referrals'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,7 +39,10 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
     const [h, c] = await Promise.all([headers(), cookies()])
     // ?for= picks the audience whose examples the page shows (landing-audiences.ts).
     const forParam = typeof sp.for === 'string' ? sp.for : null
-    return <Landing market={marketFor(h.get('x-vercel-ip-country'), m ?? c.get('juno_lang')?.value ?? null)} audience={forParam} />
+    // Arrived through a customer's link (/r/<code>): say who invited them.
+    const ref = cleanCode(c.get(REF_COOKIE)?.value)
+    const inviter = ref ? await referrerFor(ref).catch(() => null) : null
+    return <Landing market={marketFor(h.get('x-vercel-ip-country'), m ?? c.get('juno_lang')?.value ?? null)} audience={forParam} invitedBy={inviter?.first ?? null} />
   }
 
   let sessions: Awaited<ReturnType<typeof listSessions>> = []

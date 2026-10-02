@@ -87,6 +87,12 @@ const SU = {
   },
 } as const
 
+const INVITED: Record<SuLang, (n: string) => string> = {
+  en: (n) => `${n} invited you, so your first month is free.`,
+  es: (n) => `${n} te invitó, así que tu primer mes es gratis.`,
+  pt: (n) => `${n} convidou você, então seu primeiro mês é grátis.`,
+}
+
 export default function SignupPage() {
   const [state, setState] = useState<State>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -105,6 +111,7 @@ export default function SignupPage() {
   // The offer is read from the URL after mount; until then the header stays invisible so an
   // invited agent never sees the paid-plan copy flash before "Your Juno pen is on us".
   const [ready, setReady] = useState(false)
+  const [invitedBy, setInvitedBy] = useState<string | null>(null)
   const F = T.free
 
   useEffect(() => {
@@ -113,6 +120,10 @@ export default function SignupPage() {
     setShipsPen(q.get('offer') !== 'own-recorder' && q.get('waitlist') !== 'pen')
     setWaitlist(q.get('waitlist') === 'pen')
     setReady(true)
+    // Came through a friend's link: say so, and that their first month is free.
+    if (q.get('offer') !== 'free-pen') {
+      fetch('/api/pen/signup?status=invite').then((r) => r.json()).then((j) => setInvitedBy(typeof j.first === 'string' ? j.first : null)).catch(() => {})
+    }
     if (q.get('offer') === 'free-pen') {
       setFreePen(true)
       fetch('/api/pen/signup?status=free-pen').then((r) => r.json()).then((j) => setRemaining(typeof j.remaining === 'number' ? j.remaining : null)).catch(() => {})
@@ -201,6 +212,7 @@ export default function SignupPage() {
           <p className="mt-4 max-w-[52ch] text-[16.5px] leading-relaxed" style={{ color: 'var(--soft)' }}>
             {freePen ? F.lede : waitlist ? T.ledeWait : shipsPen ? T.ledePen : T.ledeOwn}
           </p>
+          {invitedBy && !freePen && !waitlist && <p className="pen-invited pen-invited-inline" role="status">{INVITED[lang](invitedBy)}</p>}
           {freePen && (
             <ul className="pen-su-terms" aria-label="Offer terms">
               {F.terms.map((t) => <li key={t}>{t}</li>)}

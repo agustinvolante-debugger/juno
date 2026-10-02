@@ -8,6 +8,8 @@ import type { Offer, Plan } from '@/lib/pen/plan'
 import { startPlanCheckout } from '@/lib/pen/checkout'
 import { sendEmailResult } from '@/lib/news/email'
 import { notifyUnpaidSignup, notifyPenWaitlist } from '@/lib/pen/notify-owner'
+import { cookies } from 'next/headers'
+import { REF_COOKIE, cleanCode, eligibleReferral, recordSignup, referrerFor } from '@/lib/pen/referrals'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -44,6 +46,12 @@ async function freePensClaimed(): Promise<number> {
 // The signup page asks how many free pens are left, so a full campaign says so before anyone
 // fills the form in.
 export async function GET(req: Request) {
+  // Who invited this visitor, from the /r/<code> cookie: the signup page shows "Diane invited you".
+  if (new URL(req.url).searchParams.get('status') === 'invite') {
+    const code = cleanCode((await cookies()).get(REF_COOKIE)?.value)
+    const ref = code ? await referrerFor(code).catch(() => null) : null
+    return NextResponse.json({ first: ref?.first ?? null })
+  }
   if (new URL(req.url).searchParams.get('status') !== 'free-pen') return NextResponse.json({ error: 'not found' }, { status: 404 })
   const claimed = await freePensClaimed().catch(() => 0)
   return NextResponse.json({ cap: FREE_PEN_CAP, claimed, remaining: Math.max(0, FREE_PEN_CAP - claimed) })
@@ -110,7 +118,14 @@ export async function POST(req: Request) {
       const offer: Offer = offerIn
       // The free pen is a monthly plan only, whatever the link says.
       const plan: Plan = offer === 'free-pen' ? 'monthly' : parsePlan(b.plan)
+      // Came through a friend's link (/r/<code>): their first month is on us, and the friend
+      // who sent it is credited once they pay (lib/pen/referrals.ts). Anything doubtful just
+      // signs up without the referral.
+      const code = cleanCode((await cookies()).get(REF_COOKIE)?.value)
+      const referrer = await eligibleReferral(code, v.value.email, offer).catch(() => null)
+      if (code && referrer) await recordSignup({ code, referrerEmail: referrer, refereeEmail: v.value.email, refereeName: v.value.name, plan, offer }).catch((e) => console.warn(`pen referral: ${(e as Error).message}`))
       const r = await startPlanCheckout({
+        referral: code && referrer ? code : null,
         email: v.value.email,
         plan,
         offer,

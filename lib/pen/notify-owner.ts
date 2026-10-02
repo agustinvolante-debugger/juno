@@ -109,3 +109,25 @@ export async function notifyPenWaitlist(s: { name: string; email: string; phone?
     ['Note', s.note ?? '—'],
   ])
 }
+
+/** A referred friend made their first real payment. The referrer's month is credited by hand. */
+export async function notifyReferralPaid(opts: { friend: string; referrer: string; plan: string | null; amount: string; readyOn: string; months: number }) {
+  const friend = await signupRow(opts.friend).catch(() => null)
+  const ref = await signupRow(opts.referrer).catch(() => null)
+  const addr = (s: Awaited<ReturnType<typeof signupRow>> | null) => (s ? [s.ship_line1, s.ship_city, s.ship_state, s.ship_country].filter(Boolean).join(', ') || '—' : '—')
+  await send(`Referral paid: ${friend?.name ?? opts.friend} via ${ref?.name ?? opts.referrer}`, [
+    ['Friend', `${friend?.name ?? '—'} <${opts.friend}>`],
+    ['Friend ships to', addr(friend)],
+    ['Referred by', `${ref?.name ?? '—'} <${opts.referrer}>`],
+    ['Referrer ships to', addr(ref)],
+    ['Friend plan', opts.plan ?? '—'],
+    ['Paid', opts.amount],
+    ['Referrer earns', `${opts.months} month${opts.months === 1 ? '' : 's'}`],
+    ['Credit it from', `${opts.readyOn}, in Customers → Referrals (if no refund by then)`],
+  ])
+}
+
+/** Anything else about referrals the owners should see: voids, the daily credits. */
+export async function notifyReferralNote(subject: string, rows: [string, string][]) {
+  await send(subject, rows)
+}
