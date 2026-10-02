@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
+import { readOnlyRefusal } from '@/lib/pen/access'
 import { getChat } from '@/lib/pen/chats'
 import { createDoc, listDocs, type DocKind } from '@/lib/pen/docs'
 import { ACTIONS, writeArtifact } from '@/lib/pen/artifact'
@@ -21,6 +22,9 @@ export async function GET() {
 export async function POST(req: Request) {
   const email = await authedEmail()
   if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  // Read-only after the plan ends: nothing that adds or calls a model (lib/pen/access.ts).
+  const ended = await readOnlyRefusal(email)
+  if (ended) return NextResponse.json({ error: ended }, { status: 403 })
 
   const b = (await req.json().catch(() => ({}))) as { chat_id?: string; kind?: string }
   const kind = (b.kind ?? 'summary') as DocKind

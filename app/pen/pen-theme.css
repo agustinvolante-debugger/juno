@@ -3705,3 +3705,56 @@ html.pen-m-lock, html.pen-m-lock body { height: 100%; overflow: hidden; overscro
 /* The how-to inside the tour's Welcome card */
 .pen-tour-video { margin-top: 4px; max-height: calc(100vh - 260px); overflow: auto; }
 .pen-tour-video .howto-frame { border-radius: 12px; box-shadow: none; }
+
+/* ------------------------------------------------ billing: plan status + cancelling */
+/* The countdown sits beside the status, a number big enough to read across the room. */
+.pen-plan-status[data-tone='warn'] { border-color: var(--warn-line); background: var(--warn-wash); }
+.pen-plan-status-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.pen-plan-count {
+  flex: none; display: flex; flex-direction: column; align-items: center; min-width: 76px;
+  padding: 10px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line);
+}
+.pen-plan-count strong { font-family: var(--display); font-weight: 400; font-size: 34px; line-height: 1; color: var(--ink); }
+.pen-plan-count span { font-size: var(--t-label); color: var(--faint); margin-top: 4px; }
+
+.pen-cancel-reasons { display: flex; flex-wrap: wrap; gap: 8px; }
+.pen-cancel-lose {
+  margin: 0; padding: 0 0 0 20px; display: flex; flex-direction: column; gap: 8px;
+  font-size: var(--t-small); line-height: var(--t-small-lh); color: var(--soft); max-width: 62ch;
+}
+.pen-cancel-pause {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+  padding: 14px 16px; border-radius: 12px; background: var(--accent-wash); border: 1px solid var(--accent-line);
+  font-size: var(--t-small); line-height: var(--t-small-lh); color: var(--accent-ink);
+}
+/* Cancelling is always available and never the loud option. */
+.pen-cancel-quiet { color: var(--soft); }
+.pen-cancel-confirm { color: var(--bad); border-color: #EFD6D2; }
+.pen-cancel-confirm:hover:not(:disabled) { background: var(--bad-wash); border-color: var(--bad); }
+@media (max-width: 520px) {
+  .pen-plan-status-row { flex-direction: column-reverse; }
+  .pen-plan-count { flex-direction: row; gap: 8px; align-items: baseline; min-width: 0; }
+}
+
+/* The countdown pill in the header (and atop Home on a phone). Calm for a trial, amber once
+   the plan is ending or over. */
+.pen-clock {
+  display: inline-flex; align-items: center; white-space: nowrap;
+  padding: 6px 12px; border-radius: 999px; font-family: var(--ui); font-size: var(--t-label); font-weight: 600;
+  background: var(--accent-wash); border: 1px solid var(--accent-line); color: var(--accent-ink);
+  text-decoration: none;
+}
+.pen-clock:hover { border-color: var(--accent); }
+.pen-clock[data-state='ending'], .pen-clock[data-state='readonly'] { background: var(--warn-wash); border-color: var(--warn-line); color: var(--warn); }
+.pen-clock[data-phone='true'] { align-self: flex-start; margin: 0 0 14px; }
+@media (max-width: 760px) { .pen-head-right .pen-clock { display: none; } }
+.pen-readonly { border-color: var(--warn-line); background: var(--warn-wash); }
+.pen-readonly .pen-btn { text-decoration: none; }
+
+/* Read-only: the composer's place, holding the reason and the way back. */
+.pen-composer-off {
+  align-items: center; justify-content: space-between; flex-wrap: wrap;
+  font-size: var(--t-small); line-height: var(--t-small-lh); color: var(--soft);
+}
+.pen-composer-off .pen-btn { text-decoration: none; display: inline-flex; align-items: center; }
+.pen-readonly .pen-btn, .pen-clock { line-height: 1.2; }

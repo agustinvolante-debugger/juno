@@ -8,7 +8,7 @@
 // person ever clicked it.
 //
 // Who may get in is decided exactly as for Google (lib/auth.ts signIn callback): the allowlist
-// or an active account. A link is only emailed to addresses that would pass, but the request
+// or an account that may enter (active, or cancelled and still read-only). A link is only emailed to addresses that would pass, but the request
 // always answers the same way, so the form can't be used to find out who has an account, and
 // strangers' inboxes can't be flooded through it. Five links per address per hour at most.
 
@@ -32,8 +32,8 @@ export async function mayEnter(email: string): Promise<boolean> {
   const { ALLOWED_EMAILS } = await import('@/lib/auth')
   if (ALLOWED_EMAILS.includes(email)) return true
   try {
-    const { isActive } = await import('@/lib/pen/accounts')
-    return await isActive(email)
+    const { mayEnterAccount } = await import('@/lib/pen/access')
+    return await mayEnterAccount(email)
   } catch {
     return false
   }

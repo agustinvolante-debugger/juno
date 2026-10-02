@@ -64,8 +64,9 @@ export const authOptions: NextAuthOptions = {
       if (ALLOWED_EMAILS.includes(email)) return true
 
       try {
-        const { isActive } = await import('@/lib/pen/accounts')
-        return await isActive(email)
+        // Active, or cancelled and read-only until the account is deleted (lib/pen/access.ts).
+        const { mayEnterAccount } = await import('@/lib/pen/access')
+        return await mayEnterAccount(email)
       } catch {
         // If the lookup itself fails, refuse rather than admit everyone. A broken database
         // should lock the door, not open it.

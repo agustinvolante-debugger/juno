@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
+import { readOnlyRefusal } from '@/lib/pen/access'
 import { getSession, updateSession } from '@/lib/pen/store'
 import type { Deliverable } from '@/lib/pen/store'
 import { draftDeliverable, type DeliverableKind } from '@/lib/pen/deliverables'
@@ -12,6 +13,9 @@ const KINDS: DeliverableKind[] = ['email', 'memo', 'tracker']
 export async function POST(req: Request) {
   const email = await authedEmail()
   if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  // Read-only after the plan ends: nothing that adds or calls a model (lib/pen/access.ts).
+  const ended = await readOnlyRefusal(email)
+  if (ended) return NextResponse.json({ error: ended }, { status: 403 })
 
   const b = (await req.json().catch(() => ({}))) as { id?: string; kind?: string; item?: string }
   if (!b.id || !b.item?.trim()) return NextResponse.json({ error: 'id and item required' }, { status: 400 })

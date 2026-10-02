@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server'
 import crypto from 'node:crypto'
-import { activate, deactivate, getAccountByStripe, setPausedUntil } from '@/lib/pen/accounts'
+import { activate, deactivate, getAccountByStripe, setCancelAt, setPausedUntil } from '@/lib/pen/accounts'
+import { sendCancelScheduled, sendEnded, sendWelcomeBack } from '@/lib/pen/cancel-mail'
 import { settleHoursCheckout } from '@/lib/pen/hours'
 import { sendEmailResult } from '@/lib/news/email'
 import { planPrice, parsePlan, parseOffer } from '@/lib/pen/plan'
 import { LOCAL_PRICES, money, parseCurrency, parseLang } from '@/lib/pen/currency'
 import { rememberAppLanguage } from '@/lib/pen/profile'
 import { notifyPaid, notifyHours } from '@/lib/pen/notify-owner'
-import { customerEmail, portalLoginUrl } from '@/lib/pen/stripe'
+import { cancelAtOf, customerEmail, portalLoginUrl, type Subscription } from '@/lib/pen/stripe'
 
 export const dynamic = 'force-dynamic'
 // A purchase can release held recordings, and a pieced one is stitched into AssemblyAI on the way.
@@ -155,8 +156,18 @@ export async function POST(req: Request) {
           // signup is greeted here instead. Nothing is charged today on a trial.
           console.log(`pen stripe: ${event.type} for ${subEmail} (${sub.status}), first=${first}`)
           if (first) await greet(subEmail, sub.metadata ?? {}, sub.status === 'trialing' ? 0 : null)
+          // Cancelled at period end (in the app or Stripe's portal), or taken back. Whichever
+          // records it first sends the confirmation, so the in-app cancel and this can't double up.
+          if (sub.id) {
+            const at = cancelAtOf(sub as Subscription)
+            const reason = sub.cancellation_details?.feedback ?? null
+            if (await setCancelAt(sub.id, at, at ? reason : null)) {
+              const acct = await getAccountByStripe(sub.id, null).catch(() => null)
+              await sendCancelScheduled(subEmail, at!, acct?.offer ?? sub.metadata?.offer ?? null).catch((e) => console.warn(`pen cancel email failed: ${(e as Error).message}`))
+            }
+          }
         } else if (!live && sub.id) {
-          await deactivate(sub.id)
+          await ended(sub)
         }
         // A pause started or ended (in the app, the dashboard, or by Stripe on the resume
         // date). Stripe clears pause_collection itself when the date arrives.
@@ -173,6 +184,9 @@ export async function POST(req: Request) {
       case 'customer.subscription.trial_will_end': {
         // Same as above: a subscription event, so no email on it. Before this lookup the
         // trial-ending email was never sent at all.
+        // Cancelled during the trial: it ends on that date and nothing is charged, so "your card
+        // will be charged" would be false.
+        if (o.cancel_at_period_end || o.cancel_at) break
         const to = email || (await emailForSubscription(o))
         if (to) await trialEnding(to, trialEnd(o), o.metadata?.plan ?? null, o.metadata?.offer ?? null, o.metadata?.lang, o.metadata?.currency ?? null).catch(() => {})
         break
@@ -195,7 +209,7 @@ export async function POST(req: Request) {
       }
 
       case 'customer.subscription.deleted': {
-        if (o.id) await deactivate(o.id)
+        if (o.id) await ended(o)
         break
       }
     }
@@ -208,9 +222,27 @@ export async function POST(req: Request) {
   return NextResponse.json({ received: true })
 }
 
+/** The plan is over: read-only from now (lib/pen/access.ts), and say so once. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function ended(sub: Record<string, any>) {
+  // Looked up before deactivate, while the row still matches this subscription as active.
+  const to = await emailForSubscription(sub).catch(() => null)
+  // Only a real end is announced. A declined card (past_due, unpaid) also closes the account,
+  // but the payment-failed email already told them, and fixing the card brings it straight back.
+  if ((await deactivate(sub.id)) && to && sub.status === 'canceled') {
+    await sendEnded(to, new Date().toISOString()).catch((e) => console.warn(`pen ended email failed: ${(e as Error).message}`))
+  }
+}
+
 /** A new customer: their welcome email, and the owners' "new customer" email with the address. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function greet(email: string, meta: Record<string, any>, amountCents: number | null) {
+  // Reactivated after the plan ended: they know the product, so no "your pen is in the post".
+  if (meta.returning === '1') {
+    await sendWelcomeBack(email).catch((e) => console.warn(`pen welcome-back failed: ${(e as Error).message}`))
+    await notifyPaid({ email, plan: meta.plan ?? null, offer: meta.offer ?? null, amountCents, returning: true }).catch((e) => console.warn(`pen notify failed: ${(e as Error).message}`))
+    return
+  }
   await welcome(email, meta.offer ?? null, meta.plan ?? null, meta.lang).catch((e) => console.warn(`pen welcome failed: ${(e as Error).message}`))
   await notifyPaid({ email, plan: meta.plan ?? null, offer: meta.offer ?? null, amountCents }).catch((e) => console.warn(`pen notify failed: ${(e as Error).message}`))
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
+import { readOnlyRefusal } from '@/lib/pen/access'
 import { getSession, updateSession } from '@/lib/pen/store'
 import { translateTranscript } from '@/lib/pen/aai'
 import { LANGUAGES } from '@/lib/pen/profile-fields'
@@ -12,6 +13,9 @@ export const maxDuration = 120
 export async function POST(req: Request) {
   const email = await authedEmail()
   if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  // Read-only after the plan ends: nothing that adds or calls a model (lib/pen/access.ts).
+  const ended = await readOnlyRefusal(email)
+  if (ended) return NextResponse.json({ error: ended }, { status: 403 })
   const b = (await req.json().catch(() => ({}))) as { id?: string; lang?: string }
   const lang = LANGUAGES.find((l) => l.code === b.lang)?.code
   if (!b.id || !lang) return NextResponse.json({ error: 'id and a supported lang required' }, { status: 400 })

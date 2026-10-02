@@ -39,6 +39,8 @@ const CV_EN = {
   writing: 'Writing…',
   followUp: 'Ask a follow-up… type @ to name a recording',
   askAnything: 'Ask anything across every recording… type @ to name one',
+  readOnly: 'Your plan has ended, so asking is off. Your past chats stay here to read.',
+  reactivate: 'Reactivate',
   asking: 'Asking…',
   ask: 'Ask',
   recent: 'Recent',
@@ -64,6 +66,8 @@ const CV: Copy<typeof CV_EN> = {
     writing: 'Escribiendo…',
     followUp: 'Haz otra pregunta… escribe @ para nombrar una grabación',
     askAnything: 'Pregunta lo que quieras sobre todas tus grabaciones… escribe @ para nombrar una',
+    readOnly: 'Tu plan terminó, así que las preguntas están apagadas. Tus chats anteriores siguen aquí para leer.',
+    reactivate: 'Reactivar',
     asking: 'Preguntando…',
     ask: 'Preguntar',
     recent: 'Recientes',
@@ -86,6 +90,8 @@ const CV: Copy<typeof CV_EN> = {
     writing: 'Escrevendo…',
     followUp: 'Faça outra pergunta… digite @ para citar uma gravação',
     askAnything: 'Pergunte qualquer coisa sobre todas as gravações… digite @ para citar uma',
+    readOnly: 'Seu plano terminou, então as perguntas estão desligadas. Seus chats anteriores continuam aqui para ler.',
+    reactivate: 'Reativar',
     asking: 'Perguntando…',
     ask: 'Perguntar',
     recent: 'Recentes',
@@ -103,8 +109,11 @@ export default function ChatView({
   suggestions = [],
   recent = [],
   onOpenRecent,
+  readOnly = false,
 }: {
   chatId: string | null
+  /** The plan ended (lib/pen/access.ts): past threads stay readable, nothing new is asked. */
+  readOnly?: boolean
   /** Starter questions for an empty chat, so the screen is never blank (phone). */
   suggestions?: string[]
   /** Recent threads to reopen from an empty chat (phone). */
@@ -185,6 +194,7 @@ export default function ChatView({
   const tp = useTagPicker({ value: q, setValue: setQ, field: inputRef, options: recordings })
 
   async function ask(question: string, preset?: Mention[]) {
+    if (readOnly) return
     const text = question.trim()
     // `thinking` is state and lags by a render; the ref closes the window in which two calls
     // can both pass this check and create two threads.
@@ -337,6 +347,12 @@ export default function ChatView({
         <div ref={endRef} />
       </div>
 
+      {readOnly ? (
+        <div className="pen-composer pen-composer-off">
+          <span>{T.readOnly}</span>
+          <a href="/pen/settings/billing" className="pen-btn pen-btn-accent">{T.reactivate}</a>
+        </div>
+      ) : (
       <form
         className="pen-composer"
         onSubmit={(e) => {
@@ -373,6 +389,7 @@ export default function ChatView({
           {thinking ? T.asking : T.ask}
         </button>
       </form>
+      )}
     </div>
   )
 }

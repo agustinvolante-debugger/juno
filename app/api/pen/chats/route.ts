@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
+import { readOnlyRefusal } from '@/lib/pen/access'
 import { askArchive } from '@/lib/pen/archive'
 import { briefFor } from '@/lib/pen/profile'
 import { createChat, getChat, listChats, setMessages, titleFromQuestion } from '@/lib/pen/chats'
@@ -24,6 +25,9 @@ export async function GET() {
 export async function POST(req: Request) {
   const email = await authedEmail()
   if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  // Read-only after the plan ends: nothing that adds or calls a model (lib/pen/access.ts).
+  const ended = await readOnlyRefusal(email)
+  if (ended) return NextResponse.json({ error: ended }, { status: 403 })
 
   const b = (await req.json().catch(() => ({}))) as { id?: string; question?: string; mentions?: unknown }
   const question = (b.question ?? '').trim()

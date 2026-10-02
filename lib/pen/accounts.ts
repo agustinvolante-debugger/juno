@@ -24,6 +24,12 @@ export type PenAccount = {
   activated_at: string | null
   /** Set while a monthly subscription is paused (Stripe pause_collection.resumes_at). */
   paused_until?: string | null
+  /** Cancelled, effective then: full access until this moment, read-only after (lib/pen/access.ts). */
+  cancel_at?: string | null
+  /** When the subscription actually ended. Read-only from here; deleted KEEP_DAYS later. */
+  ended_at?: string | null
+  /** Why they cancelled, from the in-app menu. */
+  cancel_reason?: string | null
   note: string | null
   created_at: string
   updated_at: string
@@ -95,6 +101,8 @@ export async function activate(opts: {
     ...(opts.plan ? { plan: opts.plan } : existing ? {} : { plan: 'pen' }),
     ...(opts.trialEndsAt !== undefined ? { trial_ends_at: opts.trialEndsAt } : {}),
     ...(opts.offer ? { offer: opts.offer } : {}),
+    // Coming back after the plan ended: no longer read-only, nothing scheduled to end.
+    ...(existing && existing.status !== 'active' ? { cancel_at: null, ended_at: null } : {}),
   }
 
   // Stripe sends checkout.session.completed and customer.subscription.created within moments of
@@ -132,13 +140,59 @@ export async function activate(opts: {
   return claimed
 }
 
-/** Subscription ended. The row stays so the history and the recordings survive. */
-export async function deactivate(stripeSubscriptionId: string): Promise<void> {
+/**
+ * Subscription ended. The row stays so the history and the recordings survive, read-only
+ * (lib/pen/access.ts). True only for the event that closed it, so the "your account is now
+ * read-only" email goes out once however often Stripe retries.
+ */
+export async function deactivate(stripeSubscriptionId: string): Promise<boolean> {
+  const now = new Date().toISOString()
+  const r = await supabaseAdmin
+    .from('pen_accounts')
+    .update({ status: 'cancelled', ended_at: now, updated_at: now })
+    .eq('stripe_subscription_id', stripeSubscriptionId)
+    .neq('status', 'cancelled')
+    .select('id')
+  if (!r.error) return Boolean(r.data?.length)
+  if (!/column .* does not exist|schema cache/i.test(r.error.message)) throw new Error(r.error.message)
+  // Deployed before the ALTER: close the account anyway; the end date falls back to updated_at.
   const { error } = await supabaseAdmin
     .from('pen_accounts')
-    .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+    .update({ status: 'cancelled', updated_at: now })
     .eq('stripe_subscription_id', stripeSubscriptionId)
   if (error) throw new Error(error.message)
+  return false
+}
+
+/**
+ * Records a cancellation at period end (or its undoing, with null). True only when this call
+ * is the one that scheduled it, so the confirmation email goes out once. Tolerates the
+ * column not existing yet, like setPausedUntil.
+ */
+export async function setCancelAt(stripeSubscriptionId: string, at: string | null, reason?: string | null): Promise<boolean> {
+  const missing = (m: string) => /column .* does not exist|schema cache/i.test(m)
+  const stamp = { updated_at: new Date().toISOString() }
+  if (!at) {
+    const { error } = await supabaseAdmin.from('pen_accounts').update({ cancel_at: null, ...stamp }).eq('stripe_subscription_id', stripeSubscriptionId).not('cancel_at', 'is', null)
+    if (error && !missing(error.message)) throw new Error(error.message)
+    return false
+  }
+  const extra = reason ? { cancel_reason: reason } : {}
+  const first = await supabaseAdmin
+    .from('pen_accounts')
+    .update({ cancel_at: at, ...extra, ...stamp })
+    .eq('stripe_subscription_id', stripeSubscriptionId)
+    .is('cancel_at', null)
+    .select('id')
+  if (first.error) {
+    if (missing(first.error.message)) return false
+    throw new Error(first.error.message)
+  }
+  if (first.data?.length) return true
+  // Already scheduled: keep the date honest (a plan change can move it) without re-announcing.
+  const { error } = await supabaseAdmin.from('pen_accounts').update({ cancel_at: at, ...extra }).eq('stripe_subscription_id', stripeSubscriptionId)
+  if (error && !missing(error.message)) throw new Error(error.message)
+  return false
 }
 
 /** Paused right now. A date in the past means the pause is over, whatever the webhook did. */

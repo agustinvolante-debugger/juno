@@ -316,3 +316,14 @@ create index if not exists pen_clients_user on pen_clients(user_email);
 -- create table if not exists public.pen_login_links (token_hash text primary key, email text not null, created_at timestamptz not null default now(), expires_at timestamptz not null, used_at timestamptz);
 -- create index if not exists pen_login_links_email on public.pen_login_links(email, created_at desc);
 -- alter table public.pen_login_links enable row level security;
+
+-- ---------------------------------------------------------------------------
+-- 2026-10-02 — cancelling and read-only accounts. One line, run it once.
+--
+-- cancel_at      cancelled at period end: full access until then, read-only after.
+-- ended_at       when the subscription actually ended. Deleted 12 months later (KEEP_DAYS).
+-- cancel_reason  what they picked in the in-app cancel menu (Stripe's feedback code).
+-- All three are optional to the code: before this runs, cancelling still works through Stripe
+-- and a read-only account counts its 12 months from updated_at.
+-- ---------------------------------------------------------------------------
+-- alter table public.pen_accounts add column if not exists cancel_at timestamptz, add column if not exists ended_at timestamptz, add column if not exists cancel_reason text;

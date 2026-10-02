@@ -58,15 +58,18 @@ async function send(subject: string, rows: [string, string][]) {
 }
 
 /** A checkout completed. `amountCents` is what was charged today (0 on a trial). */
-export async function notifyPaid(opts: { email: string; plan: string | null; offer: string | null; amountCents: number | null }) {
+export async function notifyPaid(opts: { email: string; plan: string | null; offer: string | null; amountCents: number | null; returning?: boolean }) {
   const s = await signupRow(opts.email).catch(() => null)
   const today = opts.amountCents ? `$${(opts.amountCents / 100).toFixed(2)} charged today` : 'Free trial started, card on file'
   const shipTo = s ? [s.ship_line1, s.ship_line2, s.ship_city, s.ship_state, s.ship_postcode, s.ship_country].filter(Boolean).join(', ') : ''
-  const pen = parseOffer(opts.offer) !== 'own-recorder'
-  await send(`${opts.amountCents ? 'Paid' : 'Trial'}: Juno Pen, ${s?.name ?? opts.email} (${planLabel(opts.plan, opts.offer)})`, [
+  // A returning customer kept their pen; there is nothing to ship.
+  const pen = parseOffer(opts.offer) !== 'own-recorder' && !opts.returning
+  // Coming back: charged today, no trial, keeps the pen they had, whatever the original offer was.
+  const plan = opts.returning ? `${opts.plan ?? 'monthly'} plan, reactivated (no trial, no pen)` : planLabel(opts.plan, opts.offer)
+  await send(`${opts.returning ? 'Reactivated' : opts.amountCents ? 'Paid' : 'Trial'}: Juno Pen, ${s?.name ?? opts.email} (${plan})`, [
     ['Name', s?.name ?? '(no signup form)'],
     ['Email', opts.email],
-    ['Plan', planLabel(opts.plan, opts.offer)],
+    ['Plan', plan],
     ['Today', today],
     ['Phone', s?.phone ?? '—'],
     ['Role', s?.role ?? '—'],

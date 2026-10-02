@@ -28,6 +28,11 @@ export async function startPlanCheckout(opts: {
   currency?: Currency
   /** The language the customer signed up in: Stripe's page and every later email follow it. */
   lang?: Lang
+  /**
+   * Coming back after the plan ended (lib/pen/cancel.ts): charged today, no trial, no pen
+   * (they kept theirs), and the Stripe customer they already have.
+   */
+  returning?: { customerId: string | null }
 }): Promise<PlanCheckout> {
   const price = planPrice(opts.offer, opts.plan)
   if (!price) return { error: 'That plan is not available. Software only comes monthly or every 6 months.' }
@@ -42,7 +47,7 @@ export async function startPlanCheckout(opts: {
 
   // The recorder is $50 on the monthly pen plan and included in the 6-month and yearly ones.
   // Software only pays for no pen at all.
-  const chargePen = opts.plan === 'monthly' && opts.offer === 'posted-pen'
+  const chargePen = opts.plan === 'monthly' && opts.offer === 'posted-pen' && !opts.returning
   const penPrice = process.env.STRIPE_PRICE_PEN
   if (chargePen && !penPrice) return { error: "Checkout isn't configured yet — STRIPE_PRICE_PEN is not set." }
 
@@ -50,13 +55,14 @@ export async function startPlanCheckout(opts: {
     priceId,
     oneTimePriceIds: chargePen && penPrice ? [penPrice] : [],
     email: opts.email,
-    trialDays: trialDaysFor(opts.offer, opts.plan),
-    successUrl: `${opts.origin}/pen?welcome=1`,
-    cancelUrl: `${opts.origin}/pen/signup?cancelled=1`,
+    trialDays: opts.returning ? 0 : trialDaysFor(opts.offer, opts.plan),
+    successUrl: opts.returning ? `${opts.origin}/pen/settings/billing?back=1` : `${opts.origin}/pen?welcome=1`,
+    cancelUrl: opts.returning ? `${opts.origin}/pen/settings/billing` : `${opts.origin}/pen/signup?cancelled=1`,
     reference: opts.reference,
-    metadata: { plan: opts.plan, offer: opts.offer, lang: opts.lang ?? 'en', currency: charged },
+    customerId: opts.returning?.customerId ?? null,
+    metadata: { plan: opts.plan, offer: opts.offer, lang: opts.lang ?? 'en', currency: charged, ...(opts.returning ? { returning: '1' } : {}) },
     locale: stripeLocale(opts.lang ?? 'en'),
-    ...(opts.offer === 'free-pen' ? { submitMessage: freePenMessage(price.usd) } : {}),
+    ...(opts.offer === 'free-pen' && !opts.returning ? { submitMessage: freePenMessage(price.usd) } : {}),
   })
   return { url: session.url }
 }

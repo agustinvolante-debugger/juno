@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
+import { readOnlyRefusal } from '@/lib/pen/access'
 import { getSession } from '@/lib/pen/store'
 import type { NoteBlock } from '@/lib/pen/store'
 import { enhanceBlocks } from '@/lib/pen/enhance'
@@ -13,6 +14,9 @@ export const maxDuration = 60
 export async function POST(req: Request) {
   const email = await authedEmail()
   if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  // Read-only after the plan ends: nothing that adds or calls a model (lib/pen/access.ts).
+  const ended = await readOnlyRefusal(email)
+  if (ended) return NextResponse.json({ error: ended }, { status: 403 })
 
   const b = (await req.json().catch(() => ({}))) as { id?: string; blocks?: NoteBlock[] }
   if (!b.id) return NextResponse.json({ error: 'id required' }, { status: 400 })

@@ -7,6 +7,7 @@
 // Trials just cancel; 6-month and yearly plans are prepaid, so there is nothing to pause.
 
 import { getAccount, isPaused, isTrialing, setPausedUntil, type PenAccount } from './accounts'
+import { readOnlyRefusal } from './access'
 import { pauseSubscription, resumeSubscription } from './stripe'
 
 export const PAUSE_DAYS = [30, 60, 90] as const
@@ -40,8 +41,10 @@ export async function resume(email: string): Promise<void> {
   await setPausedUntil(a.stripe_subscription_id, null)
 }
 
-/** The refusal for adding a recording while paused, or null. For the upload routes. */
+/** The refusal for adding a recording while paused or read-only, or null. For the upload routes. */
 export async function pausedRefusal(email: string): Promise<string | null> {
+  const ended = await readOnlyRefusal(email)
+  if (ended) return ended
   const a = await getAccount(email).catch(() => null)
   if (!isPaused(a)) return null
   const d = new Date(a!.paused_until!).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })

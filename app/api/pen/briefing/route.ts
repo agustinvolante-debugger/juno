@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
+import { readOnlyRefusal } from '@/lib/pen/access'
 import { renderBriefing, sendBriefing, hasSomethingToSay } from '@/lib/pen/briefing'
 import { userLang } from '@/lib/pen/user-lang'
 import { getSession, updateSession } from '@/lib/pen/store'
@@ -59,6 +60,9 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const email = await authedEmail()
   if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  // Read-only after the plan ends: nothing that adds or calls a model (lib/pen/access.ts).
+  const ended = await readOnlyRefusal(email)
+  if (ended) return NextResponse.json({ error: ended }, { status: 403 })
 
   const b = (await req.json().catch(() => ({}))) as { id?: string; also?: string[] | string }
   if (!b.id) return NextResponse.json({ error: 'id required' }, { status: 400 })

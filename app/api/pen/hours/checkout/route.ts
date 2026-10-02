@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
+import { readOnlyRefusal } from '@/lib/pen/access'
 import { createHoursCheckout, stripeConfigured } from '@/lib/pen/stripe'
 import { getAccount } from '@/lib/pen/accounts'
 import { HOUR_USD, MAX_HOURS_PER_PURCHASE } from '@/lib/pen/plan'
@@ -10,6 +11,9 @@ export const dynamic = 'force-dynamic'
 export async function POST(req: Request) {
   const email = await authedEmail()
   if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  // Read-only after the plan ends: nothing that adds or calls a model (lib/pen/access.ts).
+  const ended = await readOnlyRefusal(email)
+  if (ended) return NextResponse.json({ error: ended }, { status: 403 })
   if (!stripeConfigured()) {
     // Named precisely, because the failure otherwise looks like a Stripe outage.
     return NextResponse.json({ error: "Buying hours isn't switched on yet. STRIPE_SECRET_KEY is not set." }, { status: 503 })

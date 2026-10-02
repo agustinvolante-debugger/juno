@@ -1,5 +1,6 @@
 import { NextResponse, after } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
+import { readOnlyRefusal } from '@/lib/pen/access'
 import { getSession, updateSession } from '@/lib/pen/store'
 import { hasKey } from '@/lib/pen/aai'
 import { startTranscription } from '@/lib/pen/transcribe'
@@ -11,6 +12,9 @@ export const maxDuration = 300
 export async function POST(req: Request) {
   const email = await authedEmail()
   if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  // Read-only after the plan ends: nothing that adds or calls a model (lib/pen/access.ts).
+  const ended = await readOnlyRefusal(email)
+  if (ended) return NextResponse.json({ error: ended }, { status: 403 })
   if (!hasKey()) {
     return NextResponse.json(
       { error: 'ASSEMBLYAI_API_KEY is not set. Add it to .env.local and to the Vercel project env.' },

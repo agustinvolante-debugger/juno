@@ -71,11 +71,13 @@ export async function createCheckoutSession(opts: {
   locale?: string
   /** A line under the pay button, e.g. the free-pen offer's "cancel anytime" promise. */
   submitMessage?: string
+  /** A returning customer: Stripe already has them (and maybe their card). Replaces `email`. */
+  customerId?: string | null
 }): Promise<CheckoutSession> {
   return stripe<CheckoutSession>('checkout/sessions', {
     mode: 'subscription',
     line_items: [{ price: opts.priceId, quantity: 1 }, ...(opts.oneTimePriceIds ?? []).map((price) => ({ price, quantity: 1 }))],
-    customer_email: opts.email,
+    ...(opts.customerId ? { customer: opts.customerId } : { customer_email: opts.email }),
     client_reference_id: opts.reference,
     success_url: opts.successUrl,
     cancel_url: opts.cancelUrl,
@@ -182,7 +184,14 @@ export function portalLoginUrl(): string | null {
   return process.env.STRIPE_PORTAL_LOGIN_URL || null
 }
 
-export type Subscription = { id: string; status: string; pause_collection: { resumes_at: number | null } | null }
+export type Subscription = {
+  id: string
+  status: string
+  pause_collection: { resumes_at: number | null } | null
+  cancel_at?: number | null
+  cancel_at_period_end?: boolean
+  items?: { data?: { current_period_end?: number; price?: { currency?: string } }[] }
+}
 
 /**
  * Stops charging until `resumesAt`, then Stripe restarts the subscription by itself. `void`
@@ -197,6 +206,37 @@ export async function pauseSubscription(id: string, resumesAt: Date): Promise<Su
 /** Ends a pause now. An empty value is how Stripe unsets pause_collection. */
 export async function resumeSubscription(id: string): Promise<Subscription> {
   return stripe<Subscription>(`subscriptions/${encodeURIComponent(id)}`, { pause_collection: '' })
+}
+
+/** Stripe's own list of cancellation reasons; anything else is sent as 'other'. */
+export const CANCEL_FEEDBACK = ['too_expensive', 'unused', 'missing_features', 'switched_service', 'low_quality', 'too_complex', 'other'] as const
+export type CancelFeedback = (typeof CANCEL_FEEDBACK)[number]
+
+/**
+ * Cancels at the end of the period already paid for (or the trial), never now: nobody loses
+ * days they paid for, and a trial cancelled today is never charged. Stripe ends the
+ * subscription on that date and sends customer.subscription.deleted.
+ */
+export async function cancelAtPeriodEnd(id: string, feedback: CancelFeedback, comment?: string): Promise<Subscription> {
+  return stripe<Subscription>(`subscriptions/${encodeURIComponent(id)}`, {
+    cancel_at_period_end: true,
+    cancellation_details: { feedback, ...(comment ? { comment: comment.slice(0, 500) } : {}) },
+  })
+}
+
+/** Takes a scheduled cancellation back, as long as the period hasn't ended yet. */
+export async function undoCancel(id: string): Promise<Subscription> {
+  return stripe<Subscription>(`subscriptions/${encodeURIComponent(id)}`, { cancel_at_period_end: false })
+}
+
+export async function getSubscription(id: string): Promise<Subscription> {
+  return stripe<Subscription>(`subscriptions/${encodeURIComponent(id)}`)
+}
+
+/** When a scheduled cancellation takes effect, in ISO, or null when nothing is scheduled. */
+export function cancelAtOf(sub: Subscription): string | null {
+  const secs = sub.cancel_at ?? (sub.cancel_at_period_end ? sub.items?.data?.[0]?.current_period_end : null)
+  return typeof secs === 'number' ? new Date(secs * 1000).toISOString() : null
 }
 
 /** The email on a Stripe customer, for events that only carry the customer id. */

@@ -12,7 +12,7 @@
 
 import { ALLOWED_EMAILS } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabase'
-import { isActive } from '../accounts'
+import { getAccount, isActive } from '../accounts'
 import { getAllowance } from '../allowance'
 import { runAgent } from './agent'
 import { isMine } from '../todo-labels'
@@ -65,6 +65,7 @@ const EN = {
   consent: (name: string) => `Got ${name}.\n\nOne tap before I write it up: did everyone on this recording agree to be recorded?`,
   agreed: 'Everyone agreed',
   outOfHours: (hours: string) => `You're out of recording hours for this month. Buy more at ${hours} and send the file again.`,
+  readOnly: (url: string) => `Your Juno Pen plan has ended, so your account is read-only: your recordings and notes are still on the website, but I can't take new ones or answer questions. Reactivate at ${url}.`,
   paused: (url: string) => `Your Juno Pen plan is paused, so this recording wasn't processed. Resume it at ${url} and send the file again.`,
   lost: 'I lost track of that file. Could you send it again?',
   cancelled: 'Okay, I won\'t transcribe it. Nothing was kept.',
@@ -103,6 +104,7 @@ const BOT: Record<Lang, typeof EN> = {
     consent: (name) => `Recibí ${name}.\n\nUn toque antes de escribir las notas: ¿todos en esta grabación aceptaron ser grabados?`,
     agreed: 'Todos aceptaron',
     outOfHours: (hours) => `Se acabaron tus horas de grabación de este mes. Compra más en ${hours} y vuelve a mandar el archivo.`,
+    readOnly: (url) => `Tu plan de Juno Pen terminó, así que tu cuenta es solo de lectura: tus grabaciones y notas siguen en el sitio, pero no puedo recibir nuevas ni responder preguntas. Reactívala en ${url}.`,
     paused: (url) => `Tu plan de Juno Pen está en pausa, así que no procesamos esta grabación. Reactívalo en ${url} y vuelve a mandar el archivo.`,
     lost: 'Perdí la pista de ese archivo. ¿Me lo mandas otra vez?',
     cancelled: 'Listo, no lo voy a transcribir. No se guardó nada.',
@@ -138,6 +140,7 @@ const BOT: Record<Lang, typeof EN> = {
     consent: (name) => `Recebi ${name}.\n\nUm toque antes de escrever as notas: todos nesta gravação concordaram em ser gravados?`,
     agreed: 'Todos concordaram',
     outOfHours: (hours) => `Suas horas de gravação deste mês acabaram. Compre mais em ${hours} e mande o arquivo de novo.`,
+    readOnly: (url) => `Seu plano do Juno Pen terminou, então sua conta é somente leitura: suas gravações e notas continuam no site, mas não posso receber novas nem responder perguntas. Reative em ${url}.`,
     paused: (url) => `Seu plano do Juno Pen está pausado, então esta gravação não foi processada. Retome em ${url} e mande o arquivo de novo.`,
     lost: 'Perdi esse arquivo de vista. Pode mandar de novo?',
     cancelled: 'Tudo bem, não vou transcrever. Nada foi guardado.',
@@ -196,7 +199,9 @@ export async function handleInbound(msg: Inbound): Promise<void> {
     return
   }
   if (!(await allowed(link.email))) {
-    await sendText(msg.from, L.inactive(appUrl()))
+    // Ended plans are read-only on the website; say that, rather than "pick a plan".
+    const ended = (await getAccount(link.email).catch(() => null))?.status === 'cancelled'
+    await sendText(msg.from, ended ? L.readOnly(appUrl('/settings/billing')) : L.inactive(appUrl()))
     return
   }
 

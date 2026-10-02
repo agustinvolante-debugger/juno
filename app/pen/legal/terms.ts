@@ -1,9 +1,9 @@
 // Juno Pen terms of service, EN / ES / PT.
 //
 // Plans, trials and the fair-use line follow lib/pen/plan.ts and lib/pen/checkout.ts as of
-// 27 Sep 2026. Amounts are deliberately not repeated here (they are shown at checkout), so a
+// 2 Oct 2026, and cancelling / read-only follows lib/pen/access.ts and lib/pen/cancel.ts. Amounts are deliberately not repeated here (they are shown at checkout), so a
 // price change doesn't make the terms wrong. If trial lengths or the 100-hour line change,
-// change them here too.
+// change them here too. The 12 months a read-only account is kept is KEEP_DAYS in access.ts.
 
 import type { Lang, LegalDoc } from './types'
 
@@ -45,11 +45,12 @@ export const TERMS: Record<Lang, LegalDoc> = {
           {
             list: [
               'Plans are monthly, every 6 months or yearly, with the Juno pen or with your own recorder. The price, the currency and what is included are shown before you pay.',
-              'Monthly plans start with a free trial: 7 days with your own recorder, 21 days with the pen. We take a card at signup and charge it when the trial ends, unless you cancel first. If there is no valid card when the trial ends, the plan is cancelled.',
+              'Monthly plans start with a free trial: 7 days with your own recorder, 21 days with the pen, 30 days when the pen is offered free. We take a card at signup and charge it when the trial ends, unless you cancel first. If there is no valid card when the trial ends, the plan is cancelled.',
+              'When the pen is offered free, it is never charged, and it is yours to keep whether or not you stay.',
               'On the monthly pen plan, the pen is a one-time charge at signup. On the 6-month and yearly plans, the pen is included and the plan is paid up front, with no trial.',
               'Plans renew automatically for the same length until you cancel. We will tell you before a price change applies to you.',
               'Where tax applies, it is shown at checkout.',
-              'If a payment fails, your account is put on hold until the card is updated. Your recordings stay.',
+              'If a payment fails, your account becomes read-only (see Cancelling) until the card is updated. Your recordings stay.',
             ],
           },
         ],
@@ -57,13 +58,23 @@ export const TERMS: Record<Lang, LegalDoc> = {
       {
         h: 'Cancelling',
         body: [
-          'You can cancel at any time from Settings → Billing, from the link in our emails, or by writing to [CONTACT EMAIL]. Cancelling stops the next renewal; you keep access until the end of the period you have paid for.',
+          'You can cancel at any time in Settings → Billing, through the link in our emails, or by writing to [CONTACT EMAIL]. Cancelling stops the next charge. It takes effect at the end of the period you have already paid for, or at the end of your trial. Until then everything works as before, and a trial cancelled before it ends is never charged.',
+          {
+            list: [
+              'From that date your account is read-only. You can still sign in and open every recording, transcript and note you made, but you can’t add recordings (by upload, the pen or WhatsApp) or use search, chat, briefings, translation or any other AI feature.',
+              'We keep a read-only account for 12 months after the plan ends, then delete it with its recordings, transcripts and notes. You can delete anything yourself before then, or ask us to delete it all sooner.',
+              'Until the end date, you can take the cancellation back in Settings → Billing with one click. After it, you can reactivate at any time during those 12 months: the plan is charged the day you reactivate, with no new trial, and everything you recorded is where you left it.',
+              'If you cancel, you keep the pen, including a pen you received free.',
+              'Instead of cancelling, a monthly plan you have paid for at least once can be paused for 30, 60 or 90 days. Nothing is charged while it is paused, you can read everything but not add recordings, and it restarts by itself on the date you chose.',
+            ],
+          },
         ],
       },
       {
         h: 'Refunds',
         body: [
           'Payments are non-refundable, including for partial periods and unused time, except where the law of the country you live in gives you a right to cancel or to a refund that cannot be waived (for example, the seven-day right of withdrawal for online purchases in Brazil). Nothing in these terms limits those rights.',
+          'Cancelling does not refund the rest of a period you have paid for, including a 6-month or yearly plan; you keep full access until that period ends.',
         ],
       },
       {
@@ -170,11 +181,12 @@ export const TERMS: Record<Lang, LegalDoc> = {
           {
             list: [
               'Los planes son mensuales, semestrales o anuales, con el lápiz Juno o con tu propia grabadora. El precio, la moneda y lo que incluye se muestran antes de pagar.',
-              'Los planes mensuales empiezan con una prueba gratis: 7 días con tu propia grabadora, 21 días con el lápiz. Pedimos una tarjeta al registrarte y la cobramos cuando termina la prueba, salvo que canceles antes. Si no hay una tarjeta válida al terminar la prueba, el plan se cancela.',
+              'Los planes mensuales empiezan con una prueba gratis: 7 días con tu propia grabadora, 21 días con el lápiz, 30 días cuando el lápiz se ofrece gratis. Pedimos una tarjeta al registrarte y la cobramos cuando termina la prueba, salvo que canceles antes. Si no hay una tarjeta válida al terminar la prueba, el plan se cancela.',
+              'Cuando el lápiz se ofrece gratis, nunca se cobra, y es tuyo te quedes o no.',
               'En el plan mensual con lápiz, el lápiz se cobra una sola vez al registrarte. En los planes semestral y anual, el lápiz está incluido y el plan se paga por adelantado, sin prueba.',
               'Los planes se renuevan automáticamente por el mismo período hasta que canceles. Te avisaremos antes de que un cambio de precio se aplique a ti.',
               'Cuando corresponde algún impuesto, se muestra al pagar.',
-              'Si un pago falla, tu cuenta queda en pausa hasta que actualices la tarjeta. Tus grabaciones se mantienen.',
+              'Si un pago falla, tu cuenta queda solo de lectura (ver Cancelar) hasta que actualices la tarjeta. Tus grabaciones se mantienen.',
             ],
           },
         ],
@@ -182,13 +194,23 @@ export const TERMS: Record<Lang, LegalDoc> = {
       {
         h: 'Cancelar',
         body: [
-          'Puedes cancelar cuando quieras desde Ajustes → Facturación, desde el enlace en nuestros correos, o escribiendo a [CONTACT EMAIL]. Cancelar detiene la próxima renovación; mantienes el acceso hasta el final del período que pagaste.',
+          'Puedes cancelar cuando quieras en Ajustes → Facturación, desde el enlace en nuestros correos, o escribiendo a [CONTACT EMAIL]. Cancelar detiene el próximo cobro. Se hace efectivo al final del período que ya pagaste, o al final de tu prueba. Hasta entonces todo funciona igual, y una prueba cancelada antes de terminar nunca se cobra.',
+          {
+            list: [
+              'Desde esa fecha tu cuenta es solo de lectura. Puedes seguir entrando y abrir todas tus grabaciones, transcripciones y notas, pero no puedes agregar grabaciones (subiéndolas, con el lápiz o por WhatsApp) ni usar la búsqueda, el chat, los resúmenes por correo, la traducción u otras funciones de IA.',
+              'Guardamos una cuenta de solo lectura durante 12 meses después de que termina el plan, y luego la eliminamos junto con sus grabaciones, transcripciones y notas. Puedes borrar lo que quieras antes, o pedirnos que lo eliminemos todo antes.',
+              'Hasta la fecha de término, puedes deshacer la cancelación en Ajustes → Facturación con un clic. Después, puedes reactivar cuando quieras durante esos 12 meses: el plan se cobra el día que lo reactivas, sin nueva prueba, y todo lo que grabaste sigue donde lo dejaste.',
+              'Si cancelas, te quedas con el lápiz, incluso si lo recibiste gratis.',
+              'En vez de cancelar, un plan mensual que ya pagaste al menos una vez se puede pausar por 30, 60 o 90 días. Mientras está en pausa no se cobra nada, puedes leer todo pero no agregar grabaciones, y se reactiva solo en la fecha que elegiste.',
+            ],
+          },
         ],
       },
       {
         h: 'Reembolsos',
         body: [
           'Los pagos no son reembolsables, incluidos los períodos parciales y el tiempo no usado, salvo cuando la ley del país donde vives te dé un derecho de retracto o de reembolso irrenunciable (por ejemplo, el derecho de arrepentimiento de siete días para compras en línea en Brasil). Nada en estos términos limita esos derechos.',
+          'Cancelar no reembolsa el resto de un período ya pagado, incluido un plan semestral o anual; mantienes acceso completo hasta que ese período termine.',
         ],
       },
       {
@@ -295,11 +317,12 @@ export const TERMS: Record<Lang, LegalDoc> = {
           {
             list: [
               'Os planos são mensais, semestrais ou anuais, com a caneta Juno ou com o seu próprio gravador. O preço, a moeda e o que está incluído aparecem antes do pagamento.',
-              'Os planos mensais começam com um teste grátis: 7 dias com o seu próprio gravador, 21 dias com a caneta. Pedimos um cartão no cadastro e cobramos quando o teste termina, a menos que você cancele antes. Se não houver um cartão válido quando o teste terminar, o plano é cancelado.',
+              'Os planos mensais começam com um teste grátis: 7 dias com o seu próprio gravador, 21 dias com a caneta, 30 dias quando a caneta é oferecida grátis. Pedimos um cartão no cadastro e cobramos quando o teste termina, a menos que você cancele antes. Se não houver um cartão válido quando o teste terminar, o plano é cancelado.',
+              'Quando a caneta é oferecida grátis, ela nunca é cobrada, e é sua, fique você ou não.',
               'No plano mensal com caneta, a caneta é cobrada uma única vez no cadastro. Nos planos semestral e anual, a caneta está incluída e o plano é pago adiantado, sem teste.',
               'Os planos se renovam automaticamente pelo mesmo período até você cancelar. Avisaremos antes que uma mudança de preço valha para você.',
               'Quando houver imposto, ele aparece no pagamento.',
-              'Se um pagamento falhar, sua conta fica suspensa até o cartão ser atualizado. Suas gravações continuam lá.',
+              'Se um pagamento falhar, sua conta fica somente leitura (veja Cancelamento) até o cartão ser atualizado. Suas gravações continuam lá.',
             ],
           },
         ],
@@ -307,13 +330,23 @@ export const TERMS: Record<Lang, LegalDoc> = {
       {
         h: 'Cancelamento',
         body: [
-          'Você pode cancelar quando quiser em Configurações → Cobrança, pelo link nos nossos e-mails, ou escrevendo para [CONTACT EMAIL]. O cancelamento interrompe a próxima renovação; você mantém o acesso até o fim do período já pago.',
+          'Você pode cancelar quando quiser em Configurações → Cobrança, pelo link nos nossos e-mails, ou escrevendo para [CONTACT EMAIL]. O cancelamento interrompe a próxima cobrança. Ele vale a partir do fim do período já pago, ou do fim do seu teste. Até lá tudo funciona como antes, e um teste cancelado antes de terminar nunca é cobrado.',
+          {
+            list: [
+              'A partir dessa data sua conta fica somente leitura. Você ainda pode entrar e abrir todas as gravações, transcrições e notas, mas não pode adicionar gravações (por envio, pela caneta ou pelo WhatsApp) nem usar busca, chat, resumos por e-mail, tradução ou outros recursos de IA.',
+              'Guardamos uma conta somente leitura por 12 meses depois do fim do plano e então a excluímos, com as gravações, transcrições e notas. Você pode apagar o que quiser antes disso, ou pedir que apaguemos tudo antes.',
+              'Até a data de término, você pode desfazer o cancelamento em Configurações → Cobrança com um clique. Depois, pode reativar quando quiser durante esses 12 meses: o plano é cobrado no dia da reativação, sem novo teste, e tudo o que você gravou continua onde estava.',
+              'Se você cancelar, a caneta continua sua, inclusive uma caneta recebida grátis.',
+              'Em vez de cancelar, um plano mensal pago pelo menos uma vez pode ser pausado por 30, 60 ou 90 dias. Nada é cobrado durante a pausa, você vê tudo mas não adiciona gravações, e ele volta sozinho na data escolhida.',
+            ],
+          },
         ],
       },
       {
         h: 'Reembolsos',
         body: [
           'Os pagamentos não são reembolsáveis, inclusive por períodos parciais e tempo não usado, exceto quando a lei do país onde você mora garantir um direito de arrependimento ou de reembolso que não pode ser renunciado (por exemplo, o direito de arrependimento de sete dias para compras pela internet no Brasil, previsto no artigo 49 do Código de Defesa do Consumidor). Nada nestes termos limita esses direitos.',
+          'O cancelamento não reembolsa o restante de um período já pago, inclusive um plano semestral ou anual; você mantém acesso completo até esse período terminar.',
         ],
       },
       {

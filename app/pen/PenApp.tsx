@@ -259,6 +259,9 @@ export default function PenApp({
 
   // Paused (Settings → Billing): reading stays open, adding a recording doesn't.
   const paused = allowance?.pausedUntil ?? null
+  // The plan ended (lib/pen/access.ts): same as paused for adding, plus no AI, until reactivated.
+  const readOnly = allowance?.readOnly ?? false
+  const locked = Boolean(paused) || readOnly
   const [resuming, setResuming] = useState(false)
   async function resumePlan() {
     setResuming(true)
@@ -382,7 +385,7 @@ export default function PenApp({
   /* ---------------------------------------------------------------- connect */
 
   async function connectPen() {
-    if (paused) return
+    if (locked) return
     setErr(null)
     try {
       const dir = await window.showDirectoryPicker!({ id: 'pen-recorder', mode: 'read' })
@@ -403,7 +406,7 @@ export default function PenApp({
   }
 
   function addFiles(files: FileList | File[]) {
-    if (paused) return
+    if (locked) return
     const list = Array.from(files).filter((f) => MEDIA_RE.test(f.name))
     if (!list.length) return setErr(T.notMedia)
     setPenName(null)
@@ -638,6 +641,8 @@ export default function PenApp({
     if (phoneTab === 'home') {
       title = T.home
       screen = stats ? (
+        <>
+        <ClockPill clock={allowance?.clock ?? null} T={T} phone />
         <Overview
           stats={stats}
           people={people}
@@ -648,6 +653,7 @@ export default function PenApp({
           }}
           onOpen={(id) => { openSession(id); setTab('note') }}
         />
+        </>
       ) : (
         <p className="pen-m-empty">{T.chooseRecording}</p>
       )
@@ -657,7 +663,9 @@ export default function PenApp({
         <div className="pen-m-upload">
           <div className="pen-m-meter"><UsageBar allowance={allowance} /></div>
           <div className="pen-m-upload-actions">
-          {paused ? (
+          {readOnly ? (
+            <ReadOnlyBanner T={T} />
+          ) : paused ? (
             <div className="pen-paused">
               <strong>{T.pausedTitle(fmtDate(paused, appLang, { day: 'numeric', month: 'long' }))}</strong>
               <span>{T.pausedSub}</span>
@@ -807,6 +815,7 @@ export default function PenApp({
         fill = true
         screen = (
           <ChatView
+            readOnly={readOnly}
             recordings={taggable}
             chatId={view.k === 'chat' ? view.id : null}
             seed={chatSeed}
@@ -914,7 +923,9 @@ export default function PenApp({
         </div>
       </div>
 
-      {paused ? (
+      {readOnly ? (
+        <ReadOnlyBanner T={T} />
+      ) : paused ? (
         <div className="pen-paused">
           <strong>{T.pausedTitle(fmtDate(paused, appLang, { day: 'numeric', month: 'long' }))}</strong>
           <span>{T.pausedSub}</span>
@@ -1118,6 +1129,7 @@ export default function PenApp({
         />
 
         <div className="pen-head-right">
+          <ClockPill clock={allowance?.clock ?? null} T={T} />
           <button
             className="pen-browse"
             onClick={() => setNavOpen((v) => !v)}
@@ -1227,6 +1239,7 @@ export default function PenApp({
         <section className="pen-shell-main min-w-0">
           {view.k === 'chat' ? (
             <ChatView
+              readOnly={readOnly}
               recordings={taggable}
               chatId={view.id}
               seed={chatSeed}
@@ -1316,7 +1329,7 @@ export default function PenApp({
         <aside className="pen-rail">
           <div className="pen-rail-head">
             <span className="pen-rail-title">{T.recent}</span>
-            {!paused && (
+            {!locked && (
               <button className="pen-rail-new" onClick={() => fileInput.current?.click()}>
                 <Icon name="plus" size={15} />
                 {T.new}
@@ -2692,4 +2705,26 @@ function putWithProgress(url: string, blob: Blob, mime: string, onPct: (pct: num
     xhr.onerror = () => reject(new Error('upload network error'))
     xhr.send(blob)
   })
+}
+
+/** Takes the place of the ways to add a recording once the plan has ended. */
+function ReadOnlyBanner({ T }: { T: AppCopy }) {
+  return (
+    <div className="pen-paused pen-readonly">
+      <strong>{T.readOnlyTitle}</strong>
+      <span>{T.readOnlySub}</span>
+      <Link href="/pen/settings/billing" className="pen-btn pen-btn-accent">{T.reactivate}</Link>
+    </div>
+  )
+}
+
+/** The countdown: trial days left, days left after cancelling, or read-only. Links to Billing. */
+function ClockPill({ clock, T, phone }: { clock: Allowance['clock']; T: AppCopy; phone?: boolean }) {
+  if (!clock) return null
+  const label = clock.state === 'trial' ? T.pillTrial(clock.days) : clock.state === 'ending' ? T.pillEnding(clock.days) : T.pillReadOnly
+  return (
+    <Link href="/pen/settings/billing" className="pen-clock" data-state={clock.state} data-phone={phone ? 'true' : undefined}>
+      {label}
+    </Link>
+  )
 }
