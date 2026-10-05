@@ -53,6 +53,7 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
   let appLang: 'en' | 'es' | 'pt' = 'en'
   let showTour = false
   let showReferral = false
+  let showFeedback = false
   try {
     // Sequential on purpose: if the tables are missing, the first call already tells us
     // and there is no point paying for the second.
@@ -70,6 +71,11 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
     showReferral = !showTour && !profile?.onboarding?.referral
     await ensureSample(email, appLang, profile?.name ?? session?.user?.name ?? null).catch(() => {})
     sessions = await listSessions(email)
+    // The feedback pop-up: once, after the 3rd finished recording of their own (the sample
+    // doesn't count), and never on the same visit as the tour or the referral pop-up.
+    showFeedback =
+      !showTour && !showReferral && !profile?.onboarding?.feedback &&
+      sessions.filter((s) => s.status === 'noted' && s.source_channel !== 'sample').length >= 3
     stats = await archiveStats(email)
     // The bar in the sidebar. A failure here must not take the recordings down with it.
     allowance = await getAllowance(email).catch(() => null)
@@ -94,6 +100,7 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
       appLang={appLang}
       showTour={showTour}
       showReferral={showReferral}
+      showFeedback={showFeedback}
       loadError={loadError}
       email={email}
       name={session?.user?.name ?? null}

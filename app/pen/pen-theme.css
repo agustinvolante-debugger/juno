@@ -3863,3 +3863,20 @@ html.pen-m-lock, html.pen-m-lock body { height: 100%; overflow: hidden; overscro
 .pen-wacall-q { padding: 7px 12px; border-radius: 999px; background: var(--panel); border: 1px solid var(--accent-line); color: var(--accent-ink); font-size: 14px; text-decoration: none; }
 .pen-wacall-q:hover { border-color: var(--accent); }
 .pen-wacall .pen-btn { text-decoration: none; }
+
+/* Feedback pop-up: reuses the referral pop-up's layer and card. */
+.pen-fb-card { width: min(500px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; }
+.pen-fb-q { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 15px; color: var(--ink); }
+.pen-fb-q legend { padding: 0; margin-bottom: 8px; font-weight: 600; }
+.pen-fb-q > span { font-weight: 600; }
+.pen-fb-q em { font-style: normal; font-weight: 400; color: var(--faint); font-size: 13px; margin-left: 4px; }
+.pen-fb-q textarea {
+  font: inherit; font-size: 15px; color: var(--ink); background: var(--panel); resize: vertical;
+  border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; width: 100%;
+}
+.pen-fb-q textarea:focus { outline: none; border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-wash); }
+.pen-fb-opts { display: flex; flex-wrap: wrap; gap: 8px; }
+.pen-fb-pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12.5px; background: var(--sunk); color: var(--soft); white-space: nowrap; }
+.pen-fb-pill[data-v='very'] { background: var(--good-wash); color: var(--good); }
+.pen-fb-pill[data-v='not'] { background: var(--bad-wash); color: var(--bad); }
+.pen-fb-text { max-width: 34ch; font-size: 14px; line-height: 1.45; }

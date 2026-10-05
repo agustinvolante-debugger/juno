@@ -171,7 +171,7 @@ export type AgentProfile = {
   appLanguage?: string
   /** First-run state, set by the app (never by the form): when the sample was made, when the
    *  tour was finished or skipped. */
-  onboarding?: { sample?: string; tour?: string; referral?: string }
+  onboarding?: { sample?: string; tour?: string; referral?: string; feedback?: string }
   /** Answers to the role's own questions, keyed by Question.key. */
   answers?: Record<string, string | string[]>
 }

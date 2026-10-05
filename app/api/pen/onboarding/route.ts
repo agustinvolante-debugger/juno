@@ -11,7 +11,8 @@ export async function POST(req: Request) {
   if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   const b = (await req.json().catch(() => ({}))) as { step?: string }
   // 'referral': the "give a month, get a month" pop-up was seen (PenApp ReferralPromo).
-  if (b.step !== 'tour' && b.step !== 'referral') return NextResponse.json({ error: 'unknown step' }, { status: 400 })
+  // 'feedback': the feedback pop-up was answered or dismissed (PenApp FeedbackAsk).
+  if (b.step !== 'tour' && b.step !== 'referral' && b.step !== 'feedback') return NextResponse.json({ error: 'unknown step' }, { status: 400 })
   try {
     await markOnboarding(email, b.step)
     return NextResponse.json({ ok: true })

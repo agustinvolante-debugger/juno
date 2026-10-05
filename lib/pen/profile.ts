@@ -56,10 +56,11 @@ export function cleanProfile(raw: unknown): AgentProfile {
     appLanguage: r.appLanguage === 'en' || r.appLanguage === 'es' || r.appLanguage === 'pt' ? r.appLanguage : undefined,
     onboarding: (() => {
       const o = (r.onboarding && typeof r.onboarding === 'object' ? r.onboarding : {}) as Record<string, unknown>
-      const out: { sample?: string; tour?: string; referral?: string } = {}
+      const out: { sample?: string; tour?: string; referral?: string; feedback?: string } = {}
       if (typeof o.sample === 'string') out.sample = o.sample.slice(0, 40)
       if (typeof o.tour === 'string') out.tour = o.tour.slice(0, 40)
       if (typeof o.referral === 'string') out.referral = o.referral.slice(0, 40)
+      if (typeof o.feedback === 'string') out.feedback = o.feedback.slice(0, 40)
       return Object.keys(out).length ? out : undefined
     })(),
     answers: Object.keys(answers).length ? answers : undefined,
@@ -151,7 +152,7 @@ export async function getProfileRaw(email: string): Promise<AgentProfile | null>
  * Records a first-run step (the sample was made, the tour was finished or skipped) without
  * touching anything the user typed. Merges into the stored profile rather than replacing it.
  */
-export async function markOnboarding(email: string, key: 'sample' | 'tour' | 'referral'): Promise<void> {
+export async function markOnboarding(email: string, key: 'sample' | 'tour' | 'referral' | 'feedback'): Promise<void> {
   const current = (await getProfileRaw(email)) ?? {}
   const next = cleanProfile({ ...current, onboarding: { ...(current.onboarding ?? {}), [key]: new Date().toISOString() } })
   const { error } = await supabaseAdmin

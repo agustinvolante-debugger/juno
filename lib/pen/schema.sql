@@ -348,3 +348,8 @@ create index if not exists pen_clients_user on pen_clients(user_email);
 
 -- 2026-10-02 (c) — referrals, stage 2: fraud checks, automatic credit, clawback. One line.
 -- alter table public.pen_referrals add column if not exists referee_card text, add column if not exists reward_amount int, add column if not exists reward_currency text, add column if not exists reward_reversed_at timestamptz, add column if not exists reward_error text;
+
+-- 2026-10-05 — the feedback pop-up's answers (lib/pen/feedback.ts). Run each line separately.
+-- create table if not exists public.pen_feedback (id uuid primary key default gen_random_uuid(), email text not null, disappointed text not null, fix text, tell text, lang text, created_at timestamptz not null default now());
+-- create index if not exists pen_feedback_email on public.pen_feedback(lower(email));
+-- alter table public.pen_feedback enable row level security;

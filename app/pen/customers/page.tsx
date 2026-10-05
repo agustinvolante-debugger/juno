@@ -5,6 +5,8 @@ import { listCustomers } from '@/lib/pen/customers'
 import CustomersTable from './CustomersTable'
 import ReferralsTable from './ReferralsTable'
 import { listReferrals } from '@/lib/pen/referrals'
+import FeedbackList from './FeedbackList'
+import { listFeedback } from '@/lib/pen/feedback'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,6 +32,7 @@ export default async function CustomersPage() {
   }
   // Separate, so a missing referrals table (SQL not run yet) doesn't hide the customers.
   const referrals = await listReferrals().catch(() => null)
+  const feedback = await listFeedback().catch(() => null)
   const key = process.env.STRIPE_SECRET_KEY ?? ''
   const stripeBase = key.startsWith('sk_live_') ? 'https://dashboard.stripe.com' : 'https://dashboard.stripe.com/test'
 
@@ -47,6 +50,7 @@ export default async function CustomersPage() {
       </header>
       {error && <p className="pen-su-err" style={{ marginTop: 20 }}>{error}</p>}
       {data && <CustomersTable customers={data.customers} summary={data.summary} stripeBase={stripeBase} />}
+      {feedback && <FeedbackList rows={feedback.rows} veryPct={feedback.veryPct} />}
       {referrals && <ReferralsTable rows={referrals} />}
     </main>
   )

@@ -102,6 +102,7 @@ export default function PenApp({
   appLang = 'en',
   showTour = false,
   showReferral = false,
+  showFeedback = false,
 }: {
   /** The app's language (Profile "App language"). */
   appLang?: Lang
@@ -109,6 +110,8 @@ export default function PenApp({
   showTour?: boolean
   /** Show the "give a month, get a month" pop-up once (lib/pen/referrals.ts). */
   showReferral?: boolean
+  /** Ask for feedback once, after the 3rd finished recording (lib/pen/feedback.ts). */
+  showFeedback?: boolean
   /** Juno Pen's WhatsApp number and whether this account has linked a phone. Null when off. */
   whatsapp?: { number: string; linked: boolean } | null
   initial: PenSession[]
@@ -222,6 +225,20 @@ export default function PenApp({
     setPromoOpen(false)
     try { localStorage.setItem('juno-referral-seen', '1') } catch {}
     void fetch('/api/pen/onboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ step: 'referral' }) }).catch(() => {})
+  }, [])
+  // The feedback pop-up: once, and never on the same visit as the tour or the referral pop-up.
+  const [askOpen, setAskOpen] = useState(false)
+  useEffect(() => {
+    let seenHere = false
+    try { seenHere = localStorage.getItem('juno-feedback-seen') === '1' } catch {}
+    const preview = process.env.NODE_ENV === 'development' && new URLSearchParams(window.location.search).get('feedback') === '1'
+    if (preview || (showFeedback && !seenHere && !initialAllowance?.readOnly)) setAskOpen(true)
+  }, [showFeedback, initialAllowance])
+  const closeAsk = useCallback((answered: boolean) => {
+    setAskOpen(false)
+    try { localStorage.setItem('juno-feedback-seen', '1') } catch {}
+    // Answering marks the account on the server; "Not now" has to say so itself.
+    if (!answered) void fetch('/api/pen/onboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ step: 'feedback' }) }).catch(() => {})
   }, [])
   const closeTour = useCallback(() => {
     setTourOpen(false)
@@ -962,6 +979,7 @@ export default function PenApp({
         )}
         {tourOpen && <Tour lang={appLang} onClose={closeTour} onUpload={() => { setPhoneTab('upload'); fileInput.current?.click() }} />}
         {promoOpen && !tourOpen && <ReferralPromo T={T} onClose={closePromo} />}
+        {askOpen && !tourOpen && !promoOpen && <FeedbackAsk T={T} onClose={closeAsk} />}
         <UploadCard uploads={uploads} onClose={() => setUploads((prev) => prev.filter((u) => u.state === 'waiting' || u.state === 'working'))} whatsapp={whatsapp ?? null} phone={isPhone} T={T} />
       </LangProvider>
     )
@@ -1034,6 +1052,7 @@ export default function PenApp({
       )}
       {tourOpen && <Tour lang={appLang} onClose={closeTour} onUpload={() => fileInput.current?.click()} />}
       {promoOpen && !tourOpen && <ReferralPromo T={T} onClose={closePromo} />}
+      {askOpen && !tourOpen && !promoOpen && <FeedbackAsk T={T} onClose={closeAsk} />}
       <UploadCard uploads={uploads} onClose={() => setUploads((prev) => prev.filter((u) => u.state === 'waiting' || u.state === 'working'))} whatsapp={whatsapp ?? null} phone={isPhone} T={T} />
       {txImport && (
         <TranscriptImport
@@ -2950,5 +2969,81 @@ function AskWhatsApp({ whatsapp, T }: { whatsapp: { number: string; linked: bool
         </>
       )}
     </section>
+  )
+}
+
+/**
+ * "Help us make Juno better": three questions, once per account (lib/pen/feedback.ts). The
+ * first is required; the two written ones are optional so a busy agent can answer in a tap.
+ */
+function FeedbackAsk({ T, onClose }: { T: AppCopy; onClose: (answered: boolean) => void }) {
+  const [pick, setPick] = useState<'very' | 'somewhat' | 'not' | null>(null)
+  const [fix, setFix] = useState('')
+  const [tell, setTell] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const [thanks, setThanks] = useState(false)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(thanks) }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose, thanks])
+  async function send() {
+    if (!pick) return
+    setBusy(true); setErr(null)
+    try {
+      await postJson('/api/pen/feedback', { disappointed: pick, fix, tell })
+      setThanks(true)
+    } catch (e) {
+      setErr(errMessage(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const host = typeof document !== 'undefined' ? document.querySelector('.pen-root') ?? document.body : null
+  if (!host) return null
+  return createPortal(
+    <div className="pen-promo" role="dialog" aria-modal="true" aria-labelledby="pen-fb-title">
+      <div className="pen-promo-dim" onClick={() => onClose(thanks)} aria-hidden="true" />
+      <div className="pen-promo-card pen-fb-card">
+        <div className="pen-promo-band">
+          <span className="pen-promo-eyebrow">{T.fbEyebrow}</span>
+          <h2 id="pen-fb-title" className="pen-display pen-promo-title">{thanks ? T.fbThanksTitle : T.fbTitle}</h2>
+        </div>
+        {thanks ? (
+          <>
+            <p className="pen-promo-lede">{T.fbThanks}</p>
+            <div className="pen-promo-actions"><button type="button" className="pen-btn pen-btn-accent" onClick={() => onClose(true)}>{T.fbDone}</button></div>
+          </>
+        ) : (
+          <>
+            <fieldset className="pen-fb-q">
+              <legend>{T.fbQ1}</legend>
+              <div className="pen-fb-opts" role="radiogroup">
+                {(['very', 'somewhat', 'not'] as const).map((v) => (
+                  <button key={v} type="button" role="radio" aria-checked={pick === v} className="pen-set-chip" data-on={pick === v} onClick={() => setPick(v)}>
+                    {T.fbOpts[v]}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <label className="pen-fb-q">
+              <span>{T.fbQ2} <em>{T.fbOptional}</em></span>
+              <textarea rows={2} maxLength={2000} value={fix} onChange={(e) => setFix(e.target.value)} />
+            </label>
+            <label className="pen-fb-q">
+              <span>{T.fbQ3} <em>{T.fbOptional}</em></span>
+              <textarea rows={2} maxLength={2000} value={tell} onChange={(e) => setTell(e.target.value)} placeholder={T.fbQ3Ph} />
+            </label>
+            {err && <div className="pen-su-err">{err}</div>}
+            <div className="pen-promo-actions">
+              <button type="button" className="pen-btn pen-btn-accent" onClick={send} disabled={!pick || busy}>{busy ? T.fbSending : T.fbSend}</button>
+              <button type="button" className="pen-btn" onClick={() => onClose(false)}>{T.promoLater}</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>,
+    host,
   )
 }
