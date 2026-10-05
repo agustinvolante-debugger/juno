@@ -88,6 +88,7 @@ function useAccept(): string | undefined {
 
 type Pending = { file: File; picked: boolean }
 type Progress = { name: string; phase: string; pct: number }
+type UploadItem = { key: string; name: string; phase: string; pct: number; state: 'waiting' | 'working' | 'done' | 'held' | 'error'; error?: string }
 
 export default function PenApp({
   initial,
@@ -433,6 +434,124 @@ export default function PenApp({
 
   /* ----------------------------------------------------------------- import */
 
+  // Uploads run in the background (Carlitos, 5 Oct: ten recordings one by one behind a window
+  // that blocks the app is too slow). Import closes the sheet at once; a small card counts the
+  // files up while the rest of the app stays usable; two go at a time (one on a phone, where
+  // decoding a long recording already uses most of the memory). Transcription, notes and the
+  // briefing email were always server-side, so once a file is up nothing waits on this tab.
+  const [uploads, setUploads] = useState<UploadItem[]>([])
+  const uploading = uploads.some((u) => u.state === 'waiting' || u.state === 'working')
+  const patchUpload = useCallback((key: string, patch: Partial<UploadItem>) => {
+    setUploads((prev) => prev.map((u) => (u.key === key ? { ...u, ...patch } : u)))
+  }, [])
+  // Closing the tab mid-upload loses the files that haven't gone up: ask first.
+  useEffect(() => {
+    if (!uploading) return
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [uploading])
+
+  /** One file: prepare, upload, save, send for transcription. 'held' = saved, waiting for hours. */
+  async function uploadOne(file: File, people: Picked[], step: (p: { phase: string; pct: number }) => void): Promise<'done' | 'held'> {
+    const callPeople = people
+    // What goes up, and where it lands. Normally the audio is prepared (compressed) in the
+    // browser first. A file too big to prepare safely on this device (a long recording on a
+    // phone) goes up exactly as it is, in pieces, and the server joins them for AssemblyAI.
+    let up: { storage_path: string; mime: string; bytes: number; durationSec: number }
+    if (needsPiecedUpload(file)) {
+      step({ phase: T.phaseSlot, pct: 5 })
+      const durationSec = await durationWithoutDecoding(file)
+      const n = Math.ceil(file.size / PIECE_BYTES)
+      const urlRes = await fetch('/api/pen/upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: file.name, parts: n }),
+      })
+      if (!urlRes.ok) throw new Error((await urlRes.json()).error ?? T.uploadUrlFailed)
+      const { storage_path, parts } = (await urlRes.json()) as { storage_path: string; parts: { path: string; signedUrl: string }[] }
+      const mime = file.type || (/\.wav$/i.test(file.name) ? 'audio/wav' : 'application/octet-stream')
+      for (let i = 0; i < parts.length; i++) {
+        const piece = file.slice(i * PIECE_BYTES, (i + 1) * PIECE_BYTES)
+        // One retry per piece: a phone on the move drops a request now and then.
+        const put = () => putWithProgress(parts[i].signedUrl, piece, 'application/octet-stream', (pct) =>
+          step({ phase: T.phasePiece(i + 1, parts.length, fmtMB(file.size)), pct: 5 + ((i + pct / 100) / parts.length) * 70 }),
+        )
+        await put().catch(put)
+      }
+      up = { storage_path, mime, bytes: file.size, durationSec }
+    } else {
+      step({ phase: T.phasePreparing, pct: 5 })
+      const prep = await prepareAudio(file)
+
+      step({ phase: T.phaseSlot, pct: 15 })
+      const urlRes = await fetch('/api/pen/upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: file.name.replace(/\.[^.]+$/, prep.mime === 'audio/wav' ? '.wav' : '') }),
+      })
+      if (!urlRes.ok) throw new Error((await urlRes.json()).error ?? T.uploadUrlFailed)
+      const { path, signedUrl } = (await urlRes.json()) as { path: string; signedUrl: string }
+
+      // Anything compressible has already been compressed by now, so reaching this means
+      // either a genuinely enormous recording or a browser with no Opus encoder. Say which,
+      // because "split the recording" is useless advice for the second one.
+      if (prep.blob.size > SOFT_SIZE_LIMIT) {
+        throw new Error(
+          prep.mime === 'audio/ogg' ? T.tooBigCompressed(fmtMB(prep.blob.size)) : T.tooBigNoCompress(fmtMB(prep.blob.size)),
+        )
+      }
+
+      await putWithProgress(signedUrl, prep.blob, prep.mime, (pct) =>
+        step({ phase: T.phaseUploading(prep.note), pct: 15 + pct * 0.6 }),
+      )
+      up = { storage_path: path, mime: prep.mime, bytes: prep.blob.size, durationSec: prep.durationSec }
+    }
+
+    step({ phase: T.phaseSaving, pct: 80 })
+    const sRes = await fetch('/api/pen/sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        storage_path: up.storage_path,
+        source_name: file.name,
+        mime: up.mime,
+        bytes: up.bytes,
+        duration_sec: up.durationSec,
+        recorded_at: new Date(file.lastModified).toISOString(),
+        consent: true,
+        // The first person also names the call, which older parts of the app read.
+        client_name: callPeople[0]?.name || undefined,
+        ...(callPeople.length ? { people: callPeople.map((p) => (p.id ? { id: p.id } : { name: p.name })) } : {}),
+      }),
+    })
+    if (!sRes.ok) throw new Error((await sRes.json()).error ?? T.saveRecordingFailed)
+    const { session, duplicate } = (await sRes.json()) as { session: PenSession; duplicate: boolean }
+
+    // Not opened: the user is busy elsewhere in the app while these upload.
+    setSessions((prev) => [session, ...prev.filter((x) => x.id !== session.id)])
+
+    if (!duplicate) {
+      step({ phase: T.phaseSending, pct: 92 })
+      const tRes = await fetch('/api/pen/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: session.id }),
+      })
+      if (tRes.status === 402) {
+        // Saved and waiting, not failed. The banner says so and the row shows it.
+        const j = (await tRes.json()) as { allowance?: Allowance }
+        if (j.allowance) setAllowance(j.allowance)
+        setSessions((prev) => prev.map((x) => (x.id === session.id ? { ...x, status: 'held' as const } : x)))
+        setHeldNotice(true)
+        return 'held'
+      }
+      if (!tRes.ok) throw new Error((await tRes.json()).error ?? T.transcribeFailed)
+      setSessions((prev) => prev.map((x) => (x.id === session.id ? { ...x, status: 'transcribing' as const } : x)))
+    }
+    return 'done'
+  }
+
   async function importPicked() {
     setErr(null)
     const picked = pending.filter((p) => p.picked)
@@ -440,111 +559,31 @@ export default function PenApp({
     if (!consent) {
       return setErr(T.consentFirst)
     }
+    const people = callPeople
+    const batch = picked.map((p, i) => ({ key: `${Date.now()}-${i}-${p.file.name}`, file: p.file }))
+    // Finished rows from an earlier batch make way for this one; rows still going stay.
+    setUploads((prev) => [
+      ...prev.filter((u) => u.state === 'waiting' || u.state === 'working'),
+      ...batch.map((b) => ({ key: b.key, name: b.file.name, phase: T.upWaiting, pct: 0, state: 'waiting' as const })),
+    ])
+    setPending([])
+    setCallPeople([])
+    setImportDone(false)
 
-    for (const { file } of picked) {
-      try {
-        // What goes up, and where it lands. Normally the audio is prepared (compressed) in the
-        // browser first. A file too big to prepare safely on this device (a long recording on a
-        // phone) goes up exactly as it is, in pieces, and the server joins them for AssemblyAI.
-        let up: { storage_path: string; mime: string; bytes: number; durationSec: number }
-        if (needsPiecedUpload(file)) {
-          setProgress({ name: file.name, phase: T.phaseSlot, pct: 5 })
-          const durationSec = await durationWithoutDecoding(file)
-          const n = Math.ceil(file.size / PIECE_BYTES)
-          const urlRes = await fetch('/api/pen/upload-url', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: file.name, parts: n }),
-          })
-          if (!urlRes.ok) throw new Error((await urlRes.json()).error ?? T.uploadUrlFailed)
-          const { storage_path, parts } = (await urlRes.json()) as { storage_path: string; parts: { path: string; signedUrl: string }[] }
-          const mime = file.type || (/\.wav$/i.test(file.name) ? 'audio/wav' : 'application/octet-stream')
-          for (let i = 0; i < parts.length; i++) {
-            const piece = file.slice(i * PIECE_BYTES, (i + 1) * PIECE_BYTES)
-            // One retry per piece: a phone on the move drops a request now and then.
-            const put = () => putWithProgress(parts[i].signedUrl, piece, 'application/octet-stream', (pct) =>
-              setProgress({ name: file.name, phase: T.phasePiece(i + 1, parts.length, fmtMB(file.size)), pct: 5 + ((i + pct / 100) / parts.length) * 70 }),
-            )
-            await put().catch(put)
-          }
-          up = { storage_path, mime, bytes: file.size, durationSec }
-        } else {
-          setProgress({ name: file.name, phase: T.phasePreparing, pct: 5 })
-          const prep = await prepareAudio(file)
-
-          setProgress({ name: file.name, phase: T.phaseSlot, pct: 15 })
-          const urlRes = await fetch('/api/pen/upload-url', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: file.name.replace(/\.[^.]+$/, prep.mime === 'audio/wav' ? '.wav' : '') }),
-          })
-          if (!urlRes.ok) throw new Error((await urlRes.json()).error ?? T.uploadUrlFailed)
-          const { path, signedUrl } = (await urlRes.json()) as { path: string; signedUrl: string }
-
-          // Anything compressible has already been compressed by now, so reaching this means
-          // either a genuinely enormous recording or a browser with no Opus encoder. Say which,
-          // because "split the recording" is useless advice for the second one.
-          if (prep.blob.size > SOFT_SIZE_LIMIT) {
-            throw new Error(
-              prep.mime === 'audio/ogg' ? T.tooBigCompressed(fmtMB(prep.blob.size)) : T.tooBigNoCompress(fmtMB(prep.blob.size)),
-            )
-          }
-
-          await putWithProgress(signedUrl, prep.blob, prep.mime, (pct) =>
-            setProgress({ name: file.name, phase: T.phaseUploading(prep.note), pct: 15 + pct * 0.6 }),
-          )
-          up = { storage_path: path, mime: prep.mime, bytes: prep.blob.size, durationSec: prep.durationSec }
+    let next = 0
+    const worker = async () => {
+      while (next < batch.length) {
+        const b = batch[next++]
+        patchUpload(b.key, { state: 'working', phase: T.phasePreparing, pct: 2 })
+        try {
+          const r = await uploadOne(b.file, people, ({ phase, pct }) => patchUpload(b.key, { phase, pct }))
+          patchUpload(b.key, { state: r, pct: 100 })
+        } catch (e) {
+          patchUpload(b.key, { state: 'error', error: (e as Error).message })
         }
-
-        setProgress({ name: file.name, phase: T.phaseSaving, pct: 80 })
-        const sRes = await fetch('/api/pen/sessions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            storage_path: up.storage_path,
-            source_name: file.name,
-            mime: up.mime,
-            bytes: up.bytes,
-            duration_sec: up.durationSec,
-            recorded_at: new Date(file.lastModified).toISOString(),
-            consent: true,
-            // The first person also names the call, which older parts of the app read.
-            client_name: callPeople[0]?.name || undefined,
-            ...(callPeople.length ? { people: callPeople.map((p) => (p.id ? { id: p.id } : { name: p.name })) } : {}),
-          }),
-        })
-        if (!sRes.ok) throw new Error((await sRes.json()).error ?? T.saveRecordingFailed)
-        const { session, duplicate } = (await sRes.json()) as { session: PenSession; duplicate: boolean }
-
-        setSessions((prev) => [session, ...prev.filter((x) => x.id !== session.id)])
-        openSession(session.id)
-
-        if (!duplicate) {
-          setProgress({ name: file.name, phase: T.phaseSending, pct: 92 })
-          const tRes = await fetch('/api/pen/transcribe', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: session.id }),
-          })
-          if (tRes.status === 402) {
-            // Saved and waiting, not failed. The banner says so and the row shows it.
-            const j = (await tRes.json()) as { allowance?: Allowance }
-            if (j.allowance) setAllowance(j.allowance)
-            setSessions((prev) => prev.map((x) => (x.id === session.id ? { ...x, status: 'held' as const } : x)))
-            setHeldNotice(true)
-          } else if (!tRes.ok) setErr((await tRes.json()).error ?? T.transcribeFailed)
-          else setSessions((prev) => prev.map((x) => (x.id === session.id ? { ...x, status: 'transcribing' as const } : x)))
-        }
-      } catch (e) {
-        setErr(`${file.name}: ${(e as Error).message}`)
       }
     }
-    setProgress(null)
-    setPending([])
-    // On a phone the whole point is that you can now put the phone away, so say so instead of
-    // dropping the user back on a screen with nothing on it.
-    if (isPhone) setImportDone(true)
-    setCallPeople([])
+    await Promise.all(Array.from({ length: Math.min(isPhone ? 1 : 2, batch.length) }, worker))
     void refresh()
     // New names typed at upload are contacts now.
     void refreshPeople()
@@ -661,6 +700,7 @@ export default function PenApp({
       screen = stats ? (
         <>
         <ClockPill clock={allowance?.clock ?? null} T={T} phone />
+        <AskWhatsApp whatsapp={whatsapp ?? null} T={T} />
         <Overview
           stats={stats}
           people={people}
@@ -922,6 +962,7 @@ export default function PenApp({
         )}
         {tourOpen && <Tour lang={appLang} onClose={closeTour} onUpload={() => { setPhoneTab('upload'); fileInput.current?.click() }} />}
         {promoOpen && !tourOpen && <ReferralPromo T={T} onClose={closePromo} />}
+        <UploadCard uploads={uploads} onClose={() => setUploads((prev) => prev.filter((u) => u.state === 'waiting' || u.state === 'working'))} whatsapp={whatsapp ?? null} phone={isPhone} T={T} />
       </LangProvider>
     )
   }
@@ -993,6 +1034,7 @@ export default function PenApp({
       )}
       {tourOpen && <Tour lang={appLang} onClose={closeTour} onUpload={() => fileInput.current?.click()} />}
       {promoOpen && !tourOpen && <ReferralPromo T={T} onClose={closePromo} />}
+      <UploadCard uploads={uploads} onClose={() => setUploads((prev) => prev.filter((u) => u.state === 'waiting' || u.state === 'working'))} whatsapp={whatsapp ?? null} phone={isPhone} T={T} />
       {txImport && (
         <TranscriptImport
           people={people}
@@ -1292,6 +1334,8 @@ export default function PenApp({
           ) : !active ? (
 
             stats ? (
+              <>
+              <AskWhatsApp whatsapp={whatsapp ?? null} T={T} />
               <Overview
                 stats={stats}
                 people={people}
@@ -1306,6 +1350,7 @@ export default function PenApp({
                   window.scrollTo({ top: 0, behavior: 'smooth' })
                 }}
               />
+              </>
             ) : (
               <div className="pen-panel px-8 py-16 text-center">
                 <p className="text-[16.5px]" style={{ color: 'var(--dim)' }}>{T.chooseRecording}</p>
@@ -2791,5 +2836,119 @@ function ReferralPromo({ T, onClose }: { T: AppCopy; onClose: () => void }) {
       </div>
     </div>,
     host,
+  )
+}
+
+/**
+ * The background uploads (importPicked): a small card in the corner instead of a window that
+ * blocks the app. While going: how many are done, overall progress, the files on demand. When
+ * finished: what happens next (the briefing emails), anything held or failed, and the way to ask
+ * about them on WhatsApp.
+ */
+function UploadCard({ uploads, onClose, whatsapp, phone, T }: { uploads: UploadItem[]; onClose: () => void; whatsapp: { number: string; linked: boolean } | null; phone: boolean; T: AppCopy }) {
+  const [open, setOpen] = useState(false)
+  if (!uploads.length) return null
+  const finished = uploads.filter((u) => u.state === 'done' || u.state === 'held' || u.state === 'error')
+  const going = finished.length < uploads.length
+  const pct = Math.round(uploads.reduce((n, u) => n + (u.state === 'waiting' ? 0 : u.state === 'working' ? u.pct : 100), 0) / uploads.length)
+  const ok = uploads.filter((u) => u.state === 'done').length
+  const held = uploads.filter((u) => u.state === 'held').length
+  const failed = uploads.filter((u) => u.state === 'error')
+  // Portalled to .pen-root like the referral pop-up: inside the shell, the recordings rail
+  // painted over it (5 Oct).
+  const host = typeof document !== 'undefined' ? document.querySelector('.pen-root') ?? document.body : null
+  if (!host) return null
+  return createPortal(
+    <div className="pen-upcard" data-phone={phone ? 'true' : undefined} role="status" aria-live="polite">
+      <div className="pen-upcard-head">
+        <strong>{going ? T.upTitle(finished.length, uploads.length) : T.upDoneTitle(ok + held)}</strong>
+        {!going && <button type="button" className="pen-upcard-x" onClick={onClose} aria-label={T.upClose}>&times;</button>}
+      </div>
+      {going ? (
+        <>
+          <div className="pen-meter-bar"><span style={{ width: `${pct}%` }} /></div>
+          <p className="pen-upcard-note">{phone ? T.upKeepOpenPhone : T.upKeepOpen}</p>
+        </>
+      ) : (
+        <>
+          {ok + held > 0 && <p className="pen-upcard-note">{T.upDoneBody}</p>}
+          {held > 0 && <p className="pen-upcard-note">{T.upHeld(held)}</p>}
+          {failed.length > 0 && (
+            <div className="pen-upcard-err">
+              {T.upFailed(failed.length)}
+              <ul>{failed.map((f) => <li key={f.key}><span className="pen-mono">{f.name}</span>: {f.error}</li>)}</ul>
+            </div>
+          )}
+          {whatsapp && ok + held > 0 && (
+            <a
+              className="pen-btn pen-btn-accent pen-upcard-wa"
+              href={whatsapp.linked ? `https://wa.me/${whatsapp.number}?text=${encodeURIComponent(T.waCallExamples[1])}` : '/pen/settings/whatsapp'}
+              {...(whatsapp.linked ? { target: '_blank', rel: 'noreferrer' } : {})}
+            >
+              {whatsapp.linked ? T.upAskWa : T.upConnectWa}
+            </a>
+          )}
+        </>
+      )}
+      {uploads.length > 1 && (
+        <button type="button" className="pen-upcard-toggle" onClick={() => setOpen((v) => !v)} aria-expanded={open}>{open ? T.upHide : T.upShow}</button>
+      )}
+      {open && (
+        <ul className="pen-upcard-files">
+          {uploads.map((u) => (
+            <li key={u.key} data-state={u.state}>
+              <span className="pen-mono pen-upcard-name">{u.name}</span>
+              <span className="pen-upcard-state">
+                {u.state === 'done' ? '✓' : u.state === 'error' ? '!' : u.state === 'held' ? '⏸' : u.state === 'waiting' ? T.upWaiting : `${Math.round(u.pct)}%`}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>,
+    host,
+  )
+}
+
+/**
+ * "Ask Juno on WhatsApp" on Home (Carlitos, 5 Oct: nothing told him how to ask on WhatsApp).
+ * Linked: example questions that open the chat with the question typed. Not linked: the way
+ * to link. Hidden for good once dismissed on this device.
+ */
+function AskWhatsApp({ whatsapp, T }: { whatsapp: { number: string; linked: boolean } | null; T: AppCopy }) {
+  const [hidden, setHidden] = useState(true)
+  useEffect(() => {
+    let h = false
+    try { h = localStorage.getItem('juno-wa-callout-hidden') === '1' } catch {}
+    setHidden(h)
+  }, [])
+  if (!whatsapp || hidden) return null
+  const hide = () => {
+    setHidden(true)
+    try { localStorage.setItem('juno-wa-callout-hidden', '1') } catch {}
+  }
+  return (
+    <section className="pen-wacall" aria-label={T.waCallTitle}>
+      <div className="pen-wacall-head">
+        <span className="pen-wacall-icon" aria-hidden="true"><Icon name="chat" size={18} /></span>
+        <strong>{T.waCallTitle}</strong>
+        <button type="button" className="pen-wacall-hide" onClick={hide}>{T.waCallHide}</button>
+      </div>
+      {whatsapp.linked ? (
+        <>
+          <p>{T.waCallBody}</p>
+          <div className="pen-wacall-qs">
+            {T.waCallExamples.map((q) => (
+              <a key={q} className="pen-wacall-q" href={`https://wa.me/${whatsapp.number}?text=${encodeURIComponent(q)}`} target="_blank" rel="noreferrer">“{q}”</a>
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
+          <p>{T.waCallConnectBody}</p>
+          <div><a className="pen-btn pen-btn-accent" href="/pen/settings/whatsapp">{T.waCallConnect}</a></div>
+        </>
+      )}
+    </section>
   )
 }

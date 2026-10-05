@@ -51,7 +51,7 @@ const MAIL = {
   },
 } satisfies Record<Lang, unknown>
 
-export function renderBriefing(session: PenSession, lang: Lang = 'en'): string {
+export function renderBriefing(session: PenSession, lang: Lang = 'en', ask: { href: string; label: string } | null = null): string {
   const base = (process.env.PEN_PUBLIC_URL || process.env.NEXTAUTH_URL || '').replace(/\/$/, '')
   return buildBriefingHtml({
     notes: session.notes ?? {},
@@ -66,7 +66,32 @@ export function renderBriefing(session: PenSession, lang: Lang = 'en'): string {
     actionDone: Array.isArray(session.action_done) ? session.action_done : [],
     actionMeta: session.action_meta ?? null,
     lang,
+    ask,
   })
+}
+
+const ASK = {
+  en: { linked: 'Ask about this meeting on WhatsApp', unlinked: 'Connect WhatsApp to ask about your meetings', prompt: (t: string) => `About “${t}”: ` },
+  es: { linked: 'Pregunta sobre esta reunión por WhatsApp', unlinked: 'Conecta WhatsApp para preguntar por tus reuniones', prompt: (t: string) => `Sobre “${t}”: ` },
+  pt: { linked: 'Pergunte sobre esta reunião no WhatsApp', unlinked: 'Conecte o WhatsApp para perguntar sobre suas reuniões', prompt: (t: string) => `Sobre “${t}”: ` },
+} as const
+
+/**
+ * The owner's WhatsApp line under the briefing (Carlitos, 5 Oct: nothing told him he could ask
+ * on WhatsApp). Linked: opens the chat with the meeting already named. Not linked: Settings.
+ */
+async function askLink(session: PenSession, lang: Lang): Promise<{ href: string; label: string } | null> {
+  const { configured, botNumber } = await import('./whatsapp/provider')
+  if (!configured()) return null
+  const { getLinkByEmail } = await import('./whatsapp/store')
+  const link = await getLinkByEmail(session.user_email).catch(() => null)
+  const A = ASK[lang]
+  if (!link?.linked_at) {
+    const base = (process.env.PEN_PUBLIC_URL || 'https://www.tryjunoapp.com').replace(/\/$/, '')
+    return { href: `${base}/settings/whatsapp`, label: A.unlinked }
+  }
+  const title = session.title ?? session.source_name ?? ''
+  return { href: `https://wa.me/${botNumber().replace(/\D/g, '')}?text=${encodeURIComponent(A.prompt(title.slice(0, 80)))}`, label: A.linked }
 }
 
 export function hasSomethingToSay(session: PenSession): boolean {
@@ -91,7 +116,8 @@ export async function sendBriefing(opts: {
   return sendEmailResult({
     to: opts.to,
     subject: `${prefix}${title}`,
-    html: renderBriefing(opts.session, lang),
+    // The WhatsApp line only in the owner's own copy, never in one forwarded to a client.
+    html: renderBriefing(opts.session, lang, isOwnCopy(opts) ? await askLink(opts.session, lang).catch(() => null) : null),
     replyTo: opts.replyTo,
   })
 }
@@ -165,4 +191,8 @@ export async function briefOnce(opts: { email: string; session: PenSession; part
   const { updateSession } = await import('./store')
   await updateSession(s.id, { briefing_sent_at: new Date().toISOString() })
   return 'sent'
+}
+
+function isOwnCopy(opts: { session: PenSession; to: string[] }): boolean {
+  return opts.to.length === 1 && opts.to[0].toLowerCase() === opts.session.user_email.toLowerCase()
 }

@@ -3825,3 +3825,41 @@ html.pen-m-lock, html.pen-m-lock body { height: 100%; overflow: hidden; overscro
 .pen-promo-tiers span { font-size: 13px; line-height: 1.35; color: var(--accent-ink); }
 .pen-promo-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
 @media (max-width: 420px) { .pen-promo-tiers { grid-template-columns: 1fr; } .pen-promo-card { padding: 0 22px 22px; } .pen-promo-band { margin: 0 -22px 4px; padding: 20px 22px 18px; } .pen-promo-title { font-size: 31px; } }
+
+/* Background uploads: a card in the corner while the rest of the app stays usable. */
+.pen-upcard {
+  position: fixed; right: 20px; bottom: 20px; z-index: 900; width: min(360px, calc(100vw - 32px));
+  display: flex; flex-direction: column; gap: 10px; padding: 16px 18px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--lift-2), 0 12px 32px -12px rgba(22, 21, 15, .28);
+}
+.pen-upcard[data-phone='true'] { right: 16px; left: 16px; width: auto; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+.pen-upcard-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pen-upcard-head strong { font-size: 15px; font-variant-numeric: tabular-nums; }
+.pen-upcard-x { font-size: 22px; line-height: 1; color: var(--faint); padding: 0 4px; }
+.pen-upcard-note { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--soft); }
+.pen-upcard-err { font-size: 13.5px; color: var(--bad); }
+.pen-upcard-err ul { margin: 4px 0 0; padding-left: 16px; }
+.pen-upcard-wa { justify-content: center; text-decoration: none; }
+.pen-upcard-toggle { align-self: flex-start; font-size: 13px; color: var(--dim); text-decoration: underline; text-underline-offset: 2px; }
+.pen-upcard-files { list-style: none; margin: 0; padding: 0; max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.pen-upcard-files li { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.pen-upcard-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--soft); }
+.pen-upcard-state { flex: none; font-variant-numeric: tabular-nums; color: var(--faint); }
+.pen-upcard-files li[data-state='done'] .pen-upcard-state { color: var(--good); }
+.pen-upcard-files li[data-state='error'] .pen-upcard-state { color: var(--bad); }
+
+/* Home: "Ask Juno on WhatsApp", with questions that open the chat already typed. */
+.pen-wacall {
+  display: flex; flex-direction: column; gap: 10px; margin: 0 0 18px; padding: 16px 18px;
+  background: var(--accent-wash); border: 1px solid var(--accent-line); border-radius: 14px;
+  color: var(--accent-ink); font-size: 14.5px; line-height: 1.5;
+}
+.pen-wacall p { margin: 0; }
+.pen-wacall-head { display: flex; align-items: center; gap: 10px; }
+.pen-wacall-head strong { font-size: 16px; }
+.pen-wacall-icon { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: #fff; }
+.pen-wacall-hide { margin-left: auto; font-size: 13px; color: var(--accent-ink); opacity: .75; text-decoration: underline; text-underline-offset: 2px; }
+.pen-wacall-qs { display: flex; flex-wrap: wrap; gap: 8px; }
+.pen-wacall-q { padding: 7px 12px; border-radius: 999px; background: var(--panel); border: 1px solid var(--accent-line); color: var(--accent-ink); font-size: 14px; text-decoration: none; }
+.pen-wacall-q:hover { border-color: var(--accent); }
+.pen-wacall .pen-btn { text-decoration: none; }

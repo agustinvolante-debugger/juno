@@ -91,6 +91,8 @@ export function buildBriefingHtml(opts: {
   /** To-do labels (todo-meta.ts). When present, only the user's own actions are listed. */
   actionMeta?: ActionMeta[] | null
   lang?: Lang
+  /** Only in the owner's own copy: a link to ask about this meeting on WhatsApp. */
+  ask?: { href: string; label: string } | null
 }): string {
   const { notes: n, title, dateStr, clientName, durationStr, appUrl } = opts
   const C = BRIEFING_COPY[opts.lang ?? 'en']
@@ -193,6 +195,7 @@ export function buildBriefingHtml(opts: {
         ${rows.join('')}
         <tr><td style="padding:26px 0 0;border-top:1px solid ${LINE}">
           <a href="${esc(appUrl)}" style="display:inline-block;background:${INK};color:${PAPER};text-decoration:none;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;padding:10px 16px;border-radius:8px">${C.cta}</a>
+          ${opts.ask ? `<div style="margin-top:14px"><a href="${esc(opts.ask.href)}" style="color:#0B6B44;font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:14px;font-weight:600;text-decoration:none">${esc(opts.ask.label)} &rarr;</a></div>` : ''}
           <div style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;color:${DIM};margin-top:14px;line-height:1.7">
             ${esc(C.why)}<br>
             ${esc(C.check)}
