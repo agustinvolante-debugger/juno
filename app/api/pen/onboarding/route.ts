@@ -10,9 +10,10 @@ export async function POST(req: Request) {
   const email = await authedEmail()
   if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   const b = (await req.json().catch(() => ({}))) as { step?: string }
-  if (b.step !== 'tour') return NextResponse.json({ error: 'unknown step' }, { status: 400 })
+  // 'referral': the "give a month, get a month" pop-up was seen (PenApp ReferralPromo).
+  if (b.step !== 'tour' && b.step !== 'referral') return NextResponse.json({ error: 'unknown step' }, { status: 400 })
   try {
-    await markOnboarding(email, 'tour')
+    await markOnboarding(email, b.step)
     return NextResponse.json({ ok: true })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })

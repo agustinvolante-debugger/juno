@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { createPortal } from 'react-dom'
 import Image from 'next/image'
 import Icon, { type IconName } from './Icon'
 import { COMMON_TYPES, slugType, isViewing, displayType, BUCKETS, BUCKET_ICON, bucketOf, type Bucket } from '@/lib/pen/categories'
@@ -99,11 +100,14 @@ export default function PenApp({
   whatsapp,
   appLang = 'en',
   showTour = false,
+  showReferral = false,
 }: {
   /** The app's language (Profile "App language"). */
   appLang?: Lang
   /** First sign-in: play the tour once. */
   showTour?: boolean
+  /** Show the "give a month, get a month" pop-up once (lib/pen/referrals.ts). */
+  showReferral?: boolean
   /** Juno Pen's WhatsApp number and whether this account has linked a phone. Null when off. */
   whatsapp?: { number: string; linked: boolean } | null
   initial: PenSession[]
@@ -204,6 +208,20 @@ export default function PenApp({
     try { seenHere = localStorage.getItem('juno-tour-done') === '1' } catch {}
     if (showTour && !seenHere) setTourOpen(true)
   }, [showTour])
+  // The referral pop-up: once per account, after the tour, never for a read-only account.
+  const [promoOpen, setPromoOpen] = useState(false)
+  useEffect(() => {
+    let seenHere = false
+    try { seenHere = localStorage.getItem('juno-referral-seen') === '1' } catch {}
+    // Localhost only: ?promo=1 shows it again, for reviewing the design.
+    const preview = process.env.NODE_ENV === 'development' && new URLSearchParams(window.location.search).get('promo') === '1'
+    if (preview || (showReferral && !seenHere && !initialAllowance?.readOnly)) setPromoOpen(true)
+  }, [showReferral, initialAllowance])
+  const closePromo = useCallback(() => {
+    setPromoOpen(false)
+    try { localStorage.setItem('juno-referral-seen', '1') } catch {}
+    void fetch('/api/pen/onboarding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ step: 'referral' }) }).catch(() => {})
+  }, [])
   const closeTour = useCallback(() => {
     setTourOpen(false)
     try { localStorage.setItem('juno-tour-done', '1') } catch {}
@@ -903,6 +921,7 @@ export default function PenApp({
           />
         )}
         {tourOpen && <Tour lang={appLang} onClose={closeTour} onUpload={() => { setPhoneTab('upload'); fileInput.current?.click() }} />}
+        {promoOpen && !tourOpen && <ReferralPromo T={T} onClose={closePromo} />}
       </LangProvider>
     )
   }
@@ -973,6 +992,7 @@ export default function PenApp({
       </>
       )}
       {tourOpen && <Tour lang={appLang} onClose={closeTour} onUpload={() => fileInput.current?.click()} />}
+      {promoOpen && !tourOpen && <ReferralPromo T={T} onClose={closePromo} />}
       {txImport && (
         <TranscriptImport
           people={people}
@@ -2730,5 +2750,46 @@ function ClockPill({ clock, T, phone }: { clock: Allowance['clock']; T: AppCopy;
     <Link href="/pen/settings/billing" className="pen-clock" data-state={clock.state} data-phone={phone ? 'true' : undefined}>
       {label}
     </Link>
+  )
+}
+
+/**
+ * "Give a month, get a month", shown once per account. The button goes to Settings → Invite
+ * friends, where the link is; closing it in any way counts as seen.
+ */
+function ReferralPromo({ T, onClose }: { T: AppCopy; onClose: () => void }) {
+  const router = useRouter()
+  const go = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    go.current?.focus()
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+  // Portalled to the outer .pen-root (app/pen/layout.tsx), which carries the fonts and colours:
+  // inside the app shell it shared the page's stacking, and cards behind it painted over it.
+  const host = typeof document !== 'undefined' ? document.querySelector('.pen-root') ?? document.body : null
+  if (!host) return null
+  return createPortal(
+    <div className="pen-promo" role="dialog" aria-modal="true" aria-labelledby="pen-promo-title">
+      <div className="pen-promo-dim" onClick={onClose} aria-hidden="true" />
+      <div className="pen-promo-card">
+        <div className="pen-promo-band">
+          <span className="pen-promo-eyebrow">{T.promoEyebrow}</span>
+          <h2 id="pen-promo-title" className="pen-display pen-promo-title">{T.promoTitle}</h2>
+        </div>
+        <p className="pen-promo-lede">{T.promoLede}</p>
+        <ul className="pen-promo-tiers">
+          {T.promoTiers.map(([n, what]) => (
+            <li key={n}><strong>{n}</strong><span>{what}</span></li>
+          ))}
+        </ul>
+        <div className="pen-promo-actions">
+          <button ref={go} type="button" className="pen-btn pen-btn-accent" onClick={() => { onClose(); router.push('/pen/settings/invite') }}>{T.promoGo}</button>
+          <button type="button" className="pen-btn" onClick={onClose}>{T.promoLater}</button>
+        </div>
+      </div>
+    </div>,
+    host,
   )
 }

@@ -52,6 +52,7 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
   let whatsapp: { number: string; linked: boolean } | null = null
   let appLang: 'en' | 'es' | 'pt' = 'en'
   let showTour = false
+  let showReferral = false
   try {
     // Sequential on purpose: if the tables are missing, the first call already tells us
     // and there is no point paying for the second.
@@ -65,6 +66,8 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
     const chosen = (await cookies()).get('juno_lang')?.value
     if (!profile?.appLanguage && chosen) await rememberAppLanguage(email, parseLang(chosen)).catch(() => {})
     showTour = !profile?.onboarding?.tour
+    // The referral pop-up, once per account: from the sign-in after the tour, never on top of it.
+    showReferral = !showTour && !profile?.onboarding?.referral
     await ensureSample(email, appLang, profile?.name ?? session?.user?.name ?? null).catch(() => {})
     sessions = await listSessions(email)
     stats = await archiveStats(email)
@@ -90,6 +93,7 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
       whatsapp={whatsapp}
       appLang={appLang}
       showTour={showTour}
+      showReferral={showReferral}
       loadError={loadError}
       email={email}
       name={session?.user?.name ?? null}
