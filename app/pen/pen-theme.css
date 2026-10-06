@@ -3880,3 +3880,79 @@ html.pen-m-lock, html.pen-m-lock body { height: 100%; overflow: hidden; overscro
 .pen-fb-pill[data-v='very'] { background: var(--good-wash); color: var(--good); }
 .pen-fb-pill[data-v='not'] { background: var(--bad-wash); color: var(--bad); }
 .pen-fb-text { max-width: 34ch; font-size: 14px; line-height: 1.45; }
+
+/* Settings → Notion */
+.pen-notion-auto { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; }
+.pen-notion-auto span { display: flex; flex-direction: column; gap: 2px; font-size: var(--t-small); line-height: var(--t-small-lh); }
+.pen-notion-auto em { font-style: normal; color: var(--faint); }
+.pen-notion-sent { font-size: 14px; color: var(--accent-ink); text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
+.pen-notion-steps { list-style: decimal; }
+
+/* Import from Notion: the meetings Juno can see, one to pick. */
+.pen-nimp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto; }
+.pen-nimp-row {
+  width: 100%; text-align: left; display: flex; flex-direction: column; gap: 2px; padding: 12px 14px;
+  border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+}
+.pen-nimp-row strong { font-size: 15.5px; }
+.pen-nimp-row span { font-size: 13.5px; color: var(--faint); }
+.pen-nimp-row:hover:not(:disabled) { border-color: var(--accent-line); }
+.pen-nimp-row[data-on='true'] { border-color: var(--accent); background: var(--accent-wash); box-shadow: 0 0 0 1px var(--accent); }
+.pen-nimp-row:disabled { opacity: .55; cursor: not-allowed; }
+.pen-nimp-tag { align-self: flex-start; margin-top: 4px; font-style: normal; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--sunk); color: var(--soft); }
+
+/* Landing: "New" badge above the English hero, pointing at the Notion section. */
+.pen-lp2-newbadge {
+  display: inline-flex; align-items: center; gap: 8px; margin-bottom: 18px; padding: 5px 12px 5px 5px; border-radius: 999px;
+  background: var(--panel); border: 1px solid var(--accent-line); color: var(--ink); font-size: 14px; font-weight: 500; text-decoration: none;
+  box-shadow: 0 6px 18px -12px rgba(22, 21, 15, .35);
+}
+.pen-lp2-newbadge:hover { border-color: var(--accent); }
+.pen-lp2-newbadge-tag { padding: 2px 8px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; }
+
+/* Landing: Notion. A dark band; the copy left, the Notion table and an open page right. */
+.pen-lp2-notion { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 40px; align-items: center; padding: 48px; }
+.pen-lp2-kicker-ink { background: rgba(255, 255, 255, .1); color: #BFE3CF; }
+.pen-lp2-notion-h2 { color: var(--od-ink, #F2EFE5); max-width: 16ch; font-size: clamp(34px, 4.6vw, 54px); line-height: 1.04; }
+.pen-lp2-notion-sub { margin: 18px 0 20px; max-width: 46ch; font-size: var(--t-lede-sm); line-height: var(--t-lede-sm-lh); color: var(--od-soft, #CFCABC); }
+.pen-lp2-notion-points li { align-items: flex-start; }
+.pen-lp2-notion .pen-lp2-ctas { margin-top: 26px; }
+.pen-lp2-notion-stage { position: relative; display: flex; flex-direction: column; }
+.pen-nt-win {
+  position: relative; width: 100%; border-radius: 12px; overflow: hidden; background: #FFFFFF; color: #37352F;
+  box-shadow: 0 24px 60px -24px rgba(0, 0, 0, .7); font-family: var(--ui);
+}
+.pen-nt-bar { display: flex; align-items: center; gap: 12px; padding: 9px 12px; background: #F7F6F3; border-bottom: 1px solid #EDECE9; font-size: 12.5px; color: #787774; }
+.pen-nt-dots { display: inline-flex; gap: 5px; }
+.pen-nt-dots i { width: 9px; height: 9px; border-radius: 50%; background: #DCDAD5; }
+.pen-nt-body { padding: 20px 22px 18px; }
+.pen-nt-title { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 12px; color: #37352F; }
+.pen-nt-table { border-top: 1px solid #EDECE9; font-size: 13px; }
+.pen-nt-row { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, .9fr); gap: 10px; padding: 8px 4px; border-bottom: 1px solid #EDECE9; }
+.pen-nt-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pen-nt-head { color: #9B9A97; font-size: 12px; }
+.pen-nt-name { font-weight: 600; }
+.pen-nt-num { font-variant-numeric: tabular-nums; }
+.pen-nt-row[data-new='true'] { background: #EAF4EE; animation: penNtNew 2.4s ease-out 1; }
+@keyframes penNtNew { 0% { background: #CDEBD9; } 100% { background: #EAF4EE; } }
+.pen-nt-page {
+  position: relative; align-self: flex-end; margin: -12px -18px 0 0; width: min(80%, 380px); padding: 18px 20px 16px; border-radius: 12px;
+  background: #FFFFFF; color: #37352F; font-family: var(--ui); box-shadow: 0 30px 70px -20px rgba(0, 0, 0, .75), 0 0 0 1px rgba(15, 15, 15, .06);
+}
+.pen-nt-page-title { font-size: 19px; font-weight: 700; margin-bottom: 10px; }
+.pen-nt-h { font-size: 13px; font-weight: 600; margin: 10px 0 4px; }
+.pen-nt-p { margin: 0; font-size: 13px; line-height: 1.5; color: #4F4D48; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.pen-nt-todos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; font-size: 13px; }
+.pen-nt-todos li { display: flex; align-items: flex-start; gap: 8px; }
+.pen-nt-box { flex: none; width: 14px; height: 14px; margin-top: 2px; border: 1.5px solid #9B9A97; border-radius: 3px; }
+.pen-nt-todos li[data-done='true'] { color: #9B9A97; text-decoration: line-through; }
+.pen-nt-todos li[data-done='true'] .pen-nt-box { background: #2383E2; border-color: #2383E2; }
+.pen-nt-link { margin-top: 12px; font-size: 13px; color: #0B6B44; font-weight: 600; }
+@media (max-width: 900px) {
+  .pen-lp2-notion { grid-template-columns: minmax(0, 1fr); padding: 28px 22px 44px; gap: 28px; }
+  .pen-nt-page { margin: -24px 0 0 0; width: min(92%, 360px); }
+  .pen-nt-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, .8fr); }
+  .pen-nt-row span:nth-child(3) { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .pen-nt-row[data-new='true'] { animation: none; } }
+.pen-lp2-notion-points svg { flex: none; margin-top: 4px; }

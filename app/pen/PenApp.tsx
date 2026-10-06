@@ -13,6 +13,7 @@ import NoteEditor, { blocksFrom } from './NoteEditor'
 import TranscriptEditor from './TranscriptEditor'
 import SpeakerNames from './SpeakerNames'
 import TranscriptImport from './TranscriptImport'
+import NotionImport from './NotionImport'
 import Tour from './Tour'
 import { speakersIn, type SpeakerMap } from '@/lib/pen/speakers'
 import ChatView from './ChatView'
@@ -103,6 +104,7 @@ export default function PenApp({
   showTour = false,
   showReferral = false,
   showFeedback = false,
+  notion = null,
 }: {
   /** The app's language (Profile "App language"). */
   appLang?: Lang
@@ -112,6 +114,8 @@ export default function PenApp({
   showReferral?: boolean
   /** Ask for feedback once, after the 3rd finished recording (lib/pen/feedback.ts). */
   showFeedback?: boolean
+  /** Null when Notion isn't set up on the server (lib/pen/notion.ts). */
+  notion?: { connected: boolean; sent?: Record<string, string> } | null
   /** Juno Pen's WhatsApp number and whether this account has linked a phone. Null when off. */
   whatsapp?: { number: string; linked: boolean } | null
   initial: PenSession[]
@@ -141,6 +145,20 @@ export default function PenApp({
   const [dragOver, setDragOver] = useState(false)
   const [tab, setTab] = useState<'note' | 'transcript'>('note')
   const [chatOpen, setChatOpen] = useState(false)
+  // ?open=<recording id>: a link from outside the app (a Notion page's "Open in Juno") lands on
+  // that note. The parameter is dropped afterwards so a reload doesn't keep reopening it.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('open')
+    if (!id) return
+    if (sessions.some((x) => x.id === id)) {
+      openSession(id)
+      setTab('note')
+    }
+    const u = new URL(window.location.href)
+    u.searchParams.delete('open')
+    window.history.replaceState(null, '', u.toString())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [view, setView] = useState<View>({ k: 'archive' })
   const [chatSeed, setChatSeed] = useState<{ text: string; mentions: Mention[] } | null>(null)
   const [chats, setChats] = useState<ChatSummary[]>([])
@@ -205,6 +223,7 @@ export default function PenApp({
   // Everyone the user has added, for the @ picker. Refreshed when a recording's People change.
   const [people, setPeople] = useState<PersonCard[]>([])
   const [txImport, setTxImport] = useState(false)
+  const [nImport, setNImport] = useState(false)
   // The tour: once on first sign-in (the account remembers), and from the menu on demand.
   const [tourOpen, setTourOpen] = useState(false)
   useEffect(() => {
@@ -781,6 +800,12 @@ export default function PenApp({
                 <Icon name="quote" size={19} />
                 <span>{T.importTranscript}</span>
               </button>
+              {notion && (
+                <button type="button" className="pen-m-rowbtn" onClick={() => setNImport(true)}>
+                  <Icon name="link" size={19} />
+                  <span>{T.importNotion}</span>
+                </button>
+              )}
               <button type="button" className="pen-m-bigbtn" onClick={() => fileInput.current?.click()}>
                 <Icon name="plus" size={22} />
                 <span><strong>{T.mChoose}</strong><em>{T.mChooseSub}</em></span>
@@ -798,6 +823,7 @@ export default function PenApp({
           <>
             <Detail
               selfEmail={email}
+              notion={notion}
               onPeopleChanged={() => void refreshPeople()}
               onBack={() => setView({ k: 'archive' })}
               session={active} tab={tab} setTab={setTab}
@@ -977,6 +1003,14 @@ export default function PenApp({
             onImported={(id) => { setTxImport(false); void refresh(); openSession(id) }}
           />
         )}
+        {nImport && (
+          <NotionImport
+            people={people}
+            connected={Boolean(notion?.connected)}
+            onClose={() => setNImport(false)}
+            onImported={(id) => { setNImport(false); void refresh(); openSession(id) }}
+          />
+        )}
         {tourOpen && <Tour lang={appLang} onClose={closeTour} onUpload={() => { setPhoneTab('upload'); fileInput.current?.click() }} />}
         {promoOpen && !tourOpen && <ReferralPromo T={T} onClose={closePromo} />}
         {askOpen && !tourOpen && !promoOpen && <FeedbackAsk T={T} onClose={closeAsk} />}
@@ -1048,6 +1082,12 @@ export default function PenApp({
         <Icon name="quote" size={15} />
         {T.importTranscript}
       </button>
+      {notion && (
+        <button type="button" className="pen-tximp-open" onClick={() => { setNavOpen(false); setNImport(true) }}>
+          <Icon name="link" size={15} />
+          {T.importNotion}
+        </button>
+      )}
       </>
       )}
       {tourOpen && <Tour lang={appLang} onClose={closeTour} onUpload={() => fileInput.current?.click()} />}
@@ -1059,6 +1099,14 @@ export default function PenApp({
           people={people}
           onClose={() => setTxImport(false)}
           onImported={(id) => { setTxImport(false); void refresh(); openSession(id) }}
+        />
+      )}
+      {nImport && (
+        <NotionImport
+          people={people}
+          connected={Boolean(notion?.connected)}
+          onClose={() => setNImport(false)}
+          onImported={(id) => { setNImport(false); void refresh(); openSession(id) }}
         />
       )}
 
@@ -1379,6 +1427,7 @@ export default function PenApp({
             <div className={chatOpen ? 'grid gap-7 xl:grid-cols-[minmax(0,1fr)_352px]' : ''}>
               <Detail
                 selfEmail={email}
+                notion={notion}
                 onPeopleChanged={() => void refreshPeople()}
                 onBack={() => setView({ k: 'archive' })}
                 session={active} tab={tab} setTab={setTab}
@@ -2096,7 +2145,7 @@ function PartTranscript({ part, onUpdateNotes }: { part: PenSession; onUpdateNot
 /* =================================================================== detail */
 
 function Detail({
-  session, tab, setTab, chatOpen, onToggleChat, onNotes, onDelete, onPatch, askCategory, selfEmail, onBack,
+  session, tab, setTab, chatOpen, onToggleChat, onNotes, onDelete, onPatch, askCategory, selfEmail, onBack, notion,
   parts, onSplit, splitting, onPeopleChanged,
 }: {
   session: PenSession
@@ -2116,6 +2165,8 @@ function Detail({
   askCategory?: string[]
   /** The signed-in address — named in the briefing recipients popover. */
   selfEmail: string
+  /** Notion is available (and whether this account connected it): the "Send to Notion" button. */
+  notion?: { connected: boolean; sent?: Record<string, string> } | null
   onBack: () => void
   onDelete: () => void
   onPatch: (p: Partial<Pick<PenSession, 'user_notes' | 'title' | 'client_name' | 'action_done' | 'note_blocks' | 'transcript_edits' | 'briefing_sent_at'>>) => Promise<void>
@@ -2313,6 +2364,7 @@ function Detail({
             disabled={!n.summary && !n.actions?.length && !n.missed?.length && !n.open_questions?.length}
             onSent={(iso) => void onPatch({ briefing_sent_at: iso })}
           />
+          {notion && (n.summary || n.actions?.length) ? <NotionButton key={session.id} sessionId={session.id} connected={notion.connected} sentUrl={notion.sent?.[session.id] ?? null} /> : null}
           {/* Two-step, inline. Deletion takes the audio with it and cannot be undone, so it
               asks — but a modal for one row would be heavier than the action deserves. */}
           {confirmDelete ? (
@@ -3045,5 +3097,34 @@ function FeedbackAsk({ T, onClose }: { T: AppCopy; onClose: (answered: boolean) 
       </div>
     </div>,
     host,
+  )
+}
+
+/** "Send to Notion" on a note (lib/pen/notion.ts). Not connected yet: goes to Settings → Notion. */
+function NotionButton({ sessionId, connected, sentUrl }: { sessionId: string; connected: boolean; sentUrl: string | null }) {
+  const T = useCopy(APP_COPY)
+  const [busy, setBusy] = useState(false)
+  // Already in Notion (sent by hand or automatically): open it rather than offer to send.
+  const [url, setUrl] = useState<string | null>(sentUrl)
+  const [err, setErr] = useState<string | null>(null)
+  if (!connected) return <a className="pen-btn" href="/pen/settings/notion">{T.notionSend}</a>
+  if (url) return <a className="pen-notion-sent" href={url} target="_blank" rel="noreferrer">{T.notionOpen} ↗</a>
+  async function send() {
+    setBusy(true); setErr(null)
+    try {
+      const j = await postJson<{ url: string }>('/api/pen/notion/send', { id: sessionId })
+      setUrl(j.url)
+      window.open(j.url, '_blank', 'noopener')
+    } catch (e) {
+      setErr(errMessage(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <>
+      <button type="button" className="pen-btn" onClick={send} disabled={busy}>{busy ? T.notionSending : T.notionSend}</button>
+      {err && <span className="pen-ref-err">{err}</span>}
+    </>
   )
 }

@@ -4,6 +4,7 @@
 // so the notes start and the email goes out either way. The claim in writeNotes makes a race
 // between the two harmless: whoever takes it does the work, the other returns.
 
+import { autoToNotion } from './notion'
 import { getSession, updateSession } from './store'
 import { writeNotes } from './pipeline'
 import { sendBriefing, sendFailureNotice, sendReadyNotice, hasSomethingToSay } from './briefing'
@@ -65,6 +66,10 @@ export async function runUnattended(sessionId: string, email: string) {
     if (!noted) return
     // A tail part on its own says nothing worth an email — the combined briefing covers it.
     if (joined && noted.id !== joined.segments[0].id) return
+
+    // To the customer's Notion as well, if they connected it (lib/pen/notion.ts). Once per
+    // recording, never throws.
+    await autoToNotion(email, noted)
 
     // Belt and braces against a retry that slipped past the claim.
     if (noted.briefing_sent_at) return

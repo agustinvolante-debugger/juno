@@ -106,6 +106,7 @@ export default function Landing({ market = { lang: 'en', currency: 'usd' }, audi
         <Nav />
         {latam ? <HeroChat /> : <Hero />}
         <Film />
+        {!latam && <NotionSec />}
         <Audience />
         <HowItWorks />
         <WhatsAppDemo />
@@ -134,7 +135,7 @@ function useMainCta(): { label: string; href: (from: string) => string } {
 }
 
 function Nav() {
-  const { t } = useL()
+  const { t, latam } = useL()
   const cta = useMainCta()
   return (
     <header className="pen-lp-nav">
@@ -145,6 +146,7 @@ function Nav() {
         </Link>
         <nav className="flex items-center gap-1">
           <a href="#features" className="pen-lp-navlink pen-lp2-hide-sm">{t.nav.features}</a>
+          {!latam && <a href="#notion" className="pen-lp-navlink pen-lp2-hide-sm">Notion</a>}
           <a href="#pen" className="pen-lp-navlink pen-lp2-hide-sm">{t.nav.pen}</a>
           <a href="#pricing" className="pen-lp-navlink pen-lp2-hide-sm">{t.nav.pricing}</a>
           <Link href={SIGN_IN} className="pen-lp-navlink">{t.nav.signIn}</Link>
@@ -175,10 +177,19 @@ function NoPenLine() {
 
 /** Headline, lede and buttons: the same in every market; the stage beside it differs. */
 function HeroCopy() {
-  const { p } = useL()
+  const { p, latam } = useL()
   const cta = useMainCta()
   return (
     <div className="pen-lp2-hero-copy">
+      {!latam && (
+        <Reveal>
+          <a href="#notion" className="pen-lp2-newbadge">
+            <span className="pen-lp2-newbadge-tag">New</span>
+            Juno now writes your meetings into Notion
+            <Icon name="chevron" size={14} />
+          </a>
+        </Reveal>
+      )}
       <Reveal>
         <h1 className="pen-lp-h1 pen-lp2-h1">
           {p.hero.h1a} <span className="pen-lp-em">{p.hero.h1b}</span>
@@ -276,6 +287,78 @@ function Film() {
 }
 
 /* ------------------------------------------------------------- audience */
+
+/* ---------------------------------------------------------------- notion */
+
+/**
+ * Notion, as big as it gets (agreed 5 Oct): English only for now. A dark band with the promise
+ * on the left and, on the right, what the customer actually sees in their Notion: the "Juno Pen
+ * notes" table (lib/pen/notion.ts makes it) and one of its pages, written for the audience
+ * picked above. Nothing here is a Notion screenshot or logo; it's drawn in Juno's own type.
+ */
+function NotionSec() {
+  const { kit } = useL()
+  const cta = useMainCta()
+  const n = kit.note
+  const names = n.people.map(([name]) => name.split(' ')[0]).slice(0, 2).join(', ')
+  const rows: [string, string, string, number][] = [
+    [n.title, 'Today', names, 3],
+    [kit.seq.title, 'Yesterday', kit.hero.who.split(' ')[0], 1],
+    ['Weekly check-in', 'Mon', 'Team', 0],
+  ]
+  return (
+    <section id="notion" className="pen-lp-wrap pen-lp2-sec">
+      <Reveal>
+        <div className="pen-lp2-card pen-lp2-card-ink pen-lp2-notion">
+          <div className="pen-lp2-notion-copy">
+            <span className="pen-lp2-kicker pen-lp2-kicker-ink">New · Works with Notion</span>
+            <h2 className="pen-lp-h2 pen-lp2-notion-h2">Every meeting, straight into your Notion.</h2>
+            <p className="pen-lp2-notion-sub">
+              Connect Notion once. Each recording’s notes land in your own “Juno Pen notes” table the moment they’re ready. Nothing to copy, nothing to paste.
+            </p>
+            <ul className="pen-lp2-private pen-lp2-notion-points">
+              <li><Icon name="check" size={16} />Summary, to-dos as checkboxes and who was there, on every page</li>
+              <li><Icon name="check" size={16} />Already record with Notion AI Meeting Notes? Import them, and Juno writes the to-dos and the follow-up email</li>
+              <li><Icon name="check" size={16} />Included in every plan</li>
+            </ul>
+            <div className="pen-lp2-ctas">
+              <Link href={cta.href('notion')} className="pen-lp-btn pen-lp-btn-accent pen-lp2-btn-lg">{cta.label}</Link>
+            </div>
+          </div>
+
+          <div className="pen-lp2-notion-stage" aria-hidden>
+            <div className="pen-nt-win">
+              <div className="pen-nt-bar"><span className="pen-nt-dots"><i /><i /><i /></span><span className="pen-nt-crumb">Meetings / Juno Pen notes</span></div>
+              <div className="pen-nt-body">
+                <div className="pen-nt-title">Juno Pen notes</div>
+                <div className="pen-nt-table">
+                  <div className="pen-nt-row pen-nt-head"><span>Name</span><span>Date</span><span>People</span><span>To-dos</span></div>
+                  {rows.map(([title, date, who, open], i) => (
+                    <div key={title} className="pen-nt-row" data-new={i === 0 ? 'true' : undefined}>
+                      <span className="pen-nt-name">{title}</span><span>{date}</span><span>{who}</span><span className="pen-nt-num">{open}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="pen-nt-page" key={kit.key}>
+              <div className="pen-nt-page-title">{n.title}</div>
+              <div className="pen-nt-h">Summary</div>
+              <p className="pen-nt-p">{n.summary}</p>
+              <div className="pen-nt-h">To-dos</div>
+              <ul className="pen-nt-todos">
+                {n.actions.map((a, i) => (
+                  <li key={a} data-done={i === 0 ? 'true' : undefined}><span className="pen-nt-box" />{a}</li>
+                ))}
+              </ul>
+              <div className="pen-nt-link">Open the full note in Juno →</div>
+            </div>
+          </div>
+        </div>
+      </Reveal>
+    </section>
+  )
+}
 
 function Audience() {
   const { t, p, kits, kit, aud, setAud } = useL()

@@ -16,6 +16,7 @@ import { ensureSample } from '@/lib/pen/sample'
 import { appLangFor } from './app-lang'
 import { parseLang } from '@/lib/pen/currency'
 import { REF_COOKIE, cleanCode, referrerFor } from '@/lib/pen/referrals'
+import { getConnection, notionConfigured, sentPages } from '@/lib/pen/notion'
 
 export const dynamic = 'force-dynamic'
 
@@ -54,6 +55,7 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
   let showTour = false
   let showReferral = false
   let showFeedback = false
+  let notion: { connected: boolean; sent: Record<string, string> } | null = null
   try {
     // Sequential on purpose: if the tables are missing, the first call already tells us
     // and there is no point paying for the second.
@@ -71,6 +73,10 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
     showReferral = !showTour && !profile?.onboarding?.referral
     await ensureSample(email, appLang, profile?.name ?? session?.user?.name ?? null).catch(() => {})
     sessions = await listSessions(email)
+    if (notionConfigured()) {
+      const connected = Boolean(await getConnection(email).catch(() => null))
+      notion = { connected, sent: connected ? await sentPages(email).catch(() => ({})) : {} }
+    }
     // The feedback pop-up: once, after the 3rd finished recording of their own (the sample
     // doesn't count), and never on the same visit as the tour or the referral pop-up.
     showFeedback =
@@ -101,6 +107,7 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
       showTour={showTour}
       showReferral={showReferral}
       showFeedback={showFeedback}
+      notion={notion}
       loadError={loadError}
       email={email}
       name={session?.user?.name ?? null}

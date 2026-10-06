@@ -353,3 +353,11 @@ create index if not exists pen_clients_user on pen_clients(user_email);
 -- create table if not exists public.pen_feedback (id uuid primary key default gen_random_uuid(), email text not null, disappointed text not null, fix text, tell text, lang text, created_at timestamptz not null default now());
 -- create index if not exists pen_feedback_email on public.pen_feedback(lower(email));
 -- alter table public.pen_feedback enable row level security;
+
+-- 2026-10-05 (b) — Notion (lib/pen/notion.ts). Run each line separately.
+-- pen_notion        one row per connected account; access_token is AES-GCM sealed (never plain).
+-- pen_notion_pages  one row per recording sent, so it goes to Notion once.
+-- create table if not exists public.pen_notion (email text primary key, access_token text not null, bot_id text, workspace_id text, workspace_name text, workspace_icon text, database_id text, database_url text, page_id text, auto boolean not null default true, last_error text, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+-- create table if not exists public.pen_notion_pages (session_id uuid primary key, email text not null, page_id text, url text, created_at timestamptz not null default now());
+-- alter table public.pen_notion enable row level security;
+-- alter table public.pen_notion_pages enable row level security;

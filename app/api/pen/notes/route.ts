@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { autoToNotion } from '@/lib/pen/notion'
 import { authedEmail } from '@/lib/news/auth'
 import { readOnlyRefusal } from '@/lib/pen/access'
 import { getSession } from '@/lib/pen/store'
@@ -37,7 +38,10 @@ export async function POST(req: Request) {
     // covers the notes written here instead (the browser's fallback when the webhook didn't
     // arrive, or a first "Write the notes" after a failure). Already sent means nothing new.
     // Only for FIRST notes: a Redo on an old recording that predates the email must not send one.
-    if (r.session && session.status !== 'noted') await briefOnce({ email, session: r.session }).catch(() => {})
+    if (r.session && session.status !== 'noted') {
+      await briefOnce({ email, session: r.session }).catch(() => {})
+      await autoToNotion(email, r.session)
+    }
     return NextResponse.json({ session: r.session, category: r.category })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })

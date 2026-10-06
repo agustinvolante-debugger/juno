@@ -21,7 +21,7 @@ const ITEMS: { href: string; label: 'profile' | 'WhatsApp'; icon: IconName }[] =
  * `whatsapp` is false until the Vonage env vars exist, so nobody finds a page that can't work.
  * `billing` is true for anyone Stripe knows: pause, and the way into Stripe's portal.
  */
-export default function SettingsNav({ whatsapp = false, billing = false }: { whatsapp?: boolean; billing?: boolean }) {
+export default function SettingsNav({ whatsapp = false, billing = false, notion = false }: { whatsapp?: boolean; billing?: boolean; notion?: boolean }) {
   const T = useCopy(SN)
   const path = usePathname()
   return (
@@ -32,6 +32,12 @@ export default function SettingsNav({ whatsapp = false, billing = false }: { wha
           <span className="pen-cat-label">{i.label === 'profile' ? T.profile : i.label}</span>
         </Link>
       ))}
+      {notion && (
+        <Link href="/pen/settings/notion" className="pen-cat" data-active={path === '/pen/settings/notion'} aria-current={path === '/pen/settings/notion' ? 'page' : undefined}>
+          <Icon name="link" size={19} />
+          <span className="pen-cat-label">Notion</span>
+        </Link>
+      )}
       <Link href="/pen/settings/invite" className="pen-cat" data-active={path === '/pen/settings/invite'} aria-current={path === '/pen/settings/invite' ? 'page' : undefined}>
         <Icon name="link" size={19} />
         <span className="pen-cat-label">{T.invite}</span>
