@@ -21,6 +21,14 @@ export async function POST(req: Request) {
     if (body.mini.on) mini.push(body.mini.id)
     layout.grid = { ...grid, mini }
   }
+  // Section order from drag / Move up-down: the sections on screen in their new order. Ids the
+  // client didn't send (video shelves, hidden sections) keep their relative order after them.
+  if (Array.isArray(body.order)) {
+    const next = body.order.filter((x: unknown) => typeof x === 'string').slice(0, 200) as string[]
+    const grid = { ...(layout.grid || {}) }
+    grid.order = [...next, ...((grid.order || []) as string[]).filter((x) => !next.includes(x))]
+    layout.grid = grid
+  }
   // Read-later — prefs.layout.saved (no new table), newest first, capped at 100.
   if (body.save && typeof body.save.l === 'string' && body.save.l) {
     const rest = (layout.saved || []).filter((x: any) => x.l !== body.save.l)

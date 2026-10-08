@@ -4,11 +4,16 @@ import { searchTopic, resolveChannel, channelItems, interleaveBySource, type Ite
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const MODEL = 'claude-haiku-5-5'
+// Thinking OFF for every call here: these are short, structured jobs (curate, brief, classify,
+// filter) with small max_tokens. Haiku 5.5 thinks by default on longer prompts and spent the whole
+// budget thinking, returning no text, so curation and briefs silently fell back (8 Oct).
+const NO_THINKING = { type: 'disabled' } as const
 
 async function claudeText(prompt: string, maxTokens = 800, system?: string): Promise<string> {
   const m = await anthropic.messages.create({
     model: MODEL,
     max_tokens: maxTokens,
+    thinking: NO_THINKING,
     ...(system ? { system } : {}),
     messages: [{ role: 'user', content: prompt }],
   })
@@ -199,9 +204,10 @@ export async function buildTopic(query: string, lang = 'en'): Promise<BuiltTopic
 // topic without paying an AI call per section per click.
 const TOPIC_BRIEF_TTL = 6 * 3600 * 1000
 export async function refreshTopic(t: { query: string; route?: any; brief?: string }, lang = 'en'): Promise<BuiltTopic> {
-  const route: Route & { brief_at?: string } = t.route || {}
+  const route: Route & { brief_at?: string; items_at?: string } = t.route || {}
   if (!route.query) route.query = t.query
   const items = await gatherTopicItems(t.query, route)
+  route.items_at = new Date().toISOString()
   const briefAt = route.brief_at ? Date.parse(route.brief_at) : 0
   const stale = !t.brief || !briefAt || Date.now() - briefAt > TOPIC_BRIEF_TTL
   const b = stale && items.length ? await brief(t.query, items, lang) : t.brief || ''
@@ -294,7 +300,7 @@ const SETUP_SYS =
 
 export async function setupChat(messages: { role: 'user' | 'assistant'; content: string }[]): Promise<SetupResult> {
   try {
-    const m = await anthropic.messages.create({ model: MODEL, max_tokens: 700, system: SETUP_SYS, messages })
+    const m = await anthropic.messages.create({ model: MODEL, max_tokens: 700, thinking: NO_THINKING, system: SETUP_SYS, messages })
     const txt = m.content.filter((b) => b.type === 'text').map((b: any) => b.text).join('')
     return jsonFrom(txt) || { type: 'questions', reply: 'Tell me a bit more — what topics?', questions: [] }
   } catch (e: any) {
@@ -316,7 +322,7 @@ export async function classifyChannels(desc: string): Promise<{ label: string; c
   }
 }
 
-export type VideoSection = { key: string; label: string; channels: { name: string; cid: string }[]; items: Item[] }
+export type VideoSection = { key: string; label: string; channels: { name: string; cid: string }[]; items: Item[]; refreshed_at?: string }
 
 export async function buildVideoSection(desc: string): Promise<VideoSection> {
   const { label, channels } = await classifyChannels(desc)
@@ -361,10 +367,13 @@ export async function dailyBriefing(items: { t: string; s: string }[], lang = 'e
     'Write EXACTLY 3 bullets for a morning briefing. Each bullet: one plain sentence, at most 24 words, ' +
     'saying what happened and why it matters, grounded ONLY in the headline (no invented numbers). ' +
     'Pick the 3 most consequential stories; each bullet cites the index of its story. ' +
-    (lang === 'es' ? 'Write the bullets in Spanish. ' : 'Write the bullets in English. ') +
+    (lang === 'es' ? 'Write the bullets in Spanish, even when the headlines are in English. ' : 'Write the bullets in English. ') +
     'Respond ONLY with JSON: {"bullets":[{"i":0,"text":"..."}]}'
+  // The language rule also goes in the system prompt: with English headlines, a single line in
+  // the user prompt was not enough and Spanish readers got English bullets.
+  const system = lang === 'es' ? 'You write in Spanish (español), always, whatever language the input is in.' : undefined
   try {
-    const j = jsonFrom(await claudeText(prompt, 450))
+    const j = jsonFrom(await claudeText(prompt, 450, system))
     const out: { i: number; text: string }[] = []
     for (const b of Array.isArray(j?.bullets) ? j.bullets : []) {
       const i = Number(b?.i)

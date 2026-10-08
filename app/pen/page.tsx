@@ -1,6 +1,7 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { authedEmail } from '@/lib/news/auth'
+import { noteSeen } from '@/lib/pen/accounts'
 import { listSessions } from '@/lib/pen/store'
 import { archiveStats } from '@/lib/pen/stats'
 import { adoptLegacyChat } from '@/lib/pen/chats'
@@ -32,6 +33,8 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
   // ?landing=1 shows it anyway; never in production.
   const sp0 = await searchParams
   const devLanding = process.env.NODE_ENV !== 'production' && sp0.landing === '1'
+  // "Last seen" for the customers page (throttled to every 10 min inside noteSeen).
+  if (email && !devLanding) await noteSeen(email, 'seen')
   if (!email || devLanding) {
     // Which version of the landing page: ?m= (the footer switch) wins, then the remembered
     // choice, then the country Vercel reports for the visitor.

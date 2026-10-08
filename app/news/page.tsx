@@ -14,7 +14,6 @@ import SectionMenu from './SectionMenu'
 import BriefingCard from './BriefingCard'
 import ReaderState from './ReaderState'
 import Clamp from './Clamp'
-import SportsToggle from './SportsToggle'
 import { SavedList, SavedRail } from './Saved'
 import LangToggle from './LangToggle'
 import ClickTracker from './ClickTracker'
@@ -24,13 +23,17 @@ import OfflineRibbon from './OfflineRibbon'
 import LastUpdated from './LastUpdated'
 import SourcesManager from './SourcesManager'
 import ResetForYou from './ResetForYou'
-import Onboarding from './Onboarding'
 import Suggest from './Suggest'
 import DigestToggle from './DigestToggle'
 import ShowHidden from './ShowHidden'
 import MonitorControls from './MonitorControls'
 import MonitorCardView from './MonitorCardView'
 import AutoRefresh from './AutoRefresh'
+import Toaster from './Toaster'
+import SectionDnD from './SectionDnD'
+import Tour from './Tour'
+import { GripIcon } from './Icons'
+import HtmlLang from './HtmlLang'
 
 export const dynamic = 'force-dynamic'
 
@@ -102,7 +105,6 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
   const hidden: string[] = L.hidden || []
   const mini = new Set<string>(L.grid?.mini || [])
   const order: string[] = L.grid?.order || []
-  const showSports = !!L.sports
   const videos: VideoSection[] = email ? (L.videos || []) : []
   const saved: SavedItem[] = email ? (L.saved || []) : []
   const empty = Object.keys(cache).length === 0
@@ -132,10 +134,9 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
   const visible = blocks.filter((b) => !hidden.includes(b.id))
     .map((b, i) => ({ b, i })).sort((x, y) => (rank(x.b.id) - rank(y.b.id)) || (x.i - y.i)).map((x) => x.b)
   const newsBlocks = visible.filter((b) => b.kind === 'curated' || b.kind === 'topic')
-  const sportsBlocks = newsBlocks.filter((b) => b.sports)
-  const todayBlocks = newsBlocks.filter((b) => showSports || !b.sports)
+  // Sports sections show like any other; a reader who doesn't want one hides or removes it.
+  const todayBlocks = newsBlocks
   const videoBlocks = visible.filter((b) => b.kind === 'video' || b.kind === 'uservideo')
-  const hasSports = sportsBlocks.length > 0 || videoBlocks.some((b) => b.sports)
 
   // ---- Top 7: cluster the same story across sections, score, pick with diversity caps ----
   const pool: Pooled[] = []
@@ -172,6 +173,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
 
   // ---- Spanish headlines (cached per link; only what's on screen) ----
   let tr: Record<string, string> = {}
+  let untranslated = 0 // headlines left in their original language (shown as a quiet note)
   if (es && email && !empty) {
     const titleByLink: Record<string, string> = {}
     for (const c of top) titleByLink[c.best.l] = c.best.t
@@ -189,6 +191,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
       await setTranslations(fresh)
       tr = { ...cached, ...fresh }
     } else tr = cached
+    untranslated = links.filter((l) => !tr[l]).length
   }
   const T = (it: Item) => tr[it.l] || it.t
 
@@ -196,7 +199,6 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
   const bday = dayKey()
   const cachedBrief = L.briefing && L.briefing.day === bday && L.briefing.lang === lang && Array.isArray(L.briefing.bullets) && L.briefing.bullets.length ? L.briefing : null
   const topPayload = top.map((c) => ({ t: T(c.best), l: c.best.l, s: c.best.s }))
-  const fallbackBullets = topPayload.slice(0, 3).map((x) => ({ t: x.t, l: x.l }))
   const dateSpoken = new Date().toLocaleDateString(es ? 'es' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Los_Angeles' })
   const listenScript = [
     es ? `Buenos días. Hoy es ${dateSpoken}. Este es tu Daily Brief.` : `Good morning. It's ${dateSpoken}. This is your Daily Brief.`,
@@ -212,7 +214,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
 
   // ---- videos ----
   const todayVideos = interleaveBySource(
-    dedupeVideos(videoBlocks.filter((b) => showSports || !b.sports).flatMap((b) => b.items), 7)
+    dedupeVideos(videoBlocks.flatMap((b) => b.items), 7)
       .sort((a, b) => (Date.parse(b.d || '') || 0) - (Date.parse(a.d || '') || 0)),
   ).slice(0, 6)
 
@@ -240,7 +242,12 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
       <section key={b.id} className="db-sec" data-id={b.id} aria-labelledby={`h-${b.id}`}>
         <h2 className="db-label" id={`h-${b.id}`}>
           <span>{b.label}</span>
-          {email && <SectionMenu id={b.id} kind={b.kind} label={b.label} mini={isMini} instruction={sectionInstructions[b.id] || ''} canBrief={b.kind === 'curated' && !b.brief} lang={lang} />}
+          {email && (
+            <span className="db-sec-ctl">
+              <button type="button" className="db-iconbtn db-grip" aria-label={es ? `Mover ${b.label} (arrastra o usa ↑ ↓)` : `Move ${b.label} (drag, or use ↑ ↓)`} title={es ? 'Arrastra para ordenar' : 'Drag to reorder'}><GripIcon size={14} /></button>
+              <SectionMenu id={b.id} kind={b.kind} label={b.label} mini={isMini} instruction={sectionInstructions[b.id] || ''} canBrief={b.kind === 'curated' && !b.brief} lang={lang} />
+            </span>
+          )}
         </h2>
         {b.brief && !isMini && (
           <Clamp lang={lang}>
@@ -280,7 +287,11 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
   return (
     <main className="db-app" data-tab={tab}>
       <IconSprite />
-      <AutoRefresh />
+      <AutoRefresh signedIn={!!email} lang={lang} />
+      <Toaster lang={lang} />
+      {email && <SectionDnD lang={lang} />}
+      {email && <Tour lang={lang} autoStart={!L.onboarded && topics.length === 0 && videos.length === 0 && monitors.length === 0} />}
+      <HtmlLang lang={lang} />
       <SwRegister />
       <ReaderState saved={saved} authed={!!email} lang={lang} />
       {email && <ClickTracker />}
@@ -303,7 +314,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
             {email ? (
               <>
                 <LangToggle lang={lang} />
-                <AvatarMenu email={email} lang={lang} sports={showSports} hasSports={hasSports} />
+                <AvatarMenu email={email} lang={lang} />
               </>
             ) : (
               <a href={signInHref} className="db-btn is-ink">{es ? 'Iniciar sesión' : 'Sign in'}</a>
@@ -320,22 +331,30 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
               empty ? (
                 <div className="db-empty">
                   <p className="db-empty-t">{es ? 'Aún no hay noticias' : 'No news cached yet'}</p>
-                  <RefreshButton label={es ? 'Cargar las noticias' : 'Load the news'} />
+                  <RefreshButton label={es ? 'Cargar las noticias' : 'Load the news'} lang={lang} />
                 </div>
               ) : (
                 <>
-                  {tiles.length > 0 && (
+                  {(tiles.length > 0 || email) && (
                     <div className="db-mchips" aria-label={es ? 'Mercados' : 'Markets'}>
-                      {tiles.map((m) => <MarketChip key={m.id} m={m} es={es} />)}
+                      {/* Phone: the chips roll by on their own (a second copy makes the loop seamless). */}
+                      <div className="db-mchips-view">
+                        <div className={`db-mchips-track${tiles.length > 2 ? ' is-rolling' : ''}`} style={{ ['--n' as string]: tiles.length }}>
+                          {tiles.map((m) => <MarketChip key={m.id} m={m} es={es} />)}
+                          {tiles.length > 2 && <span className="db-mchips-dup" aria-hidden>{tiles.map((m) => <MarketChip key={'d' + m.id} m={m} es={es} />)}</span>}
+                        </div>
+                      </div>
+                      {email && <MarketMenu variant="chip" selected={selectedStats} catalog={fullCatalog} stats={statsMap} countryOrder={[...COUNTRY_ORDER, 'Stocks']} lang={lang} />}
                     </div>
                   )}
-                  {email && topics.length === 0 && videos.length === 0 && monitors.length === 0 && !L.onboarded && <Onboarding lang={lang} />}
 
+                  {es && (!email || untranslated > 0) && (
+                    <p className="db-trnote">{email ? 'Algunos titulares siguen en su idioma original.' : 'Titulares en su idioma original. Inicia sesión para traducirlos.'}</p>
+                  )}
                   <BriefingCard
                     day={bday}
                     initial={cachedBrief ? cachedBrief.bullets : null}
                     initialAt={cachedBrief ? cachedBrief.at : null}
-                    fallback={fallbackBullets}
                     top={topPayload}
                     authed={!!email}
                     lang={lang}
@@ -349,7 +368,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
                         <span>{email ? (es ? 'Top 7 para ti' : 'Top 7 for you') : (es ? 'Lo principal' : 'Top stories')}</span>
                         <span className="db-label-note">
                           <span id="db-caught" className="db-caught" hidden />
-                          {email && learnedClicks > 0 && <span className="db-tuned">{es ? `Afinado con ${learnedClicks} clics` : `Tuned by ${learnedClicks} clicks`} · <ResetForYou /></span>}
+                          {email && learnedClicks > 0 && <span className="db-tuned">{es ? `Afinado con ${learnedClicks} clics` : `Tuned by ${learnedClicks} clicks`} · <ResetForYou lang={lang} /></span>}
                         </span>
                       </h2>
                       <div className="db-top-grid">
@@ -373,7 +392,6 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
 
                   <div className="db-sections-bar">
                     <span className="db-sections-t">{es ? 'Secciones' : 'Sections'}</span>
-                    {email && hasSports && <SportsToggle on={showSports} count={sportsBlocks.length} lang={lang} />}
                   </div>
                   <div className="db-sections">{sectionsFor(todayBlocks)}</div>
                 </>
@@ -400,7 +418,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
                       const items = (m.items || []).filter((it) => !mutedSet.has(it.s))
                       const n = items.filter(isNew).length
                       return (
-                        <section key={m.query} className="db-sec" aria-labelledby={`h-m-${slug(m.query)}`}>
+                        <section key={m.query} className="db-sec" data-id={'m:' + m.query} aria-labelledby={`h-m-${slug(m.query)}`}>
                           <h2 className="db-label" id={`h-m-${slug(m.query)}`}>
                             <span>{m.query}{n > 0 && <span className="db-new">{n} {es ? 'nuevo' : 'new'}</span>}</span>
                             <MonitorControls query={m.query} lang={lang} alerts={!!m.alerts} />
@@ -430,7 +448,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
                   {videoBlocks.map((b) => {
                     const items = dedupeVideos(b.items, 30)
                     return (
-                      <section key={b.id} className="db-sec" aria-labelledby={`h-${b.id}`}>
+                      <section key={b.id} className="db-sec" data-id={b.id} aria-labelledby={`h-${b.id}`}>
                         <h2 className="db-label" id={`h-${b.id}`}>
                           <span>{b.label}</span>
                           {email && <SectionMenu id={b.id} kind={b.kind} label={b.label} mini={false} lang={lang} />}
@@ -485,7 +503,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
               </section>
             )}
             <SavedRail initial={saved} authed={!!email} lang={lang} />
-            <p className="db-rail-foot"><LastUpdated iso={updatedAt} lang={lang} /> <RefreshButton /></p>
+            <p className="db-rail-foot"><LastUpdated iso={updatedAt} lang={lang} /> <RefreshButton lang={lang} /></p>
           </aside>
         </div>
 
@@ -497,7 +515,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
                 <span>{es ? 'Sesión' : 'Signed in as'} {email}</span>
                 <DigestToggle on={!!L.digest} lang={lang} />
                 <SourcesManager sources={allSources} top={sourceTiers.top} muted={sourceTiers.muted} lang={lang} />
-                {hidden.length > 0 && <ShowHidden count={hidden.length} />}
+                {hidden.length > 0 && <ShowHidden count={hidden.length} lang={lang} />}
                 <a href="/news/globe">{es ? 'Explorador mundial' : 'World explorer'}</a>
               </div>
             </>

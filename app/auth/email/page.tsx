@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { signIn } from 'next-auth/react'
 import { useSearchParams } from 'next/navigation'
 import { Suspense, useEffect, useState } from 'react'
+import { safeCallback } from '@/lib/safe-callback'
 
 // Where an emailed sign-in link lands (lib/auth-link.ts). Nothing is spent by opening it:
 // Outlook's Safe Links and other scanners open every link in an email, so only the button
@@ -27,7 +28,7 @@ function EmailLinkContent() {
   const params = useSearchParams()
   const token = params.get('t') ?? ''
   const cb = params.get('callbackUrl') ?? '/pen'
-  const callbackUrl = cb.startsWith('/') && !cb.startsWith('//') ? cb : '/pen'
+  const callbackUrl = safeCallback(cb)
   const [lang, setLang] = useState<Lang>('en')
   useEffect(() => setLang(detectLang()), [])
   const [working, setWorking] = useState(false)

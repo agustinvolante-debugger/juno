@@ -182,12 +182,20 @@ async function fetchText(url: string): Promise<string> {
   }
 }
 
+const NAMED: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“', ndash: '–', mdash: '—', hellip: '…' }
+const ENTITY = /&(#x[0-9a-f]+|#\d+|[a-z]+);/gi
+const cp = (n: number) => (n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : '')
+
+// Entities in feeds are often encoded twice (&amp;#x2019;), so decode until nothing changes.
 function decode(s: string): string {
-  return s
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
-    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&#x27;/g, "'")
-    .replace(/&nbsp;/g, ' ').replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n))
+  let out = s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+  for (let i = 0; i < 3; i++) {
+    const next = out.replace(ENTITY, (m, e: string) =>
+      e[0] === '#' ? cp(e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : +e.slice(1)) || m : NAMED[e.toLowerCase()] ?? m)
+    if (next === out) break
+    out = next
+  }
+  return out
 }
 
 function clean(s: string, limit = 200): string {
@@ -385,8 +393,9 @@ export async function searchTopic(
   return out.slice(0, limit)
 }
 
-export type Stat = { label: string; value: string; sub: string; good: boolean | null }
-export type StatDef = { id: string; label: string; country: string; group: string; kind: 'stooq' | 'bls' | 'fred' | 'cnbc'; key: string; mode?: 'cpi' | 'rate' | 'yoy' | 'level' | 'num' }
+// at = when the value was quoted (market quotes) or fetched; lets the UI grey out a value that stopped updating.
+export type Stat = { label: string; value: string; sub: string; good: boolean | null; at?: string }
+export type StatDef = { id: string; label: string; country: string; group: string; kind: 'stooq' | 'bls' | 'fred' | 'cnbc' | 'mindicador' | 'bde'; key: string; mode?: 'cpi' | 'rate' | 'yoy' | 'level' | 'num' | 'yield' | 'clp' }
 
 // Flag (or icon) per country/group, shown on the belt and in the markets menu.
 export const COUNTRY_FLAG: Record<string, string> = {
@@ -408,53 +417,60 @@ export const tickerDef = (symbol: string, label?: string): StatDef => {
 // Country order here is the display order in the menu (US first, majors, LatAm, then Global).
 export const STATS_CATALOG: StatDef[] = [
   // ── United States ──
-  { id: 'dow', label: 'Dow Jones', country: 'United States', group: 'Markets', kind: 'stooq', key: '^dji' },
-  { id: 'sp500', label: 'S&P 500', country: 'United States', group: 'Markets', kind: 'stooq', key: '^spx' },
-  { id: 'nasdaq', label: 'Nasdaq 100', country: 'United States', group: 'Markets', kind: 'stooq', key: '^ndx' },
-  { id: 'us_vix', label: 'VIX · Volatility', country: 'United States', group: 'Markets', kind: 'stooq', key: '^vix' },
+  { id: 'dow', label: 'Dow Jones', country: 'United States', group: 'Markets', kind: 'cnbc', key: '.DJI' },
+  { id: 'sp500', label: 'S&P 500', country: 'United States', group: 'Markets', kind: 'cnbc', key: '.SPX' },
+  { id: 'nasdaq', label: 'Nasdaq 100', country: 'United States', group: 'Markets', kind: 'cnbc', key: '.NDX' },
+  { id: 'us_vix', label: 'VIX · Volatility', country: 'United States', group: 'Markets', kind: 'cnbc', key: '.VIX' },
   { id: 'us_cpi', label: 'CPI · YoY', country: 'United States', group: 'Economic Data', kind: 'fred', key: 'CPIAUCSL', mode: 'yoy' },
   { id: 'us_unemp', label: 'Unemployment', country: 'United States', group: 'Economic Data', kind: 'fred', key: 'UNRATE', mode: 'level' },
   { id: 'us_gdp', label: 'Real GDP · QoQ ann.', country: 'United States', group: 'Economic Data', kind: 'fred', key: 'A191RL1Q225SBEA', mode: 'level' },
   { id: 'us_fed', label: 'Fed Funds Rate', country: 'United States', group: 'Economic Data', kind: 'fred', key: 'FEDFUNDS', mode: 'level' },
-  { id: 'us_10y', label: '10Y Treasury', country: 'United States', group: 'Economic Data', kind: 'fred', key: 'DGS10', mode: 'level' },
+  { id: 'us_2y', label: '2Y Treasury', country: 'United States', group: 'Markets', kind: 'cnbc', key: 'US2Y', mode: 'yield' },
+  { id: 'us_10y', label: '10Y Treasury', country: 'United States', group: 'Markets', kind: 'cnbc', key: 'US10Y', mode: 'yield' },
+  { id: 'us_30y', label: '30Y Treasury', country: 'United States', group: 'Markets', kind: 'cnbc', key: 'US30Y', mode: 'yield' },
   { id: 'us_retail', label: 'Retail Sales · YoY', country: 'United States', group: 'Economic Data', kind: 'fred', key: 'RSAFS', mode: 'yoy' },
   { id: 'us_sentiment', label: 'Consumer Sentiment', country: 'United States', group: 'Economic Data', kind: 'fred', key: 'UMCSENT', mode: 'num' },
   // ── Euro Area ──
   { id: 'ea_cpi', label: 'CPI · YoY', country: 'Euro Area', group: 'Economic Data', kind: 'fred', key: 'CP0000EZ19M086NEST', mode: 'yoy' },
   // ── United Kingdom ──
-  { id: 'ftse', label: 'FTSE 100', country: 'United Kingdom', group: 'Markets', kind: 'stooq', key: '^ukx' },
+  { id: 'ftse', label: 'FTSE 100', country: 'United Kingdom', group: 'Markets', kind: 'cnbc', key: '.FTSE' },
   { id: 'uk_cpi', label: 'CPI · YoY', country: 'United Kingdom', group: 'Economic Data', kind: 'fred', key: 'GBRCPIALLMINMEI', mode: 'yoy' },
   { id: 'uk_unemp', label: 'Unemployment', country: 'United Kingdom', group: 'Economic Data', kind: 'fred', key: 'LRHUTTTTGBM156S', mode: 'level' },
   // ── Germany ──
-  { id: 'dax', label: 'DAX', country: 'Germany', group: 'Markets', kind: 'stooq', key: '^dax' },
+  { id: 'dax', label: 'DAX', country: 'Germany', group: 'Markets', kind: 'cnbc', key: '.GDAXI' },
   { id: 'de_cpi', label: 'CPI · YoY', country: 'Germany', group: 'Economic Data', kind: 'fred', key: 'DEUCPIALLMINMEI', mode: 'yoy' },
   { id: 'de_unemp', label: 'Unemployment', country: 'Germany', group: 'Economic Data', kind: 'fred', key: 'LRHUTTTTDEM156S', mode: 'level' },
   // ── France ──
-  { id: 'cac', label: 'CAC 40', country: 'France', group: 'Markets', kind: 'stooq', key: '^cac' },
+  { id: 'cac', label: 'CAC 40', country: 'France', group: 'Markets', kind: 'cnbc', key: '.FCHI' },
   // ── Japan ──
-  { id: 'nikkei', label: 'Nikkei 225', country: 'Japan', group: 'Markets', kind: 'stooq', key: '^nkx' },
+  { id: 'nikkei', label: 'Nikkei 225', country: 'Japan', group: 'Markets', kind: 'cnbc', key: '.N225' },
   // ── China / Hong Kong ──
-  { id: 'shanghai', label: 'Shanghai Composite', country: 'China', group: 'Markets', kind: 'stooq', key: '^shc' },
-  { id: 'hsi', label: 'Hang Seng', country: 'Hong Kong', group: 'Markets', kind: 'stooq', key: '^hsi' },
+  { id: 'shanghai', label: 'Shanghai Composite', country: 'China', group: 'Markets', kind: 'cnbc', key: '.SSEC' },
+  { id: 'hsi', label: 'Hang Seng', country: 'Hong Kong', group: 'Markets', kind: 'cnbc', key: '.HSI' },
   // ── India ──
-  { id: 'sensex', label: 'Sensex', country: 'India', group: 'Markets', kind: 'stooq', key: '^snx' },
+  { id: 'sensex', label: 'Nifty 50', country: 'India', group: 'Markets', kind: 'cnbc', key: '.NSEI' },
   // ── Canada ──
-  { id: 'tsx', label: 'TSX Composite', country: 'Canada', group: 'Markets', kind: 'stooq', key: '^tsx' },
+  { id: 'tsx', label: 'TSX Composite', country: 'Canada', group: 'Markets', kind: 'cnbc', key: '.GSPTSE' },
   // ── Australia ──
   { id: 'au_unemp', label: 'Unemployment', country: 'Australia', group: 'Economic Data', kind: 'fred', key: 'LRHUTTTTAUM156S', mode: 'level' },
   // ── Chile ──
-  { id: 'ipsa', label: 'IPSA', country: 'Chile', group: 'Markets', kind: 'stooq', key: '^ipsa' },
-  { id: 'cl_cpi', label: 'CPI · YoY', country: 'Chile', group: 'Economic Data', kind: 'fred', key: 'CHLCPIALLMINMEI', mode: 'yoy' },
-  { id: 'cl_unemp', label: 'Unemployment', country: 'Chile', group: 'Economic Data', kind: 'fred', key: 'LRHUTTTTCLM156S', mode: 'level' },
+  { id: 'ipsa', label: 'IPSA', country: 'Chile', group: 'Markets', kind: 'stooq', key: '^ipsa' /* no CNBC symbol; greys out when Stooq fails */ },
+  // IPC from Banco Central de Chile's BDE API (BDE_USER / BDE_PASS); FRED's Chile CPI stopped in 2023.
+  { id: 'cl_cpi', label: 'CPI · YoY', country: 'Chile', group: 'Economic Data', kind: 'bde', key: 'G073.IPC.V12.2023.M' },
+  { id: 'cl_cpi_m', label: 'CPI · MoM', country: 'Chile', group: 'Economic Data', kind: 'bde', key: 'G073.IPC.VAR.2023.M' },
+  { id: 'cl_unemp', label: 'Unemployment', country: 'Chile', group: 'Economic Data', kind: 'mindicador', key: 'tasa_desempleo', mode: 'level' },
+  { id: 'cl_tpm', label: 'Policy Rate (TPM)', country: 'Chile', group: 'Economic Data', kind: 'mindicador', key: 'tpm', mode: 'level' },
+  { id: 'cl_usd', label: 'Dólar observado', country: 'Chile', group: 'Markets', kind: 'mindicador', key: 'dolar', mode: 'clp' },
+  { id: 'cl_uf', label: 'UF', country: 'Chile', group: 'Markets', kind: 'mindicador', key: 'uf', mode: 'clp' },
   // ── Brazil ──
-  { id: 'bovespa', label: 'Bovespa', country: 'Brazil', group: 'Markets', kind: 'stooq', key: '^bvp' },
+  { id: 'bovespa', label: 'Bovespa', country: 'Brazil', group: 'Markets', kind: 'cnbc', key: '.BVSP' },
   // ── Argentina ──
-  { id: 'merval', label: 'Merval', country: 'Argentina', group: 'Markets', kind: 'stooq', key: '^mrv' },
+  { id: 'merval', label: 'Merval', country: 'Argentina', group: 'Markets', kind: 'cnbc', key: '.MERV' },
   // ── Global (commodities, crypto, FX) ──
-  { id: 'gold', label: 'Gold', country: 'Global', group: 'Commodities & FX', kind: 'stooq', key: 'xauusd' },
-  { id: 'oil', label: 'Crude Oil · WTI', country: 'Global', group: 'Commodities & FX', kind: 'stooq', key: 'cl.f' },
-  { id: 'btc', label: 'Bitcoin', country: 'Global', group: 'Commodities & FX', kind: 'stooq', key: 'btcusd' },
-  { id: 'eurusd', label: 'EUR / USD', country: 'Global', group: 'Commodities & FX', kind: 'stooq', key: 'eurusd' },
+  { id: 'gold', label: 'Gold', country: 'Global', group: 'Commodities & FX', kind: 'cnbc', key: 'XAU=' },
+  { id: 'oil', label: 'Crude Oil · Brent', country: 'Global', group: 'Commodities & FX', kind: 'cnbc', key: '@LCO.1' },
+  { id: 'btc', label: 'Bitcoin', country: 'Global', group: 'Commodities & FX', kind: 'cnbc', key: 'BTC.CM=' },
+  { id: 'eurusd', label: 'EUR / USD', country: 'Global', group: 'Commodities & FX', kind: 'cnbc', key: 'EUR=' },
 ]
 
 // Display order for countries in the menu.
@@ -476,7 +492,7 @@ async function stooqStat(def: StatDef): Promise<Stat | null> {
     const open = parseFloat(cols[3]); const close = parseFloat(cols[6])
     if (!isFinite(close)) return null
     const chg = isFinite(open) && open ? (close / open - 1) * 100 : null
-    return { label: def.label, value: fmtNum(close), sub: chg === null ? '' : `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%`, good: chg === null ? null : chg >= 0 }
+    return { label: def.label, value: fmtNum(close), sub: chg === null ? '' : `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%`, good: chg === null ? null : chg >= 0, at: new Date().toISOString() }
   } catch { return null }
 }
 
@@ -539,13 +555,53 @@ async function fredStat(def: StatDef): Promise<Stat | null> {
   } catch { return null }
 }
 
-// Live quotes via CNBC's JSON quote service (one call, many symbols). Reliable + gives names;
-// used for individual tickers. Could also back the indices if Stooq's bot-checks worsen.
+// Chilean indicators from mindicador.cl (free, no key; republishes Banco Central and INE).
+// Monthly figures show their month like FRED; CLP prices show the day-over-day change.
+async function mindicadorStat(def: StatDef): Promise<Stat | null> {
+  try {
+    const j = JSON.parse(await fetchText(`https://mindicador.cl/api/${def.key}`))
+    const serie: { fecha: string; valor: number }[] = j?.serie || []
+    const [cur, prev] = serie
+    if (!cur || !isFinite(cur.valor)) return null
+    if (def.mode === 'clp') {
+      const chg = prev && prev.valor ? (cur.valor / prev.valor - 1) * 100 : null
+      return { label: def.label, value: `$${cur.valor.toLocaleString('es-CL', { maximumFractionDigits: 2 })}`, sub: chg === null ? '' : `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%`, good: null, at: cur.fecha }
+    }
+    const mon = new Date(cur.fecha).toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })
+    return { label: def.label, value: `${cur.valor.toFixed(1)}%`, sub: mon, good: null, at: cur.fecha }
+  } catch { return null }
+}
+
+// Banco Central de Chile (BDE / SieteRestWS). Series values are already percentages; the last
+// "OK" observation is shown with its month, like FRED. Skipped quietly without credentials.
+async function bdeStat(def: StatDef): Promise<Stat | null> {
+  const user = process.env.BDE_USER, pass = process.env.BDE_PASS
+  if (!user || !pass) return null
+  try {
+    const first = new Date(Date.now() - 420 * 86400000).toISOString().slice(0, 10)
+    const url = `https://si3.bcentral.cl/SieteRestWS/SieteRestWS.ashx?user=${encodeURIComponent(user)}&pass=${encodeURIComponent(pass)}` +
+      `&function=GetSeries&timeseries=${encodeURIComponent(def.key)}&firstdate=${first}`
+    const j = JSON.parse(await fetchText(url))
+    const obs: { indexDateString: string; value: string; statusCode: string }[] = j?.Series?.Obs || []
+    const last = [...obs].reverse().find((o) => o.statusCode === 'OK' && isFinite(parseFloat(o.value)))
+    if (!last) return null
+    const v = parseFloat(last.value)
+    const [dd, mm, yyyy] = last.indexDateString.split('-')
+    const at = new Date(Date.UTC(+yyyy, +mm - 1, +dd))
+    const mon = at.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })
+    return { label: def.label, value: `${v >= 0 ? '+' : ''}${v.toFixed(Math.abs(v) < 1 ? 2 : 1)}%`, sub: mon, good: null, at: at.toISOString() }
+  } catch { return null }
+}
+
+const CUR: Record<string, string> = { USD: '$', EUR: '€', GBP: '£', JPY: '¥', CNY: '¥', HKD: 'HK$', CAD: 'C$', AUD: 'A$', CHF: 'CHF ', BRL: 'R$', CLP: 'CLP$', MXN: 'MX$', INR: '₹' }
+
+// Live quotes via CNBC's JSON quote service (one call, many symbols): indices, commodities, FX,
+// crypto and individual tickers. Each quote carries its own time, kept as `at`.
 async function cnbcStats(defs: StatDef[]): Promise<Record<string, Stat>> {
   const out: Record<string, Stat> = {}
   if (!defs.length) return out
   try {
-    const syms = defs.map((d) => d.key).join(',')
+    const syms = defs.map((d) => d.key).join('|')
     const url = `https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=${encodeURIComponent(syms)}&requestMethod=itv&fund=1&exthrs=1&output=json`
     const r = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: AbortSignal.timeout(13000) })
     const j = await r.json()
@@ -557,7 +613,20 @@ async function cnbcStats(defs: StatDef[]): Promise<Record<string, Stat>> {
       if (!q || q.last == null) continue
       const pct = String(q.change_pct || '')
       const good = pct ? !pct.trim().startsWith('-') : null
-      out[def.id] = { label: def.label, value: String(q.last), sub: pct, good }
+      const n = parseFloat(String(q.last).replace(/,/g, ''))
+      const t = Date.parse(String(q.last_time || ''))
+      const at = isFinite(t) ? new Date(t).toISOString() : new Date().toISOString()
+      if (def.mode === 'yield') {
+        const raw = Math.round(parseFloat(String(q.change || '0')) * 100)
+        const bp = isFinite(raw) ? raw : 0 // "UNCH" when the yield didn't move
+        out[def.id] = { label: def.label, value: isFinite(n) ? `${n.toFixed(2)}%` : String(q.last), sub: `${bp >= 0 ? '+' : ''}${bp} bp`, good: null, at }
+        continue
+      }
+      // Individual stocks: their currency sign and always two decimals ($523.45); indices stay plain.
+      const value = !isFinite(n) ? String(q.last)
+        : def.country === 'Stocks' ? `${CUR[String(q.currencyCode || 'USD').toUpperCase()] ?? String(q.currencyCode || '') + ' '}${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        : fmtNum(n)
+      out[def.id] = { label: def.label, value, sub: pct === 'UNCH' ? '0.00%' : pct, good, at }
     }
   } catch {}
   return out
@@ -570,12 +639,18 @@ export async function getStats(extra: StatDef[] = []): Promise<Record<string, St
   const stooqDefs = all.filter((d) => d.kind === 'stooq')
   const fredDefs = all.filter((d) => d.kind === 'fred')
   const cnbcDefs = all.filter((d) => d.kind === 'cnbc')
-  const [stooqRes, blsRes, fredRes, cnbcRes] = await Promise.all([
+  const mindDefs = all.filter((d) => d.kind === 'mindicador')
+  const bdeDefs = all.filter((d) => d.kind === 'bde')
+  const [stooqRes, blsRes, fredRes, cnbcRes, mindRes, bdeRes] = await Promise.all([
     Promise.all(stooqDefs.map((d) => stooqStat(d))),
     blsStats(all.filter((d) => d.kind === 'bls')),
     Promise.all(fredDefs.map((d) => fredStat(d))),
     cnbcStats(cnbcDefs),
+    Promise.all(mindDefs.map((d) => mindicadorStat(d))),
+    Promise.all(bdeDefs.map((d) => bdeStat(d))),
   ])
+  bdeDefs.forEach((d, i) => { if (bdeRes[i]) out[d.id] = bdeRes[i]! })
+  mindDefs.forEach((d, i) => { if (mindRes[i]) out[d.id] = mindRes[i]! })
   stooqDefs.forEach((d, i) => { if (stooqRes[i]) out[d.id] = stooqRes[i]! })
   Object.assign(out, blsRes)
   fredDefs.forEach((d, i) => { if (fredRes[i]) out[d.id] = fredRes[i]! })

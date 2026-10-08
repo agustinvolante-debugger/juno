@@ -1,20 +1,25 @@
 'use client'
+import { softRefresh } from './soft'
 
 // Clears the learned click-profile that powers For You. Lets the user "tune" by starting over.
-// Labeled "reset" in words (not an ↺ icon) so nobody mistakes it for a refresh button —
+// Labeled in words (not an ↺ icon) so nobody mistakes it for a refresh button —
 // clearing the profile makes the whole For You section disappear until new clicks teach it again.
-export default function ResetForYou() {
+export default function ResetForYou({ lang = 'en' }: { lang?: string }) {
+  const es = lang === 'es'
   return (
     <button
-      title="Start over: clears what For You learned from your clicks (the section disappears until it re-learns)"
+      title={es ? 'Empezar de cero: borra lo que Para ti aprendió de tus clics' : 'Start over: clears what For You learned from your clicks'}
       onClick={async () => {
-        if (!confirm('Reset For You? This ERASES what it learned from your clicks — the section will disappear until you click more articles.')) return
+        const ask = es
+          ? '¿Reiniciar Para ti? Se BORRA lo que aprendió de tus clics; la sección desaparece hasta que hagas clic en más artículos.'
+          : 'Reset For You? This ERASES what it learned from your clicks — the section will disappear until you click more articles.'
+        if (!confirm(ask)) return
         await fetch('/api/news/profile', { method: 'DELETE' })
-        location.reload()
+        softRefresh()
       }}
       type="button" className="db-textbtn"
     >
-      reset
+      {es ? 'reiniciar' : 'reset'}
     </button>
   )
 }

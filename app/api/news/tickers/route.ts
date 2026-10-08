@@ -11,12 +11,14 @@ export const maxDuration = 20
 export async function POST(req: Request) {
   const email = await authedEmail()
   if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  const raw = (await req.json().catch(() => ({})))?.symbol
-  const symbol = String(raw || '').trim().toUpperCase().replace(/[^A-Z0-9.\-]/g, '').slice(0, 12)
+  const body = (await req.json().catch(() => ({}))) as { symbol?: string; name?: string }
+  const symbol = String(body.symbol || '').trim().toUpperCase().replace(/[^A-Z0-9.\-]/g, '').slice(0, 12)
+  // The company name from the search dropdown, shortened for the tile ("Microsoft", not "Microsoft Corporation").
+  const name = String(body.name || '').replace(/,?\s+(Corporation|Corp\.?|Incorporated|Inc\.?|Ltd\.?|Limited|PLC|plc|S\.A\.|N\.V\.|Holdings?|Co\.?|Company|Group)\b\.?/g, '').replace(/\s+Class [A-Z]\b.*$/, '').trim().slice(0, 28)
   if (!symbol) return NextResponse.json({ error: 'empty' }, { status: 400 })
 
   // Fetch the quote to confirm it's real and to populate the belt cache immediately.
-  const def = tickerDef(symbol)
+  const def = tickerDef(symbol, name || undefined)
   const stats = await getStats([def])
   if (!stats[def.id]) return NextResponse.json({ error: 'not found', symbol }, { status: 404 })
 

@@ -112,7 +112,7 @@ export async function setPrefs(email: string, prefs: { lang?: string; layout?: a
 }
 
 // Per-user video sections — stored in news_prefs.layout.videos (no new table needed).
-export type VideoSection = { key: string; label: string; channels: { name: string; cid: string }[]; items: Item[] }
+export type VideoSection = { key: string; label: string; channels: { name: string; cid: string }[]; items: Item[]; refreshed_at?: string }
 
 export async function getUserVideos(email: string): Promise<VideoSection[]> {
   const { layout } = await getPrefs(email)

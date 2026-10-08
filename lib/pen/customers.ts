@@ -40,6 +40,9 @@ export type Customer = {
   boughtLeftSec: number
   spentCents: number
   lastActiveAt: string | null
+  // Last time they opened the Pen app or signed in (pen_accounts.last_seen_at / last_login_at).
+  lastSeenAt: string | null
+  lastLoginAt: string | null
 }
 
 export type CustomerSummary = {
@@ -61,6 +64,7 @@ type SignupRow = {
 type AccountRow = {
   email: string; status: string; plan: string | null; offer: string | null; trial_ends_at: string | null
   current_period_end: string | null; stripe_customer_id: string | null; created_at: string; pen_shipped_at?: string | null; source: string | null
+  last_seen_at?: string | null; last_login_at?: string | null
 }
 
 async function rows<T>(table: string, select = '*'): Promise<T[]> {
@@ -151,6 +155,8 @@ export async function listCustomers(now = new Date()): Promise<{ customers: Cust
       boughtLeftSec: allowance.boughtLeftSec,
       spentCents: spent.get(email) ?? 0,
       lastActiveAt: last,
+      lastSeenAt: [a?.last_seen_at, a?.last_login_at].filter(Boolean).sort().pop() ?? null,
+      lastLoginAt: a?.last_login_at ?? null,
     }
   })
 

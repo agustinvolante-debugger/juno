@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { signIn } from 'next-auth/react'
 import { useSearchParams } from 'next/navigation'
 import { Suspense, useEffect, useState } from 'react'
+import { safeCallback } from '@/lib/safe-callback'
 
 // One sign-in page for every Juno surface. Coming from Pen (callbackUrl under /pen, which is
 // every Pen link) it is the Pen page, in the visitor's language; from anywhere else (the Daily
@@ -142,7 +143,7 @@ function SignInContent() {
       const r = await fetch('/api/auth-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, callbackUrl: callbackUrl.startsWith('/') ? callbackUrl : '/pen', lang }),
+        body: JSON.stringify({ email, callbackUrl: safeCallback(callbackUrl), lang }),
       })
       setState(r.ok ? 'sent' : 'failed')
     } catch {

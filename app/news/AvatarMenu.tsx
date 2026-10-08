@@ -1,11 +1,12 @@
 'use client'
 import { useState } from 'react'
+import { softRefresh } from './soft'
 import Popover from './Popover'
 
 const post = (body: object) => fetch('/api/news/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 
-// Account menu behind the avatar: language, refresh, sports on Today, globe, sign out.
-export default function AvatarMenu({ email, lang, sports, hasSports }: { email: string; lang: string; sports: boolean; hasSports: boolean }) {
+// Account menu behind the avatar: language, refresh, the tutorial, globe, sign out.
+export default function AvatarMenu({ email, lang }: { email: string; lang: string }) {
   const es = lang === 'es'
   const [busy, setBusy] = useState('')
   const initial = (email[0] || '?').toUpperCase()
@@ -17,10 +18,7 @@ export default function AvatarMenu({ email, lang, sports, hasSports }: { email: 
   async function refresh() {
     setBusy('refresh')
     await Promise.allSettled([fetch('/api/news/cron'), fetch('/api/news/refresh-mine', { method: 'POST' })])
-    location.reload()
-  }
-  async function toggleSports() {
-    setBusy('sports'); await post({ layout: { sports: !sports } }); location.reload()
+    setBusy(''); softRefresh()
   }
 
   return (
@@ -35,11 +33,9 @@ export default function AvatarMenu({ email, lang, sports, hasSports }: { email: 
               <button type="button" aria-pressed={lang === 'es'} onClick={() => setLang('es')}>ES</button>
             </span>
           </div>
-          {hasSports && (
-            <button type="button" role="menuitemcheckbox" aria-checked={sports} className="db-menu-item" onClick={toggleSports} disabled={!!busy}>
-              <span>{es ? 'Deportes en Hoy' : 'Sports on Today'}</span><span className="db-switch" data-on={sports ? '1' : '0'} aria-hidden />
-            </button>
-          )}
+          <button type="button" role="menuitem" className="db-menu-item" onClick={() => window.dispatchEvent(new Event('db:tour'))}>
+            <span>{es ? 'Ver el tutorial' : 'Show the tutorial'}</span>
+          </button>
           <button type="button" role="menuitem" className="db-menu-item" onClick={refresh} disabled={!!busy}>
             <span>{busy === 'refresh' ? (es ? 'Actualizando…' : 'Refreshing…') : (es ? 'Actualizar ahora' : 'Refresh now')}</span>
           </button>

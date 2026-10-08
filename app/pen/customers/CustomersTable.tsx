@@ -26,6 +26,17 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: 'pens', label: 'Pens to post' },
 ]
 
+// "Today 2:14 PM", "Yesterday 9:03 AM", otherwise the date.
+const seen = (iso: string | null) => {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  const key = (x: Date) => x.toLocaleDateString('en-CA', { timeZone: PLAN_TZ })
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: PLAN_TZ })
+  const today = new Date()
+  if (key(d) === key(today)) return `Today ${time}`
+  if (key(d) === key(new Date(today.getTime() - 86400000))) return `Yesterday ${time}`
+  return day(iso)
+}
 const day = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: PLAN_TZ }) : '—'
 
@@ -98,7 +109,8 @@ export default function CustomersTable({ customers, summary, stripeBase }: { cus
               <th className="n">This month</th>
               <th className="n">Bought</th>
               <th className="n">Recordings</th>
-              <th>Last active</th>
+              <th>Last seen</th>
+              <th>Last recording</th>
               <th>Signed up</th>
             </tr>
           </thead>
@@ -108,7 +120,7 @@ export default function CustomersTable({ customers, summary, stripeBase }: { cus
             ))}
             {!list.length && (
               <tr>
-                <td colSpan={9} className="pen-cust-empty">Nobody here yet.</td>
+                <td colSpan={10} className="pen-cust-empty">Nobody here yet.</td>
               </tr>
             )}
           </tbody>
@@ -160,12 +172,13 @@ function Row({ c, open, onToggle, onShip, stripeBase }: { c: Customer; open: boo
         <td className="n">{c.recordings ? `${fmtHours(c.usedThisMonthSec)} / ${INCLUDED_HOURS}h` : '—'}</td>
         <td className="n">{c.boughtHours ? `${c.boughtHours}h ($${(c.spentCents / 100).toFixed(0)})` : '—'}</td>
         <td className="n">{c.recordings || '—'}</td>
+        <td title={c.lastLoginAt ? `Last sign-in: ${seen(c.lastLoginAt)}` : 'No sign-in recorded since tracking started'}>{seen(c.lastSeenAt)}</td>
         <td>{day(c.lastActiveAt)}</td>
         <td>{day(c.signedUpAt)}</td>
       </tr>
       {open && (
         <tr className="pen-cust-detail">
-          <td colSpan={9}>
+          <td colSpan={10}>
             <dl>
               <div><dt>Phone</dt><dd>{c.phone || '—'}</dd></div>
               <div><dt>Role</dt><dd>{c.role || '—'}</dd></div>

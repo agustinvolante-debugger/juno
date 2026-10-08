@@ -98,7 +98,7 @@ export function VideoRow({ it, k, es, card = false }: { it: Item; k: string; es:
   )
 }
 
-const CODE: Record<string, string> = {
+export const CODE: Record<string, string> = {
   'United States': 'US', 'Euro Area': 'EA', 'United Kingdom': 'UK', Germany: 'DE', France: 'FR', Japan: 'JP', China: 'CN',
   'Hong Kong': 'HK', India: 'IN', Canada: 'CA', Australia: 'AU', Chile: 'CL', Brazil: 'BR', Argentina: 'AR',
 }
@@ -109,11 +109,18 @@ export type Tile = Stat & { id: string; country: string; group: string }
 // month, and anything older than ~4 months is greyed with its date so it can't pass as current.
 export function tileParts(m: Tile, es: boolean) {
   const code = m.group === 'Economic Data' ? CODE[m.country] || '' : ''
-  const isChange = /^[+-−]?\d[\d.,]*%$/.test((m.sub || '').trim())
+  const isChange = /^[+-−]?\d[\d.,]*(%| bp)$/.test((m.sub || '').trim())
   const age = isChange ? null : statAgeDays(m.sub)
-  const stale = age !== null && age > 120
-  const dir = isChange ? ((m.sub || '').trim().startsWith('-') ? 'is-down' : 'is-up') : ''
-  const note = stale ? `${es ? 'dato de' : 'as of'} ${m.sub}` : m.sub
+  // A market quote is stale when it stopped updating: older than 4 days (covers weekends and
+  // holidays), or saved before quotes carried a time at all.
+  const quoteAge = isChange ? (m.at ? (Date.now() - Date.parse(m.at)) / 86400000 : Infinity) : null
+  const quoteStale = quoteAge !== null && quoteAge > 4
+  const stale = (age !== null && age > 120) || quoteStale
+  const dir = isChange && !quoteStale && /[1-9]/.test(m.sub || '') ? ((m.sub || '').trim().startsWith('-') ? 'is-down' : 'is-up') : ''
+  const asOf = m.at ? new Date(m.at).toLocaleDateString(es ? 'es' : 'en-US', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : ''
+  const note = quoteStale
+    ? (asOf ? `${es ? 'dato del' : 'as of'} ${asOf}` : (es ? 'sin actualizar' : 'not updating'))
+    : stale ? `${es ? 'dato de' : 'as of'} ${m.sub}` : m.sub
   return { code, dir, stale, note }
 }
 

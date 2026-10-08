@@ -226,3 +226,23 @@ export async function getAccountByStripe(subscriptionId: string | null, customer
   }
   return null
 }
+
+/**
+ * Records when someone signs in ('login', every Google or email-link sign-in) or opens the Pen
+ * app ('seen', at most every 10 minutes). Shown on /pen/customers as "Last seen". Best effort:
+ * a failure here must never block sign-in or the app, and people with no account row are skipped.
+ */
+export async function noteSeen(email: string, kind: 'login' | 'seen'): Promise<void> {
+  const e = email.trim().toLowerCase()
+  if (!e) return
+  const now = new Date()
+  try {
+    if (kind === 'login') {
+      await supabaseAdmin.from('pen_accounts').update({ last_login_at: now.toISOString(), last_seen_at: now.toISOString() }).eq('email', e)
+    } else {
+      const stale = new Date(now.getTime() - 10 * 60 * 1000).toISOString()
+      await supabaseAdmin.from('pen_accounts').update({ last_seen_at: now.toISOString() }).eq('email', e)
+        .or(`last_seen_at.is.null,last_seen_at.lt.${stale}`)
+    }
+  } catch { /* columns not added yet, or the database is down: never block */ }
+}

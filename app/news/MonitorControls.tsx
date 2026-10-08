@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { softRefresh, toast, hideCard } from './soft'
 
 function b64ToUint8(base64: string): Uint8Array {
   const pad = '='.repeat((4 - (base64.length % 4)) % 4)
@@ -16,9 +17,15 @@ export default function MonitorControls({ query, lang = 'en', alerts = false }: 
   const [bellBusy, setBellBusy] = useState(false)
   const es = lang === 'es'
 
-  async function remove() {
-    await fetch('/api/news/monitor?query=' + encodeURIComponent(query), { method: 'DELETE' })
-    location.reload()
+  // Monitors can't be rebuilt for free (AI), so the delete waits out the undo window.
+  function remove() {
+    const id = 'm:' + query
+    hideCard(id, true)
+    toast({
+      text: es ? `Ya no se sigue "${query}"` : `Stopped monitoring "${query}"`,
+      onUndo: () => hideCard(id, false),
+      onCommit: async () => { await fetch('/api/news/monitor?query=' + encodeURIComponent(query), { method: 'DELETE' }); softRefresh() },
+    })
   }
 
   async function setAlerts(next: boolean) {

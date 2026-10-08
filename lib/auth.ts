@@ -57,6 +57,14 @@ export const authOptions: NextAuthOptions = {
           },
         }
       : undefined,
+  events: {
+    // "Last seen" on /pen/customers: every successful sign-in, Google or email link.
+    async signIn({ user }) {
+      if (!user?.email) return
+      const { noteSeen } = await import('@/lib/pen/accounts')
+      await noteSeen(user.email, 'login')
+    },
+  },
   callbacks: {
     async signIn({ user }) {
       const email = user.email?.toLowerCase() ?? ''

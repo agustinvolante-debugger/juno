@@ -361,3 +361,7 @@ create index if not exists pen_clients_user on pen_clients(user_email);
 -- create table if not exists public.pen_notion_pages (session_id uuid primary key, email text not null, page_id text, url text, created_at timestamptz not null default now());
 -- alter table public.pen_notion enable row level security;
 -- alter table public.pen_notion_pages enable row level security;
+
+-- 2026-10-08 · "Last seen" on /pen/customers (lib/pen/accounts.ts noteSeen)
+alter table pen_accounts add column if not exists last_login_at timestamptz;
+alter table pen_accounts add column if not exists last_seen_at timestamptz;

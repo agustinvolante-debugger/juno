@@ -1,7 +1,9 @@
 'use client'
 import { useState } from 'react'
+import { softRefresh } from './soft'
 
-export default function RefreshButton({ label }: { label?: string }) {
+export default function RefreshButton({ label, lang = 'en' }: { label?: string; lang?: string }) {
+  const es = lang === 'es'
   const [busy, setBusy] = useState(false)
   return (
     <button
@@ -16,14 +18,15 @@ export default function RefreshButton({ label }: { label?: string }) {
             fetch('/api/news/refresh-mine', { method: 'POST' }),
           ])
         } finally {
-          location.reload()
+          setBusy(false)
+          softRefresh()
         }
       }}
       type="button"
       className={label ? 'db-btn is-ink' : 'db-textbtn'}
-      title="Refresh the news now"
+      title={es ? 'Actualizar las noticias ahora' : 'Refresh the news now'}
     >
-      {busy ? 'Refreshing…' : label || 'Refresh'}
+      {busy ? (es ? 'Actualizando…' : 'Refreshing…') : label || (es ? 'Actualizar' : 'Refresh')}
     </button>
   )
 }

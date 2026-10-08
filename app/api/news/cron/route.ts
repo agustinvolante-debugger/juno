@@ -13,10 +13,12 @@ export const maxDuration = 120 // feed refresh + scheduled monitor re-check for 
 const BREADTH = Object.keys(SECTION_QUERIES)
 
 // Refreshes the shared news + macro cache. Called by Vercel Cron (Bearer CRON_SECRET)
-// or manually by the in-app refresh button. No AI, no per-user data, no API cost.
+// or by the in-app refresh (button + AutoRefresh). Runs a few Haiku calls (section curation)
+// when not throttled; the scheduled run also re-checks monitor alerts and press funding.
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET
-  const scheduled = !secret || req.headers.get('authorization') === `Bearer ${secret}`
+  // Fail closed: without a secret (e.g. localhost) no call counts as the scheduled run.
+  const scheduled = !!secret && req.headers.get('authorization') === `Bearer ${secret}`
   // Public/manual refresh is allowed but throttled (RSS only, but avoid abuse): no-op if cache < 5 min old.
   if (!scheduled) {
     const age = await feedCacheAgeMs()

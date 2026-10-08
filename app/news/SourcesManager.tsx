@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { softRefresh } from './soft'
 
 type Tier = 'top' | 'normal' | 'muted'
 
@@ -24,7 +25,7 @@ export default function SourcesManager({
       const out = { top: [] as string[], muted: [] as string[] }
       for (const [s, t] of Object.entries(tiers)) { if (t === 'top') out.top.push(s); else if (t === 'muted') out.muted.push(s) }
       await fetch('/api/news/source-tiers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(out) })
-      location.reload()
+      softRefresh()
     } finally { setBusy(false) }
   }
 

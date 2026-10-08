@@ -39,3 +39,9 @@ export const CloseIcon = ({ size, className }: P) => (
 export const ReturnIcon = ({ size, className }: P) => (
   <svg {...base(size)} className={className}><path d="M13 3.5v4.2a2 2 0 0 1-2 2H3.5M6 7L3.2 9.7 6 12.4" /></svg>
 )
+export const SlidersIcon = ({ size, className }: P) => (
+  <svg {...base(size)} className={className}><path d="M2.5 4.5h6M12 4.5h1.5M2.5 11.5H4M7.5 11.5h6" /><circle cx="10.2" cy="4.5" r="1.7" /><circle cx="5.8" cy="11.5" r="1.7" /></svg>
+)
+export const GripIcon = ({ size, className }: P) => (
+  <svg {...base(size)} className={className} fill="currentColor" stroke="none"><circle cx="6" cy="3.5" r="1.1" /><circle cx="10" cy="3.5" r="1.1" /><circle cx="6" cy="8" r="1.1" /><circle cx="10" cy="8" r="1.1" /><circle cx="6" cy="12.5" r="1.1" /><circle cx="10" cy="12.5" r="1.1" /></svg>
+)

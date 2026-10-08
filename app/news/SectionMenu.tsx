@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import Popover from './Popover'
 import { MoreIcon } from './Icons'
+import { softRefresh, toast, hideCard, moveSection } from './soft'
 
 type Kind = 'curated' | 'topic' | 'video' | 'uservideo'
 const post = (body: object) => fetch('/api/news/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -18,7 +19,22 @@ export default function SectionMenu({ id, kind, label, mini, instruction = '', c
 
   async function act(fn: () => Promise<unknown>) {
     setBusy(true)
-    try { await fn() } finally { location.reload() }
+    try { await fn() } finally { setBusy(false); softRefresh() }
+  }
+  // Hide is reversible, so it happens now and Undo brings the section back.
+  async function hide() {
+    hideCard(id, true)
+    toast({ text: es ? `"${label}" oculta` : `"${label}" hidden`, onUndo: async () => { hideCard(id, false); await post({ unhide: id }); softRefresh() } })
+    await act(() => post({ hide: id }))
+  }
+  // A removed topic or shelf can't be rebuilt for free, so the delete waits out the undo window.
+  function removeLater(del: () => Promise<unknown>) {
+    hideCard(id, true)
+    toast({
+      text: es ? `"${label}" quitada` : `"${label}" removed`,
+      onUndo: () => hideCard(id, false),
+      onCommit: async () => { await del(); softRefresh() },
+    })
   }
   async function writeBrief() {
     setPanel('brief'); setBusy(true)
@@ -52,6 +68,12 @@ export default function SectionMenu({ id, kind, label, mini, instruction = '', c
           <button type="button" role="menuitem" className="db-menu-item" disabled={busy} onClick={() => act(() => post({ mini: { id, on: !mini } }))}>
             <span>{mini ? (es ? 'Expandir' : 'Expand') : (es ? 'Minimizar' : 'Minimize')}</span>
           </button>
+          {(kind === 'curated' || kind === 'topic') && (
+            <>
+              <button type="button" role="menuitem" className="db-menu-item" disabled={busy} onClick={async () => { setBusy(true); if (!(await moveSection(id, -1))) setBusy(false) }}><span>{es ? 'Subir' : 'Move up'}</span></button>
+              <button type="button" role="menuitem" className="db-menu-item" disabled={busy} onClick={async () => { setBusy(true); if (!(await moveSection(id, 1))) setBusy(false) }}><span>{es ? 'Bajar' : 'Move down'}</span></button>
+            </>
+          )}
           {kind === 'curated' && (
             <button type="button" role="menuitem" className="db-menu-item" onClick={() => setPanel('tune')}>
               <span>{es ? 'Ajustar la curaduría' : 'Tune curation'}</span>{instruction && <span className="db-menu-note">{es ? 'activa' : 'on'}</span>}
@@ -61,13 +83,13 @@ export default function SectionMenu({ id, kind, label, mini, instruction = '', c
             <button type="button" role="menuitem" className="db-menu-item" onClick={writeBrief}><span>{es ? 'Resumir esta sección' : 'Brief this section'}</span></button>
           )}
           {(kind === 'curated' || kind === 'video') && (
-            <button type="button" role="menuitem" className="db-menu-item" disabled={busy} onClick={() => act(() => post({ hide: id }))}><span>{es ? 'Ocultar sección' : 'Hide section'}</span></button>
+            <button type="button" role="menuitem" className="db-menu-item" disabled={busy} onClick={hide}><span>{es ? 'Ocultar sección' : 'Hide section'}</span></button>
           )}
           {kind === 'topic' && (
-            <button type="button" role="menuitem" className="db-menu-item is-danger" disabled={busy} onClick={() => act(() => fetch('/api/news/topic?query=' + encodeURIComponent(label), { method: 'DELETE' }))}><span>{es ? 'Quitar tema' : 'Remove topic'}</span></button>
+            <button type="button" role="menuitem" className="db-menu-item is-danger" disabled={busy} onClick={() => removeLater(() => fetch('/api/news/topic?query=' + encodeURIComponent(label), { method: 'DELETE' }))}><span>{es ? 'Quitar tema' : 'Remove topic'}</span></button>
           )}
           {kind === 'uservideo' && (
-            <button type="button" role="menuitem" className="db-menu-item is-danger" disabled={busy} onClick={() => act(() => fetch('/api/news/video-section?key=' + encodeURIComponent(id), { method: 'DELETE' }))}><span>{es ? 'Quitar sección' : 'Remove section'}</span></button>
+            <button type="button" role="menuitem" className="db-menu-item is-danger" disabled={busy} onClick={() => removeLater(() => fetch('/api/news/video-section?key=' + encodeURIComponent(id), { method: 'DELETE' }))}><span>{es ? 'Quitar sección' : 'Remove section'}</span></button>
           )}
         </>
       )}

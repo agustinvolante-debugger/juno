@@ -132,6 +132,7 @@ export default function CommandBar({ authed, signInHref, lang = 'en' }: { authed
     <div ref={rootRef} className={`db-cmd${open ? ' is-open' : ''}`}>
       <button type="button" className="db-iconbtn db-cmd-trigger" aria-label={es ? 'Buscar y comandos' : 'Search and commands'} onClick={() => { setOpen(true); requestAnimationFrame(() => inputRef.current?.focus()) }}>
         <SearchIcon size={18} />
+        <span>{es ? 'Buscar' : 'Search'}</span>
       </button>
       <div className="db-cmd-backdrop" onClick={() => setOpen(false)} />
       <div className="db-cmd-box" role="search">
