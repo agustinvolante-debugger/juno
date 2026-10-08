@@ -5,7 +5,7 @@
 // Cost logs to vc_chat_runs (conversation_id null) like the other unattended runs.
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
-import { supabaseAdmin } from '@/lib/supabase'
+import { appsAdmin } from '@/lib/supabase-apps'
 import { vcCors, vcSessionEmail } from '@/lib/vc/vc-auth'
 
 export const dynamic = 'force-dynamic'
@@ -23,14 +23,14 @@ export async function GET(req: NextRequest) {
   if (!(await vcSessionEmail())) return NextResponse.json({ error: 'unauthorized' }, { status: 401, headers: cors })
   const slug = (req.nextUrl.searchParams.get('slug') || '').trim()
   if (!slug) return NextResponse.json({ error: 'slug required' }, { status: 400, headers: cors })
-  const { data, error } = await supabaseAdmin.from('vc_memos').select('memo,sources,model,user_email,updated_at').eq('company_slug', slug).maybeSingle()
+  const { data, error } = await appsAdmin.from('vc_memos').select('memo,sources,model,user_email,updated_at').eq('company_slug', slug).maybeSingle()
   if (error) return NextResponse.json({ memo: null, error: error.message }, { headers: cors })
   return NextResponse.json({ memo: data?.memo || null, sources: data?.sources || [], model: data?.model, by: data?.user_email, updatedAt: data?.updated_at }, { headers: cors })
 }
 
 // what the graph already knows — grounds the memo and saves web searches
 async function graphContext(slug: string): Promise<{ name: string; ctx: string } | null> {
-  const sb = supabaseAdmin
+  const sb = appsAdmin
   const { data: co } = await sb.from('vc_companies').select('*').eq('slug', slug).maybeSingle()
   if (!co) return null
   const { data: inv } = await sb.from('vc_investments').select('round,amount_text,date,lead,confidence,source_text,firm_id').eq('company_id', co.id).limit(40)
@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: String(e?.message || e).slice(0, 160) }, { status: 502, headers: cors })
   } finally {
     const costUsd = (usage.in * PRICE.in + usage.out * PRICE.out) / 1e6 + webSearches * 0.01
-    supabaseAdmin.from('vc_chat_runs').insert({
+    appsAdmin.from('vc_chat_runs').insert({
       conversation_id: null, model: MODEL, turns: 1, tools: [{ name: 'memo', ms: Date.now() - startedAt }],
       input_tokens: usage.in, output_tokens: usage.out, cost_usd: costUsd, duration_ms: Date.now() - startedAt,
       status: 'ok', error: `memo: ${slug}`,
@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
   if (!text.trim()) return NextResponse.json({ error: 'empty memo' }, { status: 502, headers: cors })
 
   const sources = [...new Set([...text.matchAll(/\((https?:[^)\s]+)\)/g)].map((m) => m[1]))].slice(0, 30)
-  const { error } = await supabaseAdmin.from('vc_memos').upsert(
+  const { error } = await appsAdmin.from('vc_memos').upsert(
     { company_slug: slug, memo: text.trim(), sources, model: MODEL, user_email: email, updated_at: new Date().toISOString() },
     { onConflict: 'company_slug' },
   )

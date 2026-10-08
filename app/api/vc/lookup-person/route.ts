@@ -3,7 +3,7 @@
 // Form Ds, parse related persons, upsert into the investor index (same pattern
 // as the company /lookup). Powers the person-search-miss flow.
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { appsAdmin } from '@/lib/supabase-apps'
 import { searchFormD, fetchFilingDoc, normName, padCik } from '@/lib/vc/edgar.mjs'
 
 export const dynamic = 'force-dynamic'
@@ -15,7 +15,7 @@ export async function OPTIONS() { return new NextResponse(null, { headers: CORS 
 export async function POST(req: NextRequest) {
   const { name } = await req.json().catch(() => ({}))
   if (!name || typeof name !== 'string') return NextResponse.json({ error: 'name required' }, { status: 400, headers: CORS })
-  const sb = supabaseAdmin
+  const sb = appsAdmin
   const nq = normName(name)
 
   const hits = await searchFormD(name, { limit: 8 })

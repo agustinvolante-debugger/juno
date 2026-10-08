@@ -3,7 +3,7 @@
 // related persons to known VC partners, upserts inferred board seats, logs the run.
 // ?date=YYYY-MM-DD overrides; ?key=<CRON_SECRET> auth for manual calls.
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { appsAdmin } from '@/lib/supabase-apps'
 import { dailyFormD, fetchFilingDoc, looksLikeSpv, matchPartners, normName, upsertUniverse } from '@/lib/vc/edgar.mjs'
 import { sendWebPush } from '@/lib/news/push'
 
@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET
   const authed = !secret || req.headers.get('authorization') === `Bearer ${secret}` || req.nextUrl.searchParams.get('key') === secret
   if (!authed) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  const sb = supabaseAdmin
+  const sb = appsAdmin
 
   // date selection: explicit ?date=… processes that one day; otherwise walk a
   // cursor (formd_synced_through) from where we left off up to yesterday, max 4

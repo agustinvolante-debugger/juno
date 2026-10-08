@@ -4,7 +4,7 @@
 // cookie; the frontend fetches with credentials:'include'). Optional filters narrow
 // the subset.
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { appsAdmin } from '@/lib/supabase-apps'
 import { vcCors, vcSessionEmail } from '@/lib/vc/vc-auth'
 import { listFundingEvents } from '@/lib/vc/news-funding'
 
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   if (!(await vcSessionEmail())) {
     return NextResponse.json({ error: 'sign in required' }, { status: 401, headers: CORS })
   }
-  const sb = supabaseAdmin
+  const sb = appsAdmin
   const p = req.nextUrl.searchParams
   const sector = p.get('sector')
   const minLast = p.get('minLastRound') ? Number(p.get('minLastRound')) : null

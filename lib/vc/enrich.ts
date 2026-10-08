@@ -3,7 +3,7 @@
 // vc_enrich_queue (review before they hit the map). Cost logs to vc_chat_runs
 // with conversation_id null so enrichment spend is separable from chat spend.
 import Anthropic from '@anthropic-ai/sdk'
-import { supabaseAdmin } from '@/lib/supabase'
+import { appsAdmin } from '@/lib/supabase-apps'
 import { TOOL_DEFS, executeToolStaged } from '@/lib/vc/agent-tools'
 
 const MODEL = 'claude-sonnet-5'
@@ -23,7 +23,7 @@ const ENRICH_TOOLS = TOOL_DEFS.filter((t: any) => ['search_internal', 'search_ed
 
 export async function enrichCompany(name: string, hint: string, runNote: string): Promise<{ ok: boolean; summary: string; costUsd: number }> {
   const anthropic = new Anthropic()
-  const sb = supabaseAdmin
+  const sb = appsAdmin
   const messages: Anthropic.MessageParam[] = [
     { role: 'user', content: `Enrich: ${name}${hint ? ` — ${hint}` : ''}` },
   ]

@@ -2,7 +2,7 @@
 // the exact result-set snapshot (gated; ?key= because downloads are browser
 // navigations that can't set headers).
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { appsAdmin } from '@/lib/supabase-apps'
 import { chatGate, chatCors } from '@/lib/vc/chat-auth'
 
 export const dynamic = 'force-dynamic'
@@ -18,7 +18,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const denied = await chatGate(req)
   if (denied) return denied
   const { id } = await ctx.params
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await appsAdmin
     .from('vc_result_sets')
     .select('columns,rows,interpretation,created_at')
     .eq('id', id)

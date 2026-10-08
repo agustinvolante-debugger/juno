@@ -3,7 +3,7 @@
 // filings by companies already in the curated graph. Gated like /graph.
 // Query: ?limit=80 (max 200)
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { appsAdmin } from '@/lib/supabase-apps'
 import { vcCors, vcSessionEmail } from '@/lib/vc/vc-auth'
 import { listFundingEvents } from '@/lib/vc/news-funding'
 
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'sign in required' }, { status: 401, headers: CORS })
   }
   const limit = Math.min(200, Math.max(1, Number(req.nextUrl.searchParams.get('limit')) || 80))
-  const sb = supabaseAdmin
+  const sb = appsAdmin
 
   const [seatsR, metaR] = await Promise.all([
     sb.from('vc_board_seats')

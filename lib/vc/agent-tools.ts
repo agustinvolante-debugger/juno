@@ -7,10 +7,10 @@
 // Grounding contract: every executor returns only data read from Supabase in
 // this call, tagged with which table it came from. run_query returns a
 // resultSetId + a small preview; the UI renders the snapshot directly.
-import { supabaseAdmin } from '@/lib/supabase'
+import { appsAdmin } from '@/lib/supabase-apps'
 import { classifyIssuer, normName, searchFormD, fetchFilingDoc, looksLikeSpv, matchPartners, upsertUniverse, padCik } from '@/lib/vc/edgar.mjs'
 
-const sb = supabaseAdmin
+const sb = appsAdmin
 
 export const SECTORS = ['AI', 'Dev Tools', 'Fintech', 'Healthcare', 'Productivity', 'Consumer', 'Defense'] as const
 

@@ -2,7 +2,7 @@
 // Curated scope stays client-side in the frontend (only ~172 rows); this serves the
 // broad universe path: name / industry / geography(state) / offering-amount / date.
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { appsAdmin } from '@/lib/supabase-apps'
 import { normName } from '@/lib/vc/edgar.mjs'
 
 export const dynamic = 'force-dynamic'
@@ -10,7 +10,7 @@ const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods
 export async function OPTIONS() { return new NextResponse(null, { headers: CORS }) }
 
 export async function GET(req: NextRequest) {
-  const sb = supabaseAdmin
+  const sb = appsAdmin
   const p = req.nextUrl.searchParams
   const q = p.get('q')?.trim()
   const industry = p.get('industry')?.trim()

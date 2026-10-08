@@ -14,7 +14,7 @@ const cap = Math.max(1, Math.min(Number(process.argv[process.argv.indexOf('--cap
 const MODEL = 'claude-sonnet-5'
 const PRICE = { in: 3, out: 15 }
 
-const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE)
+const sb = createClient(process.env.APPS_SUPABASE_URL, process.env.APPS_SUPABASE_SERVICE_ROLE_KEY)
 const anthropic = new Anthropic()
 
 const probe = await sb.from('vc_companies').select('profile_updated_at').limit(1)

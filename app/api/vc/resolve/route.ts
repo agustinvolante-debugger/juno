@@ -7,7 +7,7 @@
 // searches); cost logs to vc_chat_runs with conversation_id null like the enrichment runs.
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
-import { supabaseAdmin } from '@/lib/supabase'
+import { appsAdmin } from '@/lib/supabase-apps'
 import { vcCors, vcSessionEmail } from '@/lib/vc/vc-auth'
 import { normName } from '@/lib/vc/edgar.mjs'
 
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
   const raw = (body.query || '').toString()
   if (!raw.trim()) return NextResponse.json({ error: 'query required' }, { status: 400, headers: cors })
   const { q, isUrl } = extractQuery(raw)
-  const sb = supabaseAdmin
+  const sb = appsAdmin
 
   // alias cache first — resolving the same brand twice is wasted money
   const { data: metaRow } = await sb.from('vc_ingest_meta').select('value').eq('key', ALIAS_KEY).maybeSingle()

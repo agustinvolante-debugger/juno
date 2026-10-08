@@ -4,7 +4,7 @@
 //   node scripts/vc-formd-persons.mjs --dry --from 2025q1 --to 2025q1
 //   node scripts/vc-formd-persons.mjs                       # full 2020q1->latest
 //
-// Env: EDGAR_UA, NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
+// Env: EDGAR_UA, APPS_SUPABASE_URL, APPS_SUPABASE_SERVICE_ROLE_KEY (the juno-apps project).
 import { execSync } from 'child_process';
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { createClient } from '@supabase/supabase-js';
@@ -114,7 +114,7 @@ if (DRY) {
   process.exit(0);
 }
 
-const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const sb = createClient(process.env.APPS_SUPABASE_URL, process.env.APPS_SUPABASE_SERVICE_ROLE_KEY);
 async function bulkUpsert(table, arr, conflict) {
   let done = 0;
   const CH = 500, CONC = 4;

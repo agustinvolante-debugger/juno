@@ -4,7 +4,7 @@
 //   { saveQuery: {name, filters} } | { deleteQuery: name }
 // Google session only (the chat key is a shared secret, not an identity for state).
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { appsAdmin } from '@/lib/supabase-apps'
 import { vcCors, vcSessionEmail } from '@/lib/vc/vc-auth'
 
 export const dynamic = 'force-dynamic'
@@ -17,7 +17,7 @@ export async function OPTIONS(req: NextRequest) {
 }
 
 async function getState(email: string) {
-  const { data, error } = await supabaseAdmin.from('vc_user_state').select('watchlist,saved_queries').eq('user_email', email).maybeSingle()
+  const { data, error } = await appsAdmin.from('vc_user_state').select('watchlist,saved_queries').eq('user_email', email).maybeSingle()
   if (error) throw new Error(/relation|does not exist/.test(error.message) ? 'apply supabase/migrations/013_vc_multiuser.sql first' : error.message)
   return { watchlist: (data?.watchlist as any[]) || [], savedQueries: (data?.saved_queries as any[]) || [] }
 }
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'nothing to do' }, { status: 400, headers: cors })
   }
 
-  const { error } = await supabaseAdmin.from('vc_user_state').upsert(
+  const { error } = await appsAdmin.from('vc_user_state').upsert(
     { user_email: email, watchlist: st.watchlist, saved_queries: st.savedQueries, updated_at: new Date().toISOString() },
     { onConflict: 'user_email' },
   )

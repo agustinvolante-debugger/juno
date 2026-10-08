@@ -4,7 +4,7 @@
 //   node scripts/vc-seed.mjs --dry     # shape rows + print counts, no DB writes
 //   node scripts/vc-seed.mjs           # upsert into Supabase (needs migration 007 applied)
 //
-// Reads Supabase creds from .env.local (NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY).
+// Reads Supabase creds from .env.local (APPS_SUPABASE_URL, APPS_SUPABASE_SERVICE_ROLE_KEY (the juno-apps project)).
 import { readFileSync } from 'fs';
 import { createClient } from '@supabase/supabase-js';
 
@@ -109,7 +109,7 @@ for (const line of readFileSync('/Users/agustinvolante/Downloads/juno/.env.local
   const m = line.match(/^([A-Z_]+)=(.*)$/);
   if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
 }
-const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const sb = createClient(process.env.APPS_SUPABASE_URL, process.env.APPS_SUPABASE_SERVICE_ROLE_KEY);
 
 async function up(table, rows, onConflict) {
   const { error } = await sb.from(table).upsert(rows, { onConflict, ignoreDuplicates: false });

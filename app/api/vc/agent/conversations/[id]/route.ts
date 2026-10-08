@@ -1,7 +1,7 @@
 // GET /api/vc/agent/conversations/[id] — messages of one conversation (gated).
 // DELETE — remove a conversation (cascades messages + result sets).
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { appsAdmin } from '@/lib/supabase-apps'
 import { chatGate, chatCors, chatIdentity } from '@/lib/vc/chat-auth'
 
 export const dynamic = 'force-dynamic'
@@ -11,7 +11,7 @@ export async function OPTIONS(req: NextRequest) { return new NextResponse(null, 
 // owner check (migration 013): a conversation belongs to whoever created it.
 // Pre-migration (no user_email column / null value) everything stays accessible.
 async function ownedBy(id: string, email: string | null): Promise<boolean> {
-  const { data, error } = await supabaseAdmin.from('vc_chat_conversations').select('user_email').eq('id', id).maybeSingle()
+  const { data, error } = await appsAdmin.from('vc_chat_conversations').select('user_email').eq('id', id).maybeSingle()
   if (error || !data) return true // pre-migration or missing row — downstream query 404s naturally
   return !(data as any).user_email || (data as any).user_email === email
 }
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (denied) return denied
   const { id } = await ctx.params
   if (!(await ownedBy(id, await chatIdentity(req)))) return NextResponse.json({ error: 'not found' }, { status: 404, headers: CORS })
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await appsAdmin
     .from('vc_chat_messages')
     .select('id,role,content,created_at')
     .eq('conversation_id', id)
@@ -38,7 +38,7 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
   if (denied) return denied
   const { id } = await ctx.params
   if (!(await ownedBy(id, await chatIdentity(req)))) return NextResponse.json({ error: 'not found' }, { status: 404, headers: CORS })
-  const { error } = await supabaseAdmin.from('vc_chat_conversations').delete().eq('id', id)
+  const { error } = await appsAdmin.from('vc_chat_conversations').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: CORS })
   return NextResponse.json({ deleted: id }, { headers: CORS })
 }

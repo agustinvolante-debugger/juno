@@ -2,7 +2,7 @@
 // POST /api/vc/enrich-queue — {ids:[], action:'approve'|'reject'} (admin-key gated)
 //   approve applies each row to the live graph via the same executors the chat uses.
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { appsAdmin } from '@/lib/supabase-apps'
 import { chatGate, chatCors } from '@/lib/vc/chat-auth'
 import { applyQueued } from '@/lib/vc/agent-tools'
 
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   const denied = await chatGate(req)
   if (denied) return denied
   const status = req.nextUrl.searchParams.get('status') || 'pending'
-  const { data, error } = await supabaseAdmin.from('vc_enrich_queue')
+  const { data, error } = await appsAdmin.from('vc_enrich_queue')
     .select('id,company_slug,company_name,kind,payload,confidence,source_url,status,run_note,created_at')
     .eq('status', status).order('created_at', { ascending: false }).limit(500)
   if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: CORS })
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
   const action = body.action === 'approve' ? 'approve' : body.action === 'reject' ? 'reject' : null
   if (!ids.length || !action) return NextResponse.json({ error: 'ids[] and action (approve|reject) required' }, { status: 400, headers: CORS })
 
-  const sb = supabaseAdmin
+  const sb = appsAdmin
   const { data: rows } = await sb.from('vc_enrich_queue').select('id,kind,payload').in('id', ids).eq('status', 'pending')
   const out: any[] = []
   for (const row of rows || []) {

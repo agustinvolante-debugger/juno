@@ -5,7 +5,7 @@
 // Caps: VC_ENRICH_NIGHTLY_CAP companies/run (default 8),
 //       VC_ENRICH_DAILY_CAP USD/day (default 3, separate from the chat cap).
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { appsAdmin } from '@/lib/supabase-apps'
 import { enrichCompany } from '@/lib/vc/enrich'
 import { getFeedCache, getVcEnrichRequests, setVcEnrichRequests } from '@/lib/news/store'
 import { extractFundingCompanies } from '@/lib/news/ai'
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET
   const authed = !secret || req.headers.get('authorization') === `Bearer ${secret}` || req.nextUrl.searchParams.get('key') === secret
   if (!authed) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  const sb = supabaseAdmin
+  const sb = appsAdmin
 
   const nightlyCap = Math.min(Number(req.nextUrl.searchParams.get('cap')) || Number(process.env.VC_ENRICH_NIGHTLY_CAP) || 8, 25)
   const dailyBudget = Number(process.env.VC_ENRICH_DAILY_CAP) || 3

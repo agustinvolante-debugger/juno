@@ -6,7 +6,7 @@
 //   node scripts/vc-backfill.mjs 2025q3 --dry   # parse + match + counts, no DB writes
 //   node scripts/vc-backfill.mjs 2025q3         # upsert into Supabase
 //
-// Env: EDGAR_UA (SEC contact), NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
+// Env: EDGAR_UA (SEC contact), APPS_SUPABASE_URL, APPS_SUPABASE_SERVICE_ROLE_KEY (the juno-apps project).
 import { execSync } from 'child_process';
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { createClient } from '@supabase/supabase-js';
@@ -21,7 +21,7 @@ for (const line of readFileSync(new URL('../.env.local', import.meta.url), 'utf8
   const m = line.match(/^([A-Z_]+)=(.*)$/); if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
 }
 const UA = process.env.EDGAR_UA || 'VC Constellation research chaska@caerusai.com';
-const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const sb = createClient(process.env.APPS_SUPABASE_URL, process.env.APPS_SUPABASE_SERVICE_ROLE_KEY);
 
 // ---- download + unzip the quarter dataset ----
 let dir = `/tmp/formd_${quarter}`;

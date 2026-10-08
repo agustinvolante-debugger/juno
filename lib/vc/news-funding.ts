@@ -19,7 +19,7 @@
 // normal day sends only the new ~20-40 headlines to Haiku (~$0.01). A 14-day backfill is ~$0.05.
 import Anthropic from '@anthropic-ai/sdk'
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
-import { supabaseAdmin } from '@/lib/supabase'
+import { appsAdmin } from '@/lib/supabase-apps'
 import { getFeedCache } from '@/lib/news/store'
 import { searchTopic, SECTION_QUERIES, type Item } from '@/lib/news/feeds'
 
@@ -260,13 +260,13 @@ const linkKey = (l: string) => (l || '').split('#')[0]
 const isoDay = (d: string | null | undefined) => (d && !isNaN(Date.parse(d)) ? new Date(d).toISOString().slice(0, 10) : null)
 
 async function readMeta(key: string): Promise<any> {
-  const { data } = await supabaseAdmin.from('vc_ingest_meta').select('value').eq('key', key).maybeSingle()
+  const { data } = await appsAdmin.from('vc_ingest_meta').select('value').eq('key', key).maybeSingle()
   try { return data?.value ? JSON.parse(data.value) : null } catch { return null }
 }
 
 /** Is vc_funding_events there yet? (The founder pastes the migration by hand.) */
 export async function fundingTableExists(): Promise<boolean> {
-  const { error } = await supabaseAdmin.from('vc_funding_events').select('id').limit(1)
+  const { error } = await appsAdmin.from('vc_funding_events').select('id').limit(1)
   if (error) { console.warn('[news-funding] vc_funding_events unavailable:', error.message); return false }
   return true
 }
@@ -339,8 +339,8 @@ export async function runNewsFunding(opts: { dry?: boolean; days?: number; repro
 
   // ---- reference data
   const [firmsR, cosR, aliases] = await Promise.all([
-    supabaseAdmin.from('vc_firms').select('id,slug,name').limit(10000),
-    supabaseAdmin.from('vc_companies').select('id,slug,name,cik,website').limit(20000),
+    appsAdmin.from('vc_firms').select('id,slug,name').limit(10000),
+    appsAdmin.from('vc_companies').select('id,slug,name,cik,website').limit(20000),
     readMeta(ALIAS_KEY),
   ])
   const firmIx = buildFirmIndex((firmsR.data || []) as Firm[])
@@ -436,7 +436,7 @@ export async function runNewsFunding(opts: { dry?: boolean; days?: number; repro
   if (tableOk && live.length) {
     const since = new Date(Date.now() - (days + DEDUPE_DAYS + 2) * 86400_000).toISOString().slice(0, 10)
     const slugs = [...new Set(live.map((e) => e.company_slug!).filter(Boolean))]
-    const { data } = await supabaseAdmin.from('vc_funding_events').select('*').in('company_slug', slugs).gte('announced_on', since)
+    const { data } = await appsAdmin.from('vc_funding_events').select('*').in('company_slug', slugs).gte('announced_on', since)
     existing = data || []
   }
   for (const e of live) {
@@ -481,7 +481,7 @@ export async function runNewsFunding(opts: { dry?: boolean; days?: number; repro
         if (newInv.length) patch.investors = [...prevInv, ...newInv]
         if (nextOthers.length !== others.length || patch.source_url) patch.other_sources = nextOthers
         if (Object.keys(patch).length) {
-          const { error } = await supabaseAdmin.from('vc_funding_events').update(patch).eq('id', prev.id)
+          const { error } = await appsAdmin.from('vc_funding_events').update(patch).eq('id', prev.id)
           if (error) notes.push(`merge ${e.company_name}: ${error.message}`); else result.written.merged++
         }
         continue
@@ -489,12 +489,12 @@ export async function runNewsFunding(opts: { dry?: boolean; days?: number; repro
       if (e.created_company) {
         // bare profile row only — no figures (those stay SEC/override-owned); the reported
         // block on the page shows the round
-        const { error } = await supabaseAdmin.from('vc_companies').insert({ slug: e.company_slug, name: e.company_name })
+        const { error } = await appsAdmin.from('vc_companies').insert({ slug: e.company_slug, name: e.company_name })
         if (error) { notes.push(`create ${e.company_name}: ${error.message}`); continue }
         result.written.companiesCreated++
       }
       const { _match, _action, _why, _existingId, ...row } = e
-      const { error } = await supabaseAdmin.from('vc_funding_events').upsert(row, { onConflict: 'dedupe_key', ignoreDuplicates: true })
+      const { error } = await appsAdmin.from('vc_funding_events').upsert(row, { onConflict: 'dedupe_key', ignoreDuplicates: true })
       if (error) notes.push(`insert ${e.company_name}: ${error.message}`); else result.written.inserted++
     } catch (err: any) {
       notes.push(`${e.company_name}: ${String(err?.message || err).slice(0, 120)}`)
@@ -503,8 +503,8 @@ export async function runNewsFunding(opts: { dry?: boolean; days?: number; repro
 
   // remember processed headlines so tomorrow only pays for new ones
   const nextSeen = [...seenArr.filter((k) => !todo.some((t) => linkKey(t.it.l) === k)), ...todo.map((t) => linkKey(t.it.l))].slice(-SEEN_CAP)
-  await supabaseAdmin.from('vc_ingest_meta').upsert({ key: SEEN_KEY, value: JSON.stringify(nextSeen), updated_at: new Date().toISOString() })
-  await supabaseAdmin.from('vc_sync_log').insert({
+  await appsAdmin.from('vc_ingest_meta').upsert({ key: SEEN_KEY, value: JSON.stringify(nextSeen), updated_at: new Date().toISOString() })
+  await appsAdmin.from('vc_sync_log').insert({
     source: 'news-funding', filings_processed: todo.length, new_companies: result.written.companiesCreated,
     notes: `${result.written.inserted} new, ${result.written.merged} merged from ${todo.length} headlines (${days}d), $${costUsd.toFixed(3)}`,
   }).then(() => {}, () => {})
@@ -513,7 +513,7 @@ export async function runNewsFunding(opts: { dry?: boolean; days?: number; repro
 
 function logCost(costUsd: number, inTok: number, outTok: number, n: number, dry: boolean) {
   if (!inTok) return
-  supabaseAdmin.from('vc_chat_runs').insert({
+  appsAdmin.from('vc_chat_runs').insert({
     conversation_id: null, model: MODEL, turns: 1, tools: [{ name: 'news-funding', n }],
     input_tokens: inTok, output_tokens: outTok, cost_usd: costUsd, duration_ms: 0, status: 'ok',
     error: `news-funding${dry ? ' (dry)' : ''}: ${n} headlines`,
@@ -523,25 +523,25 @@ function logCost(costUsd: number, inTok: number, outTok: number, n: number, dry:
 /** Undo: hide (or restore) one event. A company this module created is removed again when
  *  nothing else (investments, board seats, other visible events) points at it. */
 export async function setFundingEventStatus(id: string, status: 'reported' | 'hidden'): Promise<{ ok: boolean; error?: string; removedCompany?: string }> {
-  const { data: ev, error } = await supabaseAdmin.from('vc_funding_events').update({ status }).eq('id', id).select().maybeSingle()
+  const { data: ev, error } = await appsAdmin.from('vc_funding_events').update({ status }).eq('id', id).select().maybeSingle()
   if (error) return { ok: false, error: error.message }
   if (!ev) return { ok: false, error: 'not found' }
   if (status !== 'hidden' || !ev.created_company || !ev.company_slug) return { ok: true }
-  const { data: co } = await supabaseAdmin.from('vc_companies').select('id').eq('slug', ev.company_slug).maybeSingle()
+  const { data: co } = await appsAdmin.from('vc_companies').select('id').eq('slug', ev.company_slug).maybeSingle()
   if (!co) return { ok: true }
   const [inv, seats, others] = await Promise.all([
-    supabaseAdmin.from('vc_investments').select('id', { count: 'exact', head: true }).eq('company_id', co.id),
-    supabaseAdmin.from('vc_board_seats').select('id', { count: 'exact', head: true }).eq('company_id', co.id),
-    supabaseAdmin.from('vc_funding_events').select('id', { count: 'exact', head: true }).eq('company_slug', ev.company_slug).eq('status', 'reported'),
+    appsAdmin.from('vc_investments').select('id', { count: 'exact', head: true }).eq('company_id', co.id),
+    appsAdmin.from('vc_board_seats').select('id', { count: 'exact', head: true }).eq('company_id', co.id),
+    appsAdmin.from('vc_funding_events').select('id', { count: 'exact', head: true }).eq('company_slug', ev.company_slug).eq('status', 'reported'),
   ])
   if ((inv.count || 0) + (seats.count || 0) + (others.count || 0) > 0) return { ok: true }
-  const del = await supabaseAdmin.from('vc_companies').delete().eq('id', co.id)
+  const del = await appsAdmin.from('vc_companies').delete().eq('id', co.id)
   return del.error ? { ok: true, error: `event hidden; company kept: ${del.error.message}` } : { ok: true, removedCompany: ev.company_slug }
 }
 
 /** Visible events, newest first — shared by /graph and /feed. Empty when the table is missing. */
 export async function listFundingEvents(limit = 2000): Promise<any[]> {
-  const { data, error } = await supabaseAdmin.from('vc_funding_events')
+  const { data, error } = await appsAdmin.from('vc_funding_events')
     .select('id,company_slug,cik,company_name,round,amount_usd,valuation_usd,investors,announced_on,source_url,source_name,source_tier,headline,other_sources,confidence,created_company,created_at')
     .eq('status', 'reported').order('announced_on', { ascending: false }).limit(limit)
   if (error) { console.warn('[news-funding] list skipped:', error.message); return [] }

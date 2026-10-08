@@ -5,7 +5,7 @@
 //   node scripts/vc-formd-universe.mjs                                    # full ingest 2020q1->latest
 //   node scripts/vc-formd-universe.mjs --from 2024q1                      # custom range
 //
-// Env: EDGAR_UA, NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
+// Env: EDGAR_UA, APPS_SUPABASE_URL, APPS_SUPABASE_SERVICE_ROLE_KEY (the juno-apps project).
 import { execSync } from 'child_process';
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { createClient } from '@supabase/supabase-js';
@@ -106,7 +106,7 @@ if (DRY) {
 }
 
 // ---- bulk upsert ----
-const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const sb = createClient(process.env.APPS_SUPABASE_URL, process.env.APPS_SUPABASE_SERVICE_ROLE_KEY);
 const all = [...M.values()];
 let done = 0;
 for (let i = 0; i < all.length; i += 500) {

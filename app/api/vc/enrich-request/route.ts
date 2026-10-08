@@ -4,7 +4,7 @@
 // curated graph / review queue / pending requests, and queues it for the nightly
 // enrich-cron. Writes stay STAGED (vc_enrich_queue) — nothing goes live from here.
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase'
+import { appsAdmin } from '@/lib/supabase-apps'
 import { vcSessionEmail } from '@/lib/vc/vc-auth'
 import { extractFundingCompanies } from '@/lib/news/ai'
 import { getVcEnrichRequests, setVcEnrichRequests } from '@/lib/news/store'
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     round = hit.round
   }
 
-  const sb = supabaseAdmin
+  const sb = appsAdmin
   const { data: curated } = await sb.from('vc_companies').select('slug,name').ilike('name', `%${company}%`).limit(3)
   const exact = (curated || []).find((c: any) => norm(c.name) === norm(company))
   if (exact) return NextResponse.json({ ok: true, company, already: 'on the map', slug: exact.slug })

@@ -11,7 +11,7 @@
 // enforced from the vc_chat_runs log before every request.
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
-import { supabaseAdmin } from '@/lib/supabase'
+import { appsAdmin } from '@/lib/supabase-apps'
 import { TOOL_DEFS, TOOL_LABELS, executeTool } from '@/lib/vc/agent-tools'
 import { chatGate, chatCors, chatIdentity } from '@/lib/vc/chat-auth'
 
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
   const CORS = chatCors(req)
   const denied = await chatGate(req)
   if (denied) return denied
-  const sb = supabaseAdmin
+  const sb = appsAdmin
   const body = await req.json().catch(() => ({}))
   const message = (body.message || '').toString().trim()
   if (!message) return NextResponse.json({ error: 'message required' }, { status: 400, headers: CORS })
