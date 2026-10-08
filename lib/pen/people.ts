@@ -229,7 +229,7 @@ function schemaHint(message: string): string {
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 // Summarising what is already in the notes, not reading transcripts. Haiku is plenty.
-const MODEL = 'claude-haiku-4-5'
+const MODEL = 'claude-haiku-5-5'
 
 const PERSON_SCHEMA = {
   type: 'object',

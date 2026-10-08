@@ -23,8 +23,8 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { getFeedCache } from '@/lib/news/store'
 import { searchTopic, SECTION_QUERIES, type Item } from '@/lib/news/feeds'
 
-const MODEL = 'claude-haiku-4-5'
-const PRICE = { in: 1, out: 5 } // $/Mtok
+const MODEL = 'claude-haiku-5-5'
+const PRICE = { in: 0.1, out: 0.5 } // $/Mtok, Haiku 5.5 (prompts under 100k)
 const BATCH = 40
 const DEDUPE_DAYS = 21
 const SEEN_KEY = 'news_funding_seen'

@@ -10,7 +10,7 @@ import { REPLY_LANGUAGE, inQuestionLanguage } from './reply-language'
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 // The transcript is already in context; the job is to read it and answer accurately, which is
 // Haiku's shape. See lib/pen/archive.ts for the same reasoning.
-const MODEL = 'claude-haiku-4-5'
+const MODEL = 'claude-haiku-5-5'
 
 // The language is named before the answer is written: without it a Portuguese question after a
 // Spanish one was answered in Spanish (the two are close). Same pattern as archive.ts.

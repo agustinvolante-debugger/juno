@@ -14,7 +14,7 @@ import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
 import { COMMON_TYPES } from './store'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-const MODEL = 'claude-haiku-4-5'
+const MODEL = 'claude-haiku-5-5'
 
 /** Below this we show the picker instead of asserting a category. */
 export const CONFIDENCE_FLOOR = 0.6

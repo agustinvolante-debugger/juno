@@ -25,7 +25,7 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 // front of you and cite it. Haiku 4.5 does that accurately, costs a fraction, and answers fast
 // enough to feel like search rather than a request. Extraction stays on Opus, where the task is
 // noticing what someone missed rather than reporting what they said.
-const MODEL = 'claude-haiku-4-5'
+const MODEL = 'claude-haiku-5-5'
 
 type IndexRow = {
   id: string

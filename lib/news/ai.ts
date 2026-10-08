@@ -3,7 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { searchTopic, resolveChannel, channelItems, interleaveBySource, type Item, type Route, type Monitor, type MonitorCard } from './feeds'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-const MODEL = 'claude-haiku-4-5-20251001'
+const MODEL = 'claude-haiku-5-5'
 
 async function claudeText(prompt: string, maxTokens = 800, system?: string): Promise<string> {
   const m = await anthropic.messages.create({
