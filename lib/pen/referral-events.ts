@@ -165,18 +165,21 @@ const REF_MAIL = {
     body: (f: string, m: number, d: string) =>
       `<p>${f} signed up with your link and made their first payment. Thank you.</p><p>Your ${m === 1 ? 'free month is' : `${m} free months are`} added to your account by ${d}, once the two-week refund window has passed. It comes off your next bill.</p>`,
     see: 'See your referrals',
+    reply: 'Questions? Just reply to this email.',
   },
   es: {
     subject: (f: string) => `${f} se unió a Juno Pen con tu enlace`,
     body: (f: string, m: number, d: string) =>
       `<p>${f} se registró con tu enlace e hizo su primer pago. Gracias.</p><p>${m === 1 ? 'Tu mes gratis se suma' : `Tus ${m} meses gratis se suman`} a tu cuenta a más tardar el ${d}, cuando pasen las dos semanas de devolución. Se descuenta de tu próximo cobro.</p>`,
     see: 'Ver tus referidos',
+    reply: '¿Preguntas? Solo responde este correo.',
   },
   pt: {
     subject: (f: string) => `${f} entrou no Juno Pen com seu link`,
     body: (f: string, m: number, d: string) =>
       `<p>${f} se cadastrou com seu link e fez o primeiro pagamento. Obrigado.</p><p>${m === 1 ? 'Seu mês grátis entra' : `Seus ${m} meses grátis entram`} na sua conta até ${d}, quando passar o prazo de duas semanas para reembolso. Ele é descontado da sua próxima cobrança.</p>`,
     see: 'Ver suas indicações',
+    reply: 'Dúvidas? É só responder este e-mail.',
   },
 } as const
 
@@ -205,7 +208,8 @@ async function counted(r: Referral | null): Promise<void> {
     html:
       `<!doctype html><html><head><meta charset="utf-8"></head><body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.65;color:#16150F;padding:24px;max-width:560px">` +
       M.body(friend, months, day) +
-      `<p><a href="${base}/settings/invite" style="color:#0B6B44">${M.see}</a></p></body></html>`,
+      `<p><a href="${base}/settings/invite" style="color:#0B6B44">${M.see}</a></p>` +
+      `<p style="color:#514E45">${M.reply}</p></body></html>`,
   }).catch((e) => console.warn(`pen referral email failed: ${(e as Error).message}`))
 }
 
@@ -249,7 +253,8 @@ export async function giveReward(id: string): Promise<{ months: number }> {
     html:
       `<!doctype html><html><head><meta charset="utf-8"></head><body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.65;color:#16150F;padding:24px;max-width:560px">` +
       M.body(friend, months) +
-      `<p><a href="${base}/settings/invite" style="color:#0B6B44">${REF_MAIL[lang].see}</a></p></body></html>`,
+      `<p><a href="${base}/settings/invite" style="color:#0B6B44">${REF_MAIL[lang].see}</a></p>` +
+      `<p style="color:#514E45">${REF_MAIL[lang].reply}</p></body></html>`,
   }).catch((e) => console.warn(`pen referral email failed: ${(e as Error).message}`))
   return { months }
 }

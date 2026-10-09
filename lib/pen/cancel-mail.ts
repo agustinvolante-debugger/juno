@@ -38,7 +38,7 @@ const MAIL = {
     reactivate: 'Reactivate your plan',
     backSubject: 'Welcome back to Juno Pen',
     back: '<p>Your plan is running again, and everything is back on: new recordings, search, chat and WhatsApp.</p>',
-    reply: 'Reply to this and it reaches a person.',
+    reply: 'Questions? Just reply to this email.',
   },
   es: {
     scheduledSubject: 'Tu plan de Juno Pen está cancelado',
@@ -54,7 +54,7 @@ const MAIL = {
     reactivate: 'Reactiva tu plan',
     backSubject: 'Qué bueno tenerte de vuelta en Juno Pen',
     back: '<p>Tu plan está activo de nuevo y todo volvió: grabaciones nuevas, búsqueda, chat y WhatsApp.</p>',
-    reply: 'Responde este correo y te contesta una persona.',
+    reply: '¿Preguntas? Solo responde este correo.',
   },
   pt: {
     scheduledSubject: 'Seu plano do Juno Pen foi cancelado',
@@ -70,7 +70,7 @@ const MAIL = {
     reactivate: 'Reative seu plano',
     backSubject: 'Que bom ter você de volta no Juno Pen',
     back: '<p>Seu plano está ativo de novo e tudo voltou: gravações novas, busca, chat e WhatsApp.</p>',
-    reply: 'Responda este e-mail e uma pessoa vai ler.',
+    reply: 'Dúvidas? É só responder este e-mail.',
   },
 } as const
 

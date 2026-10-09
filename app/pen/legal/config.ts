@@ -1,3 +1,5 @@
+import { SUPPORT_EMAIL } from '@/lib/support'
+
 // The facts only the founder can supply. Every page that mentions one writes it as a bracketed
 // token ([ENTITY], [ADDRESS], ...), and LegalPage swaps in the value below. While a value is
 // still its own token it renders highlighted, so a policy with a gap in it can't be mistaken
@@ -10,7 +12,7 @@ export const LEGAL_FACTS = {
   ENTITY: 'Agustin Volante Silva',
   ADDRESS: '2138 Jones St, San Francisco, CA, USA',
   'GOVERNING LAW': 'the State of California, USA',
-  'CONTACT EMAIL': 'avolantesilva@gmail.com',
+  'CONTACT EMAIL': SUPPORT_EMAIL,
 } as const
 
 export type LegalFact = keyof typeof LEGAL_FACTS

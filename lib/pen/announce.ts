@@ -2,7 +2,7 @@
 //
 // Who: anyone with an active account (paid or trial), or who has made a real recording (the
 // sample every new account gets does not count). Minus anyone who unsubscribed from updates.
-// Each gets it in their App language, from the product address with Reply-To the founder.
+// Each gets it in their App language, from the product address with Reply-To the support inbox.
 //
 // Never twice: pen_announcement_sends holds one row per (announcement, email), written before
 // the send is attempted, so a re-run or a crash halfway picks up where it stopped. Unsubscribing
@@ -102,7 +102,6 @@ async function sendOne(a: Announcement, email: string): Promise<{ ok: boolean; e
     subject: m.subject,
     html: m.html,
     text: m.text,
-    replyTo: process.env.PEN_SIGNUP_NOTIFY || undefined,
     // One-click unsubscribe (RFC 8058), which Gmail and Yahoo expect on bulk mail.
     headers: { 'List-Unsubscribe': `<${unsubUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
   })

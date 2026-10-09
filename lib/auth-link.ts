@@ -22,10 +22,10 @@ const PER_HOUR = 5
 const hash = (t: string) => crypto.createHash('sha256').update(t).digest('hex')
 
 type Lang = 'en' | 'es' | 'pt'
-const MAIL: Record<Lang, { subject: string; lead: string; button: string; note: string }> = {
-  en: { subject: 'Your Juno sign-in link', lead: 'Tap the button to sign in. The link works once, for 15 minutes.', button: 'Sign in', note: 'If you didn’t ask for this, you can ignore it; nobody can sign in without this email.' },
-  es: { subject: 'Tu enlace para entrar a Juno', lead: 'Toca el botón para entrar. El enlace sirve una vez, durante 15 minutos.', button: 'Entrar', note: 'Si no lo pediste, ignóralo: nadie puede entrar sin este correo.' },
-  pt: { subject: 'Seu link para entrar no Juno', lead: 'Toque no botão para entrar. O link funciona uma vez, por 15 minutos.', button: 'Entrar', note: 'Se você não pediu, ignore: ninguém entra sem este e-mail.' },
+const MAIL: Record<Lang, { subject: string; lead: string; button: string; note: string; reply: string }> = {
+  en: { subject: 'Your Juno sign-in link', lead: 'Tap the button to sign in. The link works once, for 15 minutes.', button: 'Sign in', note: 'If you didn’t ask for this, you can ignore it; nobody can sign in without this email.', reply: 'Questions? Just reply to this email.' },
+  es: { subject: 'Tu enlace para entrar a Juno', lead: 'Toca el botón para entrar. El enlace sirve una vez, durante 15 minutos.', button: 'Entrar', note: 'Si no lo pediste, ignóralo: nadie puede entrar sin este correo.', reply: '¿Preguntas? Solo responde este correo.' },
+  pt: { subject: 'Seu link para entrar no Juno', lead: 'Toque no botão para entrar. O link funciona uma vez, por 15 minutos.', button: 'Entrar', note: 'Se você não pediu, ignore: ninguém entra sem este e-mail.', reply: 'Dúvidas? É só responder este e-mail.' },
 }
 
 export async function mayEnter(email: string): Promise<boolean> {
@@ -71,8 +71,9 @@ export async function requestLink(opts: { email: string; callbackUrl: string; or
       `<p style="font-size:15px;line-height:1.6;margin:18px 0 22px">${M.lead}</p>` +
       `<a href="${url}" style="display:inline-block;background:#0B6B44;color:#FFFFFF;text-decoration:none;font-weight:600;font-size:15px;padding:12px 22px;border-radius:10px">${M.button}</a>` +
       `<p style="font-size:13px;line-height:1.6;color:#8E8A80;margin:22px 0 0">${M.note}</p>` +
+      `<p style="font-size:13px;line-height:1.6;color:#8E8A80;margin:8px 0 0">${M.reply}</p>` +
       `</td></tr></table></td></tr></table></body></html>`,
-    text: `${M.lead}\n\n${url}\n\n${M.note}`,
+    text: `${M.lead}\n\n${url}\n\n${M.note}\n${M.reply}`,
   })
 }
 

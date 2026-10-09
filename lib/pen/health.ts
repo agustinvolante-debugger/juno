@@ -168,9 +168,11 @@ async function reminders(): Promise<CheckResult> {
 
 type StateRow = { name: string; ok: boolean; fails: number; since: string; alerted_at: string | null; detail: string | null }
 
-function alertTo(): string | null {
+// A comma-separated list (the founders), like PEN_SIGNUP_NOTIFY.
+function alertTo(): string[] | null {
   const to = process.env.PEN_ALERT_EMAIL || process.env.PEN_SIGNUP_NOTIFY
-  return to ? to.replace(/^.*<|>.*$/g, '') : null
+  const list = (to ?? '').split(',').map((a) => a.trim().replace(/^.*<|>.*$/g, '')).filter(Boolean)
+  return list.length ? list : null
 }
 
 const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -190,7 +192,8 @@ async function notify(subject: string, lines: string[]): Promise<void> {
   if (r.ok) return
   // Email itself is down. WhatsApp to the owner's linked phone, which Meta only delivers inside
   // the 24-hour window after their last message; better than nothing.
-  const link = await getLinkByEmail(to).catch(() => null)
+  let link: Awaited<ReturnType<typeof getLinkByEmail>> | null = null
+  for (const a of to) if (!link?.phone) link = await getLinkByEmail(a).catch(() => null)
   if (link?.phone) await sendText(link.phone, `${subject}\n\n${lines.join('\n')}\n\n(email failed: ${r.error})`).catch(() => {})
 }
 

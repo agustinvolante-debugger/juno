@@ -300,7 +300,7 @@ const MAIL = {
     welcomeMonthlyPen: '<p>Your recorder goes in the post shortly, and your 21 free days have started. Upload anything you already have while it&rsquo;s on its way; a voice memo works.</p>',
     welcomeFreePen: '<p>Your free Juno pen goes in the post shortly, and your 30 free days have started. Nothing is charged until the trial ends, and you can cancel anytime in Settings. Upload anything you already have while the pen is on its way; a voice memo works.</p>',
     invite: (url: string) => `<p>Know someone who’d use it? <a href="${url}" style="color:#0B6B44">Your invite link</a> gives them their first month free, and you a free month when they pay.</p>`,
-    reply: 'Reply to this and it reaches a person.',
+    reply: 'Questions? Just reply to this email.',
   },
   es: {
     trialSubject: 'Tu prueba de Juno Pen termina en tres días',
@@ -322,7 +322,7 @@ const MAIL = {
     welcomeMonthlyPen: '<p>Te enviaremos el lápiz pronto, y tus 21 días gratis ya empezaron. Mientras llega, sube cualquier audio que ya tengas.</p>',
     welcomeFreePen: '<p>Tu lápiz Juno gratis sale por correo muy pronto, y tus 30 días gratis ya empezaron. No se cobra nada hasta que termine la prueba, y puedes cancelar cuando quieras en Configuración. Mientras llega, sube cualquier audio que ya tengas; una nota de voz sirve.</p>',
     invite: (url: string) => `<p>¿Conoces a alguien a quien le sirva? <a href="${url}" style="color:#0B6B44">Tu enlace de invitación</a> le da su primer mes gratis, y a ti un mes gratis cuando pague.</p>`,
-    reply: 'Responde este correo y te contesta una persona.',
+    reply: '¿Preguntas? Solo responde este correo.',
   },
   pt: {
     trialSubject: 'Seu teste do Juno Pen termina em três dias',
@@ -344,7 +344,7 @@ const MAIL = {
     welcomeMonthlyPen: '<p>Enviaremos a caneta em breve, e seus 21 dias grátis já começaram. Enquanto ela chega, envie qualquer áudio que já tenha.</p>',
     welcomeFreePen: '<p>Sua caneta Juno grátis sai pelo correio em breve, e seus 30 dias grátis já começaram. Nada é cobrado até o fim do teste, e você pode cancelar quando quiser em Configurações. Enquanto ela chega, envie qualquer áudio que já tiver; uma mensagem de voz serve.</p>',
     invite: (url: string) => `<p>Conhece alguém que usaria? <a href="${url}" style="color:#0B6B44">Seu link de convite</a> dá a essa pessoa o primeiro mês grátis, e a você um mês grátis quando ela pagar.</p>`,
-    reply: 'Responda este e-mail e uma pessoa vai ler.',
+    reply: 'Dúvidas? É só responder este e-mail.',
   },
 } as const
 
@@ -400,7 +400,8 @@ async function paymentFailed(email: string, langRaw: unknown = null) {
     html: shell(
       M.declined +
         `<p><a href="${billingUrl()}" style="color:#0B6B44">${M.updateCard}</a></p>` +
-        `<p style="color:#514E45">${M.declinedIgnore}</p>`,
+        `<p style="color:#514E45">${M.declinedIgnore}</p>` +
+        `<p style="color:#514E45">${M.reply}</p>`,
     ),
   })
 }

@@ -1,6 +1,7 @@
 // Thin email helper for the news module (suggestions + daily digest) and the pen briefing.
 // Reuses the Resend SDK already in the project.
 import { Resend } from 'resend'
+import { SUPPORT_EMAIL } from '@/lib/support'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -27,6 +28,7 @@ export async function sendEmailResult({
   to: string | string[]
   subject: string
   html: string
+  /** Defaults to the support inbox, so a customer's reply reaches a person. */
   replyTo?: string
   /** Overrides the display name or address; defaults to RESEND_FROM_EMAIL. */
   from?: string
@@ -45,7 +47,7 @@ export async function sendEmailResult({
       subject,
       html,
       ...(text ? { text } : {}),
-      ...(replyTo ? { replyTo } : {}),
+      replyTo: replyTo || SUPPORT_EMAIL,
       ...(bcc ? { bcc } : {}),
       ...(headers ? { headers } : {}),
     })

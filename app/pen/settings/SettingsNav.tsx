@@ -5,11 +5,12 @@ import { usePathname } from 'next/navigation'
 import Icon, { type IconName } from '../Icon'
 import { useCopy } from '../LangContext'
 import type { Copy } from '@/lib/pen/i18n'
+import { SUPPORT_EMAIL } from '@/lib/support'
 
-const SN: Copy<{ profile: string; aria: string; billing: string; invite: string }> = {
-  en: { profile: 'Profile', aria: 'Settings', billing: 'Billing', invite: 'Invite friends' },
-  es: { profile: 'Perfil', aria: 'Ajustes', billing: 'Facturación', invite: 'Invitar amigos' },
-  pt: { profile: 'Perfil', aria: 'Configurações', billing: 'Cobrança', invite: 'Convidar amigos' },
+const SN: Copy<{ profile: string; aria: string; billing: string; invite: string; help: string }> = {
+  en: { profile: 'Profile', aria: 'Settings', billing: 'Billing', invite: 'Invite friends', help: 'Help' },
+  es: { profile: 'Perfil', aria: 'Ajustes', billing: 'Facturación', invite: 'Invitar amigos', help: 'Ayuda' },
+  pt: { profile: 'Perfil', aria: 'Configurações', billing: 'Cobrança', invite: 'Convidar amigos', help: 'Ajuda' },
 }
 
 const ITEMS: { href: string; label: 'profile' | 'WhatsApp'; icon: IconName }[] = [
@@ -48,6 +49,11 @@ export default function SettingsNav({ whatsapp = false, billing = false, notion 
           <span className="pen-cat-label">{T.billing}</span>
         </Link>
       )}
+      {/* Goes to the support inbox (a Google Group the founders read), not a help centre. */}
+      <a href={`mailto:${SUPPORT_EMAIL}?subject=Juno%20Pen`} className="pen-cat">
+        <Icon name="mail" size={19} />
+        <span className="pen-cat-label">{T.help}</span>
+      </a>
     </nav>
   )
 }

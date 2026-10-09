@@ -6,6 +6,7 @@ import { signIn } from 'next-auth/react'
 import { useSearchParams } from 'next/navigation'
 import { Suspense, useEffect, useState } from 'react'
 import { safeCallback } from '@/lib/safe-callback'
+import { SUPPORT_EMAIL } from '@/lib/support'
 
 // One sign-in page for every Juno surface. Coming from Pen (callbackUrl under /pen, which is
 // every Pen link) it is the Pen page, in the visitor's language; from anywhere else (the Daily
@@ -229,7 +230,7 @@ function SignInContent() {
       )}
 
       <nav className="auth-foot">
-        <a href="mailto:agustinvolantesilva@gmail.com?subject=Sign-in%20help">{L.help} {L.contact}</a>
+        <a href={`mailto:${SUPPORT_EMAIL}?subject=Sign-in%20help`}>{L.help} {L.contact}</a>
         {fromPen && <a href={`/privacy${lang === 'en' ? '' : `?lang=${lang}`}`}>{L.privacy}</a>}
         {fromPen && <a href={`/terms${lang === 'en' ? '' : `?lang=${lang}`}`}>{L.terms}</a>}
       </nav>

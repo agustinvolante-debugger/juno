@@ -39,6 +39,7 @@ import { findRuns } from '@/lib/pen/merge-detect'
 import { LangProvider, useCopy, useLang } from './LangContext'
 import { APP_COPY, type AppCopy } from './PenApp.copy'
 import { typeLabel, bucketLabel, plural, shortDate, fmtDate, LOCALE, type Lang } from '@/lib/pen/i18n'
+import { SUPPORT_EMAIL } from '@/lib/support'
 
 /**
  * What the main column is showing. Chat and pages are views, not overlays: the whole point
@@ -1574,6 +1575,10 @@ function Account({ email, name, avatar, onTour }: { email: string; name?: string
             <Icon name="link" size={17} />
             {T.inviteFriends}
           </Link>
+          <a href={`mailto:${SUPPORT_EMAIL}?subject=Juno%20Pen`} className="pen-acct2-item">
+            <Icon name="mail" size={17} />
+            {T.help}
+          </a>
           {onTour && (
             <button type="button" className="pen-acct2-item" onClick={() => { setOpen(false); onTour() }}>
               <Icon name="sparkle" size={17} />

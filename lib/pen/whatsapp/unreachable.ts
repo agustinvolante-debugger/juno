@@ -22,7 +22,7 @@ import type { FailedStatus } from './meta'
 const NOTIFY_CODES = new Set([130497, 131026])
 const QUIET_MS = 30 * 24 * 60 * 60 * 1000
 
-type Copy = { subject: string; lead: string; country: string; device: string; meanwhile: string; other: string; open: string }
+type Copy = { subject: string; lead: string; country: string; device: string; meanwhile: string; other: string; open: string; reply: string }
 
 const MAIL: Record<Lang, Copy> = {
   en: {
@@ -33,6 +33,7 @@ const MAIL: Record<Lang, Copy> = {
     meanwhile: 'Everything else works: upload recordings, read your notes and ask about your calls in the app, and your briefings keep arriving by email.',
     other: 'If you have a number from another country, you can link that one instead in Settings, WhatsApp.',
     open: 'Open Juno Pen',
+    reply: 'Questions? Just reply to this email.',
   },
   es: {
     subject: 'Juno Pen no puede responderte por WhatsApp',
@@ -42,6 +43,7 @@ const MAIL: Record<Lang, Copy> = {
     meanwhile: 'Todo lo demás funciona: sube grabaciones, lee tus notas y pregunta por tus reuniones en la app, y los resúmenes te siguen llegando por correo.',
     other: 'Si tienes un número de otro país, puedes vincular ese en Configuración, WhatsApp.',
     open: 'Abrir Juno Pen',
+    reply: '¿Preguntas? Solo responde este correo.',
   },
   pt: {
     subject: 'O Juno Pen não consegue responder você no WhatsApp',
@@ -51,6 +53,7 @@ const MAIL: Record<Lang, Copy> = {
     meanwhile: 'Todo o resto funciona: envie gravações, leia suas notas e pergunte sobre suas reuniões no app, e os resumos continuam chegando por e-mail.',
     other: 'Se você tem um número de outro país, pode vincular esse em Configurações, WhatsApp.',
     open: 'Abrir o Juno Pen',
+    reply: 'Dúvidas? É só responder este e-mail.',
   },
 }
 
@@ -100,8 +103,9 @@ async function notifyOne(f: FailedStatus): Promise<void> {
       `<p style="color:#514E45">${M.meanwhile}</p>` +
       (f.code === 130497 ? `<p style="color:#514E45">${M.other}</p>` : '') +
       `<p><a href="${base}" style="color:#0B6B44">${M.open}</a></p>` +
+      `<p style="color:#514E45">${M.reply}</p>` +
       `</body></html>`,
-    text: [M.lead, why, M.meanwhile, f.code === 130497 ? M.other : '', `${M.open}: ${base}`].filter(Boolean).join('\n\n'),
+    text: [M.lead, why, M.meanwhile, f.code === 130497 ? M.other : '', `${M.open}: ${base}`, M.reply].filter(Boolean).join('\n\n'),
   })
   if (!r.ok) throw new Error(r.error ?? 'email not sent')
 }
