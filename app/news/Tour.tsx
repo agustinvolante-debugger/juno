@@ -20,7 +20,7 @@ const STEPS: Record<'en' | 'es', Step[]> = {
     { target: '.db-sections > section .db-sec-ctl', title: 'Make each section yours', body: 'The menu on every section moves it up or down, shrinks it, tells it what to focus on, or hides it. On a computer, drag the handle to reorder.' },
     { target: '.db-row-acts, .db-act', title: 'Save for later', body: 'The star keeps a story in Saved, so you can come back to it on any device.' },
     { target: '.db-mm', title: 'Your markets', body: 'Edit chooses which markets you see: indexes, US bonds, Chile’s figures, or any company by name.' },
-    { target: '.db-avatar', title: 'Language and help', body: 'Switch between English and Spanish, refresh, or open this tutorial again.' },
+    { target: '.db-avatar', title: 'Your profile and help', body: 'Your profile changes what you read, watch, track and the language. This tutorial is here too.' },
     { title: 'You’re all set', body: 'Everything refreshes on its own while the page is open, including the sections you add. Enjoy the read.' },
   ],
   es: [
@@ -31,7 +31,7 @@ const STEPS: Record<'en' | 'es', Step[]> = {
     { target: '.db-sections > section .db-sec-ctl', title: 'Cada sección a tu gusto', body: 'El menú de cada sección la sube o la baja, la achica, le dice en qué enfocarse o la oculta. En el computador, arrastra la manilla para ordenar.' },
     { target: '.db-row-acts, .db-act', title: 'Guardar para después', body: 'La estrella deja una noticia en Guardados, para volver a ella desde cualquier dispositivo.' },
     { target: '.db-mm', title: 'Tus mercados', body: 'Editar elige qué mercados ves: índices, bonos de EE. UU., las cifras de Chile o cualquier empresa por su nombre.' },
-    { target: '.db-avatar', title: 'Idioma y ayuda', body: 'Cambia entre inglés y español, actualiza, o vuelve a abrir este tutorial.' },
+    { target: '.db-avatar', title: 'Tu perfil y ayuda', body: 'En Tu perfil cambias qué lees, ves y sigues, y el idioma. Este tutorial también está aquí.' },
     { title: 'Todo listo', body: 'Todo se actualiza solo mientras la página está abierta, también las secciones que agregues. Buena lectura.' },
   ],
 }

@@ -67,6 +67,9 @@ type AccountRow = {
   last_seen_at?: string | null; last_login_at?: string | null
 }
 
+const latest = (...xs: (string | null | undefined)[]): string | null =>
+  xs.filter((x): x is string => !!x && !isNaN(Date.parse(x))).sort((p, q) => Date.parse(q) - Date.parse(p))[0] ?? null
+
 async function rows<T>(table: string, select = '*'): Promise<T[]> {
   const { data, error } = await supabaseAdmin.from(table).select(select)
   if (error) {
@@ -155,7 +158,9 @@ export async function listCustomers(now = new Date()): Promise<{ customers: Cust
       boughtLeftSec: allowance.boughtLeftSec,
       spentCents: spent.get(email) ?? 0,
       lastActiveAt: last,
-      lastSeenAt: [a?.last_seen_at, a?.last_login_at].filter(Boolean).sort().pop() ?? null,
+      // Newest of: opened the app, signed in, recorded something (covers people without tracking yet).
+      // created_at, not recorded_at: the upload time is our clock; a recorder's own clock can be off by hours.
+      lastSeenAt: latest(a?.last_seen_at, a?.last_login_at, mine.map((m) => m.created_at).sort().pop() ?? null),
       lastLoginAt: a?.last_login_at ?? null,
     }
   })

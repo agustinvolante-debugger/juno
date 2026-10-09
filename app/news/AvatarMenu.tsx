@@ -33,6 +33,7 @@ export default function AvatarMenu({ email, lang }: { email: string; lang: strin
               <button type="button" aria-pressed={lang === 'es'} onClick={() => setLang('es')}>ES</button>
             </span>
           </div>
+          <a role="menuitem" className="db-menu-item" href="/news/profile"><span>{es ? 'Tu perfil' : 'Your profile'}</span></a>
           <button type="button" role="menuitem" className="db-menu-item" onClick={() => window.dispatchEvent(new Event('db:tour'))}>
             <span>{es ? 'Ver el tutorial' : 'Show the tutorial'}</span>
           </button>

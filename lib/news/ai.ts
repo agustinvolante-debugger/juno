@@ -359,11 +359,13 @@ export async function translateTitles(titles: string[], target: 'en' | 'es' = 'e
 
 // "Today's briefing" — three one-sentence bullets over the ranked Top 7, each pointing at the
 // story it summarises. Called at most once per user per day (cached in prefs.layout.briefing).
-export async function dailyBriefing(items: { t: string; s: string }[], lang = 'en'): Promise<{ i: number; text: string }[]> {
+export async function dailyBriefing(items: { t: string; s: string }[], lang = 'en', about = ''): Promise<{ i: number; text: string }[]> {
   if (!items.length) return []
   const list = items.slice(0, 7).map((it, i) => `${i}. ${it.t} (${it.s})`).join('\n')
+  // From the reader's profile page: who they are steers which stories and why they matter.
+  const reader = about.trim() ? `The reader describes themselves: "${about.trim().slice(0, 500)}". Pick and explain with that in mind.\n` : ''
   const prompt =
-    `These are today's top stories for a busy founder:\n${list}\n\n` +
+    `These are today's top stories for ${about.trim() ? 'this reader' : 'a busy founder'}:\n${list}\n\n` + reader +
     'Write EXACTLY 3 bullets for a morning briefing. Each bullet: one plain sentence, at most 24 words, ' +
     'saying what happened and why it matters, grounded ONLY in the headline (no invented numbers). ' +
     'Pick the 3 most consequential stories; each bullet cites the index of its story. ' +

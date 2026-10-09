@@ -3,6 +3,7 @@ import { SECTIONS, ES_NATIVE, DEFAULT_STATS, STATS_CATALOG, COUNTRY_ORDER, inter
 import { clusterItems, scoreClusters, pickTop, leadDek, isSportsLabel, youtubeId, dayKey, linkKey, type Pooled, type Cluster, type Profile } from '@/lib/news/rank'
 import { translateTitles } from '@/lib/news/ai'
 import { authedEmail } from '@/lib/news/auth'
+import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { Row, Lead, VideoRow, MarketTile, MarketChip, IconSprite, type Tile } from './parts'
 import type { SavedItem } from './savedStore'
@@ -102,6 +103,11 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
   const lang = prefs.lang
   const es = lang === 'es'
   const L = prefs.layout || {}
+  // A reader's first visit after signing in goes to the profile page; after it's saved, always the brief.
+  // Existing readers (sections already set up, or the tour seen) are never sent there.
+  if (email && !L.profile?.done && !L.onboarded && topics.length === 0 && monitors.length === 0 && !(L.videos || []).length) {
+    redirect('/news/profile?first=1')
+  }
   const hidden: string[] = L.hidden || []
   const mini = new Set<string>(L.grid?.mini || [])
   const order: string[] = L.grid?.order || []
@@ -129,8 +135,9 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
   }
   for (const t of topics) blocks.push({ id: 'topic_' + slug(t.query), key: 'topic', label: t.query, kind: 'topic', items: tiered(t.items || []), brief: t.brief, sports: isSportsLabel('', t.query) })
   for (const v of videos) blocks.push({ id: v.key, key: v.key, label: v.label, kind: 'uservideo', items: v.items || [], sports: isSportsLabel(v.key, v.label) })
-  // Respect the saved section order; anything new (a fresh topic, Geopolitics) leads.
-  const rank = (id: string) => { const i = order.indexOf(id); return i < 0 ? -1 : i }
+  // Respect the saved section order; anything new leads, and a reader's own topics lead the
+  // standard sections (a new reader's chosen topics shouldn't sit under eight built-in ones).
+  const rank = (id: string) => { const i = order.indexOf(id); return i >= 0 ? i : id.startsWith('topic_') ? -2 : -1 }
   const visible = blocks.filter((b) => !hidden.includes(b.id))
     .map((b, i) => ({ b, i })).sort((x, y) => (rank(x.b.id) - rank(y.b.id)) || (x.i - y.i)).map((x) => x.b)
   const newsBlocks = visible.filter((b) => b.kind === 'curated' || b.kind === 'topic')
@@ -290,7 +297,7 @@ export default async function NewsPage({ searchParams }: { searchParams: Promise
       <AutoRefresh signedIn={!!email} lang={lang} />
       <Toaster lang={lang} />
       {email && <SectionDnD lang={lang} />}
-      {email && <Tour lang={lang} autoStart={!L.onboarded && topics.length === 0 && videos.length === 0 && monitors.length === 0} />}
+      {email && <Tour lang={lang} autoStart={!L.onboarded && (!!L.profile?.first || (topics.length === 0 && videos.length === 0 && monitors.length === 0))} />}
       <HtmlLang lang={lang} />
       <SwRegister />
       <ReaderState saved={saved} authed={!!email} lang={lang} />

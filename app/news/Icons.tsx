@@ -45,3 +45,6 @@ export const SlidersIcon = ({ size, className }: P) => (
 export const GripIcon = ({ size, className }: P) => (
   <svg {...base(size)} className={className} fill="currentColor" stroke="none"><circle cx="6" cy="3.5" r="1.1" /><circle cx="10" cy="3.5" r="1.1" /><circle cx="6" cy="8" r="1.1" /><circle cx="10" cy="8" r="1.1" /><circle cx="6" cy="12.5" r="1.1" /><circle cx="10" cy="12.5" r="1.1" /></svg>
 )
+export const BellIcon = ({ size, className }: P) => (
+  <svg {...base(size)} className={className}><path d="M4 11.5V7.2a4 4 0 018 0v4.3l1.2 1.3H2.8zM6.6 14.2a1.5 1.5 0 002.8 0" /></svg>
+)

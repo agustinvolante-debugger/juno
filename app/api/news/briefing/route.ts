@@ -25,7 +25,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, cached: true, briefing: cur })
   }
   if (!items.length) return NextResponse.json({ error: 'no items' }, { status: 400 })
-  const bullets = (await dailyBriefing(items, lang)).map((b) => ({ t: b.text, l: items[b.i].l }))
+  const bullets = (await dailyBriefing(items, lang, String(layout?.profile?.about || ''))).map((b) => ({ t: b.text, l: items[b.i].l }))
   if (!bullets.length) return NextResponse.json({ error: 'briefing unavailable' }, { status: 502 })
   const briefing = { day, lang, at: new Date().toISOString(), bullets }
   // Re-read right before writing so a concurrent prefs write (save, minimize) isn't clobbered.
