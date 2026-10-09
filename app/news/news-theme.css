@@ -1259,3 +1259,7 @@ a.db-menu-item { color: inherit; text-decoration: none; }
   .db-prof-bell { width: 40px; padding: 0; justify-content: center; }
   .db-prof-item .db-iconbtn { width: 40px; height: 40px; }
 }
+
+.db-prof-skip { margin-right: auto; padding: 8px 2px; color: var(--ink-2); background: none; border: 0; font: 500 14px var(--sans); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.db-prof-skip:hover { color: var(--ink); }
+@media (max-width: 780px) { .db-prof-skip { min-height: 44px; } }

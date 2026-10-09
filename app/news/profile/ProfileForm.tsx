@@ -27,7 +27,7 @@ const T = {
     watchP: 'e.g. cooking, Chilean football, history', juno: 'Juno’s sections', junoS: 'Ready-made sections from hand-picked sources. Optional.', markets: 'Your markets', marketsS: 'Tap what you want on your panel.',
     stocks: 'Stocks', stockP: 'Search a company: Microsoft, Tesla…', email: 'Morning email',
     emailS: 'Your briefing and top stories in your inbox each morning.',
-    save: 'Save', saveFirst: 'Save and see my brief', saving: 'Saving…', saved: 'Saved',
+    save: 'Save', saveFirst: 'Save and see my brief', saving: 'Saving…', saved: 'Saved', skip: 'Skip for now',
     building: 'Setting up your page', buildingS: 'Building the sections you asked for. This takes a few seconds each.',
     remove: 'Remove', none: 'Nothing yet. Pick some ideas below or type your own.', limit: 'Up to 6 topics can be followed closely.',
   },
@@ -45,7 +45,7 @@ const T = {
     watchP: 'p. ej. cocina, fútbol chileno, historia', juno: 'Secciones de Juno', junoS: 'Secciones listas con fuentes elegidas a mano. Opcional.', markets: 'Tus mercados', marketsS: 'Toca lo que quieres en tu panel.',
     stocks: 'Acciones', stockP: 'Busca una empresa: Microsoft, Tesla…', email: 'Email de la mañana',
     emailS: 'Tu resumen y las noticias principales en tu correo cada mañana.',
-    save: 'Guardar', saveFirst: 'Guardar y ver mi brief', saving: 'Guardando…', saved: 'Guardado',
+    save: 'Guardar', saveFirst: 'Guardar y ver mi brief', saving: 'Guardando…', saved: 'Guardado', skip: 'Saltar por ahora',
     building: 'Armando tu página', buildingS: 'Creando las secciones que pediste. Toma unos segundos cada una.',
     remove: 'Quitar', none: 'Nada todavía. Elige ideas abajo o escribe las tuyas.', limit: 'Puedes seguir de cerca hasta 6 temas.',
   },
@@ -259,6 +259,18 @@ export default function ProfileForm({ first, initial }: { first: boolean; initia
       <div className="db-prof-foot">
         <div className="db-prof-foot-in">
           <span className="db-prof-state" aria-live="polite">{status === 'saved' ? t.saved : ''}</span>
+          {/* Never trap anyone on the first visit: skipping keeps every standard section and the
+              profile stays one tap away in the avatar menu. Marked done so /news stops sending them here. */}
+          {first && (
+            <button type="button" className="db-prof-skip" disabled={status === 'saving'}
+              onClick={async () => {
+                setStatus('saving')
+                await fetch('/api/news/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lang, layout: { profile: { done: true, first: true, skipped: true, at: new Date().toISOString() } } }) }).catch(() => {})
+                window.location.href = '/news'
+              }}>
+              {t.skip}
+            </button>
+          )}
           <button type="button" className="db-btn is-ink db-prof-save" onClick={save} disabled={status === 'saving'}>
             {status === 'saving' ? t.saving : first ? t.saveFirst : t.save}
           </button>
