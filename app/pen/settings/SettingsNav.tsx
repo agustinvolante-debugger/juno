@@ -49,10 +49,14 @@ export default function SettingsNav({ whatsapp = false, billing = false, notion 
           <span className="pen-cat-label">{T.billing}</span>
         </Link>
       )}
-      {/* Goes to the support inbox (a Google Group the founders read), not a help centre. */}
+      {/* Goes to the support inbox (a Google Group the founders read). The address is shown too,
+          because a mailto does nothing on a computer with no mail app set up. */}
       <a href={`mailto:${SUPPORT_EMAIL}?subject=Juno%20Pen`} className="pen-cat">
         <Icon name="mail" size={19} />
-        <span className="pen-cat-label">{T.help}</span>
+        <span className="pen-cat-label">
+          {T.help}
+          <span className="pen-help-addr">{SUPPORT_EMAIL}</span>
+        </span>
       </a>
     </nav>
   )

@@ -41,7 +41,6 @@ const T = {
     expired: 'Sign-in links work once, for 15 minutes. Send yourself a new one below.',
     failed: 'Something went wrong. Please try again.',
     help: 'Trouble signing in?',
-    contact: 'Email us',
     privacy: 'Privacy',
     terms: 'Terms',
   },
@@ -69,7 +68,6 @@ const T = {
     expired: 'Los enlaces sirven una vez, durante 15 minutos. Pide uno nuevo abajo.',
     failed: 'Algo falló. Inténtalo de nuevo.',
     help: '¿Problemas para entrar?',
-    contact: 'Escríbenos',
     privacy: 'Privacidad',
     terms: 'Términos',
   },
@@ -97,7 +95,6 @@ const T = {
     expired: 'Os links funcionam uma vez, por 15 minutos. Peça um novo abaixo.',
     failed: 'Algo deu errado. Tente de novo.',
     help: 'Problemas para entrar?',
-    contact: 'Fale com a gente',
     privacy: 'Privacidade',
     terms: 'Termos',
   },
@@ -230,7 +227,8 @@ function SignInContent() {
       )}
 
       <nav className="auth-foot">
-        <a href={`mailto:${SUPPORT_EMAIL}?subject=Sign-in%20help`}>{L.help} {L.contact}</a>
+        {/* The address is shown, not hidden behind "Email us": a mailto does nothing on a computer with no mail app set up. */}
+        <span>{L.help} <a href={`mailto:${SUPPORT_EMAIL}?subject=Sign-in%20help`}>{SUPPORT_EMAIL}</a></span>
         {fromPen && <a href={`/privacy${lang === 'en' ? '' : `?lang=${lang}`}`}>{L.privacy}</a>}
         {fromPen && <a href={`/terms${lang === 'en' ? '' : `?lang=${lang}`}`}>{L.terms}</a>}
       </nav>

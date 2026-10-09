@@ -444,25 +444,13 @@ export default function PenApp({
 
   /* ---------------------------------------------------------------- connect */
 
-  async function connectPen() {
+  // Opens the same file picker as "Add audio files". It used to open a folder picker
+  // (showDirectoryPicker), which greys out the files themselves, so people with the pen
+  // plugged in couldn't see what to pick (9 Oct). Picking the recordings works everywhere.
+  function connectPen() {
     if (locked) return
     setErr(null)
-    try {
-      const dir = await window.showDirectoryPicker!({ id: 'pen-recorder', mode: 'read' })
-      const found: File[] = []
-      for await (const entry of dir.values()) {
-        if (entry.kind === 'file' && MEDIA_RE.test(entry.name) && entry.getFile) found.push(await entry.getFile())
-      }
-      if (!found.length) {
-        setErr(T.noRecordingsIn(dir.name))
-        return
-      }
-      found.sort((a, b) => b.lastModified - a.lastModified)
-      setPenName(dir.name)
-      setPending(found.map((f) => ({ file: f, picked: true })))
-    } catch (e) {
-      if ((e as Error).name !== 'AbortError') setErr((e as Error).message)
-    }
+    fileInput.current?.click()
   }
 
   function addFiles(files: FileList | File[]) {
@@ -1053,12 +1041,10 @@ export default function PenApp({
         </div>
       ) : (
       <>
-      {supportsPicker ? (
-        <button className="pen-connect" onClick={connectPen}>
-          <Icon name="link" size={18} />
-          {T.connectPen}
-        </button>
-      ) : null}
+      <button className="pen-connect" onClick={connectPen}>
+        <Icon name="link" size={18} />
+        {T.connectPen}
+      </button>
 
       {/* The drop target belongs next to Connect pen: they are the two ways a recording gets
           in, and separating them meant the only visible route on a browser without the
@@ -1312,11 +1298,6 @@ export default function PenApp({
       {heldNotice && (
         <Banner tone="warn" onClose={() => setHeldNotice(false)}>
           {T.heldNotice}
-        </Banner>
-      )}
-      {mounted && !supportsPicker && (
-        <Banner tone="warn">
-          {T.noPicker}
         </Banner>
       )}
 
@@ -1577,7 +1558,10 @@ function Account({ email, name, avatar, onTour }: { email: string; name?: string
           </Link>
           <a href={`mailto:${SUPPORT_EMAIL}?subject=Juno%20Pen`} className="pen-acct2-item">
             <Icon name="mail" size={17} />
-            {T.help}
+            <span>
+              {T.help}
+              <span className="pen-help-addr">{SUPPORT_EMAIL}</span>
+            </span>
           </a>
           {onTour && (
             <button type="button" className="pen-acct2-item" onClick={() => { setOpen(false); onTour() }}>

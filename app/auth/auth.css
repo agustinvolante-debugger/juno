@@ -44,5 +44,6 @@
 .auth-sent { text-align: center; }
 .auth-sent-icon { width: 52px; height: 52px; margin: 8px auto 14px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-wash); color: var(--accent); }
 .auth-foot { margin-top: 22px; display: flex; justify-content: center; gap: 16px; font-size: 12px; }
-.auth-foot a { color: var(--faint); text-decoration: none; }
+.auth-foot, .auth-foot a { color: var(--faint); text-decoration: none; }
+.auth-foot span a { text-decoration: underline; text-underline-offset: 2px; }
 .auth-foot a:hover { color: var(--soft); }
