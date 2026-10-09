@@ -51,7 +51,7 @@ const BP_EN = {
   stripeTitle: 'Card and invoices',
   stripeLede: 'Change your card or download invoices. This opens our payment provider, Stripe, and brings you back here.',
   open: 'Open billing',
-  noStripe: 'Your account isn’t billed through Stripe, so there is nothing to manage here.',
+  noStripe: 'Your account has free access: there’s no card, plan or invoice to manage.',
 
   // Cancelling
   cancelTitle: 'Cancel your plan',
@@ -120,7 +120,7 @@ const BP: Copy<typeof BP_EN> = {
     stripeTitle: 'Tarjeta y facturas',
     stripeLede: 'Cambia tu tarjeta o descarga facturas. Se abre nuestro proveedor de pagos, Stripe, y vuelves aquí.',
     open: 'Abrir facturación',
-    noStripe: 'Tu cuenta no se cobra a través de Stripe, así que no hay nada que gestionar aquí.',
+    noStripe: 'Tu cuenta tiene acceso gratuito: no hay tarjeta, plan ni facturas que gestionar.',
     cancelTitle: 'Cancelar tu plan',
     cancelLede: (d) => `Tu plan sigue hasta el ${d} de todas formas. Cancelar evita el próximo cobro.`,
     cancelStart: 'Cancelar plan…',
@@ -184,7 +184,7 @@ const BP: Copy<typeof BP_EN> = {
     stripeTitle: 'Cartão e faturas',
     stripeLede: 'Troque o cartão ou baixe faturas. Isso abre nosso provedor de pagamentos, a Stripe, e traz você de volta.',
     open: 'Abrir cobrança',
-    noStripe: 'Sua conta não é cobrada pela Stripe, então não há nada para gerenciar aqui.',
+    noStripe: 'Sua conta tem acesso gratuito: não há cartão, plano nem faturas para gerenciar.',
     cancelTitle: 'Cancelar seu plano',
     cancelLede: (d) => `Seu plano continua até ${d} de qualquer forma. Cancelar evita a próxima cobrança.`,
     cancelStart: 'Cancelar plano…',

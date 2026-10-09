@@ -22,6 +22,8 @@ export type Missed = { item: string; why: string }
 
 /** Universal fields apply to every meeting; `showing` only appears for property viewings. */
 export type PenNotes = {
+  /** AssemblyAI finished and heard no speech (a pen left on in a pocket). No notes, no email. */
+  empty?: boolean
   meeting_type?: MeetingType
   headline?: string
   summary?: string
@@ -194,6 +196,20 @@ export async function listSessions(userEmail: string, limit = 100): Promise<PenS
     .limit(limit)
   if (error) throw new Error(error.message)
   return (data ?? []) as PenSession[]
+}
+
+/**
+ * The list the app sends to the browser. Same rows as listSessions minus each utterance's
+ * word-level timings (`words`): ~85% of the payload (~10 MB of HTML for a heavy account) and no
+ * screen uses them. Server code that rewrites transcripts (merge, transcribe) keeps listSessions.
+ */
+export async function listSessionsForClient(userEmail: string, limit = 100): Promise<PenSession[]> {
+  const rows = await listSessions(userEmail, limit)
+  return rows.map((s) => {
+    const t = s.transcript as { utterances?: Record<string, unknown>[] } | null | undefined
+    if (!t?.utterances?.length) return s
+    return { ...s, transcript: { ...t, utterances: t.utterances.map(({ words: _w, ...u }) => u) } } as PenSession
+  })
 }
 
 export async function getSession(userEmail: string, id: string): Promise<PenSession | null> {

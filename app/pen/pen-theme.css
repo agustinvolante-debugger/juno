@@ -191,11 +191,11 @@ body:has(.pen-root) {
 .pen-act + .pen-act { border-top: 1px solid var(--hair); }
 .pen-act[data-done='true'] .pen-act-text { color: var(--faint); text-decoration: line-through; }
 .pen-act-box {
-  appearance: none; width: 16px; height: 16px; flex: 0 0 16px; margin-top: 3px; cursor: pointer;
+  appearance: none; width: 20px; height: 20px; flex: 0 0 20px; margin-top: 2px; cursor: pointer;
   border: 1.5px solid #CFC9BC; border-radius: 6px; background: var(--panel); transition: all .12s;
 }
 .pen-act-box:checked { background: var(--good); border-color: var(--good); }
-.pen-act-box:checked::after { content: '✓'; color: #fff; font-size: 13px; display: block; text-align: center; line-height: 13px; }
+.pen-act-box:checked::after { content: '✓'; color: #fff; font-size: 14px; display: block; text-align: center; line-height: 17px; }
 
 /* "What you might have missed" — the most valuable block, so it gets its own texture */
 .pen-missed {
@@ -3508,13 +3508,14 @@ html.pen-m-lock, html.pen-m-lock body { height: 100%; overflow: hidden; overscro
 
 /* Recording actions on a phone: one row that scrolls sideways, thumb-sized, instead of a
    tall stack of full-width buttons. */
-.pen-m-body .pen-d-actions {
-  flex-wrap: nowrap; overflow-x: auto; margin: 0 -16px; padding: 4px 16px; width: calc(100% + 32px);
-  scrollbar-width: none;
-}
-.pen-m-body .pen-d-actions::-webkit-scrollbar { display: none; }
-.pen-m-body .pen-d-actions > * { flex: none; }
+/* Phone: Send stays as the one main button; everything else sits behind "⋯" (the old
+   sideways-scrolling strip hid Send and Delete off-screen with no hint). */
+.pen-m-body .pen-d-actions { flex-wrap: nowrap; }
 .pen-m-body .pen-d-actions .pen-btn { min-height: 44px; white-space: nowrap; }
+.pen-m-body .pen-d-actions > :first-child { flex: 1; }
+.pen-m-body .pen-d-actions > :first-child .pen-btn { width: 100%; justify-content: center; }
+.pen-m-body .pen-d-sec { display: none; }
+.pen-m-body .pen-d-more { display: block; }
 
 /* Phones: the mark alone carries the brand so Sign in and the CTA both fit. */
 @media (max-width: 460px) { .pen-lp-nav .pen-lp-wordmark { display: none; } .pen-lp-nav nav { gap: 8px; } }
@@ -3956,3 +3957,45 @@ html.pen-m-lock, html.pen-m-lock body { height: 100%; overflow: hidden; overscro
 }
 @media (prefers-reduced-motion: reduce) { .pen-nt-row[data-new='true'] { animation: none; } }
 .pen-lp2-notion-points svg { flex: none; margin-top: 4px; }
+
+/* ------------------------------------------------------------------ recording actions
+   Desktop shows the secondary actions inline; the "⋯" menu exists only on the phone. */
+.pen-d-sec { display: contents; }
+.pen-d-more { display: none; position: relative; }
+.pen-d-more > summary { list-style: none; min-height: 44px; cursor: pointer; }
+.pen-d-more > summary::-webkit-details-marker { display: none; }
+.pen-d-more[open] > summary { background: var(--sunk); }
+.pen-d-menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 30;
+  display: flex; flex-direction: column; align-items: stretch; gap: 4px;
+  min-width: 230px; padding: 8px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: 0 18px 40px -16px rgba(22, 21, 15, .45);
+}
+.pen-d-menu .pen-btn { justify-content: flex-start; width: 100%; min-height: 44px; }
+.pen-d-menu .pen-confirm { flex-wrap: wrap; padding: 6px 4px; }
+
+/* Category changed: rewriting the notes is offered, never automatic. */
+.pen-relabel {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px;
+  margin-top: 14px; padding: 12px 14px;
+  background: var(--accent-wash); border: 1px solid var(--accent-line); border-radius: 12px;
+  font-size: 14.5px; color: var(--ink);
+}
+.pen-relabel-acts { display: flex; gap: 8px; }
+
+/* Phone: the AI summary leads; "Your notes" follows it instead of pushing it ~600px down. */
+.pen-m-body .pen-doc { display: flex; flex-direction: column; }
+.pen-m-body .pen-doc > .pen-aicard { order: -1; margin-bottom: 18px; }
+
+/* Home cards while their data loads: a quiet placeholder instead of a false "0". */
+.pen-skel { display: block; width: 2.2ch; border-radius: 6px; background: var(--sunk); animation: pen-skel 1.2s ease-in-out infinite alternate; }
+.pen-skel-row { height: 18px; margin: 10px 0; border-radius: 6px; background: var(--sunk); animation: pen-skel 1.2s ease-in-out infinite alternate; list-style: none; }
+.pen-skel-row:nth-child(2) { width: 82%; } .pen-skel-row:nth-child(3) { width: 64%; }
+@keyframes pen-skel { from { opacity: .55; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .pen-skel, .pen-skel-row { animation: none; } }
+
+.pen-title-h { margin: 0; font: inherit; }
+/* Phone: to-do boxes big enough to hit with a thumb. */
+.pen-m-body .pen-act-box { width: 24px; height: 24px; flex-basis: 24px; margin-top: 0; }
+.pen-m-body .pen-act-box:checked::after { font-size: 16px; line-height: 21px; }

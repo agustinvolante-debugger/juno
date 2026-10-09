@@ -23,6 +23,9 @@ export const COMMON_TYPES = [
   'Property viewing', 'Client meeting', 'Coffee', 'Interview', 'Team meeting',
   'One-on-one', 'Sales call', 'Discovery call', 'Clinical / admin', 'Site visit',
   'Board meeting', 'Lecture or talk', 'Phone call', 'Personal note',
+  // Added 9 Oct from what the categoriser kept inventing (and leaving untranslated).
+  'Business discussion', 'Brainstorm', 'Pitch or demo', 'Conference', 'Family conversation',
+  'School meeting', 'Coaching', 'Planning session',
 ] as const
 
 /**

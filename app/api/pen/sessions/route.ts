@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
 import { pausedRefusal } from '@/lib/pen/pause'
-import { createSession, listSessions } from '@/lib/pen/store'
+import { createSession, listSessionsForClient } from '@/lib/pen/store'
 import { linkPerson, ownedPeople, upsertByName } from '@/lib/pen/people'
 
 export const dynamic = 'force-dynamic'
@@ -10,7 +10,7 @@ export async function GET() {
   const email = await authedEmail()
   if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   try {
-    return NextResponse.json({ sessions: await listSessions(email) })
+    return NextResponse.json({ sessions: await listSessionsForClient(email) })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }

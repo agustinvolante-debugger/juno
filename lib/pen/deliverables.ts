@@ -4,10 +4,11 @@
 // because the friction being removed is "I know what I owe someone, I just don't want to write
 // the email". Whole-meeting summaries already exist elsewhere in the product.
 import Anthropic from '@anthropic-ai/sdk'
+import { penAnthropic } from './anthropic'
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
 import type { PenNotes, Deliverable } from './store'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const anthropic = penAnthropic('deliverables')
 const MODEL = 'claude-opus-5-5'
 
 export type DeliverableKind = Deliverable['kind']

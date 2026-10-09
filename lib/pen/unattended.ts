@@ -6,7 +6,8 @@
 
 import { autoToNotion } from './notion'
 import { getSession, updateSession } from './store'
-import { writeNotes } from './pipeline'
+import { writeNotes, EmptyRecording } from './pipeline'
+import { briefBatch } from './batch'
 import { sendBriefing, sendFailureNotice, sendReadyNotice, hasSomethingToSay } from './briefing'
 import { autoJoin } from './merge'
 import { enrichPerson, peopleOnSession } from './people'
@@ -16,9 +17,11 @@ import { sendWhatsAppBriefing, sendWhatsAppFailure } from './whatsapp/bot'
 export async function runUnattended(sessionId: string, email: string) {
   let sourceName = 'your recording'
   let whatsapp = false
+  let createdAt: string | null = null
   try {
     const fresh = await getSession(email, sessionId)
     if (!fresh) return
+    createdAt = fresh.created_at
     sourceName = fresh.source_name ?? 'your recording'
     whatsapp = fresh.source_channel === 'whatsapp'
 
@@ -74,6 +77,13 @@ export async function runUnattended(sessionId: string, email: string) {
     // Belt and braces against a retry that slipped past the claim.
     if (noted.briefing_sent_at) return
 
+    // Uploads (not WhatsApp) are briefed as a batch: one email for everything that arrived
+    // together, sent by whichever finishes last (lib/pen/batch.ts).
+    if (!whatsapp && noted.source_channel !== 'whatsapp') {
+      await briefBatch(email, noted)
+      return
+    }
+
     // Nothing to brief (no summary, to-dos, near-misses or questions). The upload screen
     // promised an email when it's ready, so a short "it's ready" one goes instead of silence.
     if (!hasSomethingToSay(noted)) {
@@ -94,7 +104,12 @@ export async function runUnattended(sessionId: string, email: string) {
       console.warn(`pen: briefing not sent for ${noted.id}: ${sent.error}`)
     }
   } catch (e) {
-    await sendFailureNotice({ to: email, sourceName, reason: (e as Error).message }).catch(() => {})
-    if (whatsapp) await sendWhatsAppFailure(email, sourceName)
+    // Nobody spoke (a pen left on in a pocket): settled quietly, no failure email.
+    if (!(e instanceof EmptyRecording)) {
+      await sendFailureNotice({ to: email, sourceName, reason: (e as Error).message }).catch(() => {})
+      if (whatsapp) await sendWhatsAppFailure(email, sourceName)
+    }
+    // Batch-mates may be waiting on this one to finish before their email goes out.
+    if (createdAt && !whatsapp) await briefBatch(email, { id: sessionId, created_at: createdAt }).catch(() => {})
   }
 }

@@ -11,11 +11,12 @@
 import { isViewing } from '@/lib/pen/categories'
 export { isViewing }
 import Anthropic from '@anthropic-ai/sdk'
+import { penAnthropic } from './anthropic'
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
 import { mustStream } from './anthropic-limits'
 import type { PenNotes, MeetingType } from './store'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const anthropic = penAnthropic('notes')
 // Opus 5.5, measured against Opus 5 on a real 92-minute transcript rather than assumed:
 // 30% cheaper ($4/$20 against $5/$25, and it wrote 26% fewer output tokens), 40% faster
 // (36s against 61s), and the notes were at least as good — it was the only model of four that
@@ -288,7 +289,8 @@ const PROFILE_SCHEMA = {
 /** The compounding piece: what one set of people actually wants, learned across meetings. */
 export async function updateClientProfile(prior: unknown, latest: PenNotes) {
   const res = await anthropic.messages.parse({
-    model: MODEL,
+    // A small structured merge: Sonnet at low effort, not Opus (the notes themselves stay on Opus).
+    model: 'claude-sonnet-5-5',
     max_tokens: 8000,
     system:
       'You maintain a running picture of what one set of people wants, across many meetings. ' +
@@ -298,7 +300,7 @@ export async function updateClientProfile(prior: unknown, latest: PenNotes) {
     messages: [
       { role: 'user', content: `Existing picture:\n${JSON.stringify(prior ?? {})}\n\nNewest meeting:\n${JSON.stringify(latest)}` },
     ],
-    output_config: { format: jsonSchemaOutputFormat(PROFILE_SCHEMA) },
+    output_config: { effort: 'low', format: jsonSchemaOutputFormat(PROFILE_SCHEMA) },
   })
   return res.parsed_output
 }

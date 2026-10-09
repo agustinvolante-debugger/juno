@@ -10,10 +10,11 @@
 // per recorded hour and writes a few hundred.
 
 import Anthropic from '@anthropic-ai/sdk'
+import { penAnthropic } from './anthropic'
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
 import type { Utterance } from './store'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const anthropic = penAnthropic('cleanup')
 // Sonnet, not Haiku: measured 24 Sep on a Chilean-Spanish call, Haiku made 11-14 changes of which
 // ~5 were guesses (vocabulary forced in, slang "standardised"); Sonnet made 4, all correct.
 // Sonnet 5.5 from 30 Sep: on two Chilean-Spanish calls it made no wrong edits and ran 3-4x faster
@@ -108,7 +109,8 @@ export async function cleanupTranscript(
         max_tokens: 8000,
         system: SYSTEM,
         messages: [{ role: 'user', content: `${header}\nTranscript:\n${body}` }],
-        output_config: { format: jsonSchemaOutputFormat(SCHEMA) },
+        // Low effort: spotting plain mishearings needs little reasoning, and Sonnet 5.5 defaults to high.
+        output_config: { format: jsonSchemaOutputFormat(SCHEMA), effort: 'low' },
       })
       return (res.parsed_output as { fixes: { i: number; text: string }[] } | null)?.fixes ?? []
     }),

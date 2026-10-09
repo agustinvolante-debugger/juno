@@ -9,7 +9,9 @@
 // mentions "the lender" and "my wife", and a contact list that fills itself with those is a
 // list nobody trusts.
 
+import { userLang } from './user-lang'
 import Anthropic from '@anthropic-ai/sdk'
+import { penAnthropic } from './anthropic'
 import { isSelfName } from './speakers'
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
 import { supabaseAdmin } from '@/lib/supabase'
@@ -227,7 +229,7 @@ function schemaHint(message: string): string {
 
 /* ------------------------------------------------------------- enrichment */
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const anthropic = penAnthropic('people')
 // Summarising what is already in the notes, not reading transcripts. Haiku is plenty.
 const MODEL = 'claude-haiku-5-5'
 
@@ -250,6 +252,8 @@ const PERSON_SCHEMA = {
  * linked to. Reads notes, not transcripts: they are short, already name who said what, and
  * twenty recordings of notes fit where two transcripts would not.
  */
+const CARD_LANG = { en: 'English', es: 'Spanish', pt: 'Portuguese' } as const
+
 export async function enrichPerson(userEmail: string, personId: string): Promise<void> {
   const [person] = await ownedPeople(userEmail, [personId])
   if (!person) return
@@ -288,7 +292,9 @@ export async function enrichPerson(userEmail: string, personId: string): Promise
           // card once described a realtor friend as a co-founder, because that is how the
           // conversation happened to sound.
           (person.about ? `What the user says about them (treat as fact; the notes may mislead): ${person.about}\n` : '') +
-          `\nMeetings they were in:\n${corpus}`,
+          `\nMeetings they were in:\n${corpus}` +
+          // The card is for the user, so it is in their app language, whatever the meetings were in.
+          `\n\nWrite role, company and summary in ${CARD_LANG[await userLang(userEmail)]}. Keep names as spoken.`,
       },
     ],
     output_config: { format: jsonSchemaOutputFormat(PERSON_SCHEMA) },

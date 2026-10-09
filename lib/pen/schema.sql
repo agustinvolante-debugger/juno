@@ -365,3 +365,18 @@ create index if not exists pen_clients_user on pen_clients(user_email);
 -- 2026-10-08 · "Last seen" on /pen/customers (lib/pen/accounts.ts noteSeen)
 alter table pen_accounts add column if not exists last_login_at timestamptz;
 alter table pen_accounts add column if not exists last_seen_at timestamptz;
+
+-- 2026-10-09 · pen_usage: tokens and cost of every model call (lib/pen/usage.ts)
+create table if not exists public.pen_usage (
+  id                 bigint generated always as identity primary key,
+  at                 timestamptz not null default now(),
+  feature            text not null,
+  model              text not null,
+  input_tokens       int not null default 0,
+  output_tokens      int not null default 0,
+  cache_read_tokens  int not null default 0,
+  cache_write_tokens int not null default 0,
+  cost_usd           numeric
+);
+create index if not exists pen_usage_at on public.pen_usage (at);
+alter table public.pen_usage enable row level security;  -- service role only

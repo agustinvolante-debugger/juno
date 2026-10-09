@@ -222,6 +222,8 @@ export default function PenApp({
   }, [])
   // Everyone the user has added, for the @ picker. Refreshed when a recording's People change.
   const [people, setPeople] = useState<PersonCard[]>([])
+  // Until the first fetch lands, "no people yet" would be a lie; the card shows a placeholder.
+  const [peopleLoaded, setPeopleLoaded] = useState(false)
   const [txImport, setTxImport] = useState(false)
   const [nImport, setNImport] = useState(false)
   // The tour: once on first sign-in (the account remembers), and from the menu on demand.
@@ -269,6 +271,8 @@ export default function PenApp({
       setPeople((await getJson<{ people: PersonCard[] }>('/api/pen/people')).people)
     } catch {
       /* same */
+    } finally {
+      setPeopleLoaded(true)
     }
   }, [])
   useEffect(() => {
@@ -740,6 +744,7 @@ export default function PenApp({
         <Overview
           stats={stats}
           people={people}
+          peopleLoading={!peopleLoaded}
           onChanged={() => void refresh()}
           onAskPerson={(p) => {
             const label = shortLabel(p.name, new Set())
@@ -1406,6 +1411,7 @@ export default function PenApp({
               <Overview
                 stats={stats}
                 people={people}
+                peopleLoading={!peopleLoaded}
                 onChanged={() => void refresh()}
                 onAskPerson={(p) => {
                   const label = shortLabel(p.name, new Set())
@@ -1784,12 +1790,15 @@ function TitleEdit({
   if (!editing) {
     return (
       <div>
+        {/* The recording's title is the page's heading (screen readers had none on desktop). */}
+        <h1 className="pen-title-h">
         <button className="pen-title" onClick={() => setEditing(true)} title={T.clickRename}>
           <span>{shown}</span>
           <svg className="pen-title-pen" viewBox="0 0 16 16" aria-hidden>
             <path d="M11.2 2.6l2.2 2.2-7.5 7.5-2.9.7.7-2.9 7.5-7.5z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
           </svg>
         </button>
+        </h1>
         {failed && (
           <div className="pen-mono mt-1 text-[13px]" style={{ color: 'var(--bad)' }}>
             {T.renameFailed}
@@ -2021,7 +2030,7 @@ function ImportTray({
       <ul className="mt-4">
         {pending.map((p, i) => (
           <li key={`${p.file.name}-${i}`} className="flex items-center gap-3 border-t py-2.5" style={{ borderColor: 'var(--hair)' }}>
-            <input type="checkbox" className="pen-act-box" checked={p.picked}
+            <input type="checkbox" className="pen-act-box" checked={p.picked} aria-label={p.file.name}
                    onChange={(e) => setPending((prev) => prev.map((x, j) => (j === i ? { ...x, picked: e.target.checked } : x)))} />
             <span className="min-w-0 flex-1 truncate text-[14.5px]">{p.file.name}</span>
             <span className="pen-mono text-[13px]" style={{ color: 'var(--dim)' }}>{fmtMB(p.file.size)}</span>
@@ -2169,7 +2178,7 @@ function Detail({
   notion?: { connected: boolean; sent?: Record<string, string> } | null
   onBack: () => void
   onDelete: () => void
-  onPatch: (p: Partial<Pick<PenSession, 'user_notes' | 'title' | 'client_name' | 'action_done' | 'note_blocks' | 'transcript_edits' | 'briefing_sent_at'>>) => Promise<void>
+  onPatch: (p: Partial<Pick<PenSession, 'user_notes' | 'title' | 'client_name' | 'action_done' | 'note_blocks' | 'transcript_edits' | 'briefing_sent_at' | 'meeting_type'>>) => Promise<void>
 }) {
   const T = useCopy(APP_COPY)
   const lang = useLang()
@@ -2252,8 +2261,16 @@ function Detail({
 
   async function regenerate(type?: MeetingType) {
     setBusy(true)
+    setPendingType(null)
     await onNotes(type)
     setBusy(false)
+  }
+  // Picking a category used to rewrite the notes on the spot. Now it relabels, and rewriting the
+  // notes for the new type is offered as a separate, explicit step.
+  const [pendingType, setPendingType] = useState<MeetingType | null>(null)
+  function relabel(v: MeetingType) {
+    void onPatch({ meeting_type: v })
+    setPendingType(v)
   }
 
   return (
@@ -2344,6 +2361,16 @@ function Detail({
           )}
         </div>
         <div className="pen-d-actions flex flex-wrap items-center gap-2">
+          <SendBriefing
+            selfEmail={selfEmail}
+            sessionId={session.id}
+            sentAt={session.briefing_sent_at}
+            disabled={!n.summary && !n.actions?.length && !n.missed?.length && !n.open_questions?.length}
+            onSent={(iso) => void onPatch({ briefing_sent_at: iso })}
+          />
+          {/* Desktop: everything inline. Phone: the send button stays, the rest goes in "⋯", because
+              a sideways-scrolling strip hid Send and Delete off-screen. */}
+          <span className="pen-d-sec">
           {/* Keyed off the transcript, not the status. A session can land in `error` with a
               perfectly good transcript (a failed save, a transient API error), and gating the
               retry on status left it with no way out of the UI. */}
@@ -2357,13 +2384,7 @@ function Detail({
               {chatOpen ? T.hideChat : T.askMeeting}
             </button>
           )}
-          <SendBriefing
-            selfEmail={selfEmail}
-            sessionId={session.id}
-            sentAt={session.briefing_sent_at}
-            disabled={!n.summary && !n.actions?.length && !n.missed?.length && !n.open_questions?.length}
-            onSent={(iso) => void onPatch({ briefing_sent_at: iso })}
-          />
+
           {notion && (n.summary || n.actions?.length) ? <NotionButton key={session.id} sessionId={session.id} connected={notion.connected} sentUrl={notion.sent?.[session.id] ?? null} /> : null}
           {/* Two-step, inline. Deletion takes the audio with it and cannot be undone, so it
               asks — but a modal for one row would be heavier than the action deserves. */}
@@ -2378,6 +2399,40 @@ function Detail({
               {T.delete}
             </button>
           )}
+          </span>
+          <details className="pen-d-more">
+            <summary className="pen-btn" aria-label={T.moreActions}>⋯ {T.more}</summary>
+            <div className="pen-d-menu">
+          {/* Keyed off the transcript, not the status. A session can land in `error` with a
+              perfectly good transcript (a failed save, a transient API error), and gating the
+              retry on status left it with no way out of the UI. */}
+          {utts.length > 0 && (
+            <button className="pen-btn" onClick={() => regenerate()} disabled={busy}>
+              {busy ? T.working : session.status === 'noted' ? T.redoNotes : T.writeNotes}
+            </button>
+          )}
+          {utts.length > 0 && (
+            <button className={`pen-btn ${chatOpen ? 'pen-btn-accent' : ''}`} onClick={onToggleChat}>
+              {chatOpen ? T.hideChat : T.askMeeting}
+            </button>
+          )}
+
+          {notion && (n.summary || n.actions?.length) ? <NotionButton key={session.id} sessionId={session.id} connected={notion.connected} sentUrl={notion.sent?.[session.id] ?? null} /> : null}
+          {/* Two-step, inline. Deletion takes the audio with it and cannot be undone, so it
+              asks — but a modal for one row would be heavier than the action deserves. */}
+          {confirmDelete ? (
+            <span className="pen-confirm">
+              <span>{T.deleteForGood}</span>
+              <button className="pen-confirm-no" onClick={() => setConfirmDelete(false)}>{T.keep}</button>
+              <button className="pen-confirm-yes" onClick={onDelete}>{T.delete}</button>
+            </span>
+          ) : (
+            <button className="pen-btn pen-btn-quiet" onClick={() => setConfirmDelete(true)} title={T.deleteTitle}>
+              {T.delete}
+            </button>
+          )}
+            </div>
+          </details>
         </div>
       </div>
 
@@ -2403,7 +2458,7 @@ function Detail({
             <CategoryPicker
               value={displayType(session.meeting_type) || null}
               busy={busy}
-              onPick={(v) => regenerate(v)}
+              onPick={(v) => relabel(v)}
             />
             {askCategory && !session.meeting_type && (
               <span className="pen-mono text-[13px]" style={{ color: 'var(--warn)' }}>
@@ -2414,7 +2469,7 @@ function Detail({
                     {askCategory.slice(0, 2).map((a, i) => (
                       <span key={a}>
                         {i > 0 && T.or}
-                        <button className="underline" onClick={() => regenerate(a)}>{typeLabel(a, lang)}</button>
+                        <button className="underline" onClick={() => relabel(a)}>{typeLabel(a, lang)}</button>
                       </span>
                     ))}
                     ?
@@ -2425,6 +2480,16 @@ function Detail({
           </div>
         )}
       </div>
+
+      {pendingType && utts.length > 0 && (
+        <div className="pen-relabel" role="status">
+          <span>{T.relabeled(typeLabel(pendingType, lang))}</span>
+          <span className="pen-relabel-acts">
+            <button className="pen-btn" onClick={() => setPendingType(null)}>{T.keepNotes}</button>
+            <button className="pen-btn pen-btn-accent" disabled={busy} onClick={() => regenerate(pendingType)}>{T.redoAsType}</button>
+          </span>
+        </div>
+      )}
 
       {tab === 'transcript' ? (
         <div className="pen-panel mt-6 p-6">
@@ -2487,6 +2552,7 @@ function Detail({
             />
           </div>
 
+          {n.empty && <div className="pen-sec"><Muted>{T.mEmpty}</Muted></div>}
           {session.status === 'transcribing' && <div className="pen-sec"><Muted>{T.mTranscribing}</Muted></div>}
           {session.status === 'uploaded' && <div className="pen-sec"><Muted>{T.mUploaded}</Muted></div>}
           {session.status === 'held' && (
@@ -2565,7 +2631,7 @@ function Detail({
                 <div className="mt-1.5">
                   {n.actions.map((a, i) => (
                     <div key={i} className="pen-act pen-doable" data-done={done.has(i)}>
-                      <input type="checkbox" className="pen-act-box" checked={done.has(i)} onChange={() => toggleAction(i)} />
+                      <input type="checkbox" className="pen-act-box" checked={done.has(i)} onChange={() => toggleAction(i)} aria-label={a.action} />
                       <div className="min-w-0 flex-1">
                         <div className="pen-act-text text-[16.5px] leading-snug">{a.action}</div>
                         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5">

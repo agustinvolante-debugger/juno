@@ -2,7 +2,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { authedEmail } from '@/lib/news/auth'
 import { noteSeen } from '@/lib/pen/accounts'
-import { listSessions } from '@/lib/pen/store'
+import { listSessionsForClient } from '@/lib/pen/store'
 import { archiveStats } from '@/lib/pen/stats'
 import { adoptLegacyChat } from '@/lib/pen/chats'
 import { getAllowance, type Allowance } from '@/lib/pen/allowance'
@@ -49,7 +49,7 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
     return <Landing market={marketFor(h.get('x-vercel-ip-country'), m ?? c.get('juno_lang')?.value ?? null)} audience={forParam} invitedBy={inviter?.first ?? null} />
   }
 
-  let sessions: Awaited<ReturnType<typeof listSessions>> = []
+  let sessions: Awaited<ReturnType<typeof listSessionsForClient>> = []
   let stats: Awaited<ReturnType<typeof archiveStats>> | null = null
   let allowance: Allowance | null = null
   let loadError: string | null = null
@@ -75,7 +75,7 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
     // The referral pop-up, once per account: from the sign-in after the tour, never on top of it.
     showReferral = !showTour && !profile?.onboarding?.referral
     await ensureSample(email, appLang, profile?.name ?? session?.user?.name ?? null).catch(() => {})
-    sessions = await listSessions(email)
+    sessions = await listSessionsForClient(email)
     if (notionConfigured()) {
       const connected = Boolean(await getConnection(email).catch(() => null))
       notion = { connected, sent: connected ? await sentPages(email).catch(() => ({})) : {} }

@@ -37,7 +37,7 @@ const STEPS: Record<Lang, Step[]> = {
   ],
   es: [
     { title: 'Bienvenido a Juno Pen', body: 'En un minuto: cómo agregar una grabación y todo lo que recibes de vuelta.' },
-    { target: '.pen-drop-side', title: 'Agrega una grabación', body: 'Sube audio del lápiz, tu celular o cualquier grabadora. Con el lápiz conectado, Connect pen encuentra las grabaciones nuevas.' },
+    { target: '.pen-drop-side', title: 'Agrega una grabación', body: 'Sube audio del lápiz, tu celular o cualquier grabadora. Con el lápiz conectado, «Conectar el lápiz» encuentra las grabaciones nuevas.' },
     { target: '.pen-tximp-open', title: '¿Ya tienes una transcripción?', body: 'Pega el texto de Pocket, Otter o Plaud y recibe las mismas notas, personas y búsqueda.' },
     { target: '.pen-wa-side, .pen-wa-phone', title: 'O mándalo por WhatsApp', body: 'Vincula tu celular una vez. Después envía grabaciones al chat de Juno Pen y pregunta por cualquier reunión desde ahí.' },
     { target: '.pen-rail .pen-row', title: 'Tu grabación de ejemplo', body: 'Agregamos una visita de ejemplo para que veas el resultado: el resumen, las tareas, lo que casi se te pasa y quién dijo qué.' },
@@ -48,7 +48,7 @@ const STEPS: Record<Lang, Step[]> = {
   ],
   pt: [
     { title: 'Bem-vindo ao Juno Pen', body: 'Em um minuto: como adicionar uma gravação e tudo o que você recebe de volta.' },
-    { target: '.pen-drop-side', title: 'Adicione uma gravação', body: 'Envie áudio da caneta, do celular ou de qualquer gravador. Com a caneta conectada, o Connect pen encontra as gravações novas.' },
+    { target: '.pen-drop-side', title: 'Adicione uma gravação', body: 'Envie áudio da caneta, do celular ou de qualquer gravador. Com a caneta conectada, o «Conectar a caneta» encontra as gravações novas.' },
     { target: '.pen-tximp-open', title: 'Já tem uma transcrição?', body: 'Cole o texto do Pocket, Otter ou Plaud e receba as mesmas notas, pessoas e busca.' },
     { target: '.pen-wa-side, .pen-wa-phone', title: 'Ou mande pelo WhatsApp', body: 'Vincule seu celular uma vez. Depois envie gravações para a conversa do Juno Pen e pergunte sobre qualquer reunião dali.' },
     { target: '.pen-rail .pen-row', title: 'Sua gravação de exemplo', body: 'Adicionamos uma visita de exemplo para você ver o resultado: o resumo, as tarefas, o que quase passou batido e quem disse o quê.' },

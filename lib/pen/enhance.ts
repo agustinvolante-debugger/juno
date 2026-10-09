@@ -4,10 +4,11 @@
 // that render grey beneath the black original. If enhancement edited your notes in place, the
 // black/grey distinction would mean nothing and you would lose what you actually typed.
 import Anthropic from '@anthropic-ai/sdk'
+import { penAnthropic } from './anthropic'
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
 import type { NoteBlock, PenNotes } from './store'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const anthropic = penAnthropic('enhance')
 const MODEL = 'claude-opus-5-5'
 
 const SCHEMA = {

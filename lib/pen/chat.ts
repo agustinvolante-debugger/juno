@@ -2,12 +2,13 @@
 // the recording and says so plainly when the recording does not contain the answer. The whole
 // point of asking your own meeting a question is that the answer is trustworthy.
 import Anthropic from '@anthropic-ai/sdk'
+import { penAnthropic } from './anthropic'
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
 import { stripMarkdown } from './plaintext'
 import type { ChatTurn, PenNotes } from './store'
 import { REPLY_LANGUAGE, inQuestionLanguage } from './reply-language'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const anthropic = penAnthropic('chat')
 // The transcript is already in context; the job is to read it and answer accurately, which is
 // Haiku's shape. See lib/pen/archive.ts for the same reasoning.
 const MODEL = 'claude-haiku-5-5'

@@ -20,6 +20,7 @@
 
 import crypto from 'node:crypto'
 import Anthropic from '@anthropic-ai/sdk'
+import { penAnthropic } from '../anthropic'
 import { supabaseAdmin } from '@/lib/supabase'
 import { askArchive } from '../archive'
 import { getSession, updateSession, type ArchiveTurn, type Citation, type PenNotes } from '../store'
@@ -32,7 +33,7 @@ import type { Lang } from '../currency'
 import { isMine, type ActionMeta } from '../todo-labels'
 import { getDraft, setDraft, type Draft } from './store'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const anthropic = penAnthropic('whatsapp-agent')
 const MODEL = 'claude-sonnet-5-5'
 /** Tool rounds per message. A normal turn uses one to three. */
 const MAX_ROUNDS = 8

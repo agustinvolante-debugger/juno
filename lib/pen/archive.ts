@@ -12,6 +12,7 @@
 // interactive pills, which is why the marker/citation split matters: an answer with an
 // untraceable claim is worse than no answer.
 import Anthropic from '@anthropic-ai/sdk'
+import { penAnthropic } from './anthropic'
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
 import { supabaseAdmin } from '@/lib/supabase'
 import { stripMarkdown } from './plaintext'
@@ -20,7 +21,7 @@ import { ownedPeople, sessionsWith } from './people'
 import { namedDialogue, type SpeakerMap } from './speakers'
 import { REPLY_LANGUAGE, inQuestionLanguage } from './reply-language'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const anthropic = penAnthropic('archive-chat')
 // Both stages are retrieval, not synthesis — pick the recordings, then answer from what is in
 // front of you and cite it. Haiku 4.5 does that accurately, costs a fraction, and answers fast
 // enough to feel like search rather than a request. Extraction stays on Opus, where the task is

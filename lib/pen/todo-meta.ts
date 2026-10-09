@@ -12,6 +12,7 @@
 // pen_sessions.action_meta, parallel to notes.actions by index, like action_done.
 
 import Anthropic from '@anthropic-ai/sdk'
+import { penAnthropic } from './anthropic'
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getProfile } from './profile'
@@ -20,7 +21,7 @@ import type { SpeakerMap } from './speakers'
 import { isSelfName, namedDialogue } from './speakers'
 import type { ActionMeta } from './todo-labels'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const anthropic = penAnthropic('todo-meta')
 const MODEL = 'claude-sonnet-5-5'
 /** Enough dialogue to hear who is who; the actions themselves carry the rest. */
 const DIALOGUE_CHARS = 30000

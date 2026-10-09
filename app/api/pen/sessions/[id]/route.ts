@@ -28,6 +28,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (typeof b.user_notes === 'string') patch.user_notes = b.user_notes
   if (typeof b.title === 'string') patch.title = b.title
   if (typeof b.client_name === 'string') patch.client_name = b.client_name
+  // Relabel only. Rewriting the notes for a new type is a separate, explicit action.
+  if (typeof b.meeting_type === 'string' && b.meeting_type.trim()) patch.meeting_type = b.meeting_type.trim().slice(0, 40)
   if (Array.isArray(b.action_done)) patch.action_done = b.action_done.filter((n) => typeof n === 'number')
   // Blocks carry provenance, so validate the shape rather than trusting the client.
   if (Array.isArray(b.note_blocks)) {

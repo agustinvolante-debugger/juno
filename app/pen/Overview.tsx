@@ -43,6 +43,7 @@ const OV_EN = {
   todoEmpty: 'Nothing outstanding. Actions from each recording land here.',
   missed: 'Nearly missed',
   missedSub: 'said once, easy to lose',
+  missedWeek: (n: number) => `${n} new this week · said once, easy to lose`,
   missedEmpty: 'Nothing slipped through. When a meeting has something easy to miss, it shows up here.',
   people: 'People',
   lastSpoke: (name: string) => `last spoke with ${name}`,
@@ -115,6 +116,7 @@ const OV: Copy<typeof OV_EN> = {
     todoEmpty: 'No hay nada pendiente. Las tareas de cada grabación aparecen aquí.',
     missed: 'Casi se te pasa',
     missedSub: 'se dijo una vez, fácil de perder',
+    missedWeek: (n: number) => `${n} ${n === 1 ? 'nuevo' : 'nuevos'} esta semana · se dijo una vez`,
     missedEmpty: 'No se te escapó nada. Cuando una reunión tenga algo fácil de pasar por alto, aparecerá aquí.',
     people: 'Personas',
     lastSpoke: (name) => `última vez con ${name}`,
@@ -184,6 +186,7 @@ const OV: Copy<typeof OV_EN> = {
     todoEmpty: 'Nada pendente. As tarefas de cada gravação aparecem aqui.',
     missed: 'Quase passou batido',
     missedSub: 'dito uma vez, fácil de perder',
+    missedWeek: (n: number) => `${n} ${n === 1 ? 'novo' : 'novos'} esta semana · dito uma vez`,
     missedEmpty: 'Nada escapou. Quando uma reunião tiver algo fácil de perder, aparece aqui.',
     people: 'Pessoas',
     lastSpoke: (name) => `última conversa com ${name}`,
@@ -246,12 +249,14 @@ const OV: Copy<typeof OV_EN> = {
 export default function Overview({
   stats,
   people,
+  peopleLoading = false,
   onOpen,
   onAskPerson,
   onChanged,
 }: {
   stats: ArchiveStats
   people: PersonCard[]
+  peopleLoading?: boolean
   onOpen: (sessionId: string) => void
   /** Start a search scoped to one person: "Show me all the conversations with @Name". */
   onAskPerson: (p: PersonCard) => void
@@ -422,6 +427,7 @@ export default function Overview({
   const openCount = mineList.length + Math.max(0, stats.actionsOpen - stats.openActions.filter((a) => isMine(a)).length)
   const doneCount = Math.max(0, stats.actionsTotal - stats.actionsOpen + doneExtra)
   const missedCount = missed.length + Math.max(0, (stats.missedOpen ?? 0) - (stats.openMissed?.length ?? 0))
+  const missedWeek = missed.filter((m) => Date.now() - Date.parse(m.when) < 7 * 86400000).length
 
   return (
     <div className="pen-home">
@@ -466,7 +472,8 @@ export default function Overview({
             icon="alert"
             title={T.missed}
             count={missedCount}
-            sub={<span>{T.missedSub}</span>}
+            // The total is a backlog; what is new this week is the part worth reading.
+            sub={<span>{missedWeek ? T.missedWeek(missedWeek) : T.missedSub}</span>}
             empty={T.missedEmpty}
             seeAll={missedCount}
           >
@@ -484,7 +491,8 @@ export default function Overview({
             icon="people"
             title={T.people}
             count={people.length}
-            sub={<span>{people.length ? T.lastSpoke(people[0].name.split(' ')[0]) : T.nobody}</span>}
+            loading={peopleLoading}
+            sub={<span>{peopleLoading ? '' : people.length ? T.lastSpoke(people[0].name.split(' ')[0]) : T.nobody}</span>}
             empty={T.peopleEmpty}
             seeAll={people.length}
           >
@@ -531,6 +539,7 @@ function HomeCard({
   sub,
   empty,
   seeAll,
+  loading = false,
   children,
 }: {
   kind: Kind
@@ -542,6 +551,7 @@ function HomeCard({
   sub: React.ReactNode
   empty: string
   seeAll: number
+  loading?: boolean
   children: React.ReactNode
 }) {
   const T = useCopy(OV)
@@ -565,11 +575,13 @@ function HomeCard({
               <h3 id={`home-${kind}-title`} className="pen-card-title">{title}</h3>
             </div>
             {/* The figure gets its own line: read first, from across the desk. */}
-            <Count value={count} className="pen-card-count" />
+            {loading ? <span className="pen-card-count pen-skel" aria-hidden>&nbsp;</span> : <Count value={count} className="pen-card-count" />}
             <div className="pen-card-sub">{sub}</div>
           </header>
 
-          {hasItems ? <ul className="pen-card-list">{children}</ul> : <p className="pen-card-empty">{empty}</p>}
+          {loading
+            ? <ul className="pen-card-list" aria-busy="true">{[0, 1, 2].map((i) => <li key={i} className="pen-skel-row" />)}</ul>
+            : hasItems ? <ul className="pen-card-list">{children}</ul> : <p className="pen-card-empty">{empty}</p>}
 
           {seeAll > PREVIEW && (
             <button type="button" className="pen-card-more" onClick={() => onOpen(kind)} aria-haspopup="dialog">

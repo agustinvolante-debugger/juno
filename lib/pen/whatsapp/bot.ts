@@ -64,6 +64,8 @@ const EN = {
   yourRecording: 'your recording',
   consent: (name: string) => `Got ${name}.\n\nOne tap before I write it up: did everyone on this recording agree to be recorded?`,
   agreed: 'Everyone agreed',
+  consentNudge: (name: string) => `Still holding ${name}. I'll write it up as soon as you confirm everyone agreed to be recorded.`,
+  consentExpired: (name: string) => `No confirmation came for ${name}, so I let it go and didn't write it up. Send it again anytime if you want the notes.`,
   outOfHours: (hours: string) => `You're out of recording hours for this month. Buy more at ${hours} and send the file again.`,
   readOnly: (url: string) => `Your Juno Pen plan has ended, so your account is read-only: your recordings and notes are still on the website, but I can't take new ones or answer questions. Reactivate at ${url}.`,
   paused: (url: string) => `Your Juno Pen plan is paused, so this recording wasn't processed. Resume it at ${url} and send the file again.`,
@@ -103,6 +105,8 @@ const BOT: Record<Lang, typeof EN> = {
     yourRecording: 'tu grabación',
     consent: (name) => `Recibí ${name}.\n\nUn toque antes de escribir las notas: ¿todos en esta grabación aceptaron ser grabados?`,
     agreed: 'Todos aceptaron',
+    consentNudge: (name) => `Sigo guardando ${name}. Escribo las notas apenas confirmes que todos aceptaron ser grabados.`,
+    consentExpired: (name) => `No llegó la confirmación de ${name}, así que la descarté sin escribir notas. Mándamela otra vez cuando quieras las notas.`,
     outOfHours: (hours) => `Se acabaron tus horas de grabación de este mes. Compra más en ${hours} y vuelve a mandar el archivo.`,
     readOnly: (url) => `Tu plan de Juno Pen terminó, así que tu cuenta es solo de lectura: tus grabaciones y notas siguen en el sitio, pero no puedo recibir nuevas ni responder preguntas. Reactívala en ${url}.`,
     paused: (url) => `Tu plan de Juno Pen está en pausa, así que no procesamos esta grabación. Reactívalo en ${url} y vuelve a mandar el archivo.`,
@@ -139,6 +143,8 @@ const BOT: Record<Lang, typeof EN> = {
     yourRecording: 'sua gravação',
     consent: (name) => `Recebi ${name}.\n\nUm toque antes de escrever as notas: todos nesta gravação concordaram em ser gravados?`,
     agreed: 'Todos concordaram',
+    consentNudge: (name) => `Ainda estou com ${name}. Escrevo as notas assim que você confirmar que todos concordaram em ser gravados.`,
+    consentExpired: (name) => `Não chegou a confirmação de ${name}, então descartei sem escrever notas. Mande de novo quando quiser as notas.`,
     outOfHours: (hours) => `Suas horas de gravação deste mês acabaram. Compre mais em ${hours} e mande o arquivo de novo.`,
     readOnly: (url) => `Seu plano do Juno Pen terminou, então sua conta é somente leitura: suas gravações e notas continuam no site, mas não posso receber novas nem responder perguntas. Reative em ${url}.`,
     paused: (url) => `Seu plano do Juno Pen está pausado, então esta gravação não foi processada. Retome em ${url} e mande o arquivo de novo.`,
@@ -530,4 +536,33 @@ export async function sendWhatsAppFailure(email: string, sourceName: string): Pr
     if (!link?.phone) return
     await sendText(link.phone, BOT[await userLang(email)].writeFailed(sourceName, appUrl()))
   } catch {}
+}
+
+/**
+ * Files waiting on the consent tap (4 sat there for weeks in Sep). Run by /api/pen/recover every
+ * 15 min: one reminder after 2 h; at 22 h, still inside WhatsApp's 24-hour reply window, let the
+ * file go and say so. Anything already past the window is closed quietly (we can't message it).
+ */
+export async function sweepConsent(): Promise<{ nudged: number; expired: number }> {
+  const H = 60 * 60 * 1000
+  const now = Date.now()
+  const { data } = await supabaseAdmin.from('pen_whatsapp_messages').select('id,phone,email,payload,created_at')
+    .eq('state', 'consent').lt('created_at', new Date(now - 2 * H).toISOString())
+  let nudged = 0
+  let expired = 0
+  for (const row of (data ?? []) as { id: string; phone: string; email: string | null; payload: Record<string, unknown> | null; created_at: string }[]) {
+    const age = now - Date.parse(row.created_at)
+    const L = BOT[await langFor(row.phone, row.email)]
+    const name = (row.payload?.fileName as string | undefined) ?? nameFromRaw(row.payload?.raw) ?? L.yourRecording
+    if (age > 22 * H) {
+      if (!(await moveMessage(row.id, 'consent', 'cancelled'))) continue
+      expired++
+      if (age < 24 * H) await sendText(row.phone, L.consentExpired(name)).catch(() => {})
+    } else if (!row.payload?.nudged) {
+      await supabaseAdmin.from('pen_whatsapp_messages').update({ payload: { ...(row.payload ?? {}), nudged: true } }).eq('id', row.id).eq('state', 'consent')
+      await sendButtons(row.phone, L.consentNudge(name), [{ id: `consent:${row.id}`, title: L.agreed }]).catch(() => {})
+      nudged++
+    }
+  }
+  return { nudged, expired }
 }

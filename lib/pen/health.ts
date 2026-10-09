@@ -194,7 +194,17 @@ async function notify(subject: string, lines: string[]): Promise<void> {
   if (link?.phone) await sendText(link.phone, `${subject}\n\n${lines.join('\n')}\n\n(email failed: ${r.error})`).catch(() => {})
 }
 
+/** Kicks the recovery route (stuck recordings, quiet batches) in its own function, so its
+ *  5-minute budget isn't this check's 60 seconds. Fire and forget; the request only has to leave. */
+async function kickRecovery() {
+  const base = (process.env.PEN_PUBLIC_URL || process.env.NEXTAUTH_URL || '').replace(/\/$/, '')
+  const secret = process.env.PEN_HEALTH_SECRET
+  if (!base || !secret) return
+  await fetch(`${base}/api/pen/recover`, { headers: { authorization: `Bearer ${secret}` }, signal: AbortSignal.timeout(1500) }).catch(() => {})
+}
+
 export async function runHealth(): Promise<{ results: CheckResult[]; alerted: string[] }> {
+  await kickRecovery()
   const checks = [meta, assembly, resend, anthropic, whatsappReplies, transcriptions, emails, reminders]
   const results = await Promise.all(
     checks.map((c) =>

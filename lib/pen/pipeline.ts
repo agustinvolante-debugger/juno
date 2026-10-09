@@ -69,6 +69,11 @@ export function dialogueOf(session: PenSession): string {
  * is all of them, in order, with the seams marked — one set of notes for one meeting, rather
  * than two halves that each read as if the other never happened.
  */
+/** Thrown when a finished transcript holds no speech. Callers treat it as done, not as a failure. */
+export class EmptyRecording extends Error {
+  constructor() { super('No speech was found in this recording.') }
+}
+
 export async function dialogueFor(email: string, session: PenSession): Promise<string> {
   if (!session.merge_group) return dialogueOf(session)
   const segments = await groupSessions(email, session.merge_group)
@@ -117,6 +122,13 @@ export async function writeNotes(opts: {
 
   const dialogue = await dialogueFor(email, session)
   if (!dialogue.trim()) {
+    // Transcribed, and nobody spoke: settle it as an empty recording instead of putting it back
+    // to 'transcribed', where it sat forever and sent a failure email on every attempt.
+    const t = session.transcript
+    if (t && !(t.utterances?.length) && !(t.text ?? '').trim()) {
+      await updateSession(session.id, { status: 'noted', notes: { empty: true }, error_text: null })
+      throw new EmptyRecording()
+    }
     if (opts.claim) await updateSession(session.id, { status: 'transcribed' })
     throw new Error('no transcript yet')
   }

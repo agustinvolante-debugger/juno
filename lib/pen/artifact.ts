@@ -6,11 +6,12 @@
 // recordings and cited them. Re-running that selection would cost a second retrieval pass
 // and risk drifting away from the answer the user just read and accepted.
 import Anthropic from '@anthropic-ai/sdk'
+import { penAnthropic } from './anthropic'
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
 import type { ArchiveTurn } from './store'
 import type { DocKind } from './docs'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const anthropic = penAnthropic('artifact')
 const MODEL = 'claude-opus-5-5'
 
 const SCHEMA = {

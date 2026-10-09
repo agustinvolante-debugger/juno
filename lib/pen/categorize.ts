@@ -10,10 +10,11 @@
 // and the two real users needed a fourth thing within a week. `suggestions` exist so the
 // override picker can offer something better than an alphabetical list.
 import Anthropic from '@anthropic-ai/sdk'
+import { penAnthropic } from './anthropic'
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
 import { COMMON_TYPES } from './store'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const anthropic = penAnthropic('categorize')
 const MODEL = 'claude-haiku-5-5'
 
 /** Below this we show the picker instead of asserting a category. */
@@ -46,7 +47,8 @@ const SYSTEM = `You label what KIND of conversation a recording is, from its tra
   "catching up with Dani".
 - Prefer one of these when it genuinely fits, because consistent labels group usefully:
 ${COMMON_TYPES.map((t) => `  ${t}`).join('\n')}
-  If none fits, invent a short one rather than forcing a bad match.
+  Use one of them whenever it is even roughly right: those labels are translated for Spanish and
+  Portuguese users and group together. Only if none fits at all, invent two plain words.
 - A low confidence is a useful answer. Under 0.6 the product asks the user instead of
   guessing at them, so do not inflate it to seem decisive.
 - Return an empty category when there is genuinely not enough to go on: a few seconds of
