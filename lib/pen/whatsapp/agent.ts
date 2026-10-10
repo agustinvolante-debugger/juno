@@ -15,6 +15,13 @@
 //   name_speaker        the web's "Who's who": Speaker B is Carlos (or me)
 //   update_recording    rename it, change its category
 //   redo_notes          rewrite the notes (after naming speakers); runs after the reply is sent
+//   person_brief        "I'm meeting the Garcías": their card, last calls, open promises both ways
+//   add_todo / update_todo   new to-dos, due dates, rewording, reassigning
+//   add_note            the user's own note on a recording (voice notes: "they want a pool")
+//   save_contact        a contact from a business card photo, or details the user gives
+//   whatsapp_link       a wa.me link that opens the user's OWN WhatsApp with a message ready
+//
+// Voice notes arrive here already transcribed (bot.ts onVoice), photos as an image block.
 //
 // Two guarantees are enforced here rather than asked of the model. What the user sees is what
 // gets sent: the draft preview is appended by this file from the saved draft, not retyped by
@@ -29,7 +36,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { penAnthropic } from '../anthropic'
 import { supabaseAdmin } from '@/lib/supabase'
 import { askArchive } from '../archive'
-import { getSession, updateSession, type ArchiveTurn, type Citation, type PenNotes } from '../store'
+import { getSession, updateSession, type ArchiveTurn, type Citation, type PenNotes, type NoteBlock } from '../store'
 import { cleanEmail, cleanName, upsertByName, linkPerson, unlinkPerson, peopleOnSession, enrichPerson, suggestionsFrom } from '../people'
 import { foldName, speakerName, type SpeakerMap } from '../speakers'
 import { COMMON_TYPES } from '../categories'
@@ -37,7 +44,7 @@ import { sendFollowUp } from '../follow-up'
 import { getProfile } from '../profile'
 import { addReminder, cancelReminder, pendingReminders, MAX_AHEAD_MS } from '../reminders'
 import type { Lang } from '../currency'
-import { isMine, type ActionMeta } from '../todo-labels'
+import { isMine, type ActionMeta, type Mine } from '../todo-labels'
 import { getDraft, setDraft, type Draft } from './store'
 
 const anthropic = penAnthropic('whatsapp-agent')
@@ -289,6 +296,102 @@ const TOOLS: Anthropic.Tool[] = [
       additionalProperties: false,
     },
   },
+  {
+    name: 'person_brief',
+    description:
+      'Everything about one person, for prep before a meeting or a call: their contact card, the last calls with ' +
+      'them (date, title, summary), what the user still owes them and what they owe the user. Use for "I\'m meeting ' +
+      'X", "what do I need to know about X", "remind me about X".',
+    input_schema: {
+      type: 'object',
+      properties: { name: { type: 'string' } },
+      required: ['name'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'add_todo',
+    description:
+      'Add a to-do to a recording. Use the recording it belongs to; if it belongs to none, the most recent ' +
+      'recording, and say which one you used. owner = whose it is: "me" (the user), "shared", or another person\'s name.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        session_id: { type: 'string' },
+        action: { type: 'string', description: 'The to-do, starting with a verb, in the user\'s language.' },
+        owner: { type: 'string' },
+        due_date: { type: 'string', description: 'YYYY-MM-DD, or "" if none.' },
+        waiting: { type: 'string', description: 'Who is waiting on the user for it, or "".' },
+      },
+      required: ['session_id', 'action', 'owner', 'due_date', 'waiting'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'update_todo',
+    description:
+      'Change a to-do (ref from open_todos): reword it, set or clear its due date, or reassign it. "" leaves a field ' +
+      'as it is; due_date "none" clears it; owner "me", "shared" or a person\'s name.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        ref: { type: 'string' },
+        action: { type: 'string' },
+        due_date: { type: 'string' },
+        owner: { type: 'string' },
+      },
+      required: ['ref', 'action', 'due_date', 'owner'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'add_note',
+    description:
+      'Add the user\'s own note to a recording, as if they typed it under "Your notes" on the website (e.g. "they ' +
+      'want a pool", "budget is 900k"). Write it in their words, cleaned up, in their language.',
+    input_schema: {
+      type: 'object',
+      properties: { session_id: { type: 'string' }, text: { type: 'string' } },
+      required: ['session_id', 'text'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'save_contact',
+    description:
+      'Save or complete a contact: from a business card photo, or details the user gives. Fills blanks on an ' +
+      'existing contact with the same name and never overwrites. Optionally links them to a recording. "" for unknown.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        email: { type: 'string' },
+        phone: { type: 'string', description: 'With country code if known, e.g. +1 407 555 0100.' },
+        company: { type: 'string' },
+        role: { type: 'string' },
+        session_id: { type: 'string', description: 'A recording to add them to, or "".' },
+      },
+      required: ['name', 'email', 'phone', 'company', 'role', 'session_id'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'whatsapp_link',
+    description:
+      'A link that opens the USER\'S OWN WhatsApp with a message to someone already typed, for them to send ' +
+      'themselves. Juno never messages other people on WhatsApp. Use for "send the notes to Chris on WhatsApp", ' +
+      '"text the Garcías that…". Uses the contact\'s saved phone, or the phone given.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        to_name: { type: 'string' },
+        phone: { type: 'string', description: 'If the user gave one, else "".' },
+        text: { type: 'string', description: 'The message, written as the user, in the language they use with this person.' },
+      },
+      required: ['to_name', 'phone', 'text'],
+      additionalProperties: false,
+    },
+  },
 ]
 
 function system(ctx: Ctx, pending: Draft | null): string {
@@ -298,14 +401,17 @@ function system(ctx: Ctx, pending: Draft | null): string {
     'What you do: answer questions from their recordings, list and tick off their to-dos, draft and send ' +
     'follow-up emails about their meetings, set reminders, and organise their recordings the way the website does: ' +
     'add or remove the people on a call, say which speaker is who, rename a recording or change its category, and ' +
-    'rewrite its notes. Nothing else: you are not a general chatbot. If asked for something outside that, say ' +
+    'rewrite its notes; prep them for a meeting with someone; add and change to-dos; add their own notes to a ' +
+    'recording; save contacts (from business card photos too); and prepare messages they send from their own ' +
+    'WhatsApp. Nothing else: you are not a general chatbot. If asked for something outside that, say ' +
     'briefly that you only help with their calls.\n\n' +
     (ctx.recent
       ? `"This call", "the recording", "it" with no other recording named means the one they sent here last: session_id ${ctx.recent}${ctx.recentTitle ? `, "${ctx.recentTitle}"` : ''}.\n\n`
       : '') +
     `Now: ${nowLine(ctx.phone)}\n` +
     '- Reminders can be at most 23 hours ahead (WhatsApp only lets Juno message within a day of their last message). ' +
-    'For later ones, say so and suggest they ask again closer to the time. For a clock time with no timezone given, ' +
+    'For later ones, add it as a to-do with that due date instead (add_todo, on the recording it relates to) and say ' +
+    'so in one line; don\'t ask first. For a clock time with no timezone given, ' +
     'use the one above; if it says unknown, ask.\n\n' +
     'Rules:\n' +
     '- Earlier assistant turns in this chat were made with these same tools; their tool calls just are not shown. ' +
@@ -318,6 +424,18 @@ function system(ctx: Ctx, pending: Draft | null): string {
     '- After marking a to-do, confirm in one line which one.\n' +
     '- After changing a recording (people, speakers, title, category), confirm exactly what changed and on which ' +
     'recording, in one or two lines, so a misheard name is caught at once. Never claim a change a tool did not confirm.\n' +
+    '- Messages marked [voice note] were spoken and transcribed: names and numbers may be misheard. If one looks ' +
+    'off, say what you understood. A voice note that is a fact about a call ("they want a pool") is add_note; one ' +
+    'that is a task is add_todo.\n' +
+    '- Before add_todo, check open_todos (include_others) for the same task, even worded differently or under ' +
+    'another name for the same person; if it is there, update_todo it (e.g. its due date) instead of adding a second one.\n' +
+    '- A photo of a business card: read it and save_contact without a session_id, then offer to add them to the ' +
+    'recording they sent last (a card is often from someone met elsewhere). Another ' +
+    'photo: say briefly what you see and offer to add it as a note to a recording. Never invent what you cannot read.\n' +
+    '- Meeting prep ("I\'m meeting X"): person_brief, then at most 8 short lines: who they are, last time you ' +
+    'spoke, what you owe them, what they owe you, anything open. Dates as "Oct 3", not ISO.\n' +
+    '- Sharing notes: by email with save_draft (as usual); on WhatsApp with whatsapp_link, which the user sends ' +
+    'themselves. Never say Juno sent a WhatsApp to someone else.\n' +
     '- When the user lists who was on a call ("Carlos and Titi"), add each with add_person. If it is clear from ' +
     'recording_people which speaker each one is, name the speakers too; then offer to rewrite the notes with the names.\n' +
     '- Emails: write like a busy professional to someone they know. Four to eight sentences, a concrete next step. ' +
@@ -726,6 +844,181 @@ async function redoNotes(ctx: Ctx, id: string): Promise<unknown> {
   return { ok: true, queued: true, recording: s.title ?? s.source_name, note: 'Starts after your reply; the new briefing is sent here in a minute or two.' }
 }
 
+/* ---------------------------------------------------- prep, to-dos, notes */
+
+async function personBrief(ctx: Ctx, name: string): Promise<unknown> {
+  const want = foldName(name)
+  if (!want) return { error: 'a name is required' }
+  const { data: all, error } = await supabaseAdmin.from('pen_people').select('*').eq('user_email', ctx.email)
+  if (error) throw new Error(error.message)
+  const people = ((all ?? []) as Record<string, unknown>[]).filter((p) => {
+    const n = foldName(String(p.name ?? ''))
+    return n.includes(want) || want.includes(n)
+  })
+  if (people.length > 1 && !people.some((p) => foldName(String(p.name)) === want)) {
+    return { error: 'several contacts match', matches: people.map((p) => p.name), next: 'ask the user which one' }
+  }
+  const person = people.find((p) => foldName(String(p.name)) === want) ?? people[0] ?? null
+
+  // Recordings with them: linked as a contact, or named in the notes or title.
+  const linkedIds = new Set<string>()
+  if (person) {
+    const { data: links } = await supabaseAdmin.from('pen_session_people').select('session_id').eq('user_email', ctx.email).eq('person_id', person.id as string)
+    for (const l of links ?? []) linkedIds.add(l.session_id as string)
+  }
+  const { data: rows } = await supabaseAdmin
+    .from('pen_sessions')
+    .select('id,title,client_name,notes,recorded_at,created_at')
+    .eq('user_email', ctx.email)
+    .or('merge_index.is.null,merge_index.eq.0')
+    .order('created_at', { ascending: false })
+    .limit(300)
+  const calls = ((rows ?? []) as unknown as SessionRow[]).filter((r) => {
+    if (linkedIds.has(r.id)) return true
+    const has = (v: string | null | undefined) => !!v && foldName(v).includes(want)
+    return has(r.title) || has(r.client_name) || (r.notes?.people ?? []).some((p) => has(p.name))
+  })
+  const todos = (await openTodos(ctx, name, true)) as { todos: Record<string, unknown>[] }
+  return {
+    contact: person
+      ? { name: person.name, email: person.email, phone: person.phone ?? null, role: person.role, company: person.company, about: person.about ?? null, summary: person.summary }
+      : null,
+    calls: calls.length,
+    last_calls: calls.slice(0, 5).map((c) => ({
+      session_id: c.id,
+      date: (c.recorded_at ?? c.created_at).slice(0, 10),
+      title: c.title,
+      summary: c.notes?.summary?.slice(0, 600) ?? null,
+    })),
+    open_todos: todos.todos,
+    ...(!person && !calls.length ? { note: 'no contact and no calls with that name' } : {}),
+  }
+}
+
+/** Owner as the user said it → the action's owner text and the to-do's whose-is-it label. */
+function ownerOf(ctx: Ctx, owner: string): { owner: string; mine: Mine } {
+  const o = owner.trim()
+  if (!o || /^(me|i|yo|eu|myself)$/i.test(o) || (ctx.userName && foldName(o) === foldName(ctx.userName))) return { owner: ctx.userName ?? '', mine: 'me' }
+  if (/^(shared|both|ambos|nosotros|n[oó]s)$/i.test(o)) return { owner: '', mine: 'shared' }
+  return { owner: o.slice(0, 80), mine: 'other' }
+}
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/
+
+/** The labels array kept the same length as the actions, or open_todos stops trusting it. */
+function metaFor(s: { notes: PenNotes | null; action_meta?: ActionMeta[] | null }): ActionMeta[] {
+  const n = s.notes?.actions?.length ?? 0
+  const m = Array.isArray(s.action_meta) ? s.action_meta : []
+  return Array.from({ length: n }, (_, i) => m.length === n ? m[i] : { mine: 'unclear' as Mine, due_date: null, waiting: null })
+}
+
+async function addTodo(ctx: Ctx, i: { session_id: string; action: string; owner: string; due_date: string; waiting: string }): Promise<unknown> {
+  const s = await ownSession(ctx, i.session_id)
+  if (!s) return { error: 'no such recording; find it with list_recordings' }
+  const action = i.action.trim().slice(0, 500)
+  if (!action) return { error: 'the to-do is empty' }
+  if (i.due_date.trim() && !DAY.test(i.due_date.trim())) return { error: 'due_date must be YYYY-MM-DD' }
+  const who = ownerOf(ctx, i.owner)
+  const notes: PenNotes = { ...(s.notes ?? {}) }
+  const meta = metaFor(s)
+  notes.actions = [...(notes.actions ?? []), { action, owner: who.owner, due: i.due_date.trim(), priority: 'normal' }]
+  meta.push({ mine: who.mine, due_date: i.due_date.trim() || null, waiting: i.waiting.trim() || null })
+  await updateSession(s.id, { notes, action_meta: meta })
+  return { ok: true, added: action, owner: who.owner || who.mine, due_date: i.due_date.trim() || null, recording: s.title ?? s.source_name, ref: `${s.id}#${notes.actions.length - 1}` }
+}
+
+async function updateTodo(ctx: Ctx, i: { ref: string; action: string; due_date: string; owner: string }): Promise<unknown> {
+  const m = /^([0-9a-f-]{36})#(\d+)$/i.exec(i.ref.trim())
+  if (!m) return { error: 'bad ref: use one from open_todos' }
+  const s = await getSession(ctx.email, m[1])
+  const index = Number(m[2])
+  const old = s?.notes?.actions?.[index]
+  if (!s || !old) return { error: 'no such to-do' }
+  const due = i.due_date.trim()
+  if (due && due !== 'none' && !DAY.test(due)) return { error: 'due_date must be YYYY-MM-DD or "none"' }
+  const notes: PenNotes = { ...(s.notes ?? {}), actions: [...(s.notes?.actions ?? [])] }
+  const meta = metaFor(s)
+  const next = { ...old }
+  if (i.action.trim()) next.action = i.action.trim().slice(0, 500)
+  if (due) {
+    next.due = due === 'none' ? '' : due
+    meta[index] = { ...meta[index], due_date: due === 'none' ? null : due }
+  }
+  if (i.owner.trim()) {
+    const who = ownerOf(ctx, i.owner)
+    next.owner = who.owner
+    meta[index] = { ...meta[index], mine: who.mine }
+  }
+  notes.actions![index] = next
+  await updateSession(s.id, { notes, action_meta: meta })
+  return { ok: true, was: { action: old.action, owner: old.owner, due: old.due }, now: { action: next.action, owner: next.owner || meta[index].mine, due: next.due }, recording: s.title ?? s.source_name }
+}
+
+async function addNote(ctx: Ctx, i: { session_id: string; text: string }): Promise<unknown> {
+  const s = await ownSession(ctx, i.session_id)
+  if (!s) return { error: 'no such recording; find it with list_recordings' }
+  const text = i.text.trim().slice(0, 4000)
+  if (!text) return { error: 'the note is empty' }
+  // Same shape the website's note editor saves, with the plain-text mirror the briefing reads.
+  const blocks: NoteBlock[] = s.note_blocks?.length
+    ? [...s.note_blocks]
+    : (s.user_notes ?? '').split(/\n{2,}|\n/).map((t) => t.trim()).filter(Boolean).map((t) => ({ id: crypto.randomBytes(6).toString('hex'), text: t, source: 'user' as const }))
+  blocks.push({ id: crypto.randomBytes(6).toString('hex'), text, source: 'user' })
+  await updateSession(s.id, { note_blocks: blocks, user_notes: blocks.map((b) => b.text).filter(Boolean).join('\n\n') })
+  return { ok: true, added: text, recording: s.title ?? s.source_name }
+}
+
+const digits = (v: string) => v.replace(/[^\d+]/g, '')
+
+async function saveContact(ctx: Ctx, i: { name: string; email: string; phone: string; company: string; role: string; session_id: string }): Promise<unknown> {
+  const name = cleanName(i.name)
+  if (!name) return { error: 'a name is required' }
+  const email = i.email.trim() ? cleanEmail(i.email) : null
+  if (i.email.trim() && !email) return { error: `"${i.email}" is not a valid email address` }
+  const person = await upsertByName(ctx.email, name, email)
+  const blanks: Record<string, string> = {}
+  const cur = person as unknown as Record<string, unknown>
+  if (i.company.trim() && !cur.company) blanks.company = i.company.trim().slice(0, 120)
+  if (i.role.trim() && !cur.role) blanks.role = i.role.trim().slice(0, 120)
+  const phone = digits(i.phone)
+  const notes: string[] = []
+  if (Object.keys(blanks).length) await supabaseAdmin.from('pen_people').update({ ...blanks, updated_at: new Date().toISOString() }).eq('id', person.id)
+  if (phone.replace(/\D/g, '').length >= 7 && !cur.phone) {
+    const { error } = await supabaseAdmin.from('pen_people').update({ phone }).eq('id', person.id)
+    if (error) notes.push('the phone could not be saved yet (no phone column); tell the user it is noted in this chat only')
+  }
+  let recording: string | null = null
+  if (i.session_id.trim()) {
+    const s = await ownSession(ctx, i.session_id)
+    if (s) {
+      await linkPerson(ctx.email, s.id, person.id, 'user')
+      ctx.enrich.add(person.id)
+      recording = s.title ?? s.source_name
+    }
+  }
+  return {
+    ok: true,
+    saved: { name: person.name, email: person.email ?? email, phone: (cur.phone as string | null) ?? (phone || null), company: (cur.company as string | null) ?? blanks.company ?? null, role: (cur.role as string | null) ?? blanks.role ?? null },
+    ...(recording ? { added_to: recording } : {}),
+    ...(notes.length ? { note: notes.join('; ') } : {}),
+  }
+}
+
+async function whatsappLink(ctx: Ctx, i: { to_name: string; phone: string; text: string }): Promise<unknown> {
+  const text = i.text.trim().slice(0, 3000)
+  if (!text) return { error: 'the message is empty' }
+  let phone = digits(i.phone).replace(/^\+/, '')
+  if (!phone) {
+    const want = foldName(i.to_name)
+    const { data } = await supabaseAdmin.from('pen_people').select('*').eq('user_email', ctx.email)
+    const hits = ((data ?? []) as Record<string, unknown>[]).filter((p) => p.phone && foldName(String(p.name)).includes(want))
+    if (hits.length > 1) return { error: 'several contacts match', matches: hits.map((p) => p.name) }
+    phone = hits[0] ? digits(String(hits[0].phone)).replace(/^\+/, '') : ''
+  }
+  if (phone.length < 7) return { error: `no phone number saved for ${i.to_name}; ask the user for it (with country code)` }
+  return { ok: true, link: `https://wa.me/${phone}?text=${encodeURIComponent(text)}`, note: 'Give the user this link exactly; tapping it opens their own WhatsApp with the message ready to send.' }
+}
+
 async function runTool(ctx: Ctx, name: string, input: Record<string, unknown>): Promise<unknown> {
   const str = (k: string) => (typeof input[k] === 'string' ? (input[k] as string) : '')
   switch (name) {
@@ -767,6 +1060,18 @@ async function runTool(ctx: Ctx, name: string, input: Record<string, unknown>): 
       return updateRecording(ctx, { session_id: str('session_id'), title: str('title'), category: str('category') })
     case 'redo_notes':
       return redoNotes(ctx, str('session_id'))
+    case 'person_brief':
+      return personBrief(ctx, str('name'))
+    case 'add_todo':
+      return addTodo(ctx, { session_id: str('session_id'), action: str('action'), owner: str('owner'), due_date: str('due_date'), waiting: str('waiting') })
+    case 'update_todo':
+      return updateTodo(ctx, { ref: str('ref'), action: str('action'), due_date: str('due_date'), owner: str('owner') })
+    case 'add_note':
+      return addNote(ctx, { session_id: str('session_id'), text: str('text') })
+    case 'save_contact':
+      return saveContact(ctx, { name: str('name'), email: str('email'), phone: str('phone'), company: str('company'), role: str('role'), session_id: str('session_id') })
+    case 'whatsapp_link':
+      return whatsappLink(ctx, { to_name: str('to_name'), phone: str('phone'), text: str('text') })
     case 'cancel_reminder':
       return (await cancelReminder(ctx.email, str('id'))) ? { ok: true } : { error: 'no such pending reminder' }
     default:
@@ -814,6 +1119,8 @@ export async function runAgent(opts: {
   recent: string | null
   lang: Lang
   phone: string
+  /** A photo the user sent (base64), read alongside the question. */
+  image?: { data: string; mime: string }
 }): Promise<AgentResult> {
   const userName = (await getProfile(opts.email).catch(() => null))?.name?.trim() || null
   const recentTitle = opts.recent ? ((await getSession(opts.email, opts.recent).catch(() => null))?.title ?? null) : null
@@ -837,6 +1144,13 @@ export async function runAgent(opts: {
     else messages.push({ role: t.role, content: t.content })
   }
   if (messages[0]?.role === 'assistant') messages.unshift({ role: 'user', content: '(I sent you a recording.)' })
+  if (opts.image) {
+    const last = messages[messages.length - 1]
+    last.content = [
+      { type: 'image', source: { type: 'base64', media_type: opts.image.mime as 'image/jpeg', data: opts.image.data } },
+      { type: 'text', text: last.content as string },
+    ]
+  }
 
   let text = ''
   for (let round = 0; round < MAX_ROUNDS; round++) {

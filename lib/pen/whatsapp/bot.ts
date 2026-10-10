@@ -17,7 +17,7 @@ import { getAllowance } from '../allowance'
 import { runAgent, type AgentResult } from './agent'
 import { isMine } from '../todo-labels'
 import { askArchive } from '../archive'
-import { uploadStream } from '../aai'
+import { uploadStream, submit, fetchTranscript, deleteTranscript } from '../aai'
 import { briefFor } from '../profile'
 import { createSession, updateSession, type Citation, type PenSession } from '../store'
 import { startTranscription, AAI_PREFIX } from '../transcribe'
@@ -57,7 +57,11 @@ const EN = {
     `Open ${settings} while signed in and send me the code it shows.\n\n` +
     `No account yet? Start here: ${home}`,
   inactive: (home: string) => `Your Juno Pen account isn't active. You can pick a plan at ${home}.`,
-  unsupported: 'I can read recordings and text messages. Send me the WAV from your pen, or ask me about a call.',
+  unsupported: 'I can read recordings, voice notes, photos and text messages. Send me the WAV from your pen, or ask me about a call.',
+  heard: '🎙️',
+  voiceFailed: 'I couldn\'t make out that voice note. Could you send it again, or type it?',
+  photo: '(sent a photo)',
+  photoFailed: 'I couldn\'t open that photo. Could you send it again?',
   badCode: (settings: string) => `That code didn't work. Codes last 30 minutes. Get a fresh one at ${settings}.`,
   linked: (email: string) => `Linked to ${email}. ✅`,
   empty: 'That file arrived without its contents. Could you send it again?',
@@ -100,7 +104,11 @@ const BOT: Record<Lang, typeof EN> = {
       `Abre ${settings} con tu sesión iniciada y mándame el código que aparece.\n\n` +
       `¿Todavía no tienes cuenta? Empieza aquí: ${home}`,
     inactive: (home) => `Tu cuenta de Juno Pen no está activa. Puedes elegir un plan en ${home}.`,
-    unsupported: 'Puedo leer grabaciones y mensajes de texto. Mándame el WAV de tu lápiz o pregúntame por una reunión.',
+    unsupported: 'Puedo leer grabaciones, notas de voz, fotos y mensajes de texto. Mándame el WAV de tu lápiz o pregúntame por una reunión.',
+    heard: '🎙️',
+    voiceFailed: 'No pude entender esa nota de voz. ¿Me la mandas de nuevo o la escribes?',
+    photo: '(mandé una foto)',
+    photoFailed: 'No pude abrir esa foto. ¿Me la mandas de nuevo?',
     badCode: (settings) => `Ese código no funcionó. Los códigos duran 30 minutos. Pide uno nuevo en ${settings}.`,
     linked: (email) => `Vinculado a ${email}. ✅`,
     empty: 'Ese archivo llegó vacío. ¿Me lo mandas otra vez?',
@@ -140,7 +148,11 @@ const BOT: Record<Lang, typeof EN> = {
       `Abra ${settings} com sua conta conectada e me mande o código que aparece.\n\n` +
       `Ainda não tem conta? Comece aqui: ${home}`,
     inactive: (home) => `Sua conta do Juno Pen não está ativa. Você pode escolher um plano em ${home}.`,
-    unsupported: 'Eu leio gravações e mensagens de texto. Me mande o WAV da sua caneta ou pergunte sobre uma reunião.',
+    unsupported: 'Eu leio gravações, áudios, fotos e mensagens de texto. Me mande o WAV da sua caneta ou pergunte sobre uma reunião.',
+    heard: '🎙️',
+    voiceFailed: 'Não consegui entender esse áudio. Pode mandar de novo ou escrever?',
+    photo: '(mandei uma foto)',
+    photoFailed: 'Não consegui abrir essa foto. Pode mandar de novo?',
     badCode: (settings) => `Esse código não funcionou. Os códigos valem por 30 minutos. Pegue um novo em ${settings}.`,
     linked: (email) => `Vinculado a ${email}. ✅`,
     empty: 'Esse arquivo chegou vazio. Pode mandar de novo?',
@@ -218,7 +230,9 @@ export async function handleInbound(msg: Inbound): Promise<void> {
     return
   }
 
+  if (msg.kind === 'media' && msg.voice) return onVoice(msg, link, L)
   if (msg.kind === 'media') return askConsent(msg, L)
+  if (msg.kind === 'image') return onImage(msg, link, L)
   if (msg.kind === 'reply') return onReply(msg, link, L)
   if (msg.kind === 'text') return onText(msg, link, L)
   await sendText(msg.from, L.unsupported)
@@ -409,7 +423,79 @@ export function wavSeconds(head: Uint8Array, totalBytes: number): number | null 
 
 /* ------------------------------------------------------------------ agent */
 
-async function onText(msg: Inbound, link: Link, L: typeof EN): Promise<void> {
+/** Voice notes up to this long are something the user is telling Juno, not a meeting. */
+const VOICE_NOTE_MAX_SEC = 120
+
+/**
+ * A voice note: the user talking to Juno ("add to the García call that they want a pool"). It
+ * is transcribed on the spot and answered like a typed message, with what was heard shown
+ * first so a mishearing is visible. Longer than two minutes, it is probably a meeting someone
+ * recorded with the mic button, and goes the usual way (consent, then notes).
+ */
+async function onVoice(msg: Inbound, link: Link, L: typeof EN): Promise<void> {
+  let text = ''
+  let aaiId: string | null = null
+  try {
+    const media = await openMedia(msg.mediaUrl!)
+    const url = await uploadStream(media.body!)
+    const t = await submit({ audioUrl: url, languages: ['en', 'es', 'pt'] })
+    aaiId = t.id
+    // Short audio comes back in a few seconds; give up well inside the function's time.
+    for (let i = 0; i < 60; i++) {
+      await new Promise((r) => setTimeout(r, 1500))
+      const got = await fetchTranscript(t.id)
+      if (got.status === 'error') throw new Error(got.error ?? 'transcription failed')
+      if (got.status === 'completed') {
+        if ((got.audio_duration ?? 0) > VOICE_NOTE_MAX_SEC) {
+          await deleteTranscript(t.id).catch(() => {})
+          return askConsent(msg, L)
+        }
+        text = (got.text ?? '').trim()
+        break
+      }
+    }
+  } catch (e) {
+    console.warn(`pen whatsapp: voice note ${msg.id} failed: ${(e as Error).message}`)
+  } finally {
+    // Nothing of a voice note is kept at AssemblyAI; the words live on as the chat message.
+    if (aaiId) await deleteTranscript(aaiId).catch(() => {})
+  }
+  if (!text) {
+    await moveMessage(msg.id, 'received', 'failed').catch(() => {})
+    await sendText(msg.from, L.voiceFailed)
+    return
+  }
+  return onText({ ...msg, kind: 'text', text }, link, L, { heard: text })
+}
+
+/** A photo (a business card, a listing sheet): the assistant reads it, with the caption if any. */
+async function onImage(msg: Inbound, link: Link, L: typeof EN): Promise<void> {
+  let image: { data: string; mime: string } | null = null
+  try {
+    const res = await openMedia(msg.mediaUrl!)
+    const buf = Buffer.from(await res.arrayBuffer())
+    // Claude takes up to 5 MB per image; WhatsApp already compresses photos well below that.
+    if (buf.length > 0 && buf.length < 5 * 1024 * 1024) {
+      const mime = (msg.mime ?? res.headers.get('content-type') ?? 'image/jpeg').split(';')[0]
+      if (/^image\/(jpeg|png|webp|gif)$/.test(mime)) image = { data: buf.toString('base64'), mime }
+    }
+  } catch (e) {
+    console.warn(`pen whatsapp: photo ${msg.id} failed: ${(e as Error).message}`)
+  }
+  if (!image) {
+    await moveMessage(msg.id, 'received', 'failed').catch(() => {})
+    await sendText(msg.from, L.photoFailed)
+    return
+  }
+  return onText({ ...msg, kind: 'text', text: msg.text.trim() || L.photo }, link, L, { image })
+}
+
+async function onText(
+  msg: Inbound,
+  link: Link,
+  L: typeof EN,
+  extra: { heard?: string; image?: { data: string; mime: string } } = {},
+): Promise<void> {
   const q = msg.text.trim()
   if (!q) return
   // Answered text moves to 'done', so the health check can tell a question that never got a
@@ -445,6 +531,7 @@ async function onText(msg: Inbound, link: Link, L: typeof EN): Promise<void> {
           recent,
           lang: await userLang(link.email),
           phone: msg.from,
+          ...(extra.image ? { image: extra.image } : {}),
         })
       : await askArchive({
           userEmail: link.email,
@@ -465,7 +552,7 @@ async function onText(msg: Inbound, link: Link, L: typeof EN): Promise<void> {
   const now = Date.now()
   await setChat(link.email, [
     ...(link.chat ?? []),
-    { role: 'user', content: q, ts: now },
+    { role: 'user', content: extra.image ? `${q} [photo]` : extra.heard ? `${q} [voice note]` : q, ts: now },
     { role: 'assistant', content: answer, citations, ts: now + 1 },
   ])
   // The model sometimes gives one recording two markers. One line per recording, all its
@@ -479,7 +566,7 @@ async function onText(msg: Inbound, link: Link, L: typeof EN): Promise<void> {
   const sources = byRecording.size
     ? '\n\n' + [...byRecording.values()].map((r) => `${r.markers.map((m) => `[${m}]`).join('')} ${r.title}`).join('\n')
     : ''
-  await sendText(msg.from, answer + sources)
+  await sendText(msg.from, (extra.heard ? `${L.heard} _“${extra.heard}”_\n\n` : '') + answer + sources)
   await answered()
   // Work the reply promised but that is too slow to wait for: contact cards, rewritten notes.
   if (later?.after) await later.after().catch(() => {})

@@ -145,7 +145,10 @@ export type Inbound = {
   /** The user's number, digits only. */
   from: string
   name: string | null
-  kind: 'text' | 'media' | 'reply' | 'other'
+  kind: 'text' | 'media' | 'image' | 'reply' | 'other'
+  /** Recorded with WhatsApp's mic button (a voice note), as opposed to an attached audio file. */
+  voice?: boolean
+  mime?: string | null
   text: string
   mediaUrl: string | null
   fileName: string | null

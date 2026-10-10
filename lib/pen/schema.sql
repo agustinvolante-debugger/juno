@@ -380,3 +380,6 @@ create table if not exists public.pen_usage (
 );
 create index if not exists pen_usage_at on public.pen_usage (at);
 alter table public.pen_usage enable row level security;  -- service role only
+
+-- 2026-10-10: contact phone numbers (WhatsApp: business cards, "text the Garcías" links)
+alter table public.pen_people add column if not exists phone text;

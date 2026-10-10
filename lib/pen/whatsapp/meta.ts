@@ -73,7 +73,7 @@ export async function markRead(messageId: string, typing = false): Promise<boole
 
 /* ---------------------------------------------------------------- inbound */
 
-type Media = { id?: string; filename?: string; caption?: string; mime_type?: string }
+type Media = { id?: string; filename?: string; caption?: string; mime_type?: string; voice?: boolean }
 type RawMsg = {
   id?: string
   from?: string
@@ -83,6 +83,7 @@ type RawMsg = {
   voice?: Media
   video?: Media
   document?: Media
+  image?: Media
   interactive?: { type?: string; button_reply?: { id?: string; title?: string } }
   button?: { payload?: string; text?: string }
 }
@@ -110,7 +111,11 @@ export function parseInboundAll(body: unknown): Inbound[] {
         const base = { id: m.id, from, name: names.get(from) ?? null, text: '', mediaUrl: null, fileName: null, replyId: null, raw: m }
         const media = m.audio ?? m.voice ?? m.video ?? m.document
         if (m.type === 'text') out.push({ ...base, kind: 'text', text: (m.text?.body ?? '').trim() })
-        else if (media?.id) out.push({ ...base, kind: 'media', mediaUrl: `meta:${media.id}`, fileName: media.filename ?? null, text: media.caption ?? '' })
+        else if (media?.id) {
+          // A voice note is an audio message with voice: true (or, on older payloads, type 'voice').
+          const voice = m.type === 'voice' || (!!m.audio && m.audio.voice === true)
+          out.push({ ...base, kind: 'media', voice, mime: media.mime_type ?? null, mediaUrl: `meta:${media.id}`, fileName: media.filename ?? null, text: media.caption ?? '' })
+        } else if (m.type === 'image' && m.image?.id) out.push({ ...base, kind: 'image', mime: m.image.mime_type ?? null, mediaUrl: `meta:${m.image.id}`, text: m.image.caption ?? '' })
         else if (m.type === 'interactive' && m.interactive?.button_reply) out.push({ ...base, kind: 'reply', replyId: m.interactive.button_reply.id ?? null, text: m.interactive.button_reply.title ?? '' })
         else if (m.type === 'button') out.push({ ...base, kind: 'reply', replyId: m.button?.payload ?? null, text: m.button?.text ?? '' })
         else out.push({ ...base, kind: 'other' })

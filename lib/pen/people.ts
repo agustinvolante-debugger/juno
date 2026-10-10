@@ -304,8 +304,10 @@ export async function enrichPerson(userEmail: string, personId: string): Promise
   await supabaseAdmin
     .from('pen_people')
     .update({
-      role: out.role.trim() || null,
-      company: out.company.trim() || null,
+      // A blank from the model means the notes don't say, not that the saved value is wrong
+      // (a business card read on WhatsApp has the company; the calls may never mention it).
+      role: out.role.trim() || person.role || null,
+      company: out.company.trim() || person.company || null,
       summary: out.summary.trim() || null,
       enriched_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
