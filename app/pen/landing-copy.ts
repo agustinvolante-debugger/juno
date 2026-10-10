@@ -57,11 +57,13 @@ export type Copy = {
     penLineIncluded: (perMonth: string) => string
     ownLineMonthly: (trial: number) => string
     ownLineHalf: (perMonth: string) => string
+    ownLineYear: (perMonth: string) => string
     tradeMonthlyPen: string
     tradeHalfPen: string
     tradeYearPen: string
     tradeOwnMonthly: string
     tradeOwnHalf: string
+    tradeOwnYear: string
     ribbonPen: string
     ribbonBest: string
     soonTitle: string
@@ -132,11 +134,13 @@ const EN: Copy = {
     penLineIncluded: (pm) => `${pm} a month · pen included`,
     ownLineMonthly: (t) => `${t} days free`,
     ownLineHalf: (pm) => `${pm} a month · billed today`,
+    ownLineYear: (pm) => `${pm} a month · billed today`,
     tradeMonthlyPen: 'You buy the pen, and you can stop any month you like.',
     tradeHalfPen: 'The pen is on us, paid up front for half a year.',
     tradeYearPen: 'The pen is on us, and it works out cheapest.',
     tradeOwnMonthly: 'Record on your phone or any recorder and upload the file.',
     tradeOwnHalf: 'The same, paid up front for half a year.',
+    tradeOwnYear: 'The same, paid for a year, and it works out cheapest.',
     ribbonPen: 'Pen included',
     ribbonBest: 'Best value',
     soonTitle: '',
@@ -212,11 +216,13 @@ const ES: Copy = {
     penLineIncluded: (pm) => `${pm} al mes · lápiz incluido`,
     ownLineMonthly: (t) => `${t} días gratis`,
     ownLineHalf: (pm) => `${pm} al mes · se cobra hoy`,
+    ownLineYear: (pm) => `${pm} al mes · se cobra hoy`,
     tradeMonthlyPen: 'Compras el lápiz y puedes cancelar cuando quieras.',
     tradeHalfPen: 'El lápiz va por nuestra cuenta, pagando medio año por adelantado.',
     tradeYearPen: 'El lápiz va por nuestra cuenta, y sale más barato.',
     tradeOwnMonthly: 'Graba con el celular o cualquier grabadora y mándalo por WhatsApp o súbelo.',
     tradeOwnHalf: 'Lo mismo, pagando medio año por adelantado.',
+    tradeOwnYear: 'Lo mismo, pagando un año, y sale más barato.',
     ribbonPen: 'Lápiz incluido',
     ribbonBest: 'Mejor precio',
     soonTitle: 'El lápiz llega pronto',
@@ -292,11 +298,13 @@ const PT: Copy = {
     penLineIncluded: (pm) => `${pm} por mês · caneta incluída`,
     ownLineMonthly: (t) => `${t} dias grátis`,
     ownLineHalf: (pm) => `${pm} por mês · cobrado hoje`,
+    ownLineYear: (pm) => `${pm} por mês · cobrado hoje`,
     tradeMonthlyPen: 'Você compra a caneta e pode cancelar quando quiser.',
     tradeHalfPen: 'A caneta é por nossa conta, pagando meio ano adiantado.',
     tradeYearPen: 'A caneta é por nossa conta, e sai mais barato.',
     tradeOwnMonthly: 'Grave com o celular ou qualquer gravador e mande pelo WhatsApp ou envie pelo site.',
     tradeOwnHalf: 'O mesmo, pagando meio ano adiantado.',
+    tradeOwnYear: 'O mesmo, pagando um ano, e sai mais barato.',
     ribbonPen: 'Caneta incluída',
     ribbonBest: 'Melhor preço',
     soonTitle: 'A caneta chega em breve',

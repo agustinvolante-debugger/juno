@@ -25,7 +25,7 @@ export function encode(obj: Record<string, unknown>, prefix = ''): string[] {
   return out
 }
 
-async function stripe<T>(path: string, body?: Record<string, unknown>): Promise<T> {
+async function stripe<T>(path: string, body?: Record<string, unknown>, idempotencyKey?: string): Promise<T> {
   const key = process.env.STRIPE_SECRET_KEY
   if (!key) throw new Error('STRIPE_SECRET_KEY is not set')
   const res = await fetch(`https://api.stripe.com/v1/${path}`, {
@@ -37,6 +37,7 @@ async function stripe<T>(path: string, body?: Record<string, unknown>): Promise<
       // Pinning the version means a Stripe upgrade cannot silently reshape what we read.
       // current_period_end already moved off Subscription onto its items; see webhook.
       'Stripe-Version': '2025-03-31.basil',
+      ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
     },
     ...(body ? { body: encode(body).join('&') } : {}),
   })
@@ -193,6 +194,7 @@ export type Subscription = {
   pause_collection: { resumes_at: number | null } | null
   cancel_at?: number | null
   cancel_at_period_end?: boolean
+  metadata?: Record<string, string>
   items?: { data?: { current_period_end?: number; price?: { currency?: string; unit_amount?: number | null; recurring?: { interval?: string; interval_count?: number } | null } }[] }
 }
 
@@ -329,5 +331,28 @@ export async function ensureFriendCoupon(local: { clp: number; brl: number }): P
       if (!/already exists/i.test((e as Error).message)) throw e
     })
     return FRIEND_COUPON
+  }
+}
+
+/**
+ * The free pen's minimum (lib/pen/plan.ts FREE_PEN_MIN_DAYS): a plan that ended too soon pays for
+ * the pen, once. An invoice of its own on the card already on file. Keyed on the subscription,
+ * so a retried webhook can't charge twice. Returns the invoice status ('paid', or 'open' when
+ * the card was declined: Stripe then retries it on its usual schedule).
+ */
+export async function chargePenFee(opts: { customerId: string; subscriptionId: string; amountUsd: number; description: string }): Promise<{ invoice: string; status: string }> {
+  const meta = { reason: 'free-pen-minimum', subscription: opts.subscriptionId }
+  await stripe('invoiceitems', { customer: opts.customerId, amount: Math.round(opts.amountUsd * 100), currency: 'usd', description: opts.description, metadata: meta }, `pen-min-item-${opts.subscriptionId}`)
+  const inv = await stripe<{ id: string }>(
+    'invoices',
+    { customer: opts.customerId, collection_method: 'charge_automatically', auto_advance: true, pending_invoice_items_behavior: 'include', description: opts.description, metadata: meta },
+    `pen-min-inv-${opts.subscriptionId}`,
+  )
+  await stripe(`invoices/${inv.id}/finalize`, {}, `pen-min-fin-${opts.subscriptionId}`).catch(() => {})
+  try {
+    const paid = await stripe<{ status: string }>(`invoices/${inv.id}/pay`, {}, `pen-min-pay-${opts.subscriptionId}`)
+    return { invoice: inv.id, status: paid.status }
+  } catch {
+    return { invoice: inv.id, status: 'open' }
   }
 }

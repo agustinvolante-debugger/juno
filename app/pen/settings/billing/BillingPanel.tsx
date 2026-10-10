@@ -78,6 +78,7 @@ const BP_EN = {
   loseTrial: 'Your trial ends then and you’re never charged.',
   loseRefund: 'Nothing more is charged. There is no refund for the rest of this period, and you keep full access until it ends.',
   losePen: 'The pen is yours to keep.',
+  losePenFee: (usd: string) => `Your free pen came with a 3-month minimum and this is before it, so ${usd} is charged for the pen when your plan ends. The pen is yours to keep.`,
   loseBack: 'Change your mind before then and one click keeps your plan. After, Reactivate brings everything back.',
   pauseInstead: 'Would a break do? Pause for 30 days instead: no charges, and everything stays readable.',
   pauseInsteadBtn: 'Pause for 30 days instead',
@@ -145,6 +146,7 @@ const BP: Copy<typeof BP_EN> = {
     loseTrial: 'Tu prueba termina ese día y nunca se te cobra.',
     loseRefund: 'No se cobra nada más. No hay reembolso por el resto de este período, y mantienes acceso completo hasta que termine.',
     losePen: 'El lápiz es tuyo, quédatelo.',
+    losePenFee: (usd) => `Tu lápiz gratis venía con un mínimo de 3 meses y aún no se cumple, así que se cobran ${usd} por el lápiz cuando termine tu plan. El lápiz es tuyo.`,
     loseBack: 'Si cambias de opinión antes, un clic mantiene tu plan. Después, Reactivar trae todo de vuelta.',
     pauseInstead: '¿Te sirve un descanso? Pausa 30 días: sin cobros y todo sigue disponible para leer.',
     pauseInsteadBtn: 'Pausar 30 días',
@@ -209,6 +211,7 @@ const BP: Copy<typeof BP_EN> = {
     loseTrial: 'Seu teste termina nesse dia e você nunca é cobrado.',
     loseRefund: 'Nada mais é cobrado. Não há reembolso pelo resto deste período, e você mantém acesso completo até ele terminar.',
     losePen: 'A caneta é sua, pode ficar com ela.',
+    losePenFee: (usd) => `Sua caneta grátis veio com um mínimo de 3 meses, que ainda não foi cumprido, então ${usd} serão cobrados pela caneta quando o plano terminar. A caneta é sua.`,
     loseBack: 'Se mudar de ideia antes, um clique mantém seu plano. Depois, Reativar traz tudo de volta.',
     pauseInstead: 'Uma pausa resolve? Pause por 30 dias: sem cobranças, e tudo continua disponível para ler.',
     pauseInsteadBtn: 'Pausar por 30 dias',
@@ -228,6 +231,7 @@ export default function BillingPanel({
   endsAt,
   trial,
   keepsPen,
+  penFee = null,
   back,
 }: {
   pausedUntil: string | null
@@ -242,6 +246,8 @@ export default function BillingPanel({
   endsAt: string | null
   trial: boolean
   keepsPen: boolean
+  /** Set when cancelling now falls inside the free pen's minimum: the amount charged for the pen. */
+  penFee?: string | null
   /** Just came back from the reactivation checkout. */
   back: boolean
 }) {
@@ -417,8 +423,8 @@ export default function BillingPanel({
                 <li>{T.loseAdd(day(endsAt))}</li>
                 <li>{T.loseAi}</li>
                 <li>{T.loseKeep(deleteAfter(endsAt))}</li>
-                <li>{trial ? T.loseTrial : T.loseRefund}</li>
-                {keepsPen && <li>{T.losePen}</li>}
+                {penFee ? <li><strong>{T.losePenFee(penFee)}</strong></li> : <li>{trial ? T.loseTrial : T.loseRefund}</li>}
+                {keepsPen && !penFee && <li>{T.losePen}</li>}
                 <li>{T.loseBack}</li>
               </ul>
               {pausable && (

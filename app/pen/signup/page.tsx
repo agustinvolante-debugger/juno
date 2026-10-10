@@ -31,8 +31,8 @@ const SU = {
     free: {
       eyebrow: 'Your free Juno pen', h1: 'Your Juno pen is on us.',
       lede: 'Tell us where to send it. The pen is free, and so are your first 30 days of Juno. We save a card for after the trial: nothing is charged today.',
-      terms: ['$0 today', 'Pen free', '30 days free', 'Then $15/month', 'Cancel anytime'],
-      submit: 'Claim my free pen', fine: 'Your card is saved for after the trial and charged only if you keep Juno past 30 days. We email you before the trial ends. Cancel anytime in Settings, Billing.',
+      terms: ['$0 today', 'Pen free', '30 days free', 'Then $15/month', '3-month minimum'],
+      submit: 'Claim my free pen', fine: 'Your card is saved for after the trial. The free pen comes with a 3-month minimum (the free month plus two paid months at $15); if your plan ends sooner, the pen is charged at $50. We email you before the trial ends. Manage or cancel in Settings, Billing.',
       gone: 'All the free pens for this offer have been claimed.',
     },
     ph: { name: 'Mark Ellis', email: 'you@company.com', phone: '(305) 555 0142', line1: '1200 Brickell Ave', city: 'Miami', state: 'FL', postcode: '33131', country: 'United States' },
@@ -55,8 +55,8 @@ const SU = {
     free: {
       eyebrow: 'Tu lápiz Juno gratis', h1: 'Tu lápiz Juno va por nuestra cuenta.',
       lede: 'Dinos dónde enviarlo. El lápiz es gratis, y también tus primeros 30 días de Juno. Guardamos una tarjeta para después de la prueba: hoy no se cobra nada.',
-      terms: ['$0 hoy', 'Lápiz gratis', '30 días gratis', 'Luego US$15/mes', 'Cancela cuando quieras'],
-      submit: 'Pedir mi lápiz gratis', fine: 'Tu tarjeta queda guardada para después de la prueba y solo se cobra si sigues con Juno pasados los 30 días. Te escribimos antes de que termine. Cancela cuando quieras en Configuración, Facturación.',
+      terms: ['$0 hoy', 'Lápiz gratis', '30 días gratis', 'Luego US$15/mes', 'Mínimo 3 meses'],
+      submit: 'Pedir mi lápiz gratis', fine: 'Tu tarjeta queda guardada para después de la prueba. El lápiz gratis viene con un mínimo de 3 meses (el mes gratis más dos meses pagados a US$15); si tu plan termina antes, se cobran US$50 por el lápiz. Te escribimos antes de que termine la prueba. Gestiona o cancela en Configuración, Facturación.',
       gone: 'Ya se reclamaron todos los lápices gratis de esta oferta.',
     },
     ph: { name: 'Sofía Henríquez', email: 'tu@empresa.cl', phone: '+56 9 1234 5678', line1: 'Av. Apoquindo 3000', city: 'Santiago', state: 'RM', postcode: '7550000', country: 'Chile' },
@@ -79,8 +79,8 @@ const SU = {
     free: {
       eyebrow: 'Sua caneta Juno grátis', h1: 'Sua caneta Juno é por nossa conta.',
       lede: 'Diga onde enviá-la. A caneta é grátis, e seus primeiros 30 dias de Juno também. Guardamos um cartão para depois do teste: nada é cobrado hoje.',
-      terms: ['US$0 hoje', 'Caneta grátis', '30 dias grátis', 'Depois US$15/mês', 'Cancele quando quiser'],
-      submit: 'Pedir minha caneta grátis', fine: 'Seu cartão fica salvo para depois do teste e só é cobrado se você continuar com o Juno após 30 dias. Avisamos antes de o teste acabar. Cancele quando quiser em Configurações, Cobrança.',
+      terms: ['US$0 hoje', 'Caneta grátis', '30 dias grátis', 'Depois US$15/mês', 'Mínimo de 3 meses'],
+      submit: 'Pedir minha caneta grátis', fine: 'Seu cartão fica salvo para depois do teste. A caneta grátis vem com um mínimo de 3 meses (o mês grátis mais dois meses pagos a US$15); se o plano terminar antes, US$50 são cobrados pela caneta. Avisamos antes de o teste acabar. Gerencie ou cancele em Configurações, Cobrança.',
       gone: 'Todas as canetas grátis desta oferta já foram resgatadas.',
     },
     ph: { name: 'Sofia Henriques', email: 'voce@empresa.com.br', phone: '+55 11 91234 5678', line1: 'Av. Paulista 1000', city: 'São Paulo', state: 'SP', postcode: '01310-100', country: 'Brasil' },

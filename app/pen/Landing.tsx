@@ -12,7 +12,7 @@ import PenFilm from './film/PenFilm'
 import HowToPlayer from './how-to/HowToPlayer'
 import type { HowToKitKey } from './film/HowToScene'
 import Icon, { type IconName } from './Icon'
-import { PLAN_MONTHLY_USD, PLAN_HALFYEAR_USD, PLAN_ANNUAL_USD, PEN_USD, SOFTWARE_MONTHLY_USD, SOFTWARE_HALFYEAR_USD, TRIAL_DAYS, TRIAL_DAYS_POSTED } from '@/lib/pen/plan'
+import { PLAN_MONTHLY_USD, PLAN_HALFYEAR_USD, PLAN_ANNUAL_USD, PEN_USD, SOFTWARE_MONTHLY_USD, SOFTWARE_HALFYEAR_USD, SOFTWARE_ANNUAL_USD, TRIAL_DAYS, TRIAL_DAYS_POSTED } from '@/lib/pen/plan'
 import { COPY, LOCAL_PRICES, money, type Copy, type Market, type RoleDemo } from './landing-copy'
 import { AUD_PARAM, KITS, PLUS, type Kit, type Plus } from './landing-audiences'
 
@@ -1067,6 +1067,21 @@ function ownPlans(t: Copy, market: Market): PlanCard[] {
       href: signup('plan=halfyear&offer=own-recorder&from=pricing', market),
       cta: t.cta.halfyear,
     },
+    // Yearly is dollars only: there is no CLP/BRL yearly price.
+    ...(market.currency === 'usd'
+      ? [
+          {
+            name: P.yearly,
+            price: money(SOFTWARE_ANNUAL_USD, 'usd'),
+            per: P.perYear,
+            line: P.ownLineYear(money(Math.round(SOFTWARE_ANNUAL_USD / 12), 'usd')),
+            trade: P.tradeOwnYear,
+            href: signup('plan=annual&offer=own-recorder&from=pricing', market),
+            cta: t.cta.yearly,
+            ribbon: P.ribbonBest,
+          },
+        ]
+      : []),
   ]
 }
 
@@ -1135,7 +1150,7 @@ function Pricing() {
               <PenSoon />
             </div>
           ) : (
-            <div className={`pen-lp-plans ${group === 'pen' ? 'pen-lp-plans-3' : 'pen-lp-plans-2'}`}>
+            <div className={`pen-lp-plans ${(group === 'pen' ? penPlans(t, market) : ownPlans(t, market)).length === 3 ? 'pen-lp-plans-3' : 'pen-lp-plans-2'}`}>
               {(group === 'pen' ? penPlans(t, market) : ownPlans(t, market)).map((p, i) => (
                 <PlanCardView key={`${group}-${p.name}`} p={p} delay={i * 0.05} />
               ))}

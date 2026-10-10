@@ -5,11 +5,11 @@ import { sendCancelScheduled, sendEnded, sendWelcomeBack } from '@/lib/pen/cance
 import { referralCheckout, referralInvoicePaid, referralRefund } from '@/lib/pen/referral-events'
 import { settleHoursCheckout } from '@/lib/pen/hours'
 import { sendEmailResult } from '@/lib/news/email'
-import { planPrice, parsePlan, parseOffer } from '@/lib/pen/plan'
+import { planPrice, parsePlan, parseOffer, penFeeDue, PEN_USD, FREE_PEN_MIN_MONTHS } from '@/lib/pen/plan'
 import { LOCAL_PRICES, money, parseCurrency, parseLang } from '@/lib/pen/currency'
 import { rememberAppLanguage } from '@/lib/pen/profile'
-import { notifyPaid, notifyHours } from '@/lib/pen/notify-owner'
-import { cancelAtOf, chargeCustomer, customerEmail, portalLoginUrl, type Subscription } from '@/lib/pen/stripe'
+import { notifyPaid, notifyHours, notifyNote } from '@/lib/pen/notify-owner'
+import { cancelAtOf, chargeCustomer, chargePenFee, customerEmail, portalLoginUrl, type Subscription } from '@/lib/pen/stripe'
 
 export const dynamic = 'force-dynamic'
 // A purchase can release held recordings, and a pieced one is stitched into AssemblyAI on the way.
@@ -166,7 +166,7 @@ export async function POST(req: Request) {
             const reason = sub.cancellation_details?.feedback ?? null
             if (await setCancelAt(sub.id, at, at ? reason : null)) {
               const acct = await getAccountByStripe(sub.id, null).catch(() => null)
-              await sendCancelScheduled(subEmail, at!, acct?.offer ?? sub.metadata?.offer ?? null).catch((e) => console.warn(`pen cancel email failed: ${(e as Error).message}`))
+              await sendCancelScheduled(subEmail, at!, acct?.offer ?? sub.metadata?.offer ?? null, penFeeDue(sub.metadata, at)).catch((e) => console.warn(`pen cancel email failed: ${(e as Error).message}`))
             }
           }
         } else if (!live && sub.id) {
@@ -200,6 +200,8 @@ export async function POST(req: Request) {
       // is here to tell them before that happens, while it is still fixable.
       // Any paid invoice. Only referrals care, and only about a friend's first real payment.
       case 'invoice.paid': {
+        // Includes the pen charged after a free-pen plan ended early: paying for the pen counts,
+        // as it does at checkout (lib/pen/referral-events.ts).
         await referralInvoicePaid(o)
         break
       }
@@ -250,8 +252,23 @@ async function ended(sub: Record<string, any>) {
   const to = await emailForSubscription(sub).catch(() => null)
   // Only a real end is announced. A declined card (past_due, unpaid) also closes the account,
   // but the payment-failed email already told them, and fixing the card brings it straight back.
-  if ((await deactivate(sub.id)) && to && sub.status === 'canceled') {
-    await sendEnded(to, new Date().toISOString()).catch((e) => console.warn(`pen ended email failed: ${(e as Error).message}`))
+  const first = await deactivate(sub.id)
+  // The free pen's minimum: ended before it, the pen is paid for, once (keyed on the subscription).
+  let penCharged = false
+  const customer = typeof sub.customer === 'string' ? sub.customer : sub.customer?.id
+  if (sub.status === 'canceled' && customer && penFeeDue(sub.metadata, Date.now())) {
+    try {
+      const r = await chargePenFee({ customerId: customer, subscriptionId: sub.id, amountUsd: PEN_USD, description: `Juno pen: the free-pen plan ended before its ${FREE_PEN_MIN_MONTHS}-month minimum` })
+      penCharged = true
+      console.log(`pen minimum: charged the pen for ${sub.id} (${r.invoice}, ${r.status})`)
+      if (r.status !== 'paid') await notifyNote('Free-pen minimum: pen charge not paid', `The $${PEN_USD} pen charge for ${to ?? customer} is ${r.status} (invoice ${r.invoice}). Stripe will retry the card.`).catch(() => {})
+    } catch (e) {
+      console.warn(`pen minimum: charge failed for ${sub.id}: ${(e as Error).message}`)
+      await notifyNote('Free-pen minimum: pen charge failed', `Could not charge the pen for ${to ?? customer} (${sub.id}): ${(e as Error).message}`).catch(() => {})
+    }
+  }
+  if (first && to && sub.status === 'canceled') {
+    await sendEnded(to, new Date().toISOString(), penCharged).catch((e) => console.warn(`pen ended email failed: ${(e as Error).message}`))
   }
 }
 

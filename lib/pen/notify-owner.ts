@@ -22,7 +22,7 @@ function recipient(): string[] | null {
 function planLabel(plan: string | null, offer: string | null): string {
   const o = parseOffer(offer)
   const p = parsePlan(plan)
-  if (o === 'free-pen') return 'FREE PEN (invited agent), 30-day trial, then $15/month'
+  if (o === 'free-pen') return 'FREE PEN (invited agent), 30-day trial, then $15/month, 3-month minimum (pen charged $50 if it ends sooner)'
   const len = p === 'annual' ? 'yearly' : p === 'halfyear' ? '6 months' : 'monthly'
   const price = planPrice(o, p)
   return `${o === 'own-recorder' ? 'Own recorder' : 'With pen'}, ${len}${price ? ` ($${price.usd})` : ''}`
@@ -128,6 +128,11 @@ export async function notifyReferralPaid(opts: { friend: string; referrer: strin
 }
 
 /** Anything else about referrals the owners should see: voids, the daily credits. */
+/** A one-line note to the owners, e.g. a free-pen minimum charge that didn't go through. */
+export async function notifyNote(subject: string, text: string) {
+  await send(subject, [['Note', text]])
+}
+
 export async function notifyReferralNote(subject: string, rows: [string, string][]) {
   await send(subject, rows)
 }

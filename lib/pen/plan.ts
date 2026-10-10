@@ -25,12 +25,18 @@ export const PLAN_ANNUAL_USD = 144
 export const PEN_USD = 50
 
 /**
- * Agreed 25 Sep: software only, for people who already record (phone, WhatsApp voice notes,
- * Plaud, any recorder). No pen, no shipping. $12 (changed from $10 the same day): break-even
- * is about 16 recorded hours a month at $0.70 an hour; our real users record 3.5 to 8.3.
+ * Software only, for people who already record (phone, WhatsApp voice notes, Plaud, any
+ * recorder). No pen, no shipping.
+ *
+ * Agreed 10 Oct: the same price as the pen plans. It was $12 / $54, cheaper than the pen plans'
+ * $15 / $90 for the same software, so anyone who had the pen could switch down and save, and a
+ * loyal pen customer renewing paid $72 a year more for nothing. One software price for
+ * everyone; the pen is a one-time $50, or free when the plan is paid 6 or 12 months up front.
+ * Local prices (CLP, BRL) are unchanged: the pen isn't sold there, so there is nothing to game.
  */
-export const SOFTWARE_MONTHLY_USD = 12
-export const SOFTWARE_HALFYEAR_USD = 54
+export const SOFTWARE_MONTHLY_USD = PLAN_MONTHLY_USD
+export const SOFTWARE_HALFYEAR_USD = PLAN_HALFYEAR_USD
+export const SOFTWARE_ANNUAL_USD = PLAN_ANNUAL_USD
 
 /**
  * Fair-use ceiling on "unlimited", in hours a month. Agreed 25 Sep, replacing the 12-hour cap:
@@ -53,6 +59,22 @@ export const TRIAL_DAYS_POSTED = 21
  *  then the monthly plan. Capped, because a forwarded link must not post unlimited hardware. */
 export const FREE_PEN_TRIAL_DAYS = 30
 export const FREE_PEN_CAP = 25
+/**
+ * Agreed 10 Oct: the free pen comes with a 3-month minimum (the free month plus two paid). A
+ * plan that ends sooner is charged PEN_USD for the pen, once, when it ends. Measured in days
+ * from checkout so the end of the second paid month (about day 90) clears it.
+ * Applies to free-pen checkouts made after the change only: the subscription carries
+ * `pen_min_until` in its metadata, and earlier ones (whose terms said "never charged") don't.
+ */
+export const FREE_PEN_MIN_MONTHS = 3
+export const FREE_PEN_MIN_DAYS = 85
+
+/** Whether a plan ending at `endsAt` falls inside the free pen's minimum (so the pen is charged). */
+export function penFeeDue(meta: Record<string, unknown> | null | undefined, endsAt: string | number | Date | null | undefined): boolean {
+  const until = typeof meta?.pen_min_until === 'string' ? Date.parse(meta.pen_min_until) : NaN
+  if (!Number.isFinite(until) || endsAt == null) return false
+  return new Date(endsAt).getTime() < until
+}
 
 export type Offer = 'own-recorder' | 'posted-pen' | 'free-pen'
 export type Plan = 'monthly' | 'halfyear' | 'annual'
@@ -73,7 +95,7 @@ export function trialDaysFor(offer: Offer, plan: Plan = 'monthly'): number {
 
 /**
  * What each offer and plan costs, and the env var holding its Stripe price. Software only has
- * no yearly plan; asking for one is refused rather than quietly charged as something else.
+ * its own prices (same amounts as the pen plans) so its receipts never say "recorder included".
  */
 export function planPrice(offer: Offer, plan: Plan): { usd: number; months: number; env: string } | null {
   // Free pen: monthly only, the same price as the pen plan; the pen itself is never charged.
@@ -85,7 +107,7 @@ export function planPrice(offer: Offer, plan: Plan): { usd: number; months: numb
   }
   if (plan === 'monthly') return { usd: SOFTWARE_MONTHLY_USD, months: 1, env: 'STRIPE_PRICE_SOFTWARE_MONTHLY' }
   if (plan === 'halfyear') return { usd: SOFTWARE_HALFYEAR_USD, months: 6, env: 'STRIPE_PRICE_SOFTWARE_HALFYEAR' }
-  return null
+  return { usd: SOFTWARE_ANNUAL_USD, months: 12, env: 'STRIPE_PRICE_SOFTWARE_ANNUAL' }
 }
 
 export type Usage = {

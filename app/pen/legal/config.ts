@@ -20,4 +20,4 @@ export type LegalFact = keyof typeof LEGAL_FACTS
 export const LEGAL_DRAFT = false
 
 /** Shown under the title. Change it whenever the text changes. */
-export const LEGAL_UPDATED = { en: '27 September 2026', es: '27 de septiembre de 2026', pt: '27 de setembro de 2026' } as const
+export const LEGAL_UPDATED = { en: '10 October 2026', es: '10 de octubre de 2026', pt: '10 de outubro de 2026' } as const

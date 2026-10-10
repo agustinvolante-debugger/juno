@@ -6,6 +6,7 @@
 // "Keep my plan" takes the cancellation back; after it, Reactivate opens a checkout with no
 // trial and no pen charge (they have the pen already).
 
+import { penFeeDue } from './plan'
 import { getAccount, isPaused, setCancelAt, setPausedUntil, type PenAccount } from './accounts'
 import { cancelAtOf, cancelAtPeriodEnd, getSubscription, resumeSubscription, undoCancel, CANCEL_FEEDBACK, type CancelFeedback } from './stripe'
 import { isReadOnly } from './access'
@@ -38,7 +39,7 @@ export async function cancel(email: string, feedback: CancelFeedback, comment?: 
   if (!at) throw new Error('Stripe did not say when the plan ends.')
   // The webhook records the same thing a moment later; whichever is first sends the email.
   if (await setCancelAt(subId, at, comment ? `${feedback}: ${comment}`.slice(0, 500) : feedback)) {
-    await sendCancelScheduled(email, at, a!.offer).catch((e) => console.warn(`pen cancel email failed: ${(e as Error).message}`))
+    await sendCancelScheduled(email, at, a!.offer, penFeeDue(sub.metadata, at)).catch((e) => console.warn(`pen cancel email failed: ${(e as Error).message}`))
   }
   return at
 }

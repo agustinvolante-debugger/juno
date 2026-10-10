@@ -46,7 +46,7 @@ export const TERMS: Record<Lang, LegalDoc> = {
             list: [
               'Plans are monthly, every 6 months or yearly, with the Juno pen or with your own recorder. The price, the currency and what is included are shown before you pay.',
               'Monthly plans start with a free trial: 7 days with your own recorder, 21 days with the pen, 30 days when the pen is offered free. We take a card at signup and charge it when the trial ends, unless you cancel first. If there is no valid card when the trial ends, the plan is cancelled.',
-              'When the pen is offered free, it is never charged, and it is yours to keep whether or not you stay.',
+              'When the pen is offered free, it comes with a 3-month minimum: the free month plus two paid months. If the plan ends before then, the pen is charged once, at the price shown at signup, when the plan ends. Either way the pen is yours to keep. Free pens from signups before 10 October 2026 are never charged.',
               'On the monthly pen plan, the pen is a one-time charge at signup. On the 6-month and yearly plans, the pen is included and the plan is paid up front, with no trial.',
               'Plans renew automatically for the same length until you cancel. We will tell you before a price change applies to you.',
               'Where tax applies, it is shown at checkout.',
@@ -182,7 +182,7 @@ export const TERMS: Record<Lang, LegalDoc> = {
             list: [
               'Los planes son mensuales, semestrales o anuales, con el lápiz Juno o con tu propia grabadora. El precio, la moneda y lo que incluye se muestran antes de pagar.',
               'Los planes mensuales empiezan con una prueba gratis: 7 días con tu propia grabadora, 21 días con el lápiz, 30 días cuando el lápiz se ofrece gratis. Pedimos una tarjeta al registrarte y la cobramos cuando termina la prueba, salvo que canceles antes. Si no hay una tarjeta válida al terminar la prueba, el plan se cancela.',
-              'Cuando el lápiz se ofrece gratis, nunca se cobra, y es tuyo te quedes o no.',
+              'Cuando el lápiz se ofrece gratis, viene con un mínimo de 3 meses: el mes gratis más dos meses pagados. Si el plan termina antes, el lápiz se cobra una sola vez, al precio indicado al registrarte, cuando termina el plan. En cualquier caso el lápiz es tuyo. Los lápices gratis de registros anteriores al 10 de octubre de 2026 nunca se cobran.',
               'En el plan mensual con lápiz, el lápiz se cobra una sola vez al registrarte. En los planes semestral y anual, el lápiz está incluido y el plan se paga por adelantado, sin prueba.',
               'Los planes se renuevan automáticamente por el mismo período hasta que canceles. Te avisaremos antes de que un cambio de precio se aplique a ti.',
               'Cuando corresponde algún impuesto, se muestra al pagar.',
@@ -318,7 +318,7 @@ export const TERMS: Record<Lang, LegalDoc> = {
             list: [
               'Os planos são mensais, semestrais ou anuais, com a caneta Juno ou com o seu próprio gravador. O preço, a moeda e o que está incluído aparecem antes do pagamento.',
               'Os planos mensais começam com um teste grátis: 7 dias com o seu próprio gravador, 21 dias com a caneta, 30 dias quando a caneta é oferecida grátis. Pedimos um cartão no cadastro e cobramos quando o teste termina, a menos que você cancele antes. Se não houver um cartão válido quando o teste terminar, o plano é cancelado.',
-              'Quando a caneta é oferecida grátis, ela nunca é cobrada, e é sua, fique você ou não.',
+              'Quando a caneta é oferecida grátis, ela vem com um mínimo de 3 meses: o mês grátis mais dois meses pagos. Se o plano terminar antes, a caneta é cobrada uma única vez, pelo preço mostrado no cadastro, quando o plano termina. De qualquer forma a caneta é sua. Canetas grátis de cadastros anteriores a 10 de outubro de 2026 nunca são cobradas.',
               'No plano mensal com caneta, a caneta é cobrada uma única vez no cadastro. Nos planos semestral e anual, a caneta está incluída e o plano é pago adiantado, sem teste.',
               'Os planos se renovam automaticamente pelo mesmo período até você cancelar. Avisaremos antes que uma mudança de preço valha para você.',
               'Quando houver imposto, ele aparece no pagamento.',

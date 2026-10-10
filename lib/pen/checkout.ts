@@ -5,14 +5,14 @@
 // $50 recorder was charged by neither, and a change to the yearly trial landed in only one.
 
 import { createCheckoutSession, ensureFriendCoupon } from './stripe'
-import { planPrice, trialDaysFor, type Offer, type Plan } from './plan'
+import { planPrice, trialDaysFor, PEN_USD, FREE_PEN_MIN_DAYS, FREE_PEN_MIN_MONTHS, type Offer, type Plan } from './plan'
 import { LOCAL_PRICES, stripeLocale, type Currency, type Lang } from './currency'
 
 /** Under the pay button on the free-pen checkout: the promise, with the actual date. */
 function freePenMessage(usd: number): string {
   const end = new Date(Date.now() + trialDaysFor('free-pen') * 86_400_000)
   const day = end.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-  return `Your Juno pen is free and the first 30 days are free. You won't be charged until ${day}, then $${usd}/month. Cancel anytime before then and you pay nothing. We'll email you before your trial ends.`
+  return `Your Juno pen is free and the first 30 days are free. You won't be charged until ${day}, then $${usd}/month. The free pen comes with a ${FREE_PEN_MIN_MONTHS}-month minimum: if your plan ends before then, the pen is charged at $${PEN_USD}. We'll email you before your trial ends.`
 }
 
 export type PlanCheckout = { url: string } | { error: string }
@@ -37,7 +37,7 @@ export async function startPlanCheckout(opts: {
   referral?: string | null
 }): Promise<PlanCheckout> {
   const price = planPrice(opts.offer, opts.plan)
-  if (!price) return { error: 'That plan is not available. Software only comes monthly or every 6 months.' }
+  if (!price) return { error: 'That plan is not available. The free pen comes with the monthly plan only.' }
   // Local prices exist only for software-only plans (STRIPE_PRICE_SOFTWARE_MONTHLY_CLP etc).
   // If one is missing, charge the dollar price rather than fail the signup.
   const cur: Currency = opts.offer === 'own-recorder' && opts.currency && opts.currency !== 'usd' ? opts.currency : 'usd'
@@ -67,7 +67,16 @@ export async function startPlanCheckout(opts: {
     reference: opts.reference,
     customerId: opts.returning?.customerId ?? null,
     coupon,
-    metadata: { plan: opts.plan, offer: opts.offer, lang: opts.lang ?? 'en', currency: charged, ...(opts.returning ? { returning: '1' } : {}), ...(opts.referral ? { ref: opts.referral } : {}) },
+    metadata: {
+      plan: opts.plan,
+      offer: opts.offer,
+      lang: opts.lang ?? 'en',
+      currency: charged,
+      ...(opts.returning ? { returning: '1' } : {}),
+      ...(opts.referral ? { ref: opts.referral } : {}),
+      // The free pen's minimum (lib/pen/plan.ts): the webhook charges the pen if the plan ends before this.
+      ...(opts.offer === 'free-pen' && !opts.returning ? { pen_min_until: new Date(Date.now() + FREE_PEN_MIN_DAYS * 86_400_000).toISOString() } : {}),
+    },
     locale: stripeLocale(opts.lang ?? 'en'),
     ...(opts.offer === 'free-pen' && !opts.returning ? { submitMessage: freePenMessage(price.usd) } : {}),
   })
