@@ -799,7 +799,7 @@ function Phone({ t, width, k }: { t: number; width: number; k: HowKit }) {
 
 const STEPS: { at: number; until: number; n: string; text: string; sub?: string }[] = [
   { at: 0.4, until: 6.6, n: '1', text: 'Plug the pen into your computer', sub: 'Pull off the cap: the USB-C plug is underneath' },
-  { at: 8.2, until: 12.6, n: '2', text: 'Click Connect pen, then choose JUNO PEN', sub: 'On Safari? Drag the files into “Add audio files”' },
+  { at: 8.2, until: 12.6, n: '2', text: 'Click Connect pen, then select the recordings', sub: 'Open JUNO PEN and select them all' },
   { at: 12.9, until: 20.6, n: '3', text: 'Add who was there, and confirm everyone agreed', sub: 'In Florida and many states, everyone recorded must agree' },
   { at: 21.0, until: 27.2, n: '4', text: 'Check who’s who, and save the people', sub: 'Juno matches each voice to a name' },
   { at: 27.6, until: 37.6, n: '5', text: 'Your summary, to-dos and follow-up are ready', sub: 'Tick to-dos off as you go' },

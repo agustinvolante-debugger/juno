@@ -14,7 +14,7 @@ import { ALLOWED_EMAILS } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getAccount, isActive } from '../accounts'
 import { getAllowance } from '../allowance'
-import { runAgent } from './agent'
+import { runAgent, type AgentResult } from './agent'
 import { isMine } from '../todo-labels'
 import { askArchive } from '../archive'
 import { uploadStream } from '../aai'
@@ -50,6 +50,7 @@ const EN = {
     'I\'m Juno Pen.\n\n' +
     '• Send me a recording (the WAV from your pen, or any audio file) and I\'ll send the briefing back here.\n' +
     '• Ask me anything about your calls, like "what did Chris say about the Malibu house?"\n' +
+    '• Organise them: "add Carlos to this call", "speaker B is Carlos", "rename it Malibu showing".\n' +
     '• Send "new" to start a fresh conversation.',
   notLinked: (settings: string, home: string) =>
     'Hi, this is Juno Pen. This number isn\'t linked to an account yet.\n\n' +
@@ -80,6 +81,8 @@ const EN = {
   missed: '*Nearly missed*',
   open: '*Still open*',
   full: (home: string) => `Full note: ${home}\nAsk me anything about this call.`,
+  whoWasThere: 'Who was on this call? Tell me their names (and emails, if you want follow-ups) and I\'ll add them, like on the website.',
+  redoFailed: (title: string) => `I couldn't rewrite the notes for "${title}". They're unchanged; you can try again on the website.`,
   writeFailed: (name: string, home: string) => `I couldn't write up ${name}. Nothing is lost: open it at ${home} and press "Write the notes" to try again.`,
   agentFailed: 'Sorry, something went wrong on my side and I couldn\'t answer that. Try again in a minute.',
 }
@@ -121,6 +124,8 @@ const BOT: Record<Lang, typeof EN> = {
     missed: '*Casi se te pasa*',
     open: '*Sin resolver*',
     full: (home) => `Nota completa: ${home}\nPregúntame lo que quieras de esta reunión.`,
+    whoWasThere: '¿Quiénes estaban en esta reunión? Dime sus nombres (y emails, si quieres hacer seguimiento) y los agrego, como en el sitio web.',
+    redoFailed: (title) => `No pude reescribir las notas de "${title}". Quedaron como estaban; puedes intentarlo de nuevo en el sitio web.`,
     writeFailed: (name, home) => `No pude escribir las notas de ${name}. No se perdió nada: ábrela en ${home} y presiona "Escribir las notas" para intentarlo otra vez.`,
     agentFailed: 'Perdón, algo falló de mi lado y no pude responder eso. Inténtalo de nuevo en un minuto.',
   },
@@ -159,6 +164,8 @@ const BOT: Record<Lang, typeof EN> = {
     missed: '*Quase passou batido*',
     open: '*Em aberto*',
     full: (home) => `Nota completa: ${home}\nPergunte qualquer coisa sobre esta reunião.`,
+    whoWasThere: 'Quem estava nesta reunião? Me diga os nomes (e emails, se quiser fazer follow-up) e eu adiciono, como no site.',
+    redoFailed: (title) => `Não consegui reescrever as notas de "${title}". Ficaram como estavam; você pode tentar de novo no site.`,
     writeFailed: (name, home) => `Não consegui escrever as notas de ${name}. Nada se perdeu: abra em ${home} e aperte "Escrever as notas" para tentar de novo.`,
     agentFailed: 'Desculpe, algo deu errado do meu lado e não consegui responder. Tente de novo em um minuto.',
   },
@@ -426,8 +433,9 @@ async function onText(msg: Inbound, link: Link, L: typeof EN): Promise<void> {
   const recent = await latestWhatsAppRecording(link.email)
   let answer: string
   let citations: Citation[]
+  let later: AgentResult | null = null
   try {
-    ;({ text: answer, citations } = agentFor(msg.from)
+    const r: AgentResult = agentFor(msg.from)
       ? await runAgent({
           email: link.email,
           msgId: msg.id,
@@ -444,7 +452,10 @@ async function onText(msg: Inbound, link: Link, L: typeof EN): Promise<void> {
           history: link.chat ?? [],
           agent: await briefFor(link.email).catch(() => undefined),
           ...(recent ? { mentions: [recent] } : {}),
-        }).then((r) => ({ text: r.answer, citations: r.citations })))
+        }).then((x) => ({ text: x.answer, citations: x.citations }))
+    later = r
+    answer = r.text
+    citations = r.citations
   } catch (e) {
     console.warn(`pen whatsapp: answer failed for ${msg.id}: ${(e as Error).message}`)
     await moveMessage(msg.id, 'received', 'failed').catch(() => {})
@@ -470,6 +481,26 @@ async function onText(msg: Inbound, link: Link, L: typeof EN): Promise<void> {
     : ''
   await sendText(msg.from, answer + sources)
   await answered()
+  // Work the reply promised but that is too slow to wait for: contact cards, rewritten notes.
+  if (later?.after) await later.after().catch(() => {})
+  if (later?.redo) await redoNotes(link.email, later.redo.sessionId, later.redo.type, L)
+}
+
+/** Rewrites one recording's notes (asked for on WhatsApp) and sends the new briefing here. */
+async function redoNotes(email: string, sessionId: string, type: string | undefined, L: typeof EN): Promise<void> {
+  const { getSession } = await import('../store')
+  const session = await getSession(email, sessionId)
+  if (!session) return
+  try {
+    const { writeNotes } = await import('../pipeline')
+    const r = await writeNotes({ email, session, forceType: type, claim: false })
+    if (r === 'taken' || !r.session) throw new Error('notes not written')
+    await sendWhatsAppBriefing(r.session, { ask: false })
+  } catch (e) {
+    console.warn(`pen whatsapp: redo notes ${sessionId} failed: ${(e as Error).message}`)
+    const link = await getLinkByEmail(email)
+    if (link?.phone) await sendText(link.phone, L.redoFailed(session.title ?? session.source_name ?? L.titleFallback)).catch(() => {})
+  }
 }
 
 /**
@@ -520,11 +551,20 @@ export function briefingText(session: PenSession, lang: Lang = 'en'): string {
 }
 
 /** Sends the briefing back to the phone a WhatsApp recording came from. Never throws. */
-export async function sendWhatsAppBriefing(session: PenSession): Promise<void> {
+export async function sendWhatsAppBriefing(session: PenSession, opts: { ask?: boolean } = {}): Promise<void> {
   try {
     const link = await getLinkByEmail(session.user_email)
     if (!link?.phone) return
-    await sendText(link.phone, briefingText(session, await userLang(session.user_email)))
+    const L = BOT[await userLang(session.user_email)]
+    let text = briefingText(session, await userLang(session.user_email))
+    // Nobody on it yet: ask, so the answer ("Carlos and Titi") can go straight onto it.
+    if (opts.ask !== false) {
+      const { peopleOnSession } = await import('../people')
+      if (!(await peopleOnSession(session.user_email, session.id).catch(() => [1])).length) text += `\n\n${L.whoWasThere}`
+    }
+    await sendText(link.phone, text)
+    // In the chat history, so a reply to the briefing ("Carlos and Titi") has its context.
+    await setChat(session.user_email, [...(link.chat ?? []), { role: 'assistant', content: text, ts: Date.now() }]).catch(() => {})
   } catch (e) {
     console.warn(`pen whatsapp: briefing not sent for ${session.id}: ${(e as Error).message}`)
   }
