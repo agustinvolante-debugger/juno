@@ -151,6 +151,18 @@ export async function unlinkPerson(userEmail: string, sessionId: string, personI
   if (error) throw new Error(schemaHint(error.message))
 }
 
+/**
+ * Delete a contact outright: their links to recordings first, then the person. Both scoped to
+ * the signed-in user, so an id from someone else's list deletes nothing. The recordings and
+ * their notes are untouched; only the contact and its links go.
+ */
+export async function deletePerson(userEmail: string, id: string) {
+  const { error: e1 } = await supabaseAdmin.from('pen_session_people').delete().eq('user_email', userEmail).eq('person_id', id)
+  if (e1) throw new Error(schemaHint(e1.message))
+  const { error: e2 } = await supabaseAdmin.from('pen_people').delete().eq('user_email', userEmail).eq('id', id)
+  if (e2) throw new Error(schemaHint(e2.message))
+}
+
 /** People linked to one recording. */
 export async function peopleOnSession(userEmail: string, sessionId: string): Promise<PenPerson[]> {
   const { data, error } = await supabaseAdmin

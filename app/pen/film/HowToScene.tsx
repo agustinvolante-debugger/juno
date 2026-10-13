@@ -4,12 +4,17 @@
 // Remotion drives it from the frame number (video/), so the page and the MP4 are the same
 // frames. Inline styles and SVG only, because no stylesheet exists inside the video renderer.
 //
-// Everything shown is the product as it is today: Connect pen (the folder picker on Chrome and
-// Edge), Who's who for speaker names, People's "Detected on this call · Add all", the notes,
+// Everything shown is the product as it is today, in the app's current look (Oct 13): a cool
+// grey canvas, white glass cards, Inter, near-black ink and one blue action colour. Connect pen
+// opens the computer's file picker on the JUNO PEN drive, where the recordings are selected;
+// then who was there and consent, Who's who for speaker names, People's "Add all", the notes,
 // to-dos and follow-up draft, and the WhatsApp assistant answering and setting a reminder.
 //
+// The laptop is drawn, not photographed, and deliberately generic: a thin silver laptop with a
+// black bezel and a small camera notch. No brand marks and no operating-system chrome.
+//
 //   0.0  the laptop from the side; the cap comes off, the pen goes in, it turns to face us
-//   8.0  into the screen: Connect pen, the JUNO PEN folder
+//   8.0  into the screen: Connect pen, the file picker on JUNO PEN
 //  12.8  the import: who was on the call, everyone agreed, Import and transcribe
 //  21.0  Who's who, then People      27.6  summary, to-dos, follow-up
 //  37.8  the phone: WhatsApp          49.5  end card
@@ -23,30 +28,64 @@ export const HOWTO_SIZE: Record<HowToFormat, { w: number; h: number }> = {
   portrait: { w: 720, h: 1280 },
 }
 
+/** The app's tokens (app/pen/app-skin.css), as literals: the video has no stylesheet. */
 const C = {
-  paper: '#F2EFE5',
-  side: '#E8E3D6',
-  panel: '#FFFFFF',
-  ink: '#16150F',
-  soft: '#514E45',
-  dim: '#646158',
-  faint: '#8E8A80',
-  line: '#DCD5C4',
-  accent: '#0B6B44',
-  accentWash: '#DCEDE3',
-  amber: '#8A6516',
-  amberWash: '#F7EFDC',
-  bad: '#9E3229',
+  stage: '#f2f3f7',
+  canvas: '#f5f5f7',
+  panel: '#ffffff',
+  ink: '#1d1d1f',
+  soft: '#424245',
+  dim: '#6e6e73',
+  faint: '#86868b',
+  line: '#d2d2d7',
+  hair: '#e8e8ed',
+  blue: '#0066cc',
+  blueHi: '#0071e3',
+  blueInk: '#0055aa',
+  blueWash: '#e8f1fc',
+  blueLine: '#a9cdf2',
+  amber: '#935400',
+  amberWash: '#fff3df',
+  amberLine: '#f2d6a4',
+  red: '#c0281c',
+  redWash: '#fdeceb',
+  green: '#1b6e36',
+  greenWash: '#e7f5ec',
   waBg: '#EFE7DD',
   waMe: '#D9FDD3',
   waHead: '#F6F5F3',
+  waGreen: '#1f9d55',
 }
 const FONT = {
-  display: "var(--font-display, 'Instrument Serif'), Georgia, serif",
-  ui: "var(--font-ui, Inter), system-ui, -apple-system, sans-serif",
-  mono: "var(--mono, var(--font-mono, 'IBM Plex Mono')), ui-monospace, Menlo, monospace",
-  serif: "var(--serif, var(--font-serif, Literata)), Georgia, serif",
+  /** Only for the logo's "j", which is the brand mark itself. */
+  mark: "var(--font-display, 'Instrument Serif'), Georgia, serif",
+  ui: "var(--font-ui, Inter), Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
 }
+const NUM: React.CSSProperties = { fontVariantNumeric: 'tabular-nums' }
+
+/** Floating glass, as the app's cards. */
+const GLASS: React.CSSProperties = {
+  background: 'linear-gradient(150deg, rgba(255,255,255,.97), rgba(255,255,255,.86))',
+  border: '1px solid rgba(255,255,255,.95)',
+  borderRadius: 16,
+  boxShadow: 'inset 0 1px 0 #fff, 0 1px 2px rgba(29,29,31,.05), 0 10px 22px -12px rgba(29,29,31,.16), 0 24px 44px -26px rgba(29,29,31,.18)',
+}
+/** The blue pill with depth. */
+const PRIMARY: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+  borderRadius: 999, background: 'linear-gradient(180deg, #1b7be3, #0066cc)', color: '#fff', fontWeight: 600,
+  border: '1px solid #0062c4',
+  boxShadow: 'inset 0 1px 0 rgba(255,255,255,.32), 0 1px 2px rgba(0,51,122,.2), 0 7px 14px -7px rgba(0,102,204,.55)',
+}
+/** A small glass pill: the secondary buttons. */
+const SECONDARY: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+  borderRadius: 999, background: 'linear-gradient(180deg, #fff, rgba(255,255,255,.8))', color: C.ink, fontWeight: 500,
+  border: '1px solid rgba(29,29,31,.1)',
+  boxShadow: 'inset 0 1px 0 #fff, 0 1px 2px rgba(29,29,31,.06), 0 3px 8px -3px rgba(29,29,31,.1)',
+}
+/** The app canvas: grey with a few very soft cool tints. */
+const CANVAS_BG = `radial-gradient(700px 420px at 4% -6%, rgba(168,192,232,.32), transparent 62%), radial-gradient(640px 420px at 104% 4%, rgba(212,202,242,.3), transparent 60%), ${C.canvas}`
 
 /* ------------------------------------------------------------------ time */
 
@@ -235,7 +274,7 @@ function Cursor({ x, y, down }: { x: number; y: number; down: number }) {
   return (
     <div style={{ position: 'absolute', left: x, top: y, width: 0, height: 0, zIndex: 30, pointerEvents: 'none' }}>
       {down > 0 && (
-        <span style={{ position: 'absolute', left: -22, top: -22, width: 44, height: 44, borderRadius: '50%', border: `2px solid ${C.accent}`, opacity: 1 - down, transform: `scale(${0.4 + down * 0.9})` }} />
+        <span style={{ position: 'absolute', left: -22, top: -22, width: 44, height: 44, borderRadius: '50%', border: `2px solid ${C.blueHi}`, opacity: 1 - down, transform: `scale(${0.4 + down * 0.9})` }} />
       )}
       <svg width="26" height="30" viewBox="0 0 26 30" style={{ position: 'absolute', left: -3, top: -2, transform: `scale(${1 - 0.12 * Math.sin(down * Math.PI)})`, transformOrigin: '3px 2px', filter: 'drop-shadow(0 2px 3px rgba(0,0,0,.3))' }}>
         <path d="M3 2 L3 24 L9 18.5 L13 27 L17 25.2 L13 17 L21 17 Z" fill="#111" stroke="#fff" strokeWidth="1.6" strokeLinejoin="round" />
@@ -249,7 +288,7 @@ const click = (t: number, at: number) => (t >= at && t < at + 0.5 ? (t - at) / 0
 
 function Check({ on, size = 20 }: { on: number; size?: number }) {
   return (
-    <span style={{ flex: 'none', width: size, height: size, borderRadius: '50%', border: `1.5px solid ${on ? C.accent : C.line}`, background: on ? C.accent : 'transparent', display: 'grid', placeItems: 'center' }}>
+    <span style={{ flex: 'none', width: size, height: size, borderRadius: '50%', border: `1.5px solid ${on ? C.blue : '#c7c7cc'}`, background: on ? C.blue : '#fff', display: 'grid', placeItems: 'center', boxSizing: 'border-box' }}>
       <svg viewBox="0 0 20 20" width={size * 0.64} height={size * 0.64} aria-hidden>
         <path d="M5.2 10.4 8.4 13.6 14.8 6.8" fill="none" stroke="#fff" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" strokeDasharray="14" strokeDashoffset={14 * (1 - on)} />
       </svg>
@@ -257,40 +296,74 @@ function Check({ on, size = 20 }: { on: number; size?: number }) {
   )
 }
 
-function Label({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
-  return <div style={{ fontFamily: FONT.mono, fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: C.dim, ...style }}>{children}</div>
+/** A square tick box (the file list and the consent box). */
+function Box({ on }: { on: boolean }) {
+  return (
+    <span style={{ flex: 'none', width: 17, height: 17, borderRadius: 5, boxSizing: 'border-box', border: `1.5px solid ${on ? C.blue : '#c7c7cc'}`, background: on ? C.blue : '#fff', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 11, lineHeight: 1 }}>
+      {on ? '✓' : ''}
+    </span>
+  )
 }
 
-function Avatar({ name, size = 26, tone = C.accent }: { name: string; size?: number; tone?: string }) {
+function Label({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  return <div style={{ fontFamily: FONT.ui, fontSize: 11, fontWeight: 600, letterSpacing: '.05em', textTransform: 'uppercase', color: C.dim, ...style }}>{children}</div>
+}
+
+function Avatar({ name, size = 26, you = false, muted = false }: { name: string; size?: number; you?: boolean; muted?: boolean }) {
   return (
-    <span style={{ flex: 'none', width: size, height: size, borderRadius: '50%', background: tone, color: '#fff', display: 'grid', placeItems: 'center', fontFamily: FONT.ui, fontWeight: 600, fontSize: size * 0.42 }}>
+    <span style={{ flex: 'none', width: size, height: size, borderRadius: '50%', boxSizing: 'border-box', border: '1px solid rgba(255,255,255,.9)', background: you ? C.ink : muted ? '#e8e8ed' : C.blueWash, color: you ? '#fff' : muted ? C.dim : C.blueInk, display: 'grid', placeItems: 'center', fontFamily: FONT.ui, fontWeight: 600, fontSize: size * 0.4 }}>
       {name.split(' ').map((p) => p[0]).join('').slice(0, 2)}
     </span>
   )
+}
+
+/** The Juno mark: a serif "j" on a black tile. */
+function Mark({ size = 28 }: { size?: number }) {
+  return (
+    <span style={{ flex: 'none', width: size, height: size, borderRadius: size * 0.24, background: '#111', color: '#f5f5f7', display: 'grid', placeItems: 'center', fontFamily: FONT.mark, fontSize: size * 0.72, lineHeight: 1 }}>j</span>
+  )
+}
+
+/** The category pill on a recording row, in the app's tint groups. */
+function catTint(label: string): [string, string] {
+  const c = label.toLowerCase()
+  if (/(lecture|class|lesson|coach|office hours|talk|study)/.test(c)) return ['#f3ebfc', '#6e2ba8']
+  if (/(plan|strategy|brainstorm|board|prep|product)/.test(c)) return [C.greenWash, C.green]
+  if (/(note|to-?do|admin|memo)/.test(c)) return [C.amberWash, '#8a4f00']
+  return [C.blueWash, C.blueInk]
+}
+function CatPill({ label }: { label: string }) {
+  const [bg, fg] = catTint(label)
+  const text = label.charAt(0).toUpperCase() + label.slice(1)
+  return <span style={{ flex: 'none', padding: '3px 10px', borderRadius: 999, background: bg, color: fg, fontSize: 11.5, fontWeight: 600, border: '1px solid rgba(255,255,255,.85)', whiteSpace: 'nowrap' }}>{text}</span>
 }
 
 /* ------------------------------------------------------------ the laptop */
 
 /** Window-space size of the app, as drawn on the laptop's screen and full frame. */
 const WIN = { w: 1120, h: 630 }
+/** The screen's black bezel, in window units: thin, as on a current laptop. */
+const BEZEL = 18
+/** The base under the screen when the laptop faces us, in window units. */
+const BASE_H = 16
 /** How far the screen leans back from upright. */
 const TILT = 12
 
 /** The laptop's measurements for a given screen width, shared by the drawing and the scene. */
 function lapGeo(lapW: number) {
   const sh = (lapW * WIN.h) / WIN.w // the screen itself
-  const SW = lapW + 28 // with its bezel
-  const SH = sh + 32
+  const bz = (BEZEL * lapW) / WIN.w // the bezel, at this size
+  const SW = lapW + bz * 2 // with its bezel
+  const SH = sh + bz * 2
   const r = (TILT * Math.PI) / 180
   const yh = (SH / 2) * Math.cos(r) // the hinge, below and in front of the screen's centre
   const zh = (SH / 2) * Math.sin(r)
-  const D = lapW * 0.62 // depth of the base
-  const T = 22 // its thickness
-  const BW = SW + 30
-  // The USB-C port, on the base's right side, towards the front.
-  // Set in the upper part of the side, as on a MacBook.
-  const port = { x: BW / 2, y: yh + T * 0.42, z: zh + D - D * 0.18 - 7 }
-  return { sh, SW, SH, yh, zh, D, T, BW, port }
+  const D = lapW * 0.64 // depth of the base
+  const T = Math.max(9, lapW * 0.024) // its thickness: thin
+  const BW = SW * 1.04
+  // The USB-C port, on the base's right side, towards the front, in the middle of the edge.
+  const port = { x: BW / 2, y: yh + T * 0.5, z: zh + D - D * 0.18 - 7 }
+  return { sh, bz, SW, SH, yh, zh, D, T, BW, port }
 }
 
 /** One flat face of the laptop, centred at (x, y, z) and turned by `turn`. */
@@ -302,41 +375,54 @@ function Face({ w, h, x, y, z, turn = '', style, children }: { w: number; h: num
   )
 }
 
+/** Aluminium, light "starlight" silver. */
+const ALU = {
+  lid: 'linear-gradient(140deg, #eef0f2 0%, #dfe1e5 45%, #c9ccd1 100%)',
+  deck: 'linear-gradient(180deg, #e9eaed, #dcdee2 55%, #d3d5d9)',
+  edge: 'linear-gradient(180deg, #e3e5e8 0%, #c4c7cc 55%, #a9adb3 100%)',
+  side: 'linear-gradient(180deg, #d6d8dc, #aeb2b8)',
+}
+
 /**
  * The laptop in 3D, built around the centre of its screen (which is where it turns). `gy` turns
  * it left and right (about -44 shows its right side, 0 faces us), `gx` tips it towards us.
  * `pen` is drawn in the plane of the port, so it turns with the laptop once it is plugged in.
  */
 function Laptop3D({ t, lapW, gx, gy, pen, k }: { t: number; lapW: number; gx: number; gy: number; pen: React.ReactNode; k: HowToKitKey }) {
-  const { sh, SW, SH, yh, zh, D, T, BW, port } = lapGeo(lapW)
+  const { sh, bz, SW, SH, yh, zh, D, T, BW } = lapGeo(lapW)
   const s = lapW / WIN.w
   const connected = seg(t, 3.9, 4.3)
   const toast = seg(t, 5.0, 5.4)
   return (
     <div style={{ position: 'absolute', left: 0, top: 0, width: 0, height: 0, transformStyle: 'preserve-3d', transform: `rotateX(${gx}deg) rotateY(${gy}deg)` }}>
       {/* Shadow on the table */}
-      <Face w={BW * 1.25} h={D * 1.4} x={0} y={yh + T + 1} z={zh + D / 2} turn="rotateX(90deg)" style={{ background: 'radial-gradient(closest-side, rgba(22,21,15,.22), rgba(22,21,15,.08) 60%, transparent)', backfaceVisibility: 'visible' }} />
-      {/* Base: top, front, both sides */}
-      <Face w={BW} h={D} x={0} y={yh} z={zh + D / 2} turn="rotateX(90deg)" style={{ borderRadius: 10, background: 'linear-gradient(180deg, #C9CCD0, #DADCDF 40%, #D2D5D8)' }}>
-        <div style={{ position: 'absolute', left: '9%', right: '9%', top: '8%', height: '44%', borderRadius: 6, background: 'repeating-linear-gradient(90deg, #2A2C30 0 22px, #3A3D42 22px 25px), #2A2C30', opacity: 0.85 }} />
-        <div style={{ position: 'absolute', left: '33%', right: '33%', top: '60%', bottom: '8%', borderRadius: 8, background: '#C3C6CA', boxShadow: 'inset 0 0 0 1px #B4B8BD' }} />
+      <Face w={BW * 1.3} h={D * 1.45} x={0} y={yh + T + 1} z={zh + D / 2} turn="rotateX(90deg)" style={{ background: 'radial-gradient(closest-side, rgba(29,29,31,.2), rgba(29,29,31,.07) 60%, transparent)', backfaceVisibility: 'visible' }} />
+      {/* Base: top deck (keyboard, trackpad), front edge with its lip, both sides */}
+      <Face w={BW} h={D} x={0} y={yh} z={zh + D / 2} turn="rotateX(90deg)" style={{ borderRadius: 12, background: ALU.deck, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.55)' }}>
+        {/* Keyboard well: a dark key grid, generic */}
+        <div style={{ position: 'absolute', left: '7%', right: '7%', top: '7%', height: '46%', borderRadius: 7, background: '#cfd1d5', boxShadow: 'inset 0 1px 2px rgba(0,0,0,.18)', padding: '1.2%', boxSizing: 'border-box' }}>
+          <div style={{ width: '100%', height: '100%', borderRadius: 5, background: 'repeating-linear-gradient(90deg, transparent 0 18px, #cfd1d5 18px 21px), repeating-linear-gradient(180deg, transparent 0 13px, #cfd1d5 13px 16px), #2b2c30' }} />
+        </div>
+        {/* Trackpad, wide */}
+        <div style={{ position: 'absolute', left: '29%', right: '29%', top: '59%', bottom: '7%', borderRadius: 9, background: 'linear-gradient(180deg, #e2e4e7, #d7d9dd)', boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.07), inset 0 1px 2px rgba(0,0,0,.06)' }} />
       </Face>
-      <Face w={BW} h={T} x={0} y={yh + T / 2} z={zh + D} style={{ borderRadius: '0 0 8px 8px', background: 'linear-gradient(#B8BCC1, #9DA2A8)' }}>
-        <div style={{ position: 'absolute', left: '50%', top: 0, width: 110, marginLeft: -55, height: 6, borderRadius: '0 0 7px 7px', background: '#A7ABB0' }} />
+      <Face w={BW} h={T} x={0} y={yh + T / 2} z={zh + D} style={{ borderRadius: `0 0 ${T}px ${T}px`, background: ALU.edge }}>
+        {/* The lip: a shallow scoop in the middle of the front edge, for opening the lid */}
+        <div style={{ position: 'absolute', left: '50%', top: 0, width: BW * 0.16, marginLeft: -BW * 0.08, height: T * 0.42, borderRadius: `0 0 ${T}px ${T}px`, background: 'linear-gradient(180deg, #a6aab0, #c2c5ca)' }} />
       </Face>
-      <Face w={D} h={T} x={BW / 2} y={yh + T / 2} z={zh + D / 2} turn="rotateY(90deg)" style={{ borderRadius: 4, background: 'linear-gradient(#AEB2B7, #8E9399)' }}>
+      <Face w={D} h={T} x={BW / 2} y={yh + T / 2} z={zh + D / 2} turn="rotateY(90deg)" style={{ borderRadius: T / 2, background: ALU.side }}>
         {/* USB-C port; glows once the pen is in */}
-        <div style={{ position: 'absolute', left: D * 0.18, top: T * 0.42 - 3.5, width: 15, height: 7, borderRadius: 3.5, background: '#1E2023', boxShadow: connected ? `0 0 ${12 * connected}px ${C.accent}` : 'none' }} />
+        <div style={{ position: 'absolute', left: D * 0.18, top: T / 2 - 3, width: 13, height: 6, borderRadius: 3, background: '#1E2023', boxShadow: connected ? `0 0 ${12 * connected}px ${C.blueHi}` : 'none' }} />
       </Face>
-      <Face w={D} h={T} x={-BW / 2} y={yh + T / 2} z={zh + D / 2} turn="rotateY(-90deg)" style={{ borderRadius: 4, background: 'linear-gradient(#AEB2B7, #8E9399)' }} />
-      {/* Lid, from behind */}
-      <Face w={SW} h={SH} x={0} y={0} z={0} turn={`rotateX(${TILT}deg) rotateY(180deg)`} style={{ borderRadius: '16px 16px 4px 4px', background: 'linear-gradient(135deg, #D5D8DB, #A9AEB4)' }} />
-      {/* Screen */}
-      <Face w={SW} h={SH} x={0} y={0} z={0} turn={`rotateX(${TILT}deg)`} style={{ boxSizing: 'border-box', padding: 14, paddingBottom: 18, borderRadius: '16px 16px 4px 4px', background: '#1C1D20' }}>
-        <div style={{ position: 'relative', width: lapW, height: sh, overflow: 'hidden', borderRadius: 4, background: C.paper }}>
+      <Face w={D} h={T} x={-BW / 2} y={yh + T / 2} z={zh + D / 2} turn="rotateY(-90deg)" style={{ borderRadius: T / 2, background: ALU.side }} />
+      {/* Lid, from behind: plain aluminium */}
+      <Face w={SW} h={SH} x={0} y={0} z={0} turn={`rotateX(${TILT}deg) rotateY(180deg)`} style={{ borderRadius: bz * 1.6, background: ALU.lid, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.6)' }} />
+      {/* Screen: thin black bezel, a small camera notch, the app filling it */}
+      <Face w={SW} h={SH} x={0} y={0} z={0} turn={`rotateX(${TILT}deg)`} style={{ boxSizing: 'border-box', padding: bz, borderRadius: bz * 1.6, background: '#0d0d0f', boxShadow: '0 0 0 1px #c9ccd1' }}>
+        <div style={{ position: 'relative', width: lapW, height: sh, overflow: 'hidden', borderRadius: bz * 0.6, background: C.canvas }}>
           <div style={{ width: WIN.w, height: WIN.h, transform: `scale(${s})`, transformOrigin: '0 0' }}>{HOME_SCREENS[k]}</div>
-          {/* The system's "drive connected" notice */}
-          <div style={{ position: 'absolute', right: 10, top: 10, display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 10, background: 'rgba(255,255,255,.96)', boxShadow: '0 6px 16px -6px rgba(0,0,0,.35)', fontFamily: FONT.ui, fontSize: 11, color: C.ink, opacity: toast, transform: `translateX(${(1 - out(toast)) * 30}px)` }}>
+          {/* The system's "drive connected" notice: a generic one */}
+          <div style={{ position: 'absolute', right: 10, top: 10 + bz * 0.6, display: 'flex', alignItems: 'center', gap: 8, padding: '7px 11px', borderRadius: 12, background: 'rgba(255,255,255,.97)', boxShadow: '0 6px 16px -6px rgba(0,0,0,.3)', fontFamily: FONT.ui, fontSize: 11, color: C.ink, opacity: toast, transform: `translateX(${(1 - out(toast)) * 30}px)` }}>
             <DriveIcon size={22} />
             <span style={{ lineHeight: 1.25 }}>
               <strong style={{ display: 'block' }}>JUNO PEN</strong>
@@ -344,19 +430,48 @@ function Laptop3D({ t, lapW, gx, gy, pen, k }: { t: number; lapW: number; gx: nu
             </span>
           </div>
         </div>
+        <Notch w={lapW * 0.075} h={bz * 0.62} />
       </Face>
       {/* The pen, in the plane of the port */}
-      <div style={{ position: 'absolute', left: 0, top: 0, width: 0, height: 0, transformStyle: 'preserve-3d', transform: `translateZ(${port.z}px)` }}>{pen}</div>
+      <div style={{ position: 'absolute', left: 0, top: 0, width: 0, height: 0, transformStyle: 'preserve-3d', transform: `translateZ(${port3(lapW)}px)` }}>{pen}</div>
     </div>
+  )
+}
+const port3 = (lapW: number) => lapGeo(lapW).port.z
+
+/** The camera notch: a small black tab hanging from the top bezel, with the lens in it. */
+function Notch({ w, h }: { w: number; h: number }) {
+  return (
+    <div style={{ position: 'absolute', left: '50%', top: 0, width: w, marginLeft: -w / 2, height: h * 2.1, borderRadius: `0 0 ${h}px ${h}px`, background: '#0d0d0f', zIndex: 3 }}>
+      <span style={{ position: 'absolute', left: '50%', top: h * 0.55, width: h * 0.7, height: h * 0.7, marginLeft: -h * 0.35, borderRadius: '50%', background: 'radial-gradient(circle at 35% 35%, #3a4a66, #121418 70%)' }} />
+    </div>
+  )
+}
+
+/**
+ * The same laptop, flat and facing us, drawn around the app window in window space while the
+ * steps play: the bezel and notch around it, the base's front edge and lip below it. It matches
+ * the 3D laptop at the end of its zoom, so the cut between them doesn't jump.
+ */
+function LaptopFront() {
+  const bw = WIN.w + BEZEL * 2
+  const baseW = bw * 1.04
+  return (
+    <>
+      <div style={{ position: 'absolute', left: -BEZEL, top: -BEZEL, width: bw, height: WIN.h + BEZEL * 2, borderRadius: BEZEL * 1.6, background: '#0d0d0f', boxShadow: '0 0 0 2px #c9ccd1, 0 40px 70px -34px rgba(29,29,31,.45)', zIndex: 0 }} />
+      <div style={{ position: 'absolute', left: (WIN.w - baseW) / 2, top: WIN.h + BEZEL, width: baseW, height: BASE_H, borderRadius: `3px 3px ${BASE_H}px ${BASE_H}px`, background: ALU.edge, boxShadow: '0 14px 22px -12px rgba(29,29,31,.35)', zIndex: 0 }}>
+        <div style={{ position: 'absolute', left: '50%', top: 0, width: baseW * 0.16, marginLeft: -baseW * 0.08, height: BASE_H * 0.42, borderRadius: `0 0 ${BASE_H}px ${BASE_H}px`, background: 'linear-gradient(180deg, #a6aab0, #c2c5ca)' }} />
+      </div>
+    </>
   )
 }
 
 function DriveIcon({ size = 28 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 28 28" aria-hidden>
-      <rect x="3" y="7" width="22" height="14" rx="3" fill="#E9EBEE" stroke="#9AA0A6" />
-      <rect x="6" y="15" width="10" height="2" rx="1" fill="#9AA0A6" />
-      <circle cx="21" cy="16" r="1.4" fill={C.accent} />
+      <rect x="3" y="7" width="22" height="14" rx="3.5" fill="#eef0f3" stroke="#a1a6ad" />
+      <rect x="6" y="15" width="10" height="2" rx="1" fill="#a1a6ad" />
+      <circle cx="21" cy="16" r="1.5" fill={C.blueHi} />
     </svg>
   )
 }
@@ -390,79 +505,117 @@ function PenPlug({ width, capOff, x, y, opacity = 1 }: { width: number; capOff: 
 
 /* ---------------------------------------------------------- the app window */
 
+const ICON: Record<string, React.ReactNode> = {
+  home: <path d="M3.5 8.6 10 3.4l6.5 5.2V16a.9.9 0 0 1-.9.9h-3.4v-4.6H7.8v4.6H4.4a.9.9 0 0 1-.9-.9Z" />,
+  recordings: <><path d="M10 3.3v9.1" /><path d="M6.6 6.1v3.5M13.4 6.1v3.5" /><path d="M4.2 15.9h11.6" /></>,
+  meetings: <><rect x="2.8" y="5" width="14.4" height="10" rx="2" /><path d="M6.4 3.2v2M13.6 3.2v2" /></>,
+  link: <><path d="M8.3 11.7 11.7 8.3" /><path d="M7.2 8.9 5.6 10.5a2.6 2.6 0 0 0 3.7 3.7l1.6-1.6" /><path d="M12.8 11.1l1.6-1.6a2.6 2.6 0 0 0-3.7-3.7L9.1 7.4" /></>,
+  search: <><circle cx="8.8" cy="8.8" r="5.3" /><path d="M12.7 12.7 17 17" /></>,
+  sparkle: <path d="M10 2.9l1.5 4.3 4.3 1.5-4.3 1.5L10 14.5 8.5 10.2 4.2 8.7l4.3-1.5Z" />,
+  mail: <><rect x="2.6" y="4.8" width="14.8" height="10.4" rx="2" /><path d="M3.4 6.2 10 11l6.6-4.8" /></>,
+  check: <path d="M4.6 10.4 8 13.8l7-7.6" />,
+  chevron: <path d="M7.6 5.4 12.2 10l-4.6 4.6" />,
+  back: <><path d="M16 10H4.4" /><path d="M8.6 5.6 4.2 10l4.4 4.4" /></>,
+  people: <><circle cx="7.6" cy="7.4" r="2.5" /><path d="M2.9 16.2c.5-2.4 2.5-3.8 4.7-3.8s4.2 1.4 4.7 3.8" /><path d="M13.2 5.3a2.5 2.5 0 0 1 0 4.9" /><path d="M14 12.6c1.6.4 2.8 1.6 3.2 3.6" /></>,
+  folder: <path d="M2.9 6.1a1.3 1.3 0 0 1 1.3-1.3h3.6l1.7 1.9h6.3a1.3 1.3 0 0 1 1.3 1.3v7.2a1.3 1.3 0 0 1-1.3 1.3H4.2a1.3 1.3 0 0 1-1.3-1.3Z" />,
+  wave: <path d="M2.8 10h1.6M6 7v6M8.8 4.6v10.8M11.6 7.4v5.2M14.4 5.8v8.4M17.2 10h0" />,
+  plus: <path d="M10 4.4v11.2M4.4 10h11.2" />,
+}
+function I({ n, size = 16, color = 'currentColor' }: { n: string; size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke={color} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden style={{ flex: 'none' }}>
+      {ICON[n]}
+    </svg>
+  )
+}
+
 function SideItem({ icon, label, n, on }: { icon: string; label: string; n?: number; on?: boolean }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 10, background: on ? C.panel : 'transparent', border: `1px solid ${on ? C.line : 'transparent'}`, fontSize: 14, fontWeight: 600, color: on ? C.accent : C.soft }}>
-      <span style={{ width: 18, textAlign: 'center', fontSize: 14 }}>{icon}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 11, background: on ? '#fff' : 'transparent', boxShadow: on ? 'inset 0 1px 0 #fff, 0 1px 2px rgba(29,29,31,.06), 0 6px 14px -6px rgba(29,29,31,.16)' : 'none', fontSize: 13.5, fontWeight: on ? 600 : 500, color: on ? C.blueInk : C.soft }}>
+      <I n={icon} size={17} color={on ? C.blue : C.dim} />
       <span style={{ flex: 1 }}>{label}</span>
-      {n != null && <span style={{ fontFamily: FONT.mono, fontSize: 12, color: C.dim, fontWeight: 400 }}>{n}</span>}
+      {n != null && <span style={{ fontSize: 12, color: on ? C.blue : C.dim, fontWeight: 500, ...NUM }}>{n}</span>}
     </div>
   )
 }
 
-/** Window-space positions the cursor aims at. */
+/** Window-space positions the cursor aims at (measured from the drawn layout). */
 const AT = {
-  connect: [125, 132] as [number, number],
-  folder: [524, 224] as [number, number],
-  select: [786, 455] as [number, number],
-  who: [520, 322] as [number, number],
-  consent: [708, 321] as [number, number],
-  importBtn: [376, 401] as [number, number],
-  row: [520, 212] as [number, number],
-  nameB: [460, 299] as [number, number],
-  save: [597, 299] as [number, number],
-  addAll: [1036, 366] as [number, number],
-  todo: [742, 245] as [number, number],
-  email: [1023, 449] as [number, number],
+  connect: [118, 129] as [number, number],
+  folder: [560, 251] as [number, number],
+  select: [807, 455] as [number, number],
+  who: [470, 307] as [number, number],
+  consent: [702, 305] as [number, number],
+  importBtn: [358, 381] as [number, number],
+  row: [560, 376] as [number, number],
+  addAll: [1044, 376] as [number, number],
+  todo: [719, 259] as [number, number],
+  email: [1038, 412] as [number, number],
 }
+
+const SIDE_W = 212
+const MAIN_X = 12 + SIDE_W + 20
 
 function AppWindow({ t, k }: { t: number; k: HowKit }) {
   // Which screen: home with the import (before 21), the recording (after).
   const onRecording = t >= 21.0
+  const landed = t >= IMP.landed
   return (
-    <div style={{ position: 'relative', width: WIN.w, height: WIN.h, background: C.paper, borderRadius: 14, overflow: 'hidden', fontFamily: FONT.ui, color: C.ink, border: `1px solid ${C.line}` }}>
-      {/* Title bar */}
-      <div style={{ height: 30, display: 'flex', alignItems: 'center', gap: 7, padding: '0 14px', background: '#ECE8DD', borderBottom: `1px solid ${C.line}` }}>
-        {['#E96E5F', '#E7B94F', '#69B865'].map((c) => (
-          <span key={c} style={{ width: 11, height: 11, borderRadius: '50%', background: c }} />
-        ))}
-        <span style={{ flex: 1, textAlign: 'center', fontSize: 12, color: C.dim, fontFamily: FONT.mono }}>tryjunoapp.com</span>
+    <div data-win="" style={{ position: 'relative', width: WIN.w, height: WIN.h, background: CANVAS_BG, overflow: 'hidden', fontFamily: FONT.ui, color: C.ink, letterSpacing: '-0.006em' }}>
+      {/* A plain browser bar: the address, nothing else */}
+      <div style={{ height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(233,234,238,.92)', borderBottom: '1px solid rgba(29,29,31,.07)' }}>
+        <span style={{ marginTop: 6, width: 320, height: 20, borderRadius: 999, background: 'rgba(255,255,255,.9)', display: 'grid', placeItems: 'center', fontSize: 11, color: C.dim }}>tryjunoapp.com</span>
       </div>
-      <div style={{ display: 'flex', height: WIN.h - 30 }}>
-        {/* Sidebar */}
-        <div style={{ width: 236, flex: 'none', padding: 14, background: C.side, borderRight: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 6 }}>
-            <span style={{ width: 30, height: 30, borderRadius: 7, background: C.ink, color: C.paper, display: 'grid', placeItems: 'center', fontFamily: FONT.display, fontSize: 21 }}>j</span>
-            <span style={{ fontFamily: FONT.display, fontSize: 22 }}>Juno Pen</span>
+      <div style={{ position: 'relative', height: WIN.h - 34 }}>
+        {/* Sidebar: one floating glass card */}
+        <div style={{ position: 'absolute', left: 12, top: 12, bottom: 12, width: SIDE_W, boxSizing: 'border-box', padding: 12, display: 'flex', flexDirection: 'column', gap: 8, ...GLASS, borderRadius: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 4 }}>
+            <Mark size={28} />
+            <span>
+              <span style={{ display: 'block', fontWeight: 600, fontSize: 16, letterSpacing: '-0.03em' }}>Juno Pen</span>
+              <span style={{ display: 'block', fontSize: 10, color: C.dim }}>Capture. Understand. Do.</span>
+            </span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '11px 12px', borderRadius: 11, background: C.accent, color: '#fff', fontWeight: 600, fontSize: 14, boxShadow: t > 9.8 && t < 10.4 ? `0 0 0 4px ${C.accentWash}` : 'none' }}>
-            <span style={{ fontSize: 15 }}>⌁</span> Connect pen
+          <div data-at="connect" style={{ ...PRIMARY, height: 38, fontSize: 13.5, boxShadow: t > 9.8 && t < 10.4 ? `0 0 0 4px ${C.blueWash}, ${PRIMARY.boxShadow}` : PRIMARY.boxShadow }}>
+            <I n="link" size={15} /> Connect pen
           </div>
-          <div style={{ padding: '10px 12px', borderRadius: 11, border: `1.5px dashed ${C.line}`, background: '#F3F0E8' }}>
-            <div style={{ fontSize: 13.5, fontWeight: 600 }}>+ Add audio files</div>
-            <div style={{ fontSize: 11.5, color: C.dim }}>or drag them here</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 12px', borderRadius: 14, border: '1.5px dashed #c7c7cc', background: 'rgba(245,245,247,.85)' }}>
+            <I n="plus" size={15} color={C.dim} />
+            <span>
+              <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600 }}>Add audio files</span>
+              <span style={{ display: 'block', fontSize: 10.5, color: C.dim }}>or drag them here</span>
+            </span>
           </div>
-          <div style={{ height: 6 }} />
-          <SideItem icon="⌂" label="Home" n={onRecording ? 4 : 3} on={!onRecording} />
-          <SideItem icon="≡" label="All recordings" n={t >= IMP.landed ? 4 : 3} on={onRecording} />
-          <SideItem icon="▭" label="Meetings" n={t >= IMP.landed ? 3 : 2} />
-          <div style={{ flex: 1 }} />
-          <div style={{ padding: 12, borderRadius: 12, background: C.accentWash, fontFamily: FONT.display, fontStyle: 'italic', fontSize: 17, color: '#08482E', lineHeight: 1.2 }}>
-            “Small moments.
-            <br />
-            Bigger progress.”
+          <div style={{ ...SECONDARY, height: 32, fontSize: 12.5, justifyContent: 'flex-start', padding: '0 12px' }}>
+            <I n="plus" size={13} color={C.dim} /> <span style={{ flex: 1 }}>More ways to import</span> <span style={{ transform: 'rotate(90deg)', display: 'inline-flex' }}><I n="chevron" size={12} color={C.dim} /></span>
           </div>
+          <div style={{ height: 2 }} />
+          <SideItem icon="home" label="Home" n={landed ? 9 : 6} on={!onRecording} />
+          <SideItem icon="recordings" label="All recordings" n={landed ? 4 : 3} on={onRecording} />
+          <div style={{ borderTop: `1px solid ${C.hair}`, margin: '4px 0 0', padding: '8px 10px 2px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Label style={{ fontSize: 10.5 }}>Categories</Label>
+            <span style={{ transform: 'rotate(90deg)', display: 'inline-flex' }}><I n="chevron" size={11} color={C.dim} /></span>
+          </div>
+          <SideItem icon="meetings" label="Meetings" n={landed ? 4 : 3} />
+          <div style={{ borderTop: `1px solid ${C.hair}`, padding: '8px 10px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Label style={{ fontSize: 10.5 }}>Chats</Label>
+            <span style={{ color: C.dim, fontSize: 14, lineHeight: 1 }}>+</span>
+          </div>
+          <div style={{ padding: '4px 10px', fontSize: 12.5, color: C.soft, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>What’s still open this week?</div>
         </div>
+
         {/* Main */}
-        <div style={{ flex: 1, position: 'relative', padding: '18px 24px', overflow: 'hidden' }}>
-          <div style={{ height: 38, borderRadius: 12, background: C.panel, border: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', padding: '0 14px', fontFamily: FONT.serif, fontSize: 14, color: C.faint, marginBottom: 18 }}>
-            ⌕&nbsp;&nbsp;Ask anything… type @ for a person or recording
+        <div style={{ position: 'absolute', left: MAIN_X, right: 20, top: 12, bottom: 0, overflow: 'hidden' }}>
+          <div style={{ height: 38, display: 'flex', alignItems: 'center', gap: 10, padding: '0 16px', marginBottom: 16, fontSize: 13, color: C.faint, ...GLASS, borderRadius: 999 }}>
+            <I n="search" size={15} color={C.faint} />
+            <span style={{ flex: 1 }}>Ask anything… type @ for a person or recording</span>
+            <span style={{ fontSize: 11, color: C.dim }}>⌘K</span>
           </div>
           {onRecording ? <RecordingView t={t} k={k} /> : <HomeView t={t} k={k} />}
         </div>
       </div>
-      {/* The browser's folder picker, over everything */}
-      <FolderPicker t={t - 0.8} />
+      {/* The computer's file picker, over everything */}
+      <FilePicker t={t - 0.8} />
     </div>
   )
 }
@@ -486,48 +639,48 @@ function ImportPanel({ t, k }: { t: number; k: HowKit }) {
   const prog = seg(t, IMP.go + 0.1, IMP.landed - 0.2)
   const phase = prog < 0.4 ? 'Uploading' : prog < 0.75 ? 'Transcribing' : 'Writing notes'
   return (
-    <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20, marginBottom: 16, ...enter(t, IMP.open, 0.5) }}>
+    <div style={{ ...GLASS, padding: '16px 20px 18px', marginBottom: 16, ...enter(t, IMP.open, 0.5) }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-        <span style={{ fontFamily: FONT.display, fontSize: 22 }}>1 on “JUNO PEN”</span>
-        <span style={{ fontFamily: FONT.mono, fontSize: 12, color: C.dim, textDecoration: 'underline' }}>clear</span>
+        <span style={{ fontSize: 17, fontWeight: 600, letterSpacing: '-0.02em' }}>1 on JUNO PEN</span>
+        <span style={{ fontSize: 12, color: C.dim, textDecoration: 'underline' }}>clear</span>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', marginTop: 10, borderTop: `1px solid #EEE9DD` }}>
-        <span style={{ width: 17, height: 17, borderRadius: 4, background: C.accent, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 11 }}>✓</span>
-        <span style={{ flex: 1, fontSize: 14.5 }}>{FILE}</span>
-        <span style={{ fontFamily: FONT.mono, fontSize: 12.5, color: C.dim }}>36.4 MB</span>
-        <span style={{ fontFamily: FONT.mono, fontSize: 12.5, color: C.faint }}>10/1/2026</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 0', marginTop: 8, borderTop: `1px solid ${C.hair}` }}>
+        <Box on />
+        <span style={{ flex: 1, fontSize: 13.5, fontWeight: 500 }}>{FILE}</span>
+        <span style={{ fontSize: 12, color: C.dim, ...NUM }}>36.4 MB</span>
+        <span style={{ fontSize: 12, color: C.faint, ...NUM }}>10/1/2026</span>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 8 }}>
         <div>
           <Label>Who was on this call (optional)</Label>
-          <div style={{ marginTop: 7, minHeight: 40, boxSizing: 'border-box', borderRadius: 10, border: `1.5px solid ${focused ? C.accent : C.line}`, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, padding: '5px 8px' }}>
+          <div data-at="who" style={{ marginTop: 7, minHeight: 40, boxSizing: 'border-box', borderRadius: 12, background: '#fff', border: `1px solid ${focused ? C.blueHi : C.line}`, boxShadow: focused ? '0 0 0 4px rgba(0,113,227,.15)' : 'none', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, padding: '5px 8px' }}>
             {chips.map((n) => (
-              <span key={n} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 9px 3px 4px', borderRadius: 999, background: C.accentWash, color: '#08482E', fontSize: 13, fontWeight: 600 }}>
+              <span key={n} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 10px 3px 4px', borderRadius: 999, background: C.blueWash, color: C.blueInk, fontSize: 12.5, fontWeight: 600 }}>
                 <Avatar name={n} size={20} /> {n}
               </span>
             ))}
-            <span style={{ fontSize: 14, color: typing ? C.ink : C.faint, display: 'inline-flex', alignItems: 'center' }}>
+            <span style={{ fontSize: 13.5, color: typing ? C.ink : C.faint, display: 'inline-flex', alignItems: 'center' }}>
               {typing || (chips.length ? '' : 'Add a person…')}
               {focused && Math.floor(t * 2.5) % 2 === 0 && <span style={{ width: 1.5, height: 16, background: C.ink, marginLeft: 1 }} />}
             </span>
           </div>
-          <div style={{ marginTop: 5, fontSize: 12, color: C.faint }}>Leave it empty and the notes will suggest who they heard.</div>
+          <div style={{ marginTop: 5, fontSize: 11.5, color: C.dim }}>Leave it empty and the notes will suggest who they heard.</div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: 13, borderRadius: 10, background: '#FAF3E3', border: '1px solid #EFE2C4', alignSelf: 'start', marginTop: 18 }}>
-          <span style={{ flex: 'none', marginTop: 1, width: 17, height: 17, borderRadius: 4, border: `1.5px solid ${consent ? C.accent : '#C9B98F'}`, background: consent ? C.accent : '#fff', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 11 }}>{consent ? '✓' : ''}</span>
-          <span style={{ fontSize: 13.5, lineHeight: 1.4, color: C.amber }}>Everyone recorded agreed to it, and this recording contains no patient or medical information.</span>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: 13, borderRadius: 12, background: C.amberWash, border: `1px solid ${C.amberLine}`, alignSelf: 'start', marginTop: 18 }}>
+          <span data-at="consent" style={{ marginTop: 1 }}><Box on={consent} /></span>
+          <span style={{ fontSize: 12.5, lineHeight: 1.4, color: C.amber }}>Everyone recorded agreed to it, and this recording contains no patient or medical information.</span>
         </div>
       </div>
       {t < IMP.go + 0.1 ? (
-        <div style={{ display: 'inline-block', marginTop: 16, padding: '10px 16px', borderRadius: 10, background: consent ? C.accent : '#8DB7A2', color: '#fff', fontSize: 14, fontWeight: 600 }}>Import 1 and transcribe</div>
+        <div data-at="importBtn" style={{ ...PRIMARY, marginTop: 14, height: 36, padding: '0 18px', fontSize: 13.5, opacity: consent ? 1 : 0.5, boxShadow: consent ? PRIMARY.boxShadow : 'none' }}>Import 1 and transcribe</div>
       ) : (
         <div style={{ marginTop: 18 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: FONT.mono, fontSize: 12.5, color: C.soft }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: C.soft }}>
             <span>{FILE}</span>
             <span>{phase}</span>
           </div>
-          <div style={{ marginTop: 7, height: 4, borderRadius: 2, background: C.line }}>
-            <div style={{ height: 4, borderRadius: 2, background: C.accent, width: `${prog * 100}%` }} />
+          <div style={{ marginTop: 7, height: 5, borderRadius: 3, background: C.hair }}>
+            <div style={{ height: 5, borderRadius: 3, background: 'linear-gradient(90deg, #1b7be3, #0066cc)', width: `${prog * 100}%` }} />
           </div>
         </div>
       )}
@@ -535,33 +688,68 @@ function ImportPanel({ t, k }: { t: number; k: HowKit }) {
   )
 }
 
+function Stat({ label, n, tone, children }: { label: string; n: number; tone?: 'bad'; children: React.ReactNode }) {
+  return (
+    <div style={{ ...GLASS, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 3, background: tone ? 'linear-gradient(150deg, rgba(255,241,240,.97), rgba(253,232,230,.86))' : GLASS.background }}>
+      <span style={{ fontSize: 11.5, fontWeight: 600, color: C.soft }}>{label}</span>
+      <span style={{ fontSize: 28, fontWeight: 600, letterSpacing: '-0.035em', lineHeight: 1.05, color: tone ? C.red : C.ink, ...NUM }}>{n}</span>
+      {children}
+    </div>
+  )
+}
+
 function HomeView({ t, k }: { t: number; k: HowKit }) {
   const landed = t >= IMP.landed
+  const importing = t >= IMP.open && !landed
   const rows = k.recent
   return (
     <div>
-      <div style={{ fontFamily: FONT.display, fontSize: 28, marginBottom: 14 }}>{landed ? 4 : 3} recordings, and what came out of them</div>
-      {t >= IMP.open && !landed && <ImportPanel t={t} k={k} />}
-      <Label style={{ marginBottom: 8 }}>Recent recordings</Label>
-      <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, overflow: 'hidden' }}>
+      <div style={{ fontSize: 26, fontWeight: 600, letterSpacing: '-0.035em', lineHeight: 1.1 }}>Good morning</div>
+      <div style={{ fontSize: 12, color: C.dim, margin: '5px 0 14px', ...NUM }}>
+        {landed ? '4 recordings · 2.7 h captured · latest Oct 1' : '3 recordings · 2.1 h captured · latest Sep 29'}
+      </div>
+      {importing ? (
+        <ImportPanel t={t} k={k} />
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12, marginBottom: 16, ...(landed ? enter(t, IMP.landed, 0.5, 8) : {}) }}>
+          <Stat label="Overdue" n={1} tone="bad"><span style={{ fontSize: 11, color: C.dim }}>Needs attention</span></Stat>
+          <Stat label="Still to do" n={landed ? 9 : 6}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ flex: 1, height: 4, borderRadius: 2, background: C.hair }}><span style={{ display: 'block', height: 4, borderRadius: 2, width: landed ? '31%' : '40%', background: C.blue }} /></span>
+              <span style={{ fontSize: 10.5, color: C.dim, ...NUM }}>{landed ? '4 of 13 done' : '4 of 10 done'}</span>
+            </span>
+          </Stat>
+          <Stat label="Nearly missed" n={landed ? 4 : 3}><span style={{ fontSize: 11, color: C.dim }}>{landed ? '2 new this week' : '1 new this week'}</span></Stat>
+          <Stat label="People" n={8}><span style={{ fontSize: 11, color: C.dim }}>In your recordings</span></Stat>
+        </div>
+      )}
+      <div style={{ ...GLASS, padding: '12px 14px 6px', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <span style={{ fontSize: 14, fontWeight: 600 }}>Recent recordings</span>
+          <span style={{ ...SECONDARY, height: 26, padding: '0 12px', fontSize: 12, color: C.blueInk }}>+ New</span>
+        </div>
         {landed && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderBottom: `1px solid ${C.line}`, background: '#F4FAF6', ...enter(t, IMP.landed, 0.5, 10) }}>
-            <span style={{ width: 36, height: 36, borderRadius: 9, background: C.accentWash, color: C.accent, display: 'grid', placeItems: 'center', fontSize: 16 }}>♪</span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: 15 }}>{k.title}</div>
-              <div style={{ fontFamily: FONT.mono, fontSize: 11.5, color: C.dim, marginTop: 3 }}>{k.meta} · with {k.people.map((p) => p[0]).join(', ')}</div>
+          <div style={enter(t, IMP.landed, 0.5, 10)}>
+            <Label style={{ fontSize: 10.5, padding: '6px 4px 4px' }}>Wed, Oct 1</Label>
+            <div data-at="row" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 10px', borderRadius: 12, background: `rgba(232,241,252,${0.9 - 0.5 * seg(t, IMP.landed + 1.2, IMP.landed + 2.4)})` }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 500, fontSize: 13.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{k.title}</div>
+                <div style={{ fontSize: 11.5, color: C.dim, marginTop: 2, ...NUM }}>{k.meta.split(' · ')[0]}</div>
+              </div>
+              <CatPill label={k.meta.split(' · ')[1] ?? ''} />
             </div>
-            <span style={{ fontFamily: FONT.mono, fontSize: 11, letterSpacing: '.06em', padding: '3px 8px', borderRadius: 6, background: C.accentWash, color: '#08482E' }}>NOTED</span>
           </div>
         )}
         {rows.map(([title, meta, day], i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderBottom: i < rows.length - 1 ? `1px solid ${C.line}` : 'none' }}>
-            <span style={{ width: 36, height: 36, borderRadius: 9, background: '#F0ECE2', color: C.dim, display: 'grid', placeItems: 'center', fontSize: 16 }}>♪</span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: 15 }}>{title}</div>
-              <div style={{ fontFamily: FONT.mono, fontSize: 11.5, color: C.dim, marginTop: 3 }}>{meta}</div>
+          <div key={i}>
+            <Label style={{ fontSize: 10.5, padding: '8px 4px 4px' }}>{day.charAt(0) + day.slice(1).toLowerCase()}</Label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 10px', borderBottom: i < rows.length - 1 ? `1px solid ${C.hair}` : 'none' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 500, fontSize: 13.5 }}>{title}</div>
+                <div style={{ fontSize: 11.5, color: C.dim, marginTop: 2, ...NUM }}>{meta.split(' · ')[0]}</div>
+              </div>
+              <CatPill label={meta.split(' · ')[1] ?? ''} />
             </div>
-            <span style={{ fontFamily: FONT.mono, fontSize: 11, color: C.faint }}>{day}</span>
           </div>
         ))}
       </div>
@@ -569,34 +757,60 @@ function HomeView({ t, k }: { t: number; k: HowKit }) {
   )
 }
 
-function FolderPicker({ t }: { t: number }) {
+/**
+ * The computer's own file picker, as Connect pen opens it, already on the JUNO PEN drive: the
+ * recording is selected and opened. Generic on purpose, not any one operating system's.
+ */
+function FilePicker({ t }: { t: number }) {
   const open = out(seg(t, 9.5, 9.9)) * (1 - seg(t, 11.7, 12.0))
   if (open <= 0) return null
   const picked = t >= 10.9
+  const files: [string, string, string, boolean][] = [
+    [FILE, '36.4 MB', '10/1/2026 9:42', true],
+    ['SYSTEM', '', '', false],
+  ]
   return (
-    <div style={{ position: 'absolute', inset: 0, background: `rgba(22,21,15,${0.22 * open})`, display: 'grid', placeItems: 'center', zIndex: 10 }}>
-      <div style={{ width: 560, borderRadius: 14, background: '#FBFAF7', boxShadow: '0 30px 60px -20px rgba(0,0,0,.45)', overflow: 'hidden', opacity: open, transform: `scale(${0.96 + 0.04 * open})`, fontFamily: FONT.ui }}>
-        <div style={{ padding: '14px 18px', borderBottom: `1px solid ${C.line}`, fontWeight: 600, fontSize: 14 }}>Choose the pen’s folder</div>
+    <div style={{ position: 'absolute', inset: 0, background: `rgba(29,29,31,${0.22 * open})`, display: 'grid', placeItems: 'center', zIndex: 10 }}>
+      <div style={{ width: 600, borderRadius: 16, background: '#fbfbfd', boxShadow: '0 30px 60px -20px rgba(0,0,0,.4), 0 0 0 1px rgba(29,29,31,.08)', overflow: 'hidden', opacity: open, transform: `scale(${0.96 + 0.04 * open})`, fontFamily: FONT.ui, color: C.ink }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: `1px solid ${C.hair}` }}>
+          <span style={{ fontWeight: 600, fontSize: 13.5 }}>Open</span>
+          <span style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: C.dim }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 999, background: '#eef0f3', color: C.ink, fontWeight: 600 }}><DriveIcon size={16} /> JUNO PEN</span>
+          </span>
+        </div>
         <div style={{ display: 'flex', minHeight: 230 }}>
-          <div style={{ width: 160, padding: 12, borderRight: `1px solid ${C.line}`, background: '#F3F1EC', fontSize: 13, color: C.soft, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <Label>Locations</Label>
+          <div style={{ width: 150, padding: 12, borderRight: `1px solid ${C.hair}`, background: '#f3f4f6', fontSize: 12.5, color: C.soft, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <Label style={{ fontSize: 10 }}>Locations</Label>
             <span>Desktop</span>
             <span>Documents</span>
             <span>Downloads</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 7px', borderRadius: 7, background: C.accentWash, color: '#08482E', fontWeight: 600 }}>
-              <DriveIcon size={18} /> JUNO PEN
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 8px', borderRadius: 8, background: C.blueWash, color: C.blueInk, fontWeight: 600 }}>
+              <DriveIcon size={16} /> JUNO PEN
             </span>
           </div>
-          <div style={{ flex: 1, padding: 12, display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13.5 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, background: picked ? C.accent : 'transparent', color: picked ? '#fff' : C.ink, fontWeight: 600 }}>
-              <span>📁</span> RECORD
+          <div style={{ flex: 1, padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 2, fontSize: 13 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 110px', gap: 8, padding: '4px 10px 6px', fontSize: 10.5, color: C.dim, borderBottom: `1px solid ${C.hair}` }}>
+              <span>Name</span><span>Size</span><span>Modified</span>
             </div>
-            <div style={{ padding: '8px 10px', color: C.faint }}>📁 SYSTEM</div>
+            {files.map(([name, size, date, audio], i) => {
+              const sel = audio && picked
+              return (
+                <div key={name} data-at={i === 0 ? 'folder' : undefined} style={{ display: 'grid', gridTemplateColumns: '1fr 70px 110px', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 9, background: sel ? C.blue : 'transparent', color: sel ? '#fff' : audio ? C.ink : C.faint }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: audio ? 600 : 400 }}>
+                    {audio ? <I n="wave" size={15} color={sel ? '#fff' : C.blue} /> : <I n="folder" size={15} color={C.faint} />}
+                    {name}
+                  </span>
+                  <span style={{ fontSize: 11.5, ...NUM }}>{size}</span>
+                  <span style={{ fontSize: 11.5, ...NUM }}>{date}</span>
+                </div>
+              )
+            })}
           </div>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '12px 16px', borderTop: `1px solid ${C.line}` }}>
-          <span style={{ padding: '8px 16px', borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 13 }}>Cancel</span>
-          <span style={{ padding: '8px 18px', borderRadius: 8, background: picked ? C.accent : '#BFD8CB', color: '#fff', fontSize: 13, fontWeight: 600 }}>Select</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, padding: '11px 16px', borderTop: `1px solid ${C.hair}` }}>
+          <span style={{ flex: 1, fontSize: 12, color: C.dim }}>{picked ? '1 item selected' : 'Select recordings'}</span>
+          <span style={{ ...SECONDARY, padding: '7px 16px', fontSize: 12.5 }}>Cancel</span>
+          <span data-at="select" style={{ ...PRIMARY, padding: '7px 20px', fontSize: 12.5, opacity: picked ? 1 : 0.5, boxShadow: picked ? PRIMARY.boxShadow : 'none' }}>Open</span>
         </div>
       </div>
     </div>
@@ -609,56 +823,65 @@ function RecordingView({ t, k }: { t: number; k: HowKit }) {
   const notes = t >= 27.6
   return (
     <div style={{ position: 'relative' }}>
-      <div style={{ fontFamily: FONT.mono, fontSize: 11, color: C.dim, letterSpacing: '.06em' }}>WED, OCT 1 · {k.meta}</div>
-      <div style={{ fontFamily: FONT.display, fontSize: 30, margin: '4px 0 14px' }}>{k.title}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.dim, fontWeight: 500 }}>
+        <I n="back" size={14} color={C.dim} /> All recordings
+      </div>
+      <div style={{ fontSize: 26, fontWeight: 600, letterSpacing: '-0.035em', lineHeight: 1.12, margin: '8px 0 6px' }}>{k.title}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: C.dim, marginBottom: 14, ...NUM }}>
+        <span>Wed, Oct 1 · {k.meta.split(' · ')[0]}</span>
+        <CatPill label={k.meta.split(' · ')[1] ?? ''} />
+      </div>
 
       {!notes ? (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           {/* Who's who */}
-          <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: 16, alignSelf: 'start', ...enter(t, 21.0, 0.5) }}>
-            <Label style={{ marginBottom: 12 }}>Who’s who</Label>
+          <div style={{ ...GLASS, padding: 16, alignSelf: 'start', ...enter(t, 21.0, 0.5) }}>
+            <Label style={{ marginBottom: 10 }}>Who’s who</Label>
             {k.speakers.map((x, i) => ({ sp: `Speaker ${'ABC'[i]}`, name: x.name, share: x.share, you: !!x.you, note: x.you ? '' : 'matched by voice' })).map((r, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderTop: i ? `1px solid #EEE9DD` : 'none', ...enter(t, 21.3 + i * 0.25, 0.4, 6) }}>
-                <span style={{ width: 82, fontFamily: FONT.mono, fontSize: 11.5, color: C.dim }}>{r.sp}</span>
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderTop: i ? `1px solid ${C.hair}` : 'none', ...enter(t, 21.3 + i * 0.25, 0.4, 6) }}>
+                <span style={{ width: 72, fontSize: 11.5, color: C.dim }}>{r.sp}</span>
                 <span style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Avatar name={r.name} size={24} tone={r.you ? C.ink : C.accent} />
-                  <span style={{ fontSize: 14.5, fontWeight: 600 }}>{r.name}</span>
-                  {r.note && <span style={{ fontFamily: FONT.mono, fontSize: 10.5, color: C.faint }}>{r.note}</span>}
+                  <Avatar name={r.name} size={24} you={r.you} />
+                  <span style={{ fontSize: 13.5, fontWeight: 600 }}>{r.name}</span>
+                  {r.note && <span style={{ fontSize: 10.5, color: C.faint }}>{r.note}</span>}
                 </span>
-                <span style={{ fontFamily: FONT.mono, fontSize: 11, color: C.faint }}>{r.share}%</span>
+                <span style={{ fontSize: 11, color: C.dim, ...NUM }}>{r.share}%</span>
               </div>
             ))}
           </div>
           {/* People */}
-          <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: 16, alignSelf: 'start', ...enter(t, 22.0, 0.5) }}>
-            <Label style={{ marginBottom: 12 }}>People</Label>
+          <div style={{ ...GLASS, padding: 16, alignSelf: 'start', ...enter(t, 22.0, 0.5) }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <I n="people" size={15} color={C.dim} />
+              <Label>People</Label>
+            </div>
             {!added ? (
               <>
-                <div style={{ fontSize: 13, color: C.dim, marginBottom: 10 }}>Detected on this call · not saved yet</div>
+                <div style={{ fontSize: 12.5, color: C.dim, marginBottom: 8 }}>Detected on this call · not saved yet</div>
                 {k.people.map(([n]) => (
                   <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0' }}>
-                    <Avatar name={n} size={26} tone="#B9B3A3" />
-                    <span style={{ flex: 1, fontSize: 14.5 }}>{n}</span>
+                    <Avatar name={n} size={26} muted />
+                    <span style={{ flex: 1, fontSize: 13.5 }}>{n}</span>
                   </div>
                 ))}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-                  <span style={{ padding: '8px 16px', borderRadius: 9, background: C.accent, color: '#fff', fontSize: 13, fontWeight: 600 }}>Add all</span>
+                  <span data-at="addAll" style={{ ...PRIMARY, padding: '7px 18px', fontSize: 12.5 }}>Add all</span>
                 </div>
               </>
             ) : (
               <>
                 {k.people.map(([n, about], i) => (
-                  <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', ...enter(t, 24.6 + i * 0.15, 0.4, 8) }}>
+                  <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderTop: i ? `1px solid ${C.hair}` : 'none', ...enter(t, 24.6 + i * 0.15, 0.4, 8) }}>
                     <Avatar name={n} size={30} />
                     <span style={{ flex: 1 }}>
-                      <span style={{ display: 'block', fontSize: 14.5, fontWeight: 600 }}>{n}</span>
-                      <span style={{ display: 'block', fontFamily: FONT.serif, fontSize: 12.5, color: C.dim }}>{about}</span>
+                      <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600 }}>{n}</span>
+                      <span style={{ display: 'block', fontSize: 11.5, color: C.dim }}>{about}</span>
                     </span>
-                    <span style={{ color: C.accent, fontSize: 15 }}>✓</span>
+                    <I n="check" size={16} color={C.blue} />
                   </div>
                 ))}
-                <div style={{ marginTop: 10, fontSize: 12.5, color: C.dim, ...enter(t, 25.2, 0.4, 6) }}>
-                  Now ask about them anywhere with <strong style={{ color: C.accent }}>@{k.people[0][0].replace(/^(Prof\.|Ms\.|Mr\.|Dr\.) /, '').split(' ')[0]}</strong>
+                <div style={{ marginTop: 10, fontSize: 12, color: C.dim, ...enter(t, 25.2, 0.4, 6) }}>
+                  Now ask about them anywhere with <strong style={{ color: C.blueInk }}>@{k.people[0][0].replace(/^(Prof\.|Ms\.|Mr\.|Dr\.) /, '').split(' ')[0]}</strong>
                 </div>
               </>
             )}
@@ -676,44 +899,54 @@ function NotesView({ t, k }: { t: number; k: HowKit }) {
   const emailIn = out(seg(t, 32.3, 32.8))
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 1fr', gap: 16 }}>
-      <div style={{ alignSelf: 'start', background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: 16, ...enter(t, 24.6, 0.5) }}>
-        <Label style={{ marginBottom: 10 }}>Summary</Label>
+      {/* The AI summary: the app's blue-tinted glass */}
+      <div style={{ ...GLASS, alignSelf: 'start', padding: '16px 18px', background: 'linear-gradient(150deg, rgba(232,241,252,.97), rgba(222,235,251,.82))', borderLeft: `3px solid ${C.blue}`, ...enter(t, 24.6, 0.5) }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <I n="sparkle" size={16} color={C.blue} />
+          <span style={{ fontSize: 14, fontWeight: 600, color: C.blueInk }}>AI meeting summary</span>
+        </div>
         {k.summary.map((s, i) => {
           const at = 25.1 + i * 1.25
           return (
-            <div key={i} style={{ display: 'flex', gap: 9, marginBottom: 9, fontFamily: FONT.serif, fontSize: 14.5, lineHeight: 1.5, minHeight: t >= at ? undefined : 0 }}>
-              {t >= at && <span style={{ color: C.accent }}>•</span>}
+            <div key={i} style={{ display: 'flex', gap: 9, marginBottom: 8, fontSize: 13.5, lineHeight: 1.5, minHeight: t >= at ? undefined : 0 }}>
+              {t >= at && <span style={{ color: C.blue }}>•</span>}
               <span>{typed(s, t, at, 75)}</span>
             </div>
           )
         })}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: 16, ...enter(t, 28.6, 0.5) }}>
-          <Label style={{ marginBottom: 10 }}>To-dos</Label>
+        <div style={{ ...GLASS, padding: 16, ...enter(t, 28.6, 0.5) }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <Label>Next actions</Label>
+            <span style={{ fontSize: 11, color: C.dim, ...NUM }}>{ticked > 0.6 ? '1/3 done' : '0/3 done'}</span>
+          </div>
           {k.todos.map(([what, when], i) => {
             const on = i === 0 ? ticked : 0
             return (
-              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '6px 0', ...enter(t, 28.9 + i * 0.3, 0.4, 8) }}>
-                <Check on={on} />
-                <span>
-                  <span style={{ display: 'block', fontSize: 14.5, fontWeight: 600, color: on ? C.faint : C.ink, textDecoration: on > 0.6 ? 'line-through' : 'none' }}>{what}</span>
-                  <span style={{ display: 'block', fontFamily: FONT.serif, fontSize: 12.5, color: i === 0 ? C.amber : C.dim }}>{when}</span>
+              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '7px 0', borderTop: i ? `1px solid ${C.hair}` : 'none', ...enter(t, 28.9 + i * 0.3, 0.4, 8) }}>
+                <span data-at={i === 0 ? 'todo' : undefined}><Check on={on} /></span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: 'block', fontSize: 13.5, fontWeight: 500, color: on ? C.faint : C.ink, textDecoration: on > 0.6 ? 'line-through' : 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{what}</span>
                 </span>
+                <span style={{ flex: 'none', padding: '1px 8px', borderRadius: 999, fontSize: 10.5, fontWeight: 600, background: i === 0 ? C.amberWash : '#f0f0f3', color: i === 0 ? C.amber : C.soft }}>{when}</span>
               </div>
             )
           })}
         </div>
-        <div style={{ background: C.panel, border: `1px solid ${emailIn ? C.accent : C.line}`, borderRadius: 14, padding: 16, ...enter(t, 31.4, 0.5) }}>
+        <div style={{ ...GLASS, padding: 16, boxShadow: emailIn ? `0 0 0 2px ${C.blueLine}, ${GLASS.boxShadow}` : GLASS.boxShadow, ...enter(t, 31.4, 0.5) }}>
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: emailIn ? 10 : 0 }}>
-            <Label style={{ flex: 1 }}>Follow-up email · ready</Label>
-            <span style={{ padding: '6px 12px', borderRadius: 8, background: C.accent, color: '#fff', fontSize: 12.5, fontWeight: 600 }}>{emailIn ? 'Open in Gmail' : 'Open draft'}</span>
+            <span style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 7 }}>
+              <I n="mail" size={15} color={C.dim} />
+              <Label>Follow-up email · ready</Label>
+            </span>
+            <span data-at="email" style={{ ...PRIMARY, padding: '6px 14px', fontSize: 12 }}>{emailIn ? 'Open in Gmail' : 'Open draft'}</span>
           </div>
           {emailIn > 0 && (
             <div style={{ opacity: emailIn }}>
-              <div style={{ fontSize: 13, color: C.dim, marginBottom: 4 }}>To: {k.email.to}</div>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>{k.email.subject}</div>
-              <div style={{ fontFamily: FONT.serif, fontSize: 13, lineHeight: 1.5, color: C.soft }}>{typed(k.email.body, t, 32.7, 70)}</div>
+              <div style={{ fontSize: 12.5, color: C.dim, marginBottom: 4 }}>To: {k.email.to}</div>
+              <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 6 }}>{k.email.subject}</div>
+              <div style={{ fontSize: 12.5, lineHeight: 1.5, color: C.soft }}>{typed(k.email.body, t, 32.7, 70)}</div>
             </div>
           )}
         </div>
@@ -738,7 +971,7 @@ function WaText({ text }: { text: string }) {
 
 function Bubble({ me, children, style }: { me?: boolean; children: React.ReactNode; style?: React.CSSProperties }) {
   return (
-    <div style={{ alignSelf: me ? 'flex-end' : 'flex-start', maxWidth: '86%', padding: '8px 11px 7px', borderRadius: 10, borderTopRightRadius: me ? 3 : 10, borderTopLeftRadius: me ? 10 : 3, background: me ? C.waMe : C.panel, boxShadow: '0 1px 1px rgba(11,20,26,.13)', fontFamily: FONT.ui, fontSize: 15, lineHeight: 1.38, color: '#111B21', flex: 'none', ...style }}>
+    <div style={{ alignSelf: me ? 'flex-end' : 'flex-start', maxWidth: '86%', padding: '8px 11px 7px', borderRadius: 12, borderTopRightRadius: me ? 3 : 12, borderTopLeftRadius: me ? 12 : 3, background: me ? C.waMe : C.panel, boxShadow: '0 1px 1px rgba(11,20,26,.13)', fontFamily: FONT.ui, fontSize: 15, lineHeight: 1.38, color: '#111B21', flex: 'none', ...style }}>
       {children}
     </div>
   )
@@ -757,12 +990,12 @@ function Phone({ t, width, k }: { t: number; width: number; k: HowKit }) {
   const thinking = (t >= 38.8 && t < 39.8) || (t >= 43.5 && t < 44.3)
   const h = width * 2.05
   return (
-    <div style={{ width, height: h, borderRadius: 52, background: '#121212', padding: 11, boxShadow: '0 40px 80px -30px rgba(22,21,15,.55), 0 12px 26px -14px rgba(22,21,15,.35)' }}>
+    <div style={{ width, height: h, borderRadius: 52, background: 'linear-gradient(140deg, #3a3b3f, #1d1d1f 40%)', padding: 11, boxShadow: '0 0 0 1.5px #c9ccd1, 0 40px 80px -30px rgba(29,29,31,.5), 0 12px 26px -14px rgba(29,29,31,.3)' }}>
       <div style={{ position: 'relative', height: '100%', borderRadius: 42, overflow: 'hidden', background: C.waBg, display: 'flex', flexDirection: 'column' }}>
-        <div style={{ position: 'absolute', top: 10, left: '50%', width: 96, height: 27, marginLeft: -48, borderRadius: 16, background: '#121212', zIndex: 2 }} />
+        <div style={{ position: 'absolute', top: 10, left: '50%', width: 96, height: 27, marginLeft: -48, borderRadius: 16, background: '#0d0d0f', zIndex: 2 }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '48px 14px 11px', background: C.waHead, borderBottom: '1px solid #E4E1DC' }}>
-          <span style={{ fontSize: 26, lineHeight: 1, color: C.accent }}>‹</span>
-          <span style={{ width: 36, height: 36, borderRadius: '50%', display: 'grid', placeItems: 'center', background: C.ink, color: C.paper, fontFamily: FONT.display, fontSize: 21 }}>j</span>
+          <span style={{ fontSize: 26, lineHeight: 1, color: C.waGreen }}>‹</span>
+          <span style={{ width: 36, height: 36, borderRadius: '50%', display: 'grid', placeItems: 'center', background: '#111', color: '#f5f5f7', fontFamily: FONT.mark, fontSize: 22 }}>j</span>
           <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2, fontFamily: FONT.ui }}>
             <strong style={{ fontSize: 16, color: '#111B21' }}>Juno Pen</strong>
             <span style={{ fontSize: 12.5, color: '#667781' }}>{thinking ? 'typing…' : 'online'}</span>
@@ -788,7 +1021,7 @@ function Phone({ t, width, k }: { t: number; width: number; k: HowKit }) {
           <span style={{ flex: 1, minHeight: 34, borderRadius: 17, background: '#fff', border: '1px solid #E4E1DC', display: 'flex', alignItems: 'center', padding: '6px 12px', fontFamily: FONT.ui, fontSize: 14, color: typing ? '#111B21' : '#8696A0', lineHeight: 1.3 }}>
             {typing || 'Message'}
           </span>
-          <span style={{ width: 34, height: 34, borderRadius: '50%', background: C.accent, display: 'grid', placeItems: 'center', color: '#fff', fontSize: 15 }}>{typing ? '➤' : '🎙'}</span>
+          <span style={{ width: 34, height: 34, borderRadius: '50%', background: C.waGreen, display: 'grid', placeItems: 'center', color: '#fff', fontSize: 15 }}>{typing ? '➤' : '🎙'}</span>
         </div>
       </div>
     </div>
@@ -811,12 +1044,12 @@ function Caption({ t, portrait }: { t: number; portrait: boolean }) {
   if (!s) return null
   const o = out(seg(t, s.at, s.at + 0.4)) * (1 - seg(t, s.until, s.until + 0.4))
   return (
-    <div style={{ position: 'absolute', left: 0, right: 0, top: portrait ? 70 : 22, display: 'flex', justifyContent: 'center', opacity: o, transform: `translateY(${(1 - o) * 8}px)`, zIndex: 40, padding: portrait ? '0 36px' : 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: portrait ? '14px 20px' : '10px 18px 10px 12px', borderRadius: 16, background: 'rgba(255,255,255,.94)', border: `1px solid ${C.line}`, boxShadow: '0 12px 30px -16px rgba(22,21,15,.4)', maxWidth: portrait ? 648 : 900 }}>
-        <span style={{ flex: 'none', width: portrait ? 40 : 34, height: portrait ? 40 : 34, borderRadius: '50%', background: C.accent, color: '#fff', display: 'grid', placeItems: 'center', fontFamily: FONT.mono, fontSize: portrait ? 18 : 16 }}>{s.n}</span>
+    <div style={{ position: 'absolute', left: 0, right: 0, top: portrait ? 70 : 18, display: 'flex', justifyContent: 'center', opacity: o, transform: `translateY(${(1 - o) * 8}px)`, zIndex: 40, padding: portrait ? '0 36px' : 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: portrait ? '14px 22px 14px 14px' : '10px 20px 10px 10px', ...GLASS, borderRadius: 999, maxWidth: portrait ? 648 : 920 }}>
+        <span style={{ flex: 'none', width: portrait ? 42 : 36, height: portrait ? 42 : 36, borderRadius: '50%', background: 'linear-gradient(180deg, #1b7be3, #0066cc)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.3), 0 6px 12px -6px rgba(0,102,204,.6)', color: '#fff', display: 'grid', placeItems: 'center', fontFamily: FONT.ui, fontWeight: 600, fontSize: portrait ? 18 : 16 }}>{s.n}</span>
         <span>
-          <span style={{ display: 'block', fontFamily: FONT.ui, fontWeight: 700, fontSize: portrait ? 26 : 22, color: C.ink, lineHeight: 1.2 }}>{s.text}</span>
-          {s.sub && <span style={{ display: 'block', fontFamily: FONT.serif, fontSize: portrait ? 18 : 15, color: C.dim, marginTop: 2 }}>{s.sub}</span>}
+          <span style={{ display: 'block', fontFamily: FONT.ui, fontWeight: 600, letterSpacing: '-0.02em', fontSize: portrait ? 25 : 21, color: C.ink, lineHeight: 1.2 }}>{s.text}</span>
+          {s.sub && <span style={{ display: 'block', fontFamily: FONT.ui, fontSize: portrait ? 17 : 14, color: C.dim, marginTop: 2 }}>{s.sub}</span>}
         </span>
       </div>
     </div>
@@ -831,35 +1064,36 @@ export default function HowToScene({ t, format = 'landscape', kit = 'sales' }: {
   const portrait = format === 'portrait'
 
   /* -- the app window's place, used by the zoom and by steps 2–5 -- */
-  // Landscape: the window fills the frame. Portrait: it is wider than the frame, so a camera
-  // follows the action (focus in window space).
-  const winScale = portrait ? 1.12 : Math.min((w - 60) / WIN.w, (h - 110) / WIN.h)
+  // Landscape: the laptop, facing us, fills the frame under the caption. Portrait: the window
+  // is wider than the frame, so a camera follows the action (focus in window space).
+  const TOP = 98
+  const winScale = portrait ? 1.12 : Math.min((w - 80) / (WIN.w + BEZEL * 2), (h - TOP - 12) / (WIN.h + BEZEL * 2 + BASE_H))
   const FOCUS: [number, number, number][] = [
     [7.7, 330, 300],
-    [9.2, 300, 220],
+    [9.2, AT.connect[0] + 180, AT.connect[1] + 100],
     [10.4, 560, 300],
     [12.6, 560, 280],
-    [13.4, 500, 300],
-    [15.9, 520, 310],
-    [16.4, 690, 310],
-    [17.1, 690, 310],
-    [17.6, 430, 340],
-    [19.9, 520, 240],
-    [21.2, 520, 270],
-    [22.8, 850, 290],
-    [27.6, 450, 300],
-    [31.4, 430, 300],
-    [32.0, 800, 320],
+    [13.4, 520, 300],
+    [15.9, AT.who[0], AT.who[1] - 10],
+    [16.4, AT.consent[0] - 20, AT.consent[1]],
+    [17.1, AT.consent[0] - 20, AT.consent[1]],
+    [17.6, AT.importBtn[0] + 40, AT.importBtn[1] - 40],
+    [19.9, 560, 280],
+    [21.2, 540, 280],
+    [22.8, 860, 290],
+    [27.6, 470, 300],
+    [31.4, 450, 300],
+    [32.0, 820, 320],
     [36.5, 840, 420],
   ]
   const cam = (tt: number) => {
     const f = path(tt, FOCUS)
-    return portrait ? [w / 2 - f[0] * winScale, 680 - f[1] * winScale] : [(w - WIN.w * winScale) / 2, 86]
+    return portrait ? [w / 2 - f[0] * winScale, 680 - f[1] * winScale] : [(w - WIN.w * winScale) / 2, TOP + BEZEL * winScale]
   }
   const [camX, camY] = cam(t)
 
   /* -- 1. the laptop, from the side; the pen goes in; it turns to face us (0 – 8) -- */
-  const lapW = portrait ? 380 : 460
+  const lapW = portrait ? 380 : 470
   const geo = lapGeo(lapW)
   // Where the screen's centre sits in the frame: the laptop turns about it.
   const P = portrait ? { x: w / 2 + 30, y: 600 } : { x: w / 2 - 150, y: 262 }
@@ -877,7 +1111,7 @@ export default function HowToScene({ t, format = 'landscape', kit = 'sales' }: {
   const [endX, endY] = cam(7.7)
   const lapScale = lerp(1, (WIN.w * winScale) / lapW, zoom)
   const lapDx = lerp(0, endX + (WIN.w * winScale) / 2 - P.x, zoom)
-  const lapDy = lerp(0, endY + (WIN.h * winScale) / 2 - (P.y - 2), zoom)
+  const lapDy = lerp(0, endY + (WIN.h * winScale) / 2 - P.y, zoom)
   const lapLayer = t < 8.1
 
   // To the phone: landscape shrinks the window to the left, portrait fades it out.
@@ -915,8 +1149,9 @@ export default function HowToScene({ t, format = 'landscape', kit = 'sales' }: {
   const down = Math.max(...[9.8, 11.65, 12.3, 14.0, 16.8, 17.7, 20.6, 24.3, 33.55, 35.2].map((c) => click(t, c)))
 
   return (
-    <div style={{ position: 'relative', width: w, height: h, overflow: 'hidden', background: C.paper, fontFamily: FONT.ui }}>
-      <div style={{ position: 'absolute', left: w * 0.1, top: h * 0.1, width: w * 0.8, height: h * 0.6, background: `radial-gradient(closest-side, ${C.accentWash}, transparent)`, opacity: 0.8 }} />
+    <div style={{ position: 'relative', width: w, height: h, overflow: 'hidden', background: C.stage, fontFamily: FONT.ui }}>
+      {/* The stage: cool grey with soft tints, as the app's canvas */}
+      <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(${w * 0.7}px ${h * 0.6}px at 8% -4%, rgba(168,192,232,.38), transparent 64%), radial-gradient(${w * 0.6}px ${h * 0.55}px at 100% 8%, rgba(212,202,242,.34), transparent 62%), radial-gradient(${w * 0.7}px ${h * 0.5}px at 50% 112%, rgba(182,212,236,.32), transparent 62%)` }} />
 
       {/* ---- 1. laptop + pen ---- */}
       {lapLayer && (
@@ -929,7 +1164,7 @@ export default function HowToScene({ t, format = 'landscape', kit = 'sales' }: {
         </div>
       )}
 
-      {/* ---- 2–5. the app ---- */}
+      {/* ---- 2–5. the app, on the laptop facing us ---- */}
       {t >= 7.7 && (
         <div style={{ position: 'absolute', left: 0, top: 0, width: w, height: h, opacity: seg(t, 7.7, 8.1) * (portrait ? 1 - toPhone : 1) * (1 - endIn) }}>
           <div
@@ -941,12 +1176,16 @@ export default function HowToScene({ t, format = 'landscape', kit = 'sales' }: {
               height: WIN.h,
               transform: `scale(${portrait ? winScale : lerp(winScale, 0.62, toPhone)})`,
               transformOrigin: '0 0',
-              boxShadow: '0 30px 70px -30px rgba(22,21,15,.45)',
-              borderRadius: 14,
             }}
           >
-            <AppWindow t={t} k={k} />
-            {t >= 8.2 && t < 37.8 && <Cursor x={cur[0]} y={cur[1]} down={down} />}
+            <LaptopFront />
+            <div style={{ position: 'absolute', inset: 0, borderRadius: BEZEL * 0.6, overflow: 'hidden', zIndex: 1 }}>
+              <AppWindow t={t} k={k} />
+            </div>
+            <div style={{ position: 'absolute', left: 0, top: -BEZEL, width: WIN.w, height: BEZEL * 2, zIndex: 2, pointerEvents: 'none' }}>
+              <Notch w={WIN.w * 0.075} h={BEZEL * 0.62} />
+            </div>
+            {t >= 8.2 && t < 37.8 && <div style={{ position: 'absolute', inset: 0, zIndex: 3 }}><Cursor x={cur[0]} y={cur[1]} down={down} /></div>}
           </div>
         </div>
       )}
@@ -962,11 +1201,11 @@ export default function HowToScene({ t, format = 'landscape', kit = 'sales' }: {
 
       {/* ---- end card ---- */}
       {endIn > 0 && (
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 22, background: `rgba(242,239,229,${0.98 * endIn})`, opacity: endIn, padding: 40, textAlign: 'center' }}>
-          <div style={{ fontFamily: FONT.display, fontSize: portrait ? 84 : 92, lineHeight: 1, color: C.ink, transform: `translateY(${(1 - endIn) * 16}px)` }}>That’s it.</div>
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 22, background: `rgba(242,243,247,${0.98 * endIn})`, opacity: endIn, padding: 40, textAlign: 'center' }}>
+          <div style={{ fontFamily: FONT.ui, fontWeight: 600, letterSpacing: '-0.045em', fontSize: portrait ? 84 : 96, lineHeight: 1, color: C.ink, transform: `translateY(${(1 - endIn) * 16}px)` }}>That’s it.</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10, ...enter(t, 50.4, 0.5, 10) }}>
-            <span style={{ width: 40, height: 40, borderRadius: 10, background: C.ink, color: C.paper, display: 'grid', placeItems: 'center', fontFamily: FONT.display, fontSize: 26 }}>j</span>
-            <span style={{ fontFamily: FONT.mono, fontSize: 20, color: C.soft }}>tryjunoapp.com</span>
+            <Mark size={40} />
+            <span style={{ fontFamily: FONT.ui, fontWeight: 500, fontSize: 20, color: C.soft }}>tryjunoapp.com</span>
           </div>
         </div>
       )}

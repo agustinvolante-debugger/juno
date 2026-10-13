@@ -252,7 +252,7 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
     box-shadow: var(--lift-3); padding: 6px;
     display: flex; flex-direction: column; gap: 2px;
   }
-  .pen-menu-right { left: auto; right: 0; width: 196px; }
+  .pen-menu-right { left: auto; right: 0; width: max-content; min-width: 196px; max-width: min(300px, 86vw); }
   .pen-menu-item {
     display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 8px 12px;
     border-radius: 10px; font-family: var(--ui); font-size: 14.5px; font-weight: 500; color: var(--ink);
@@ -669,6 +669,29 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
     .pen-su-ship { padding: 16px 12px; }
     .pen-legal-body { padding: 4px 18px 12px; }
     .pen-su-done { padding: 28px 20px; }
+  }
+
+  /* ---- the sidebar brand is a Home button ---- */
+  .pen-brand-home {
+    width: 100%; text-align: left; background: none; border: 0; cursor: pointer; border-radius: 14px;
+    margin: -4px -6px 0; padding: 4px 6px 16px; color: inherit;
+  }
+  .pen-brand-home:hover .pen-brand-name { color: var(--accent-ink); }
+  .pen-brand-home:focus-visible { outline: 2px solid var(--sk-blue-hi); outline-offset: 2px; }
+
+  /* ---- "⋯" on people rows (RowMenu.tsx), same look as the chat menu ---- */
+  .pen-rowmenu { position: relative; flex: none; display: inline-flex; align-self: center; }
+  .pen-rowmenu .pen-rowmenu-btn { position: static; transform: none; opacity: .6; }
+  .pen-row2:hover .pen-rowmenu-btn, .pen-person:hover .pen-rowmenu-btn, .pen-rowmenu-btn:focus-visible,
+  .pen-rowmenu-btn[aria-expanded='true'] { opacity: 1; }
+  .pen-rowmenu .pen-menu { top: calc(100% + 4px); }
+  /* The recording's person actions style their buttons; the menu's items keep the menu look. */
+  .pen-person-actions .pen-menu-item { width: 100%; height: auto; min-height: 40px; padding: 8px 12px; justify-content: flex-start; color: var(--ink); }
+  .pen-person-actions .pen-menu-danger, .pen-person-actions .pen-menu-danger svg { color: var(--bad); }
+  .pen-person-actions .pen-rowmenu-btn { width: 32px; height: 32px; padding: 0; }
+  .pen-rename { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  @media (hover: none) {
+    .pen-rowmenu .pen-rowmenu-btn, .pen-person-actions .pen-rowmenu-btn { opacity: 1; width: 44px; height: 44px; }
   }
 
   /* A pre-existing cascade slip, fixed here because the white card made it visible: between

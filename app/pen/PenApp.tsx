@@ -753,6 +753,7 @@ export default function PenApp({
         <Overview
           stats={stats}
           firstName={firstName}
+          onPeopleChanged={() => void refreshPeople()}
           people={people}
           peopleLoading={!peopleLoaded}
           onChanged={() => void refresh()}
@@ -1041,13 +1042,19 @@ export default function PenApp({
           header, the banners, the import tray and the note/rail grid — stacks to its right. */}
       <div className="pen-side">
       {/* ------------------------------------------------------ navigation */}
-      <div className="pen-brand">
+      {/* The brand goes Home, like the Home item below it. */}
+      <button
+        type="button"
+        className="pen-brand pen-brand-home"
+        aria-label={T.brandHome}
+        onClick={() => { setView({ k: 'archive' }); setCatFilter(null); setNavOpen(false) }}
+      >
         <Image src="/juno_mark.png" alt="" width={34} height={34} className="pen-mark" priority />
         <div>
           <div className="pen-display pen-brand-name">Juno Pen</div>
           <div className="pen-brand-tag">{T.brandTag}</div>
         </div>
-      </div>
+      </button>
 
       {readOnly ? (
         <ReadOnlyBanner T={T} />
@@ -1413,6 +1420,7 @@ export default function PenApp({
               <Overview
                 stats={stats}
                 firstName={firstName}
+                onPeopleChanged={() => void refreshPeople()}
                 people={people}
                 peopleLoading={!peopleLoaded}
                 onChanged={() => void refresh()}

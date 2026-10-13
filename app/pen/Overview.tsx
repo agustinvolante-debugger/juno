@@ -15,7 +15,8 @@ import { createPortal } from 'react-dom'
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion, useIsPresent, animate } from 'motion/react'
 import type { ArchiveStats, OpenAction, OpenMissed, ClientCard } from '@/lib/pen/stats'
 import type { PersonCard } from '@/lib/pen/people'
-import { postJson, errMessage } from '@/lib/pen/http'
+import { postJson, patchJson, del, errMessage } from '@/lib/pen/http'
+import { RowMenu, RenameInput } from './RowMenu'
 import Icon, { type IconName } from './Icon'
 import DeliverableSheet, { type SheetRequest } from './DeliverableSheet'
 import { isMine } from '@/lib/pen/todo-labels'
@@ -107,6 +108,13 @@ const OV_EN = {
   newThisWeek: (n: number) => `${n} new this week`,
   inRecordings: 'In your recordings',
   youOwe: 'You owe',
+  personOptions: (n: string) => `Options for ${n}`,
+  rename: 'Rename',
+  deleteContact: 'Delete contact',
+  nameLabel: 'Name',
+  confirmDeletePerson: (n: string) => `Delete ${n} from your People? Their recordings stay; only the contact and its links to recordings are removed.`,
+  dupName: 'Someone with that name is already in your People.',
+  personFailed: 'That did not work. Try again.',
   emptyBody: 'Plug the pen in and import one recording. From the second one on, Juno Pen starts joining them up: what the same people keep asking for, what you keep forgetting, what is still outstanding across everything.',
 }
 
@@ -187,6 +195,13 @@ const OV: Copy<typeof OV_EN> = {
     newThisWeek: (n) => `${n} ${n === 1 ? 'nuevo' : 'nuevos'} esta semana`,
     inRecordings: 'En tus grabaciones',
     youOwe: 'Debes',
+    personOptions: (n) => `Opciones de ${n}`,
+    rename: 'Renombrar',
+    deleteContact: 'Eliminar contacto',
+    nameLabel: 'Nombre',
+    confirmDeletePerson: (n) => `¿Eliminar a ${n} de tus Personas? Sus grabaciones se quedan; solo se borran el contacto y sus vínculos con las grabaciones.`,
+    dupName: 'Ya hay alguien con ese nombre en tus Personas.',
+    personFailed: 'No funcionó. Inténtalo otra vez.',
     emptyBody: 'Conecta el lápiz e importa una grabación. Desde la segunda, Juno Pen empieza a conectarlas: lo que las mismas personas siguen pidiendo, lo que se te sigue olvidando, lo que sigue pendiente en todo.',
   },
   pt: {
@@ -264,6 +279,13 @@ const OV: Copy<typeof OV_EN> = {
     newThisWeek: (n) => `${n} ${n === 1 ? 'novo' : 'novos'} esta semana`,
     inRecordings: 'Nas suas gravações',
     youOwe: 'Você deve',
+    personOptions: (n) => `Opções de ${n}`,
+    rename: 'Renomear',
+    deleteContact: 'Excluir contato',
+    nameLabel: 'Nome',
+    confirmDeletePerson: (n) => `Excluir ${n} das suas Pessoas? As gravações continuam; só o contato e os vínculos com as gravações são removidos.`,
+    dupName: 'Já existe alguém com esse nome nas suas Pessoas.',
+    personFailed: 'Não funcionou. Tente de novo.',
     emptyBody: 'Conecte a caneta e importe uma gravação. A partir da segunda, o Juno Pen começa a ligar os pontos: o que as mesmas pessoas continuam pedindo, o que você continua esquecendo, o que ainda está pendente em tudo.',
   },
 }
@@ -275,8 +297,11 @@ export default function Overview({
   onOpen,
   onAskPerson,
   onChanged,
+  onPeopleChanged = () => {},
   firstName = null,
 }: {
+  /** A person was renamed or deleted here: reload the People list. */
+  onPeopleChanged?: () => void
   /** For the greeting. The session's name, first word; none means a greeting without a name. */
   firstName?: string | null
   stats: ArchiveStats
@@ -292,6 +317,7 @@ export default function Overview({
   // snapshot changes, which happens a moment after each change settles.
   const T = useCopy(OV)
   const lang = useLang()
+  const personActions = usePersonActions(onPeopleChanged)
   // The viewer's own clock, read after mount: the server's hour is not the viewer's.
   const [hour, setHour] = useState<number | null>(null)
   useEffect(() => {
@@ -528,7 +554,7 @@ export default function Overview({
             seeAll={people.length}
           >
             {people.slice(0, PREVIEW).map((p) => (
-              <PersonRow key={p.id} p={p} client={clientsByName.get(p.name.toLowerCase())} onAsk={onAskPerson} />
+              <PersonRow key={p.id} p={p} client={clientsByName.get(p.name.toLowerCase())} onAsk={onAskPerson} actions={personActions} />
             ))}
           </HomeCard>
         </div>
@@ -541,7 +567,7 @@ export default function Overview({
             <MissedPanel missed={missed} count={missedCount} onHandle={handle} onPromote={promote} onOpen={(id) => { setOpen(null); onOpen(id) }} />
           )}
           {open === 'people' && (
-            <PeoplePanel people={people} clients={stats.clients} clientsByName={clientsByName} onAsk={(p) => { setOpen(null); onAskPerson(p) }} />
+            <PeoplePanel people={people} clients={stats.clients} clientsByName={clientsByName} onAsk={(p) => { setOpen(null); onAskPerson(p) }} actions={personActions} />
           )}
         </Panel>
       </LayoutGroup>
@@ -931,25 +957,90 @@ function MissedRow({
   )
 }
 
-function PersonRow({ p, client, onAsk }: { p: PersonCard; client?: ClientCard; onAsk: (p: PersonCard) => void }) {
+function PersonRow({ p, client, onAsk, actions }: { p: PersonCard; client?: ClientCard; onAsk: (p: PersonCard) => void; actions: PersonActions }) {
   const T = useCopy(OV)
   const lang = useLang()
   const peek = usePeek()
+  const editing = actions.editing === p.id
   return (
-    <li className="pen-row2" {...peek.bind}>
+    <li className="pen-row2 pen-person-row" {...(editing ? {} : peek.bind)}>
       <div className="pen-row2-inner">
         <span className="pen-avatar pen-row2-avatar">{initials(p.name)}</span>
-        <button type="button" className="pen-row2-main" onClick={() => onAsk(p)} title={T.askAbout(p.name)}>
-          <span className="pen-row2-text pen-row2-name">{p.name}</span>
-          <span className="pen-row2-meta">
-            <span>{[plural(p.recordings, T.calls), p.lastAt && fmtAgo(p.lastAt, lang)].filter(Boolean).join(' · ')}</span>
-          </span>
-        </button>
+        {editing ? (
+          <RenameInput value={p.name} label={T.nameLabel} error={actions.error} busy={actions.busy} onSave={(v) => void actions.rename(p, v)} onCancel={actions.cancel} />
+        ) : (
+          <button type="button" className="pen-row2-main" onClick={() => onAsk(p)} title={T.askAbout(p.name)}>
+            <span className="pen-row2-text pen-row2-name">{p.name}</span>
+            <span className="pen-row2-meta">
+              <span>{[plural(p.recordings, T.calls), p.lastAt && fmtAgo(p.lastAt, lang)].filter(Boolean).join(' · ')}</span>
+            </span>
+          </button>
+        )}
+        {!editing && <PersonMenu p={p} actions={actions} />}
       </div>
-      <Peek on={peek.on}>
+      {actions.failedId === p.id && !editing && actions.error && <p className="pen-chatrow-err" role="alert">{actions.error}</p>}
+      <Peek on={peek.on && !editing}>
         <PersonDetail p={p} client={client} onAsk={onAsk} />
       </Peek>
     </li>
+  )
+}
+
+/* ------------------------------------------------- rename / delete a person */
+
+type PersonActions = ReturnType<typeof usePersonActions>
+
+/** Rename and delete for the People rows on Home and in the People panel. One row at a time. */
+function usePersonActions(onPeopleChanged: () => void) {
+  const T = useCopy(OV)
+  const [editing, setEditing] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [failedId, setFailedId] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const cancel = useCallback(() => { setEditing(null); setError(null); setFailedId(null) }, [])
+  const start = useCallback((id: string) => { setError(null); setFailedId(null); setEditing(id) }, [])
+  const rename = useCallback(async (p: PersonCard, name: string) => {
+    if (!name || name === p.name) { cancel(); return }
+    setBusy(true)
+    setError(null)
+    try {
+      await patchJson(`/api/pen/people/${p.id}`, { name })
+      setEditing(null)
+      onPeopleChanged()
+    } catch (e) {
+      setFailedId(p.id)
+      setError((e as { status?: number }).status === 409 ? T.dupName : errMessage(e, T.personFailed))
+    } finally {
+      setBusy(false)
+    }
+  }, [cancel, onPeopleChanged, T])
+  const remove = useCallback(async (p: PersonCard) => {
+    if (!window.confirm(T.confirmDeletePerson(p.name))) return
+    setBusy(true)
+    setError(null)
+    try {
+      await del(`/api/pen/people/${p.id}?contact=1`)
+      onPeopleChanged()
+    } catch (e) {
+      setFailedId(p.id)
+      setError(errMessage(e, T.personFailed))
+    } finally {
+      setBusy(false)
+    }
+  }, [onPeopleChanged, T])
+  return { editing, error, failedId, busy, cancel, start, rename, remove }
+}
+
+function PersonMenu({ p, actions }: { p: PersonCard; actions: PersonActions }) {
+  const T = useCopy(OV)
+  return (
+    <RowMenu
+      label={T.personOptions(p.name)}
+      items={[
+        { label: T.rename, icon: 'pen', onSelect: () => actions.start(p.id) },
+        { label: T.deleteContact, icon: 'trash', danger: true, onSelect: () => void actions.remove(p) },
+      ]}
+    />
   )
 }
 
@@ -1168,11 +1259,12 @@ function MissedPanel({ missed, count, onHandle, onPromote, onOpen }: {
   )
 }
 
-function PeoplePanel({ people, clients, clientsByName, onAsk }: {
+function PeoplePanel({ people, clients, clientsByName, onAsk, actions }: {
   people: PersonCard[]
   clients: ClientCard[]
   clientsByName: Map<string, ClientCard>
   onAsk: (p: PersonCard) => void
+  actions: PersonActions
 }) {
   const T = useCopy(OV)
   const lang = useLang()
@@ -1201,14 +1293,20 @@ function PeoplePanel({ people, clients, clientsByName, onAsk }: {
           <li key={p.id} className="pen-row2" data-full>
             <div className="pen-row2-inner">
               <span className="pen-avatar pen-row2-avatar">{initials(p.name)}</span>
-              <button type="button" className="pen-row2-main" onClick={() => setOpenId(openId === p.id ? null : p.id)} aria-expanded={openId === p.id}>
-                <span className="pen-row2-text pen-row2-name">{p.name}</span>
-                <span className="pen-row2-meta">
-                  <span>{[p.role, p.company, plural(p.recordings, T.calls)].filter(Boolean).join(' · ')}</span>
-                </span>
-              </button>
-              {p.lastAt && <span className="pen-row2-when">{fmtAgo(p.lastAt, lang)}</span>}
+              {actions.editing === p.id ? (
+                <RenameInput value={p.name} label={T.nameLabel} error={actions.error} busy={actions.busy} onSave={(v) => void actions.rename(p, v)} onCancel={actions.cancel} />
+              ) : (
+                <button type="button" className="pen-row2-main" onClick={() => setOpenId(openId === p.id ? null : p.id)} aria-expanded={openId === p.id}>
+                  <span className="pen-row2-text pen-row2-name">{p.name}</span>
+                  <span className="pen-row2-meta">
+                    <span>{[p.role, p.company, plural(p.recordings, T.calls)].filter(Boolean).join(' · ')}</span>
+                  </span>
+                </button>
+              )}
+              {p.lastAt && actions.editing !== p.id && <span className="pen-row2-when">{fmtAgo(p.lastAt, lang)}</span>}
+              {actions.editing !== p.id && <PersonMenu p={p} actions={actions} />}
             </div>
+            {actions.failedId === p.id && actions.editing !== p.id && actions.error && <p className="pen-chatrow-err" role="alert">{actions.error}</p>}
             <AnimatePresence initial={false}>
               {openId === p.id && (
                 <motion.div {...rowMotion} className="pen-row2-expand">

@@ -12,6 +12,7 @@ import type { PenPerson } from '@/lib/pen/people'
 import { getJson, postJson, patchJson, del, errMessage } from '@/lib/pen/http'
 import Icon from './Icon'
 import { useCopy } from './LangContext'
+import { RowMenu } from './RowMenu'
 import type { Copy } from '@/lib/pen/i18n'
 
 type Suggestion = { name: string; role: string | null; note: string | null }
@@ -30,6 +31,8 @@ const PP_EN = {
   edit: 'Edit',
   removeAria: (n: string) => `Remove ${n} from this recording`,
   removeTitle: 'Remove from this recording',
+  options: (n: string) => `Options for ${n}`,
+  dupName: 'Someone with that name is already in your People.',
   empty: 'Nobody added yet. Add who you spoke with, and ask about them later with @ in search.',
   detected: 'Detected on this call · not saved yet',
   addAll: 'Add all',
@@ -64,6 +67,8 @@ const PP: Copy<typeof PP_EN> = {
     edit: 'Editar',
     removeAria: (n) => `Quitar a ${n} de esta grabación`,
     removeTitle: 'Quitar de esta grabación',
+    options: (n) => `Opciones de ${n}`,
+    dupName: 'Ya hay alguien con ese nombre en tus Personas.',
     empty: 'Todavía no agregas a nadie. Agrega con quién hablaste y pregunta por ellos después con @ en la búsqueda.',
     detected: 'Detectados en esta reunión · sin guardar',
     addAll: 'Agregar a todos',
@@ -95,6 +100,8 @@ const PP: Copy<typeof PP_EN> = {
     edit: 'Editar',
     removeAria: (n) => `Remover ${n} desta gravação`,
     removeTitle: 'Remover desta gravação',
+    options: (n) => `Opções de ${n}`,
+    dupName: 'Já existe alguém com esse nome nas suas Pessoas.',
     empty: 'Ninguém adicionado ainda. Adicione com quem você falou e pergunte sobre eles depois com @ na busca.',
     detected: 'Detectados nesta reunião · ainda não salvos',
     addAll: 'Adicionar todos',
@@ -215,7 +222,7 @@ export default function PeoplePanel({
       await load()
       onChanged()
     } catch (x) {
-      setErr(errMessage(x, T.saveFailed))
+      setErr((x as { status?: number }).status === 409 ? T.dupName : errMessage(x, T.saveFailed))
     }
   }
 
@@ -259,11 +266,16 @@ export default function PeoplePanel({
                   </p>
                 )}
               </div>
+              {/* On a recording, the second action takes them off this recording only; deleting the
+                  contact itself lives in the People list, where its reach is clear. */}
               <div className="pen-person-actions">
-                <button type="button" onClick={() => setEditing(p.id)} aria-label={T.editAria(p.name)} title={T.edit}>{T.edit}</button>
-                <button type="button" onClick={() => remove(p)} aria-label={T.removeAria(p.name)} title={T.removeTitle}>
-                  <Icon name="trash" size={15} />
-                </button>
+                <RowMenu
+                  label={T.options(p.name)}
+                  items={[
+                    { label: T.edit, icon: 'pen', onSelect: () => setEditing(p.id) },
+                    { label: T.removeTitle, icon: 'trash', danger: true, onSelect: () => void remove(p) },
+                  ]}
+                />
               </div>
             </div>
           ),
