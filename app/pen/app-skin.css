@@ -424,7 +424,10 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
   .pen-stat[data-tone='bad'] { background: linear-gradient(150deg, rgba(255, 241, 240, .9), rgba(253, 232, 230, .66)); }
 
   /* The sticky month meter fades in over the scrolling sidebar instead of sitting as a slab. */
-  .pen-side-meter { background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, .9) 16px); }
+  /* Pinned at the bottom of a scrolling sidebar: it must hide what scrolls under it (it was a
+     see-through fade, so the Chats/Pages rows showed through the hours). A short fade above
+     keeps the edge soft. */
+  .pen-side-meter { background: #fbfbfd; box-shadow: 0 -14px 14px -6px #fbfbfd; z-index: 1; }
 
   /* ---- things that pop over the page: glass, more opaque for legibility, deeper shadow ---- */
   .pen-menu, .pen-d-menu, .pen-acct2-menu, .pen-catpick-menu, .pen-search-sugg, .pen-promo-card,
@@ -696,4 +699,16 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
       content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 44px; transform: translateY(-50%);
     }
   }
+
+  /* A card's pop-up (task/person preview, menus, pickers) must sit above the cards after it.
+     Glass (backdrop-filter, hover translate) makes every card its own stacking layer, so a
+     pop-up inside one was painted under the next card. Lift the card that holds an open one. */
+  :is(.pen-stat, .pen-today, .pen-card, .pen-rail, .pen-panel, .pen-aicard, .pen-missed,
+      .pen-set-card, .pen-cust-tile, .pen-cust-wrap, .pen-turn-a, .pen-search, .pen-m-rec, .pen-composer-input):has(
+      .pen-peek, [role="menu"], [role="tooltip"], [role="listbox"], .pen-brief-pop, .pen-catpick-menu, details[open]) {
+    position: relative;
+    z-index: 60;
+  }
+  /* The sidebar is sticky (already positioned): only the layer changes. */
+  .pen-side:has(.pen-peek, [role="menu"], [role="tooltip"], [role="listbox"], details[open]) { z-index: 60; }
 }
