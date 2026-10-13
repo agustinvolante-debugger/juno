@@ -1,6 +1,6 @@
-/* The Portuguese landing page (LandingPt.tsx), as a product gallery. Every class is prefixed
-   lpa- and every token is defined on .lpa, so nothing here reaches the shared landing page or
-   the app. Inter (next/font, --font-ui in layout.tsx) stands in for the system display face.
+/* The landing page (LandingApple.tsx), in all three languages, as a product gallery. Every
+   class is prefixed lpa- and every token is defined on .lpa, so nothing here reaches the
+   previous landing page (Landing.tsx) or the app. Inter (next/font, --font-ui in layout.tsx) stands in for the system display face.
    Motion is transform/opacity only; prefers-reduced-motion gets the final frame. */
 
 .lpa {
@@ -405,3 +405,95 @@
   .lpa-hero-copy, .lpa-hero-stage { transform: none !important; opacity: 1 !important; }
 }
 .lpa-close-soon { margin-top: 32px; }
+
+/* ------------------------------------------- English only: the pen is sold there */
+.lpa-newbadge {
+  display: inline-flex; align-items: center; gap: 10px; min-height: 44px; margin-bottom: 18px;
+  padding: 6px 14px 6px 6px; border-radius: var(--lpa-pill);
+  background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .16);
+  color: var(--lpa-on-dark); font-size: 15px; line-height: 1.3; text-align: left;
+  transition: background-color .2s;
+}
+.lpa-newbadge:hover { background: rgba(255, 255, 255, .14); }
+.lpa-newbadge-tag { flex: none; padding: 4px 10px; border-radius: var(--lpa-pill); background: var(--lpa-blue); color: #fff; font-size: 13px; font-weight: 600; }
+.lpa-newbadge svg { flex: none; color: var(--lpa-blue-dark); }
+.lpa-nopen {
+  display: inline-flex; align-items: center; gap: 10px; min-height: 44px; margin-top: 40px; padding: 8px 4px;
+  color: var(--lpa-on-dark-soft); font-size: 17px; line-height: 1.4; text-align: left; max-width: 60ch;
+}
+.lpa-nopen strong { color: var(--lpa-white); font-weight: 600; }
+.lpa-nopen svg { flex: none; color: var(--lpa-blue-dark); }
+.lpa-nopen:hover span { text-decoration: underline; text-underline-offset: 3px; }
+
+/* pricing: two groups, one at a time */
+.lpa-tabs-row { margin-top: 40px; gap: 14px; }
+.lpa #plans-own { scroll-margin-top: calc(var(--lpa-nav-h) + 24px); }
+.lpa-tabs { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 2px; padding: 4px; border-radius: var(--lpa-pill); background: #e8e8ed; }
+.lpa-tab {
+  min-height: 44px; padding: 0 22px; border: 0; border-radius: var(--lpa-pill); background: transparent;
+  font: inherit; font-size: 15px; color: #424245; cursor: pointer; transition: background-color .2s, color .2s;
+}
+.lpa-tab:hover { color: var(--lpa-ink); }
+.lpa-tab[data-on="true"] { background: var(--lpa-white); color: var(--lpa-ink); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
+.lpa-tabs-row + [role="tabpanel"] .lpa-plans { margin-top: 32px; }
+.lpa-plans-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 1132px; }
+.lpa-pricing-wide .lpa-included { max-width: 1132px; }
+.lpa-chip-pad { visibility: hidden; }
+
+/* the how-to video, framed as a product shot; its controls in this page's blue and sizes */
+.lpa-film { margin: 56px auto 0; max-width: 1080px; }
+.lpa .howto-frame { border-radius: var(--lpa-r-xl); border-color: var(--lpa-hair); box-shadow: 0 30px 60px -30px rgba(0, 0, 0, .35); }
+.lpa .howto-play { width: 44px; height: 44px; background: var(--lpa-blue); }
+.lpa .howto-scrub { accent-color: var(--lpa-blue); min-height: 44px; }
+.lpa .howto-chip { min-height: 44px; padding: 0 16px; border-color: #d2d2d7; font-family: var(--lpa-font); color: var(--lpa-ink); }
+.lpa .howto-chip[data-on="true"] { background: var(--lpa-white); border-color: var(--lpa-blue-hover); box-shadow: inset 0 0 0 1px var(--lpa-blue-hover); color: var(--lpa-ink); }
+.lpa .howto-time { color: var(--lpa-muted); }
+
+/* Notion */
+.lpa-nt { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 72px; align-items: center; }
+.lpa-checks-1 { grid-template-columns: minmax(0, 1fr); }
+.lpa-checks-dark { color: var(--lpa-on-dark); }
+.lpa-checks-dark svg { color: var(--lpa-blue-dark); }
+.lpa-nt-stage { position: relative; padding-bottom: 210px; }
+.lpa-nt-win { background: var(--lpa-white); color: var(--lpa-ink); border-radius: var(--lpa-r-lg); overflow: hidden; box-shadow: 0 30px 60px -30px rgba(0, 0, 0, .8); }
+.lpa-nt-bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--lpa-parch); font-size: 13px; color: var(--lpa-muted); }
+.lpa-nt-dots { display: inline-flex; gap: 6px; }
+.lpa-nt-dots i { width: 10px; height: 10px; border-radius: 50%; background: #d2d2d7; }
+.lpa-nt-body { padding: 22px 22px 26px; }
+.lpa-nt-title { font-size: 24px; font-weight: 600; letter-spacing: -0.025em; margin-bottom: 14px; }
+.lpa-nt-table { font-size: 14px; }
+.lpa-nt-row { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr) minmax(0, 1.1fr) 56px; gap: 10px; padding: 10px 6px; border-top: 1px solid var(--lpa-hair); align-items: center; }
+.lpa-nt-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lpa-nt-head { color: var(--lpa-muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; border-top: 0; }
+.lpa-nt-row[data-new="true"] { background: #e8f2fc; border-radius: var(--lpa-r-sm); }
+.lpa-nt-name { font-weight: 600; }
+.lpa-nt-num { text-align: right; font-variant-numeric: tabular-nums; }
+.lpa-nt-page {
+  position: absolute; right: 0; bottom: 0; width: min(340px, 78%);
+  background: var(--lpa-parch); color: var(--lpa-ink); border-radius: var(--lpa-r-lg); padding: 22px;
+  display: grid; gap: 8px; box-shadow: 0 30px 60px -20px rgba(0, 0, 0, .7);
+}
+.lpa-nt-page-title { font-size: 19px; font-weight: 600; letter-spacing: -0.02em; }
+.lpa-nt-p { font-size: 14px; line-height: 1.45; color: var(--lpa-muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.lpa-nt-page .lpa-todos li { font-size: 14px; }
+.lpa-nt-link { margin-top: 4px; font-size: 14px; color: var(--lpa-blue); }
+
+@media (max-width: 1023px) {
+  .lpa-nt { grid-template-columns: minmax(0, 1fr); gap: 48px; }
+  .lpa-hide-md { display: none; }
+}
+@media (max-width: 899px) {
+  .lpa-plans-3 { grid-template-columns: minmax(0, 1fr); max-width: 560px; }
+}
+@media (max-width: 767px) {
+  .lpa-nopen { margin-top: 28px; font-size: 16px; }
+  .lpa-newbadge { font-size: 14px; }
+  .lpa-tab { padding: 0 14px; font-size: 14px; }
+  .lpa-nt-stage { padding-bottom: 0; }
+  .lpa-nt-page { position: relative; right: auto; width: auto; margin: -24px 12px 0; }
+  .lpa-nt-row { grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr) 40px; }
+  .lpa-nt-row > span:nth-child(3) { display: none; }
+  .lpa-film { margin-top: 40px; }
+}
+.lpa-plan > .lpa-chip { align-self: flex-start; }
+.lpa-scene-cap .lpa-soonline { margin-top: 14px; font-size: 15px; }

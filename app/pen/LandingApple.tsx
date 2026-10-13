@@ -2,36 +2,86 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { animate, motion, useInView, useMotionValue, useReducedMotion, useTransform, type MotionValue } from 'motion/react'
 import PenArt from './PenArt'
 import Icon, { type IconName } from './Icon'
-import { TRIAL_DAYS } from '@/lib/pen/plan'
-import { COPY, type Market } from './landing-copy'
-import { AUD_PARAM, KITS, PLUS } from './landing-audiences'
-import { INVITED, SIGN_IN, ownPlans, signup, type PlanCard } from './Landing'
-import './landing-pt.css'
+import HowToPlayer from './how-to/HowToPlayer'
+import type { HowToKitKey } from './film/HowToScene'
+import { PEN_USD, TRIAL_DAYS, TRIAL_DAYS_POSTED } from '@/lib/pen/plan'
+import { COPY, money, type Copy, type Market } from './landing-copy'
+import { AUD_PARAM, KITS, PLUS, type Kit } from './landing-audiences'
+import { INVITED, SIGN_IN, ownPlans, penPlans, signup, type PlanCard } from './Landing'
+import './landing-apple.css'
 
-// The Portuguese landing page, as a product gallery (agreed Oct 12): edge-to-edge tiles that
-// alternate black and light, very large tight headlines, one blue action colour, and the pen as
-// the object on the pedestal. The words are the shared ones: COPY.pt (landing-copy.ts) and
-// PLUS.pt / KITS.pt (landing-audiences.ts). Prices and links come from Landing.tsx.
+// The landing page as a product gallery, in all three languages (Portuguese agreed Oct 12,
+// English and Spanish moved onto it Oct 13): edge-to-edge tiles that alternate black and light,
+// very large tight headlines, one blue action colour, and the pen as the object on the pedestal.
+// The words are the shared ones: COPY (landing-copy.ts) and PLUS / KITS (landing-audiences.ts).
+// Prices and links come from Landing.tsx (the previous layout, kept so a revert is one line in
+// page.tsx).
 //
-// The pen is NOT sold in Brazil yet. It is shown as the product and its future, every pen
-// section carries "Em breve no Brasil" and the waitlist link, and every primary button starts
-// today's own-recorder trial, exactly as the shared Portuguese page does.
+// Market rules, as the previous page had them:
+// - English (US): the pen IS sold. Every primary button starts the posted-pen trial, pricing
+//   has both tabs (with the pen / your own recorder), and the English-only pieces stay: the
+//   Notion badge and section, the how-to video, and the "No pen?" line into the own-recorder tab.
+// - Spanish and Portuguese: the pen is NOT sold in Latin America yet. It is shown as the product
+//   and its future, every pen section carries "coming soon" and the waitlist link, and every
+//   primary button starts today's own-recorder trial.
 //
 // Motion: transform and opacity only. Nothing starts hidden on the server: content below the
 // fold is armed after mount and rises in when it scrolls into view, so a slow connection or a
 // crawler still sees the whole page. prefers-reduced-motion gets the final frame everywhere;
-// the scroll scene's reduced layout is pure CSS (landing-pt.css), so server and client agree.
+// the scroll scene's reduced layout is pure CSS (landing-apple.css), so server and client agree.
 
-/** The few labels this layout needs that the shared copy doesn't have. Keep this list short. */
-const PT_EXTRA = {
-  skip: 'Pular para o conteúdo',
-  how: 'Como funciona',
-  hours: 'h',
-  gb: 'GB',
+/**
+ * The few labels this layout needs that the shared copy doesn't have. Keep this list short.
+ * `notion` is the English-only Notion section, word for word as the previous page had it.
+ */
+const EXTRA = {
+  en: {
+    skip: 'Skip to content',
+    how: 'How it works',
+    hours: 'hrs',
+    gb: 'GB',
+    film: 'The how-to',
+  },
+  es: {
+    skip: 'Saltar al contenido',
+    how: 'Cómo funciona',
+    hours: 'h',
+    gb: 'GB',
+    film: 'Cómo se usa',
+  },
+  pt: {
+    skip: 'Pular para o conteúdo',
+    how: 'Como funciona',
+    hours: 'h',
+    gb: 'GB',
+    film: 'Como usar',
+  },
+} as const
+
+const NOTION_EN = {
+  badgeTag: 'New',
+  badge: 'Juno now writes your meetings into Notion',
+  kicker: 'New · Works with Notion',
+  h2: 'Every meeting, straight into your Notion.',
+  sub: 'Connect Notion once. Each recording’s notes land in your own “Juno Pen notes” table the moment they’re ready. Nothing to copy, nothing to paste.',
+  points: [
+    'Summary, to-dos as checkboxes and who was there, on every page',
+    'Already record with Notion AI Meeting Notes? Import them, and Juno writes the to-dos and the follow-up email',
+    'Included in every plan',
+  ],
+  crumb: 'Meetings / Juno Pen notes',
+  table: 'Juno Pen notes',
+  cols: ['Name', 'Date', 'People', 'To-dos'],
+  today: 'Today',
+  yesterday: 'Yesterday',
+  weekly: ['Weekly check-in', 'Mon', 'Team'],
+  summary: 'Summary',
+  todos: 'To-dos',
+  open: 'Open the full note in Juno →',
 } as const
 
 const LANGS: { code: 'en' | 'es' | 'pt'; label: string }[] = [
@@ -122,9 +172,50 @@ function CountUp({ to }: { to: number }) {
   return <span ref={ref}>{to}</span>
 }
 
-/** The "coming soon" line every pen section carries. */
+/* ------------------------------------------------------------------ the market */
+
+/**
+ * What the page needs to know about where the visitor is. `sold` is whether the pen can be
+ * bought there (the US only, for now); everything market-dependent below reads this.
+ */
+type Lpa = {
+  market: Market
+  t: Copy
+  p: (typeof PLUS)['en']
+  kits: Kit[]
+  x: (typeof EXTRA)['en' | 'es' | 'pt']
+  sold: boolean
+  /** The one "try it" label and where it goes: the pen trial in the US, the own-recorder trial elsewhere. */
+  ctaLabel: string
+  cta: (from: string) => string
+  waitlist: (from: string) => string
+}
+
+function lpaFor(market: Market): Lpa {
+  const lang = market.lang
+  const t = COPY[lang]
+  const sold = lang === 'en'
+  return {
+    market,
+    t,
+    p: PLUS[lang],
+    kits: KITS[lang],
+    x: EXTRA[lang],
+    sold,
+    ctaLabel: sold ? t.cta.trialPen(TRIAL_DAYS_POSTED) : t.cta.trialOwn(TRIAL_DAYS),
+    cta: sold
+      ? (from) => signup(`from=${from}`, market)
+      : (from) => signup(`plan=monthly&offer=own-recorder&from=${from}`, market),
+    waitlist: (from) => signup(`offer=posted-pen&waitlist=pen&from=${from}`, market),
+  }
+}
+
+const LpaCtx = createContext<Lpa>(lpaFor({ lang: 'pt', currency: 'brl' }))
+const useLpa = () => useContext(LpaCtx)
+
+/** The "coming soon" line every pen section carries where the pen isn't sold. */
 function SoonLine({ dark = false }: { dark?: boolean }) {
-  const t = COPY.pt
+  const { t } = useLpa()
   return (
     <p className={`lpa-soonline${dark ? ' lpa-soonline-dark' : ''}`}>
       <span className="lpa-chip">{t.pen.soon}</span>
@@ -135,18 +226,19 @@ function SoonLine({ dark = false }: { dark?: boolean }) {
 
 /* ------------------------------------------------------------------------- page */
 
-export default function LandingPt({ market, audience = null, invitedBy = null }: { market: Market; audience?: string | null; invitedBy?: string | null }) {
-  const t = COPY.pt
-  const p = PLUS.pt
-  const kits = KITS.pt
+export default function LandingApple({ market, audience = null, invitedBy = null }: { market: Market; audience?: string | null; invitedBy?: string | null }) {
+  const lpa = lpaFor(market)
+  const { t, p, kits, x, sold, ctaLabel, cta, waitlist } = lpa
+  const lang = market.lang
   const [aud, setAudState] = useState(() => {
     const key = AUD_PARAM[(audience ?? '').toLowerCase()]
     return Math.max(0, key ? kits.findIndex((k) => k.key === key) : 0)
   })
   const kit = kits[aud]
+  // The root layout says lang="en" for the whole site; the page it actually shows may not be.
   useEffect(() => {
-    document.documentElement.lang = 'pt-BR'
-  }, [])
+    document.documentElement.lang = lang === 'pt' ? 'pt-BR' : lang
+  }, [lang])
   const setAud = useCallback(
     (i: number) => {
       setAudState(i)
@@ -156,17 +248,15 @@ export default function LandingPt({ market, audience = null, invitedBy = null }:
     },
     [kits],
   )
-
-  const ctaLabel = t.cta.trialOwn(TRIAL_DAYS)
-  const cta = (from: string) => signup(`plan=monthly&offer=own-recorder&from=${from}`, market)
-  const waitlist = (from: string) => signup(`offer=posted-pen&waitlist=pen&from=${from}`, market)
+  const legal = lang === 'en' ? '' : `?lang=${lang}`
 
   return (
+    <LpaCtx.Provider value={lpa}>
     <div className="lpa">
-      <a href="#lpa-main" className="lpa-skip">{PT_EXTRA.skip}</a>
+      <a href="#lpa-main" className="lpa-skip">{x.skip}</a>
       {invitedBy && (
         <div className="lpa-invited" role="status">
-          <strong>{INVITED.pt(invitedBy)[0]}</strong> <span>{INVITED.pt(invitedBy)[1]}</span>
+          <strong>{INVITED[lang](invitedBy)[0]}</strong> <span>{INVITED[lang](invitedBy)[1]}</span>
         </div>
       )}
 
@@ -180,6 +270,7 @@ export default function LandingPt({ market, audience = null, invitedBy = null }:
           <nav className="lpa-nav-links" aria-label="Juno Pen">
             <a href="#pen" className="lpa-navlink lpa-hide-sm">{t.nav.pen}</a>
             <a href="#features" className="lpa-navlink lpa-hide-sm">{t.nav.features}</a>
+            {sold && <a href="#notion" className="lpa-navlink lpa-hide-md">Notion</a>}
             <a href="#pricing" className="lpa-navlink lpa-hide-sm">{t.nav.pricing}</a>
             <Link href={SIGN_IN} className="lpa-navlink">{t.nav.signIn}</Link>
             <Link href={cta('nav')} className="lpa-btn lpa-btn-sm">{ctaLabel}</Link>
@@ -197,7 +288,7 @@ export default function LandingPt({ market, audience = null, invitedBy = null }:
         <section className="lpa-tile lpa-tile-parch">
           <div className="lpa-wrap">
             <Reveal>
-              <span className="lpa-eyebrow">{PT_EXTRA.how}</span>
+              <span className="lpa-eyebrow">{x.how}</span>
               <h2 className="lpa-h2">{p.how.h2}</h2>
             </Reveal>
             <ol className="lpa-steps">
@@ -211,6 +302,8 @@ export default function LandingPt({ market, audience = null, invitedBy = null }:
             </ol>
           </div>
         </section>
+
+        {sold && <Film kit={kit} />}
 
         <WhatsApp kitIndex={aud} ctaLabel={ctaLabel} ctaHref={cta('whatsapp')} />
 
@@ -257,6 +350,8 @@ export default function LandingPt({ market, audience = null, invitedBy = null }:
           </div>
         </section>
 
+        {sold && <NotionSec kit={kit} ctaLabel={ctaLabel} ctaHref={cta('notion')} />}
+
         {/* ----------------------------------------------------------- privacy */}
         <section className="lpa-tile lpa-tile-parch">
           <div className="lpa-wrap lpa-priv">
@@ -298,7 +393,7 @@ export default function LandingPt({ market, audience = null, invitedBy = null }:
           <div className="lpa-wrap lpa-center">
             <Reveal>
               <h2 className="lpa-display">{t.closing.h2}</h2>
-              <p className="lpa-lead lpa-on-dark-soft">{t.closing.sub(TRIAL_DAYS)}</p>
+              <p className="lpa-lead lpa-on-dark-soft">{t.closing.sub(sold ? TRIAL_DAYS_POSTED : TRIAL_DAYS)}</p>
               <div className="lpa-ctas lpa-ctas-center">
                 <Link href={cta('closing')} className="lpa-btn lpa-btn-lg">{ctaLabel}</Link>
               </div>
@@ -306,9 +401,11 @@ export default function LandingPt({ market, audience = null, invitedBy = null }:
             <Reveal delay={0.15} className="lpa-close-pen">
               <div className="lpa-float"><PenArt id="close-pen" className="lpa-pen-svg" shadow={false} /></div>
             </Reveal>
-            <Reveal delay={0.2} className="lpa-close-soon">
-              <SoonLine dark />
-            </Reveal>
+            {!sold && (
+              <Reveal delay={0.2} className="lpa-close-soon">
+                <SoonLine dark />
+              </Reveal>
+            )}
           </div>
         </section>
       </main>
@@ -325,10 +422,12 @@ export default function LandingPt({ market, audience = null, invitedBy = null }:
               <a href="#pen">{t.nav.pen}</a>
               <a href="#features">{t.nav.features}</a>
               <a href="#pricing">{t.nav.pricing}</a>
-              <Link href="/privacy?lang=pt">{t.footer.privacy}</Link>
-              <Link href="/terms?lang=pt">{t.footer.terms}</Link>
+              <Link href={`/privacy${legal}`}>{t.footer.privacy}</Link>
+              <Link href={`/terms${legal}`}>{t.footer.terms}</Link>
               <Link href={SIGN_IN}>{t.nav.signIn}</Link>
             </nav>
+            {/* Anyone can switch: a Chilean in San Francisco, or a visitor on a VPN. The choice
+                is remembered by the site (see proxy.ts). */}
             <nav className="lpa-langs" aria-label={t.switcher}>
               {LANGS.map((l) => (
                 <a key={l.code} href={`?m=${l.code}`} className="lpa-lang" data-on={market.lang === l.code} aria-current={market.lang === l.code ? 'true' : undefined}>
@@ -343,14 +442,14 @@ export default function LandingPt({ market, audience = null, invitedBy = null }:
 
       <StickyCta href={cta('sticky')} label={ctaLabel} />
     </div>
+    </LpaCtx.Provider>
   )
 }
 
 /* ------------------------------------------------------------------------- hero */
 
 function Hero({ ctaLabel, ctaHref, waitlistHref }: { ctaLabel: string; ctaHref: string; waitlistHref: string }) {
-  const p = PLUS.pt
-  const t = COPY.pt
+  const { t, p, sold } = useLpa()
   const ref = useRef<HTMLElement>(null)
   const reduce = useReducedMotion()
   // As the hero scrolls away the words lift and fade, and the pen drifts up and grows a touch.
@@ -362,7 +461,15 @@ function Hero({ ctaLabel, ctaHref, waitlistHref }: { ctaLabel: string; ctaHref: 
   return (
     <section ref={ref} className="lpa-tile lpa-tile-black lpa-hero" data-hero>
       <motion.div className="lpa-wrap lpa-center lpa-hero-copy" style={{ y: copyY, opacity: copyO }}>
-        <p className="lpa-eyebrow lpa-eyebrow-dark lpa-in">Juno Pen</p>
+        {sold ? (
+          <a href="#notion" className="lpa-newbadge lpa-in">
+            <span className="lpa-newbadge-tag">{NOTION_EN.badgeTag}</span>
+            <span>{NOTION_EN.badge}</span>
+            <Icon name="chevron" size={14} />
+          </a>
+        ) : (
+          <p className="lpa-eyebrow lpa-eyebrow-dark lpa-in">Juno Pen</p>
+        )}
         <h1 className="lpa-hero-h1">
           <span className="lpa-in" style={{ animationDelay: '.08s' }}>{p.hero.h1a}</span>{' '}
           <span className="lpa-hero-h1b lpa-in" style={{ animationDelay: '.22s' }}>{p.hero.h1b}</span>
@@ -384,19 +491,48 @@ function Hero({ ctaLabel, ctaHref, waitlistHref }: { ctaLabel: string; ctaHref: 
       </motion.div>
 
       <div className="lpa-wrap lpa-center">
-        <p className="lpa-hero-soon">
-          <span className="lpa-chip">{t.pen.soon}</span>
-          <Link href={waitlistHref} className="lpa-link-dark">{t.pricing.soonCta}<Icon name="chevron" size={14} /></Link>
-        </p>
+        {sold ? (
+          <NoPenLine />
+        ) : (
+          <p className="lpa-hero-soon">
+            <span className="lpa-chip">{t.pen.soon}</span>
+            <Link href={waitlistHref} className="lpa-link-dark">{t.pricing.soonCta}<Icon name="chevron" size={14} /></Link>
+          </p>
+        )}
       </div>
     </section>
+  )
+}
+
+/** English only: "No pen?" links on to the own-recorder plans (and opens that tab). */
+function NoPenLine() {
+  const { t } = useLpa()
+  // The question part ("No pen?") is set in bold; the rest links on to the plans.
+  const m = /^(.*?\?)\s+(.*)$/.exec(t.hero.noPen)
+  return (
+    <a href="#plans-own" className="lpa-nopen">
+      <Icon name="wave" size={17} />
+      <span>{m ? <><strong>{m[1]}</strong> {m[2]}</> : t.hero.noPen}</span>
+      <Icon name="chevron" size={14} />
+    </a>
+  )
+}
+
+/** Where the pen is sold: what it costs and the button, in place of the waitlist. */
+function PenBuy({ dark = false }: { dark?: boolean }) {
+  const { t, ctaLabel, cta } = useLpa()
+  return (
+    <>
+      <p className={`lpa-soonline${dark ? ' lpa-soonline-dark' : ''}`}>{t.pricing.penLineMonthly(TRIAL_DAYS_POSTED, money(PEN_USD, 'usd'))}</p>
+      <Link href={cta(dark ? 'pen' : 'specs')} className={dark ? 'lpa-link-dark' : 'lpa-link'}>{ctaLabel}<Icon name="chevron" size={14} /></Link>
+    </>
   )
 }
 
 /* ---------------------------------------------------------- the pen opens (scroll) */
 
 function PenOpens({ waitlistHref }: { waitlistHref: string }) {
-  const t = COPY.pt
+  const { t, sold } = useLpa()
   const ref = useRef<HTMLElement>(null)
   const scrollYProgress = useSectionProgress(ref, 'pin')
   // Phase 1 (0 to .4): the pen swings level and comes forward. Phase 2 (.45 to .65): it opens
@@ -420,7 +556,7 @@ function PenOpens({ waitlistHref }: { waitlistHref: string }) {
         <div className="lpa-wrap lpa-scene-in">
           <div className="lpa-scene-caps">
             <motion.div className="lpa-scene-cap lpa-scene-cap1" style={{ opacity: cap1, y: cap1y }}>
-              <span className="lpa-chip">{t.pen.soon}</span>
+              {sold ? <span className="lpa-eyebrow lpa-eyebrow-dark">{t.nav.pen}</span> : <span className="lpa-chip">{t.pen.soon}</span>}
               <h2 className="lpa-h2 lpa-on-dark">{t.pen.h2}</h2>
               <p className="lpa-lead lpa-on-dark-soft">{t.pen.sub}</p>
             </motion.div>
@@ -428,7 +564,7 @@ function PenOpens({ waitlistHref }: { waitlistHref: string }) {
               <span className="lpa-eyebrow lpa-eyebrow-dark">USB-C</span>
               <h2 className="lpa-h2 lpa-on-dark">{t.pen.open}</h2>
               <p className="lpa-lead lpa-on-dark-soft">{t.pen.specs[1].v}</p>
-              <Link href={waitlistHref} className="lpa-link-dark">{t.pricing.soonCta}<Icon name="chevron" size={14} /></Link>
+              {sold ? <PenBuy dark /> : <Link href={waitlistHref} className="lpa-link-dark">{t.pricing.soonCta}<Icon name="chevron" size={14} /></Link>}
             </motion.div>
           </div>
           <motion.div className="lpa-scene-stage" style={{ rotate, scale }}>
@@ -451,8 +587,7 @@ function PenOpens({ waitlistHref }: { waitlistHref: string }) {
 /* ------------------------------------------------------------------------ specs */
 
 function Specs({ waitlistHref }: { waitlistHref: string }) {
-  const t = COPY.pt
-  const p = PLUS.pt
+  const { t, p, x, sold } = useLpa()
   return (
     <section className="lpa-tile lpa-tile-parch">
       <div className="lpa-wrap">
@@ -462,12 +597,12 @@ function Specs({ waitlistHref }: { waitlistHref: string }) {
         </Reveal>
         <div className="lpa-stats">
           <Reveal className="lpa-stat lpa-stat-dark">
-            <span className="lpa-stat-n"><CountUp to={72} /><small>{PT_EXTRA.gb}</small></span>
+            <span className="lpa-stat-n"><CountUp to={72} /><small>{x.gb}</small></span>
             <span className="lpa-stat-k">{t.pen.storageK}</span>
             <span className="lpa-stat-v">{t.pen.storageV}</span>
           </Reveal>
           <Reveal className="lpa-stat" delay={0.1}>
-            <span className="lpa-stat-n"><CountUp to={35} /><small>{PT_EXTRA.hours}</small></span>
+            <span className="lpa-stat-n"><CountUp to={35} /><small>{x.hours}</small></span>
             <span className="lpa-stat-k">{t.pen.batteryK}</span>
             <span className="lpa-stat-v">{t.pen.batteryV}</span>
           </Reveal>
@@ -485,8 +620,14 @@ function Specs({ waitlistHref }: { waitlistHref: string }) {
           <p>{t.pen.inBox}</p>
         </Reveal>
         <Reveal className="lpa-center lpa-specs-soon">
-          <SoonLine />
-          <Link href={waitlistHref} className="lpa-link">{t.pricing.soonCta}<Icon name="chevron" size={14} /></Link>
+          {sold ? (
+            <PenBuy />
+          ) : (
+            <>
+              <SoonLine />
+              <Link href={waitlistHref} className="lpa-link">{t.pricing.soonCta}<Icon name="chevron" size={14} /></Link>
+            </>
+          )}
         </Reveal>
       </div>
     </section>
@@ -509,9 +650,7 @@ const WAVE = (() => {
 })()
 
 function SoundToNotes({ kitIndex, setAud }: { kitIndex: number; setAud: (i: number) => void }) {
-  const t = COPY.pt
-  const p = PLUS.pt
-  const kits = KITS.pt
+  const { t, p, kits } = useLpa()
   const kit = kits[kitIndex]
   const ref = useRef<HTMLDivElement>(null)
   const inView = useInView(ref, { margin: '0px 0px -20% 0px' })
@@ -598,8 +737,8 @@ function WaText({ text }: { text: string }) {
 }
 
 function WhatsApp({ kitIndex, ctaLabel, ctaHref }: { kitIndex: number; ctaLabel: string; ctaHref: string }) {
-  const p = PLUS.pt
-  const kit = KITS.pt[kitIndex]
+  const { p, kits } = useLpa()
+  const kit = kits[kitIndex]
   const msgs = kit.wa.msgs.slice(0, 7)
   return (
     <section id="whatsapp" className="lpa-tile lpa-tile-black">
@@ -637,50 +776,185 @@ function WhatsApp({ kitIndex, ctaLabel, ctaHref }: { kitIndex: number; ctaLabel:
 /* ---------------------------------------------------------------------- pricing */
 
 function Pricing({ market, waitlistHref }: { market: Market; waitlistHref: string }) {
-  const t = COPY.pt
-  const plans = ownPlans(t, market)
+  const { t, sold } = useLpa()
+  const P = t.pricing
+  // Where the pen is sold there are two groups, one at a time (five cards at once read as a
+  // menu), and the pen leads. Elsewhere: the software plans and the coming-soon pen card.
+  const [group, setGroup] = useState<'pen' | 'own'>(sold ? 'pen' : 'own')
+  // "No pen?" in the hero links to #plans-own: open that tab (the browser scrolls to it).
+  useEffect(() => {
+    if (!sold) return
+    const open = () => {
+      if (window.location.hash === '#plans-own') setGroup('own')
+    }
+    open()
+    window.addEventListener('hashchange', open)
+    return () => window.removeEventListener('hashchange', open)
+  }, [sold])
+  const plans = group === 'pen' ? penPlans(t, market) : ownPlans(t, market)
+  const ribbons = plans.some((pl) => pl.ribbon)
+  const grid = (
+    <div className={plans.length === 3 ? 'lpa-plans lpa-plans-3' : 'lpa-plans'} key={group}>
+      {plans.map((pl, i) => <PlanView key={pl.name} plan={pl} delay={i * 0.1} pad={ribbons} />)}
+    </div>
+  )
   return (
-    <section id="pricing" className="lpa-tile lpa-tile-white">
+    <section id="pricing" className={plans.length === 3 ? 'lpa-tile lpa-tile-white lpa-pricing-wide' : 'lpa-tile lpa-tile-white'}>
       <div className="lpa-wrap">
         <Reveal className="lpa-center">
           <span className="lpa-eyebrow">{t.nav.pricing}</span>
-          <h2 className="lpa-h2">{t.pricing.h2}</h2>
-          <p className="lpa-lead">{t.pricing.sub}</p>
-          <p className="lpa-own-sub">{t.pricing.ownSub}</p>
+          <h2 className="lpa-h2">{P.h2}</h2>
+          <p className="lpa-lead">{P.sub}</p>
+          {!sold && <p className="lpa-own-sub">{P.ownSub}</p>}
         </Reveal>
-        <div className="lpa-plans">
-          {plans.map((pl, i) => <PlanView key={pl.name} plan={pl} delay={i * 0.1} />)}
-        </div>
+        {sold ? (
+          <>
+            <div id="plans-own" className="lpa-center lpa-tabs-row">
+              <div className="lpa-tabs" role="tablist" aria-label={P.tabAria}>
+                {(['pen', 'own'] as const).map((g) => (
+                  <button
+                    key={g}
+                    type="button"
+                    role="tab"
+                    id={`lpa-plans-tab-${g}`}
+                    aria-controls="lpa-plans-panel"
+                    aria-selected={group === g}
+                    data-plans-tab={g}
+                    data-on={group === g}
+                    className="lpa-tab"
+                    onClick={() => setGroup(g)}
+                  >
+                    {g === 'pen' ? P.tabPen : P.tabOwn}
+                  </button>
+                ))}
+              </div>
+              {group === 'own' && <p className="lpa-own-sub">{P.ownSub}</p>}
+            </div>
+            <div id="lpa-plans-panel" role="tabpanel" aria-labelledby={`lpa-plans-tab-${group}`}>
+              {grid}
+            </div>
+          </>
+        ) : (
+          grid
+        )}
         <Reveal className="lpa-included">
-          <h3 className="lpa-h5">{t.pricing.includedTitle}</h3>
+          <h3 className="lpa-h5">{P.includedTitle}</h3>
           <ul className="lpa-checks lpa-checks-3">
-            {t.pricing.included.map((it) => <li key={it}><Icon name="check" size={16} />{it}</li>)}
+            {P.included.map((it) => <li key={it}><Icon name="check" size={16} />{it}</li>)}
           </ul>
         </Reveal>
-        <Reveal className="lpa-pensoon">
-          <div className="lpa-pensoon-art" aria-hidden><PenArt id="soon-pen" className="lpa-pen-svg" /></div>
-          <div className="lpa-pensoon-copy">
-            <span className="lpa-chip lpa-chip-light">{t.pen.soon}</span>
-            <h3 className="lpa-h4">{t.pricing.soonTitle}</h3>
-            <p>{t.pricing.soonBody}</p>
-            <Link href={waitlistHref} className="lpa-link">{t.pricing.soonCta}<Icon name="chevron" size={14} /></Link>
-          </div>
-        </Reveal>
+        {!sold && (
+          <Reveal className="lpa-pensoon">
+            <div className="lpa-pensoon-art" aria-hidden><PenArt id="soon-pen" className="lpa-pen-svg" /></div>
+            <div className="lpa-pensoon-copy">
+              <span className="lpa-chip lpa-chip-light">{t.pen.soon}</span>
+              <h3 className="lpa-h4">{P.soonTitle}</h3>
+              <p>{P.soonBody}</p>
+              <Link href={waitlistHref} className="lpa-link">{P.soonCta}<Icon name="chevron" size={14} /></Link>
+            </div>
+          </Reveal>
+        )}
       </div>
     </section>
   )
 }
 
-function PlanView({ plan, delay }: { plan: PlanCard; delay: number }) {
+/** `pad`: another card in the row has a ribbon, so this one keeps the space and the names line up. */
+function PlanView({ plan, delay, pad = false }: { plan: PlanCard; delay: number; pad?: boolean }) {
   return (
     <Reveal delay={delay} className={plan.pro ? 'lpa-plan lpa-plan-pro' : 'lpa-plan'}>
-      {plan.ribbon && <span className="lpa-chip lpa-chip-light">{plan.ribbon}</span>}
+      {plan.ribbon ? <span className="lpa-chip lpa-chip-light">{plan.ribbon}</span> : pad && <span className="lpa-chip lpa-chip-pad" aria-hidden>&nbsp;</span>}
       <h3 className="lpa-plan-name">{plan.name}</h3>
       <p className="lpa-price">{plan.price}<span>{plan.per}</span></p>
       <p className="lpa-plan-line">{plan.line}</p>
       <p className="lpa-plan-trade">{plan.trade}</p>
       <Link href={plan.href} className={`lpa-btn lpa-btn-lg lpa-plan-cta${plan.pro ? '' : ' lpa-btn-ghost'}`}>{plan.cta}</Link>
     </Reveal>
+  )
+}
+
+/* ------------------------------------------------------------------------- film */
+
+/** English only: the how-to for the chosen audience (film/HowToScene.tsx), from the pen plugged
+ *  in through to WhatsApp, playing while it is on screen; another audience restarts its story. */
+function Film({ kit }: { kit: Kit }) {
+  const { p, x } = useLpa()
+  return (
+    <section id="film" className="lpa-tile lpa-tile-white">
+      <div className="lpa-wrap">
+        <Reveal className="lpa-center">
+          <span className="lpa-eyebrow">{x.film}</span>
+          <h2 className="lpa-h2">{p.film.h2}</h2>
+          <p className="lpa-lead">{p.film.sub}</p>
+        </Reveal>
+        <Reveal className="lpa-film">
+          <HowToPlayer autoplay="visible" loop kit={kit.key as HowToKitKey} key={kit.key} />
+        </Reveal>
+      </div>
+    </section>
+  )
+}
+
+/* ----------------------------------------------------------------------- notion */
+
+/**
+ * English only: what the customer sees in their Notion, the "Juno Pen notes" table
+ * (lib/pen/notion.ts makes it) and one of its pages, for the chosen audience. Drawn in the
+ * page's own type: no Notion screenshot or logo.
+ */
+function NotionSec({ kit, ctaLabel, ctaHref }: { kit: Kit; ctaLabel: string; ctaHref: string }) {
+  const N = NOTION_EN
+  const n = kit.note
+  const names = n.people.map(([name]) => name.split(' ')[0]).slice(0, 2).join(', ')
+  const rows: [string, string, string, number][] = [
+    [n.title, N.today, names, 3],
+    [kit.seq.title, N.yesterday, kit.hero.who.split(' ')[0], 1],
+    [N.weekly[0], N.weekly[1], N.weekly[2], 0],
+  ]
+  return (
+    <section id="notion" className="lpa-tile lpa-tile-black">
+      <div className="lpa-wrap lpa-nt">
+        <Reveal>
+          <span className="lpa-eyebrow lpa-eyebrow-dark">{N.kicker}</span>
+          <h2 className="lpa-h2 lpa-on-dark">{N.h2}</h2>
+          <p className="lpa-lead lpa-on-dark-soft">{N.sub}</p>
+          <ul className="lpa-checks lpa-checks-1 lpa-checks-dark">
+            {N.points.map((it) => <li key={it}><Icon name="check" size={16} />{it}</li>)}
+          </ul>
+          <div className="lpa-ctas">
+            <Link href={ctaHref} className="lpa-btn lpa-btn-lg">{ctaLabel}</Link>
+          </div>
+        </Reveal>
+        <Reveal delay={0.12} className="lpa-nt-stage">
+          <div className="lpa-nt-win" aria-hidden>
+            <div className="lpa-nt-bar"><span className="lpa-nt-dots"><i /><i /><i /></span><span>{N.crumb}</span></div>
+            <div className="lpa-nt-body">
+              <p className="lpa-nt-title">{N.table}</p>
+              <div className="lpa-nt-table">
+                <div className="lpa-nt-row lpa-nt-head">{N.cols.map((c) => <span key={c}>{c}</span>)}</div>
+                {rows.map(([title, date, who, open], i) => (
+                  <div key={title} className="lpa-nt-row" data-new={i === 0 ? 'true' : undefined}>
+                    <span className="lpa-nt-name">{title}</span><span>{date}</span><span>{who}</span><span className="lpa-nt-num">{open}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="lpa-nt-page" key={kit.key} aria-hidden>
+            <p className="lpa-nt-page-title">{n.title}</p>
+            <span className="lpa-label">{N.summary}</span>
+            <p className="lpa-nt-p">{n.summary}</p>
+            <span className="lpa-label">{N.todos}</span>
+            <ul className="lpa-todos">
+              {n.actions.map((a, i) => (
+                <li key={a} data-done={i === 0}><span className="lpa-tick"><Icon name="check" size={12} /></span><span>{a}</span></li>
+              ))}
+            </ul>
+            <p className="lpa-nt-link">{N.open}</p>
+          </div>
+        </Reveal>
+      </div>
+    </section>
   )
 }
 

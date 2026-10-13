@@ -9,8 +9,7 @@ import { getAllowance, type Allowance } from '@/lib/pen/allowance'
 import PenApp from './PenApp'
 import { getLinkByEmail } from '@/lib/pen/whatsapp/store'
 import { botNumber, configured as whatsappReady } from '@/lib/pen/whatsapp/provider'
-import Landing from './Landing'
-import LandingPt from './LandingPt'
+import LandingApple from './LandingApple'
 import { headers, cookies } from 'next/headers'
 import { marketFor } from './landing-copy'
 import { getProfileRaw, rememberAppLanguage } from '@/lib/pen/profile'
@@ -48,9 +47,9 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
     const ref = cleanCode(c.get(REF_COOKIE)?.value)
     const inviter = ref ? await referrerFor(ref).catch(() => null) : null
     const market = marketFor(h.get('x-vercel-ip-country'), m ?? c.get('juno_lang')?.value ?? null)
-    // Portuguese has its own layout (LandingPt.tsx); English and Spanish share Landing.tsx.
-    if (market.lang === 'pt') return <LandingPt market={market} audience={forParam} invitedBy={inviter?.first ?? null} />
-    return <Landing market={market} audience={forParam} invitedBy={inviter?.first ?? null} />
+    // Every language uses the product-gallery layout (LandingApple.tsx, Oct 13). The previous
+    // layout (Landing.tsx) is kept: to go back, render <Landing ... /> here instead.
+    return <LandingApple market={market} audience={forParam} invitedBy={inviter?.first ?? null} />
   }
 
   let sessions: Awaited<ReturnType<typeof listSessionsForClient>> = []

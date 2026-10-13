@@ -1008,7 +1008,7 @@ function PlanCardView({ p, delay }: { p: PlanCard; delay: number }) {
   )
 }
 
-function penPlans(t: Copy, market: Market): PlanCard[] {
+export function penPlans(t: Copy, market: Market): PlanCard[] {
   const P = t.pricing
   return [
     {
