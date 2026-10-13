@@ -32,9 +32,9 @@ import { AUD_PARAM, KITS, PLUS, type Kit, type Plus } from './landing-audiences'
 // says only what is true today: encrypted in transit and at rest, private to the account,
 // deletable, never sold. It does not say end-to-end, because the AI has to read the audio.
 
-const SIGN_IN = '/auth/signin?callbackUrl=/pen'
+export const SIGN_IN = '/auth/signin?callbackUrl=/pen'
 // Everything that means "I want to try this" goes here.
-const SIGN_UP = '/pen/signup'
+export const SIGN_UP = '/pen/signup'
 
 /** `kit` is the chosen audience's examples; every section that shows an example reads it. */
 type Ctx = { t: Copy; p: Plus; kits: Kit[]; kit: Kit; aud: number; setAud: (i: number) => void; market: Market; latam: boolean }
@@ -42,7 +42,7 @@ const L = createContext<Ctx>({ t: COPY.en, p: PLUS.en, kits: KITS.en, kit: KITS.
 const useL = () => useContext(L)
 
 /** A signup link that carries the page's language and currency through to checkout. */
-function signup(params: string, market: Market): string {
+export function signup(params: string, market: Market): string {
   const extra = market.lang === 'en' ? '' : `&lang=${market.lang}&cur=${market.currency}`
   return `${SIGN_UP}?${params}${extra}`
 }
@@ -65,7 +65,7 @@ function Reveal({ children, delay = 0, className }: { children: React.ReactNode;
   )
 }
 
-const INVITED = {
+export const INVITED = {
   en: (n: string) => [`${n} invited you to Juno Pen.`, 'Sign up through this page and your first month is free.'],
   es: (n: string) => [`${n} te invitó a Juno Pen.`, 'Regístrate desde esta página y tu primer mes es gratis.'],
   pt: (n: string) => [`${n} convidou você para o Juno Pen.`, 'Cadastre-se por esta página e seu primeiro mês é grátis.'],
@@ -974,7 +974,7 @@ function PlanCta({ href, children, variant }: { href: string; children: React.Re
   )
 }
 
-type PlanCard = {
+export type PlanCard = {
   name: string
   price: string
   per: string
@@ -1044,7 +1044,7 @@ function penPlans(t: Copy, market: Market): PlanCard[] {
   ]
 }
 
-function ownPlans(t: Copy, market: Market): PlanCard[] {
+export function ownPlans(t: Copy, market: Market): PlanCard[] {
   const P = t.pricing
   const half = market.currency === 'usd' ? SOFTWARE_HALFYEAR_USD : LOCAL_PRICES[market.currency].halfyear
   return [

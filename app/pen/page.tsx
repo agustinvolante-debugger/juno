@@ -10,6 +10,7 @@ import PenApp from './PenApp'
 import { getLinkByEmail } from '@/lib/pen/whatsapp/store'
 import { botNumber, configured as whatsappReady } from '@/lib/pen/whatsapp/provider'
 import Landing from './Landing'
+import LandingPt from './LandingPt'
 import { headers, cookies } from 'next/headers'
 import { marketFor } from './landing-copy'
 import { getProfileRaw, rememberAppLanguage } from '@/lib/pen/profile'
@@ -46,7 +47,10 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
     // Arrived through a customer's link (/r/<code>): say who invited them.
     const ref = cleanCode(c.get(REF_COOKIE)?.value)
     const inviter = ref ? await referrerFor(ref).catch(() => null) : null
-    return <Landing market={marketFor(h.get('x-vercel-ip-country'), m ?? c.get('juno_lang')?.value ?? null)} audience={forParam} invitedBy={inviter?.first ?? null} />
+    const market = marketFor(h.get('x-vercel-ip-country'), m ?? c.get('juno_lang')?.value ?? null)
+    // Portuguese has its own layout (LandingPt.tsx); English and Spanish share Landing.tsx.
+    if (market.lang === 'pt') return <LandingPt market={market} audience={forParam} invitedBy={inviter?.first ?? null} />
+    return <Landing market={market} audience={forParam} invitedBy={inviter?.first ?? null} />
   }
 
   let sessions: Awaited<ReturnType<typeof listSessionsForClient>> = []
