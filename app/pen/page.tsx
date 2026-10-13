@@ -60,6 +60,8 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
   let whatsapp: { number: string; linked: boolean } | null = null
   let appLang: 'en' | 'es' | 'pt' = 'en'
   let showTour = false
+  // The name the user gave in Profile, for Home's greeting; the Google name is the fallback.
+  let profileName: string | null = null
   let showReferral = false
   let showFeedback = false
   let notion: { connected: boolean; sent: Record<string, string> } | null = null
@@ -70,6 +72,7 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
     // the tour still needs to play. None of it may block the page.
     const profile = await getProfileRaw(email).catch(() => null)
     appLang = await appLangFor(email, profile)
+    profileName = profile?.name ?? null
     // Emails and WhatsApp read only the stored setting, so an explicit language choice on the
     // landing page (the juno_lang cookie, set only by its language switch) is kept. A guess from
     // the visitor's country is not: it pinned Spanish on the founder while he was in Chile.
@@ -118,6 +121,7 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
       loadError={loadError}
       email={email}
       name={session?.user?.name ?? null}
+      profileName={profileName}
       avatar={session?.user?.image ?? null}
     />
   )

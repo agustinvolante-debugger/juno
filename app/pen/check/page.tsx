@@ -109,7 +109,7 @@ export default function CheckPage() {
 
   return (
     <div className="pen-root">
-      <main className="mx-auto max-w-[680px] px-5 py-12">
+      <main className="pen-check mx-auto max-w-[680px] px-5 py-12">
         <h1 className="pen-display text-[34px] leading-tight">Upload check</h1>
         <p className="mt-3 text-[16.5px] leading-relaxed" style={{ color: 'var(--soft)' }}>
           Two steps: whether the phone will let you <em>choose</em> a recording off the pen, and

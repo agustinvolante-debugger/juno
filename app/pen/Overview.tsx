@@ -99,6 +99,14 @@ const OV_EN = {
   draftFollowUp: 'Draft follow-up',
   everyoneElse: (n: number) => `Everyone else ${n}`,
   mine: 'Mine',
+  greet: (part: 'morning' | 'afternoon' | 'evening', name: string | null) =>
+    `Good ${part}${name ? `, ${name}` : ''}`,
+  subline: (n: number, hours: string, latest: string | null) =>
+    `${n} recording${n === 1 ? '' : 's'} · ${hours} captured${latest ? ` · latest ${latest}` : ''}`,
+  needsAttention: 'Needs attention',
+  newThisWeek: (n: number) => `${n} new this week`,
+  inRecordings: 'In your recordings',
+  youOwe: 'You owe',
   emptyBody: 'Plug the pen in and import one recording. From the second one on, Juno Pen starts joining them up: what the same people keep asking for, what you keep forgetting, what is still outstanding across everything.',
 }
 
@@ -172,6 +180,13 @@ const OV: Copy<typeof OV_EN> = {
     draftFollowUp: 'Redactar seguimiento',
     everyoneElse: (n) => `De otros ${n}`,
     mine: 'Mías',
+    greet: (part, name) => `${part === 'morning' ? 'Buenos días' : part === 'afternoon' ? 'Buenas tardes' : 'Buenas noches'}${name ? `, ${name}` : ''}`,
+    subline: (n, hours, latest) =>
+      `${n} ${n === 1 ? 'grabación' : 'grabaciones'} · ${hours} capturadas${latest ? ` · la última el ${latest}` : ''}`,
+    needsAttention: 'Requiere atención',
+    newThisWeek: (n) => `${n} ${n === 1 ? 'nuevo' : 'nuevos'} esta semana`,
+    inRecordings: 'En tus grabaciones',
+    youOwe: 'Debes',
     emptyBody: 'Conecta el lápiz e importa una grabación. Desde la segunda, Juno Pen empieza a conectarlas: lo que las mismas personas siguen pidiendo, lo que se te sigue olvidando, lo que sigue pendiente en todo.',
   },
   pt: {
@@ -242,6 +257,13 @@ const OV: Copy<typeof OV_EN> = {
     draftFollowUp: 'Escrever follow-up',
     everyoneElse: (n) => `De outros ${n}`,
     mine: 'Minhas',
+    greet: (part, name) => `${part === 'morning' ? 'Bom dia' : part === 'afternoon' ? 'Boa tarde' : 'Boa noite'}${name ? `, ${name}` : ''}`,
+    subline: (n, hours, latest) =>
+      `${n} ${n === 1 ? 'gravação' : 'gravações'} · ${hours} capturadas${latest ? ` · a última em ${latest}` : ''}`,
+    needsAttention: 'Precisa de atenção',
+    newThisWeek: (n) => `${n} ${n === 1 ? 'novo' : 'novos'} esta semana`,
+    inRecordings: 'Nas suas gravações',
+    youOwe: 'Você deve',
     emptyBody: 'Conecte a caneta e importe uma gravação. A partir da segunda, o Juno Pen começa a ligar os pontos: o que as mesmas pessoas continuam pedindo, o que você continua esquecendo, o que ainda está pendente em tudo.',
   },
 }
@@ -253,7 +275,10 @@ export default function Overview({
   onOpen,
   onAskPerson,
   onChanged,
+  firstName = null,
 }: {
+  /** For the greeting. The session's name, first word; none means a greeting without a name. */
+  firstName?: string | null
   stats: ArchiveStats
   people: PersonCard[]
   peopleLoading?: boolean
@@ -267,6 +292,13 @@ export default function Overview({
   // snapshot changes, which happens a moment after each change settles.
   const T = useCopy(OV)
   const lang = useLang()
+  // The viewer's own clock, read after mount: the server's hour is not the viewer's.
+  const [hour, setHour] = useState<number | null>(null)
+  useEffect(() => {
+    setHour(new Date().getHours())
+    const t = setInterval(() => setHour(new Date().getHours()), 10 * 60_000)
+    return () => clearInterval(t)
+  }, [])
   const [actions, setActions] = useState<OpenAction[]>(stats.openActions)
   const [missed, setMissed] = useState<OpenMissed[]>(stats.openMissed ?? [])
   const [doneExtra, setDoneExtra] = useState(0)
@@ -429,42 +461,42 @@ export default function Overview({
   const missedCount = missed.length + Math.max(0, (stats.missedOpen ?? 0) - (stats.openMissed?.length ?? 0))
   const missedWeek = missed.filter((m) => Date.now() - Date.parse(m.when) < 7 * 86400000).length
 
+  const today = todayIso()
+  const overdueCount = mineList.filter((a) => a.dueDate && a.dueDate < today).length
+  const part = hour === null ? 'morning' : hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'
+
   return (
     <div className="pen-home">
       <header className="pen-home-head">
-        <h2 className="pen-display pen-home-title">
-          {T.heading(stats.recordings)}
+        {/* Hidden until the viewer's clock is known, so it never flashes the wrong greeting. */}
+        <h2 className="pen-display pen-home-title" data-ready={hour !== null}>
+          {T.greet(part, firstName)}
         </h2>
         <p className="pen-home-meta">
-          {T.recorded(hours >= 1 ? `${hours.toFixed(1)} h` : `${stats.minutes} min`)}
-          {stats.lastAt && T.latest(fmtShort(stats.lastAt, lang))}
+          {T.subline(stats.recordings, hours >= 1 ? `${hours.toFixed(1)} h` : `${stats.minutes} min`, stats.lastAt ? fmtShort(stats.lastAt, lang) : null)}
         </p>
       </header>
+
+      {/* The four numbers, read first. Each opens the full list it counts. */}
+      <div className="pen-stats">
+        <StatTile label={T.overdue} value={overdueCount} tone={overdueCount ? 'bad' : undefined} onClick={() => setOpen('todo')}>
+          <span className="pen-stat-line">{T.needsAttention}</span>
+        </StatTile>
+        <StatTile label={T.todo} value={openCount} onClick={() => setOpen('todo')}>
+          <FollowThrough done={doneCount} total={doneCount + openCount} />
+        </StatTile>
+        <StatTile label={T.missed} value={missedCount} onClick={() => setOpen('missed')}>
+          <span className="pen-stat-line">{T.newThisWeek(missedWeek)}</span>
+        </StatTile>
+        <StatTile label={T.people} value={people.length} loading={peopleLoading} onClick={() => setOpen('people')}>
+          <span className="pen-stat-line">{T.inRecordings}</span>
+        </StatTile>
+      </div>
 
       <Today actions={mineList} onTick={tick} onOpen={onOpen} onDraft={(a) => setSheet({ sessionId: a.sessionId, req: { kind: 'email', item: a.action } })} />
 
       <LayoutGroup>
-        <div className="pen-home-cards">
-          <HomeCard
-            kind="todo"
-            open={open}
-            onOpen={setOpen}
-            icon="checklist"
-            title={T.todo}
-            count={openCount}
-            sub={
-              <FollowThrough done={doneCount} total={doneCount + openCount} />
-            }
-            empty={T.todoEmpty}
-            seeAll={openCount}
-          >
-            <AnimatePresence initial={false}>
-              {mineList.slice(0, PREVIEW).map((a) => (
-                <ActionRow key={`${a.sessionId}:${a.index}`} a={a} onTick={tick} onOpen={onOpen} />
-              ))}
-            </AnimatePresence>
-          </HomeCard>
-
+        <div className="pen-home-cards pen-home-pair">
           <HomeCard
             kind="missed"
             open={open}
@@ -472,8 +504,7 @@ export default function Overview({
             icon="alert"
             title={T.missed}
             count={missedCount}
-            // The total is a backlog; what is new this week is the part worth reading.
-            sub={<span>{missedWeek ? T.missedWeek(missedWeek) : T.missedSub}</span>}
+            compact
             empty={T.missedEmpty}
             seeAll={missedCount}
           >
@@ -492,7 +523,7 @@ export default function Overview({
             title={T.people}
             count={people.length}
             loading={peopleLoading}
-            sub={<span>{peopleLoading ? '' : people.length ? T.lastSpoke(people[0].name.split(' ')[0]) : T.nobody}</span>}
+            compact
             empty={T.peopleEmpty}
             seeAll={people.length}
           >
@@ -540,15 +571,18 @@ function HomeCard({
   empty,
   seeAll,
   loading = false,
+  compact = false,
   children,
 }: {
+  /** Title only: the count and its line live in the stats row above. */
+  compact?: boolean
   kind: Kind
   open: Kind | null
   onOpen: (k: Kind) => void
   icon: IconName
   title: string
   count: number
-  sub: React.ReactNode
+  sub?: React.ReactNode
   empty: string
   seeAll: number
   loading?: boolean
@@ -567,6 +601,7 @@ function HomeCard({
           transition={MORPH}
           className="pen-card"
           data-kind={kind}
+          data-compact={compact || undefined}
           aria-labelledby={`home-${kind}-title`}
         >
           <header className="pen-card-head">
@@ -575,8 +610,8 @@ function HomeCard({
               <h3 id={`home-${kind}-title`} className="pen-card-title">{title}</h3>
             </div>
             {/* The figure gets its own line: read first, from across the desk. */}
-            {loading ? <span className="pen-card-count pen-skel" aria-hidden>&nbsp;</span> : <Count value={count} className="pen-card-count" />}
-            <div className="pen-card-sub">{sub}</div>
+            {!compact && (loading ? <span className="pen-card-count pen-skel" aria-hidden>&nbsp;</span> : <Count value={count} className="pen-card-count" />)}
+            {!compact && <div className="pen-card-sub">{sub}</div>}
           </header>
 
           {loading
@@ -598,6 +633,24 @@ function HomeCard({
         </motion.section>
       )}
     </div>
+  )
+}
+
+/** One of the four figures under the greeting. A button: it opens the list it counts. */
+function StatTile({ label, value, tone, loading = false, onClick, children }: {
+  label: string
+  value: number
+  tone?: 'bad'
+  loading?: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button type="button" className="pen-stat" data-tone={tone} onClick={onClick} aria-haspopup="dialog">
+      <span className="pen-stat-label">{label}</span>
+      {loading ? <span className="pen-stat-n pen-skel" aria-hidden>&nbsp;</span> : <Count value={value} className="pen-stat-n" />}
+      {children}
+    </button>
   )
 }
 
@@ -732,9 +785,10 @@ function ActionRow({ a, onTick, onOpen, onDraft, full = false }: { a: OpenAction
             ) : (
               a.due && <span className="pen-row2-due">{a.due}</span>
             )}
-            {!isMine(a) && a.owner && <span className="pen-row2-owner">{a.owner}</span>}
-            {a.waiting && isMine(a) && <span className="pen-row2-wait">{T.waits(a.waiting)}</span>}
-            <span>{a.sessionTitle}</span>
+            {/* Who, then where it came from, as one muted run that ellipsizes at the source. */}
+            <span className="pen-row2-src">
+              {[!isMine(a) ? a.owner : a.waiting, a.sessionTitle].filter(Boolean).join(' · ')}
+            </span>
           </span>
         </button>
         {onDraft && (
@@ -819,7 +873,7 @@ function Today({ actions, onTick, onOpen, onDraft }: { actions: OpenAction[]; on
           </ul>
         </div>
         <div className="pen-today-col">
-          <h4 className="pen-today-sub">{T.waitingOnYou}{waiting.length ? ` · ${waiting.length}` : ''}</h4>
+          <h4 className="pen-today-sub">{T.youOwe}{waiting.length ? ` · ${waiting.length}` : ''}</h4>
           <ul className="pen-card-list">
             <AnimatePresence initial={false}>
               {waiting.map((a) => <ActionRow key={`${a.sessionId}:${a.index}`} a={a} onTick={onTick} onOpen={onOpen} onDraft={onDraft} />)}

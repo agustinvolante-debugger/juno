@@ -159,7 +159,7 @@ function SignInContent() {
           : null
 
   return (
-    <main className="auth-card">
+    <main className={`auth-card${fromPen ? ' auth-pen' : ''}`}>
       <Link href="/" className="auth-brand" aria-label="Juno">
         <Image src="/juno_mark.png" alt="" width={36} height={36} className="auth-mark" priority />
         <span className="auth-word">{fromPen ? 'Juno Pen' : 'Juno'}</span>

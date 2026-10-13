@@ -27,8 +27,8 @@ function langOf(req: Request): Lang {
 function page(lang: Lang, inner: string, status = 200): Response {
   return new Response(
     `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Juno Pen</title></head>` +
-      `<body style="margin:0;background:#F2EFE5;font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#16150F">` +
-      `<main style="max-width:480px;margin:0 auto;padding:48px 16px">${inner}</main></body></html>`,
+      `<body style="margin:0;min-height:100vh;background:#f2f3f7;font-family:Inter,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;color:#1d1d1f;-webkit-font-smoothing:antialiased">` +
+      `<main style="max-width:480px;margin:0 auto;padding:56px 16px"><div style="background:#fff;border:1px solid rgba(29,29,31,.06);border-radius:22px;padding:32px 28px;box-shadow:0 1px 2px rgba(29,29,31,.04),0 12px 24px -10px rgba(29,29,31,.12),0 30px 60px -24px rgba(29,29,31,.18)">${inner}</div></main></body></html>`,
     { status, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } },
   )
 }
@@ -45,9 +45,9 @@ export async function GET(req: Request) {
   if (!t) return page(lang, `<p>${esc(L.bad)}</p>`, 400)
   return page(
     lang,
-    `<h1 style="font-family:Georgia,serif;font-weight:400;font-size:28px;margin:0 0 12px">${esc(L.title)}</h1>` +
-      `<p style="color:#514E45;line-height:1.6">${esc(L.body)}</p>` +
-      `<form method="post" action="?t=${esc(t)}"><button type="submit" style="margin-top:12px;padding:12px 18px;border-radius:10px;border:0;background:#16150F;color:#F2EFE5;font-size:15px;font-weight:600;cursor:pointer">${esc(L.button)}</button></form>`,
+    `<h1 style="font-weight:600;font-size:28px;line-height:1.1;letter-spacing:-0.03em;margin:0 0 12px">${esc(L.title)}</h1>` +
+      `<p style="color:#424245;font-size:16px;line-height:1.55;margin:0">${esc(L.body)}</p>` +
+      `<form method="post" action="?t=${esc(t)}"><button type="submit" style="margin-top:20px;min-height:48px;padding:0 24px;border-radius:9999px;border:1px solid #0062c4;background:#0066cc;color:#fff;font-size:16px;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(0,51,122,.22),0 8px 18px -8px rgba(0,102,204,.55)">${esc(L.button)}</button></form>`,
   )
 }
 
@@ -64,6 +64,6 @@ export async function POST(req: Request) {
   if (error || !data?.length) return page(lang, `<p>${esc(L.bad)}</p>`, 400)
   return page(
     lang,
-    `<h1 style="font-family:Georgia,serif;font-weight:400;font-size:28px;margin:0 0 12px">${esc(L.done)}</h1><p style="color:#514E45;line-height:1.6">${esc(L.doneBody)}</p>`,
+    `<h1 style="font-weight:600;font-size:28px;line-height:1.1;letter-spacing:-0.03em;margin:0 0 12px">${esc(L.done)}</h1><p style="color:#424245;font-size:16px;line-height:1.55;margin:0">${esc(L.doneBody)}</p>`,
   )
 }

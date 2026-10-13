@@ -1,0 +1,699 @@
+/* The signed-in app's skin (agreed 13 Oct): the same product-gallery language as the Portuguese
+   landing page (LandingPt.tsx / landing-pt.css). Light grey canvas, white cards, near-black ink,
+   one blue action colour, Inter for everything with big tight headings, generous radii, chrome
+   that recedes.
+
+   A skin only: no layout, markup or behaviour changes. It works by re-declaring pen-theme.css's
+   tokens and restyling the components that read literal values.
+
+   SCOPE. The tokens live on .pen-root, which also wraps the EN/ES landing page, the signup
+   pages, the legal pages and the how-to. None of those may change, so nothing here touches
+   .pen-root on its own: every rule is nested under a .pen-root that contains one of the app's
+   own surfaces. The app's pop-ups, upload card and tour are portalled into .pen-root (not
+   body), so they sit inside the scope too.
+     .pen-page  desktop app        .pen-m    phone app
+     .pen-set   settings pages     .pen-cust /pen/customers     .pen-usage /pen/usage
+     .pen-su-wrap  signup, and the privacy policy and terms (LegalPage uses the same wrapper)
+     .howto-page   /pen/how-to       .pen-check  /pen/check
+   The EN/ES and PT landing pages contain none of these, so they never match.
+   Browsers without :has() (Safari < 15.4, Firefox < 121) keep the previous look. */
+
+html:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .pen-cust, .pen-root .pen-usage, .pen-root .pen-su-wrap, .pen-root .howto-page, .pen-root .pen-check),
+body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .pen-cust, .pen-root .pen-usage, .pen-root .pen-su-wrap, .pen-root .howto-page, .pen-root .pen-check) {
+  background: #f2f3f7;
+  color: #1d1d1f;
+}
+/* Glass needs something behind it: three large, very soft cool tints on the canvas, fixed to
+   the viewport so cards slide over them. Low enough that text contrast on the canvas holds. */
+body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .pen-cust, .pen-root .pen-usage, .pen-root .pen-su-wrap, .pen-root .howto-page, .pen-root .pen-check) {
+  background:
+    radial-gradient(1100px 760px at 6% -8%, rgba(168, 192, 232, .34), transparent 62%),
+    radial-gradient(980px 720px at 102% 6%, rgba(212, 202, 242, .32), transparent 60%),
+    radial-gradient(1000px 760px at 48% 112%, rgba(182, 212, 236, .30), transparent 62%),
+    #f2f3f7;
+  background-attachment: fixed;
+}
+
+.pen-root:has(.pen-page, .pen-m, .pen-set, .pen-cust, .pen-usage, .pen-su-wrap, .howto-page, .pen-check) {
+  /* ------------------------------------------------------------------ tokens */
+  --paper:      #f5f5f7;
+  --side:       #ffffff;
+  --panel:      #ffffff;
+  --sunk:       #f5f5f7;
+  --line:       #d2d2d7;
+  --hair:       #e8e8ed;
+
+  --ink:        #1d1d1f;   /* 15.4:1 on the canvas */
+  --soft:       #424245;   /* 9.5:1 */
+  --dim:        #6e6e73;   /* 4.8:1 on the canvas, 5.1:1 on white */
+  --faint:      #6e6e73;
+
+  /* One action colour. #0066cc carries body text (5.6:1 on white, 5.2:1 on the canvas) and
+     white labels (5.6:1). */
+  --accent:     #0066cc;
+  --accent-ink: #0055aa;
+  --accent-wash:#e8f1fc;
+  --accent-line:#a9cdf2;
+
+  --good:       #1b7a3b;
+  --good-wash:  #e7f5ec;
+  --warn:       #935400;
+  --warn-wash:  #fff3df;
+  --warn-line:  #f2d6a4;
+  --bad:        #c0281c;
+  --bad-wash:   #fdeceb;
+
+  /* Elevation: surface contrast does the work; only floating things cast a shadow. */
+  --lift-1: none;
+  --lift-2: 0 1px 2px rgba(0, 0, 0, .04);
+  --lift-3: 0 18px 50px -12px rgba(0, 0, 0, .22), 0 2px 8px rgba(0, 0, 0, .06);
+
+  /* Inter for every role, as on the landing page. Monospace labels and figures become Inter
+     with tabular numerals. */
+  --serif:   var(--font-ui), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --display: var(--font-ui), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono:    var(--font-ui), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --t-body: 17px; --t-body-lh: 1.5;
+
+  --sk-r-card: 18px;
+  --sk-r-ctl:  12px;
+  --sk-blue:   #0066cc;
+  --sk-blue-hi:#0071e3;
+
+  /* Floating glass, used by the block of that name further down. */
+  --g-fill:      linear-gradient(150deg, rgba(255, 255, 255, .84), rgba(255, 255, 255, .62));
+  --g-fill-solid:linear-gradient(150deg, rgba(255, 255, 255, .95), rgba(255, 255, 255, .86));
+  --g-edge:      rgba(255, 255, 255, .9);
+  --g-blur:      blur(20px) saturate(170%);
+  --g-shadow:    inset 0 1px 0 #fff, 0 1px 2px rgba(29, 29, 31, .04), 0 12px 24px -10px rgba(29, 29, 31, .12), 0 30px 60px -24px rgba(29, 29, 31, .18);
+  --g-shadow-hi: inset 0 1px 0 #fff, 0 2px 4px rgba(29, 29, 31, .05), 0 18px 32px -12px rgba(29, 29, 31, .16), 0 40px 70px -26px rgba(29, 29, 31, .24);
+  --g-shadow-pop:inset 0 1px 0 #fff, 0 2px 6px rgba(29, 29, 31, .08), 0 24px 48px -12px rgba(29, 29, 31, .26);
+  --g-pill:      linear-gradient(180deg, rgba(255, 255, 255, .96), rgba(255, 255, 255, .74));
+  --g-pill-line: rgba(29, 29, 31, .10);
+  --g-pill-shadow: inset 0 1px 0 #fff, 0 1px 2px rgba(29, 29, 31, .06), 0 3px 8px -3px rgba(29, 29, 31, .10);
+
+  /* Transparent: the tinted canvas on body shows through, so the glass has something to blur. */
+  background: transparent;
+  color: var(--ink);
+  font-feature-settings: "cv11", "ss03";
+  letter-spacing: -0.006em;
+  -webkit-font-smoothing: antialiased;
+
+  ::selection { background: #b3d7ff; }
+
+  /* ------------------------------------------------------------- typography */
+  .pen-display { font-family: var(--display); font-weight: 600; letter-spacing: -0.028em; }
+  .pen-mono { font-family: var(--mono); font-variant-numeric: tabular-nums; letter-spacing: 0; }
+  .pen-label {
+    font-family: var(--ui); font-size: 12px; font-weight: 600; letter-spacing: .05em;
+    text-transform: uppercase; color: var(--dim);
+  }
+  .pen-brand-name { font-size: 20px; letter-spacing: -0.03em; }
+  .pen-home-title { font-size: clamp(28px, 2.6vw, 38px); line-height: 1.1; letter-spacing: -0.035em; }
+
+  /* -------------------------------------------------------------- focus ring */
+  :focus-visible { outline: 2px solid var(--sk-blue-hi); outline-offset: 2px; }
+
+  /* ---------------------------------------------------------- surfaces/cards */
+  .pen-panel,
+  .pen-card,
+  .pen-set-card {
+    border-color: transparent;
+    border-radius: var(--sk-r-card);
+    box-shadow: none;
+  }
+  .pen-trio > .pen-card { border-top-color: transparent; }
+  .pen-today,
+  .pen-rail {
+    border-color: transparent;
+    border-radius: var(--sk-r-card);
+    box-shadow: none;
+  }
+  .pen-cats-list, .pen-side-meter { border-color: var(--hair); }
+  .pen-meter-n strong { white-space: nowrap; font-weight: 600; letter-spacing: -0.02em; }
+  .pen-side {
+    background: var(--panel);
+    border-color: transparent;
+    border-radius: 22px;
+    box-shadow: none;
+  }
+  .pen-row { border-radius: var(--sk-r-ctl); }
+
+  /* ----------------------------------------------------------------- buttons */
+  .pen-btn {
+    border-radius: 9999px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    border-color: var(--line);
+    transition: background .15s, border-color .15s, color .15s, transform .15s;
+  }
+  .pen-btn:hover:not(:disabled) { background: var(--sunk); border-color: #c7c7cc; }
+  .pen-btn:active:not(:disabled) { transform: scale(.97); }
+  .pen-btn-primary,
+  .pen-btn-accent { background: var(--sk-blue); border-color: var(--sk-blue); color: #fff; }
+  .pen-btn-primary:hover:not(:disabled),
+  .pen-btn-accent:hover:not(:disabled) { background: var(--sk-blue-hi); border-color: var(--sk-blue-hi); color: #fff; }
+  .pen-btn-quiet:hover:not(:disabled) { border-color: #f3c6c2; }
+
+  .pen-connect {
+    border-radius: 9999px;
+    background: var(--sk-blue); border-color: var(--sk-blue);
+    box-shadow: none; font-weight: 600;
+  }
+  .pen-connect:hover { background: var(--sk-blue-hi); }
+
+  /* Every compact action is a pill, as on the landing page. */
+  .pen-brief, .pen-brief-more, .pen-rail-new, .pen-rail-all, .pen-people-add, .pen-copy,
+  .pen-ov-back, .pen-cats-new, .pen-quick-btn, .pen-meter-cta, .pen-cmdk {
+    border-radius: 9999px;
+  }
+  .pen-back { border-radius: 9999px; }
+  .pen-drop { border-radius: var(--sk-r-card); border-color: #c7c7cc; background: var(--sunk); }
+  .pen-drop:hover { border-color: var(--sk-blue); background: var(--accent-wash); }
+
+  /* Native selects and text fields: quiet rounded wells. */
+  select, input[type='text'], input[type='email'], input[type='search'], input[type='url'], input[type='tel'], textarea {
+    accent-color: var(--sk-blue);
+  }
+
+  /* ------------------------------------------------------------- navigation */
+  .pen-cat { border-radius: var(--sk-r-ctl); font-weight: 500; }
+  .pen-cat:hover { background: var(--sunk); }
+  .pen-cat[data-active='true'] {
+    background: var(--accent-wash); color: var(--accent-ink);
+    border-color: transparent; box-shadow: none; font-weight: 600;
+  }
+
+  /* ------------------------------------------------------------------ search */
+  .pen-search {
+    border-radius: 9999px; border-color: transparent; box-shadow: none; background: var(--panel);
+  }
+  .pen-search:focus-within { border-color: var(--sk-blue-hi); box-shadow: 0 0 0 4px rgba(0, 113, 227, .15); }
+
+  /* ------------------------------------------------------------ pills/chips */
+  .pen-pill[data-s='transcribing'],
+  .pen-pill[data-s='noting'] { border-color: var(--warn-line); }
+  .pen-pill[data-s='noted'] { border-color: #c7e6d2; }
+  .pen-pill[data-s='error'] { border-color: #f3c6c2; }
+  .pen-chip[data-tone='bad'] { border-color: #f3c6c2; }
+
+  /* -------------------------------------------------------------------- chat */
+  .pen-turn-a { border-color: transparent; border-radius: var(--sk-r-card); box-shadow: none; }
+  .pen-turn-q { border-radius: 20px; }
+  .pen-composer-input { border-radius: 24px; border-color: transparent; box-shadow: none; padding-left: 20px; padding-right: 20px; }
+  .pen-composer-input:focus { border-color: var(--sk-blue-hi); box-shadow: 0 0 0 4px rgba(0, 113, 227, .15); outline: none; }
+
+  /* ---------------------------------------------------------------- settings */
+  .pen-set { background: transparent; }
+  .pen-set-card { padding: 32px; }
+  .pen-set-follow { border-color: transparent; border-radius: var(--sk-r-card); }
+  .pen-su-opt { border-radius: 14px; }
+
+  /* --------------------------------------------------------------- customers */
+  .pen-cust-pill[data-tone='bad'] { border-color: #f3c6c2; }
+  .pen-cust-tile, .pen-cust-wrap { border-color: transparent; border-radius: var(--sk-r-card); box-shadow: none; }
+  .pen-cust-search { border-radius: 9999px; border-color: transparent; padding-left: 18px; }
+  .pen-cust-search:focus { border-color: var(--sk-blue-hi); box-shadow: 0 0 0 4px rgba(0, 113, 227, .15); outline: none; }
+
+  /* ------------------------------------------------------------------- phone */
+  .pen-m-rec { border-color: transparent; border-radius: var(--sk-r-card); box-shadow: none; }
+  .pen-m-chip:not([data-on='true']) { border-color: transparent; background: var(--panel); }
+
+  /* ------------------------------------------------------------ pop-ups, dim */
+  .pen-promo-dim { background: #000; opacity: .4; }
+
+  /* =================================================== Home dashboard (Oct 13) */
+
+  /* ---- sidebar: scrolls on its own; the month's recording meter pinned at the foot ---- */
+  .pen-side-meter {
+    position: sticky; bottom: -12px; z-index: 2;
+    margin-top: auto; padding-bottom: 10px;
+    background: var(--panel); border-color: var(--hair);
+  }
+  .pen-saved { border-color: var(--hair); }
+
+  /* ---- "More ways to import" ---- */
+  .pen-imenu { position: relative; margin: 0 0 16px; flex-shrink: 0; }
+  .pen-imenu-btn {
+    display: flex; align-items: center; gap: 9px; width: 100%; min-height: 44px; padding: 0 16px;
+    border-radius: 9999px; border: 1px solid var(--line); background: var(--panel);
+    font-family: var(--ui); font-size: 14.5px; font-weight: 500; color: var(--ink);
+    transition: background .15s, border-color .15s;
+  }
+  .pen-imenu-btn:hover { background: var(--sunk); border-color: #c7c7cc; }
+  .pen-imenu-btn > svg:first-child { color: var(--dim); }
+  .pen-imenu-chev { margin-left: auto; color: var(--dim); transform: rotate(90deg); transition: transform .2s; }
+  .pen-imenu-btn[aria-expanded='true'] .pen-imenu-chev { transform: rotate(-90deg); }
+
+  .pen-menu {
+    position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 40;
+    background: var(--panel); border: 1px solid var(--hair); border-radius: 14px;
+    box-shadow: var(--lift-3); padding: 6px;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .pen-menu-right { left: auto; right: 0; width: 196px; }
+  .pen-menu-item {
+    display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 8px 12px;
+    border-radius: 10px; font-family: var(--ui); font-size: 14.5px; font-weight: 500; color: var(--ink);
+    text-align: left; text-decoration: none; white-space: nowrap;
+  }
+  .pen-menu-item svg { flex: none; color: var(--dim); }
+  .pen-menu-item:hover, .pen-menu-item:focus-visible { background: var(--sunk); outline: none; }
+  .pen-menu-item:focus-visible { box-shadow: inset 0 0 0 2px var(--sk-blue-hi); }
+  .pen-menu-danger, .pen-menu-danger svg { color: var(--bad); }
+  .pen-menu-danger:hover, .pen-menu-danger:focus-visible { background: var(--bad-wash); }
+
+  /* ---- section labels: CATEGORIES (collapsible) and CHATS ---- */
+  .pen-sec-toggle-wrap { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hair); }
+  .pen-sec-toggle {
+    display: flex; align-items: center; justify-content: space-between; width: 100%;
+    min-height: 32px; padding: 4px 8px; border-radius: 8px; color: var(--dim);
+  }
+  .pen-sec-toggle:hover { color: var(--ink); background: var(--sunk); }
+  .pen-sec-chev { transform: rotate(90deg); transition: transform .2s; }
+  .pen-sec-toggle[aria-expanded='false'] .pen-sec-chev { transform: rotate(0deg); }
+  .pen-cats-buckets { border-top: 0; margin-top: 2px; padding-top: 0; }
+  .pen-sec-label { padding: 14px 8px 6px; }
+
+  /* ---- chat rows with a "..." menu ---- */
+  .pen-chatrow { position: relative; display: flex; align-items: center; }
+  .pen-chatrow-open { flex: 1; min-width: 0; padding-right: 40px; }
+  .pen-chatrow-more {
+    position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+    width: 30px; height: 30px; border-radius: 9999px; display: grid; place-items: center;
+    color: var(--dim); font-size: 18px; line-height: 1; opacity: 0; transition: opacity .15s, background .15s;
+  }
+  .pen-chatrow:hover .pen-chatrow-more, .pen-chatrow-more:focus-visible, .pen-chatrow-more[aria-expanded='true'],
+  .pen-chatrow[data-active='true'] .pen-chatrow-more { opacity: 1; }
+  .pen-chatrow-more:hover, .pen-chatrow-more[aria-expanded='true'] { background: var(--sunk); color: var(--ink); }
+  .pen-chatrow .pen-menu { top: calc(100% + 2px); }
+  .pen-chatrow-edit { flex-direction: column; align-items: stretch; gap: 4px; padding: 2px 0; }
+  .pen-chatrow-input {
+    width: 100%; min-height: 38px; padding: 6px 12px; border-radius: 10px;
+    border: 1px solid var(--sk-blue-hi); box-shadow: 0 0 0 4px rgba(0, 113, 227, .15);
+    background: var(--panel); color: var(--ink); font-family: var(--ui); font-size: 14.5px; outline: none;
+  }
+  .pen-chatrow-err { font-size: 12.5px; color: var(--bad); padding: 2px 8px; }
+  @media (hover: none) {
+    .pen-chatrow-more { opacity: 1; width: 44px; height: 44px; right: 0; }
+    .pen-chatrow-open { padding-right: 48px; }
+  }
+
+  /* ---- header ---- */
+  .pen-home-title[data-ready='false'] { visibility: hidden; }
+
+  /* ---- stats row ---- */
+  .pen-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+  .pen-stat {
+    display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 0;
+    padding: 18px 20px 18px; border-radius: var(--sk-r-card); background: var(--panel);
+    text-align: left; color: var(--ink); transition: background .15s, transform .15s;
+  }
+  .pen-stat:hover { background: #fbfbfd; }
+  .pen-stat:active { transform: scale(.985); }
+  .pen-stat-label { font-size: 13.5px; font-weight: 600; color: var(--soft); }
+  .pen-stat-n {
+    font-size: clamp(32px, 3vw, 42px); font-weight: 600; line-height: 1.05; letter-spacing: -0.035em;
+    font-variant-numeric: tabular-nums; color: var(--ink);
+  }
+  .pen-stat[data-tone='bad'] .pen-stat-n { color: var(--bad); }
+  .pen-stat-line { font-size: 13px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pen-stat .pen-follow-n { font-size: 12.5px; }
+
+  /* ---- Today and the task rows ---- */
+  .pen-row2:not([data-full='true']) .pen-row2-text { font-family: var(--ui); font-size: 15px; }
+  .pen-today .pen-row2-text { -webkit-line-clamp: 1; line-clamp: 1; word-break: break-all; overflow-wrap: anywhere; }
+  .pen-row2:not([data-full='true']) .pen-row2-meta {
+    flex-wrap: nowrap; align-items: center; gap: 6px; overflow: hidden; white-space: nowrap; min-width: 0;
+    font-size: 12.5px;
+  }
+  .pen-row2-flag, .pen-row2-due {
+    flex: none; display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 9999px;
+    font-size: 11.5px; font-weight: 600; letter-spacing: .01em; text-transform: none;
+  }
+  .pen-row2-flag { background: var(--warn-wash); color: var(--warn); }
+  .pen-row2-due { background: var(--sunk); color: var(--soft); }
+  .pen-row2-due[data-late='true'] { background: var(--bad-wash); color: var(--bad); }
+  .pen-row2-src,
+  .pen-today .pen-row2-meta > span.pen-row2-src:last-child {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim);
+  }
+  .pen-row2[data-full='true'] .pen-row2-src { white-space: normal; }
+
+  /* ---- Nearly missed (wide) and People (narrow), side by side ---- */
+  .pen-home-pair { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); align-items: start; }
+  .pen-home-pair .pen-card-slot { min-height: 0; }
+  .pen-card[data-compact] .pen-card-head { padding: 16px 18px 14px; }
+  .pen-card[data-compact] .pen-card-title { font-size: 17px; }
+  .pen-card[data-compact] .pen-card-icon { width: 30px; height: 30px; border-radius: 9px; }
+  .pen-home-pair .pen-card-list > li + li { border-top: 1px solid var(--hair); }
+  .pen-home-pair .pen-row2-text { -webkit-line-clamp: 2; line-clamp: 2; }
+
+  /* ---- Recent recordings: one card, rows with dividers ---- */
+  .pen-recrow {
+    display: flex; align-items: center; gap: 12px; padding: 11px 10px;
+    border-radius: 12px; border-bottom: 1px solid var(--hair); box-shadow: none;
+  }
+  .pen-recrow:last-child { border-bottom: 0; }
+  .pen-recrow:hover { background: var(--sunk); }
+  .pen-recrow-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .pen-recrow-title { font-size: 14.5px; font-weight: 500; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pen-recrow-dur { font-size: 12.5px; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .pen-recpills { flex: none; display: inline-flex; align-items: center; gap: 6px; max-width: 58%; min-width: 0; }
+  .pen-pill { font-family: var(--ui); font-size: 11.5px; font-weight: 600; letter-spacing: .04em; padding: 3px 9px; }
+  .pen-catpill {
+    display: inline-block; min-width: 0; max-width: 170px; padding: 3px 10px; border-radius: 9999px;
+    font-size: 12px; font-weight: 600; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    background: var(--sunk); color: var(--soft);
+  }
+  .pen-catpill[data-tint='meet']    { background: #e8f1fc; color: #0055aa; }
+  .pen-catpill[data-tint='talk']    { background: #f3ebfc; color: #6e2ba8; }
+  .pen-catpill[data-tint='product'] { background: #e7f5ec; color: #1b6e36; }
+  .pen-catpill[data-tint='notes']   { background: #fff3df; color: #8a4f00; }
+  .pen-catpill[data-tint='shop']    { background: #fdecf3; color: #a3214f; }
+  .pen-langpill {
+    flex: none; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--line);
+    font-size: 11px; font-weight: 600; letter-spacing: .04em; color: var(--dim);
+  }
+  .pen-m-rec-top .pen-recpills { max-width: 55%; }
+  .pen-m-rec-top .pen-catpill { max-width: 128px; }
+  /* In the narrow right-hand column the title needs the room more than the category does. */
+  @media (min-width: 1281px) {
+    .pen-rail .pen-recpills { max-width: 46%; }
+    .pen-rail .pen-catpill { max-width: 108px; }
+  }
+
+  /* ---- narrow ---- */
+  @media (max-width: 900px) {
+    .pen-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .pen-stat { padding: 14px 16px; }
+    .pen-home-pair { grid-template-columns: minmax(0, 1fr); }
+    .pen-today-cols { grid-template-columns: minmax(0, 1fr); }
+  }
+
+  /* ========================================================= floating glass (Oct 13) */
+
+
+  /* ---- top-level cards: translucent fill, blur, bright edge, layered shadow ---- */
+  .pen-side, .pen-stat, .pen-today, .pen-card, .pen-rail, .pen-panel, .pen-aicard, .pen-missed,
+  .pen-set-card, .pen-cust-tile, .pen-cust-wrap, .pen-turn-a, .pen-search, .pen-m-rec,
+  .pen-composer-input {
+    background: var(--g-fill);
+    -webkit-backdrop-filter: var(--g-blur);
+    backdrop-filter: var(--g-blur);
+    border: 1px solid var(--g-edge);
+    box-shadow: var(--g-shadow);
+  }
+  .pen-trio > .pen-card { border-top: 1px solid var(--g-edge); }
+  .pen-search:focus-within, .pen-composer-input:focus {
+    border-color: var(--sk-blue-hi);
+    box-shadow: 0 0 0 4px rgba(0, 113, 227, .15), var(--g-shadow);
+  }
+
+  /* Status cards keep their colour: the glass is tinted, not replaced with white. */
+  .pen-aicard {
+    background: linear-gradient(150deg, rgba(232, 241, 252, .9), rgba(222, 235, 251, .66));
+    border-left: 3px solid var(--accent);
+  }
+  .pen-missed {
+    background:
+      repeating-linear-gradient(135deg, rgba(147, 84, 0, .04) 0 1px, transparent 1px 7px),
+      linear-gradient(150deg, rgba(255, 246, 228, .92), rgba(255, 240, 214, .7));
+  }
+  .pen-stat[data-tone='bad'] { background: linear-gradient(150deg, rgba(255, 241, 240, .9), rgba(253, 232, 230, .66)); }
+
+  /* The sticky month meter fades in over the scrolling sidebar instead of sitting as a slab. */
+  .pen-side-meter { background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, .9) 16px); }
+
+  /* ---- things that pop over the page: glass, more opaque for legibility, deeper shadow ---- */
+  .pen-menu, .pen-d-menu, .pen-acct2-menu, .pen-catpick-menu, .pen-search-sugg, .pen-promo-card,
+  .pen-tximp, .pen-bigpanel, .pen-sheet, .pen-upcard, .pen-tour-card {
+    background: var(--g-fill-solid);
+    -webkit-backdrop-filter: var(--g-blur);
+    backdrop-filter: var(--g-blur);
+    border: 1px solid var(--g-edge);
+    box-shadow: var(--g-shadow-pop);
+  }
+
+  /* ---- gentle lift on hover, only for cards you act on, only with a real pointer ---- */
+  .pen-stat, .pen-card, .pen-today, .pen-cust-tile {
+    transition: translate .22s ease, box-shadow .22s ease, background .22s ease;
+  }
+  @media (hover: hover) and (prefers-reduced-motion: no-preference) {
+    .pen-stat:hover, .pen-card:hover, .pen-today:hover, .pen-cust-tile:hover {
+      translate: 0 -2px;
+      box-shadow: var(--g-shadow-hi);
+    }
+  }
+  .pen-stat:hover { background: var(--g-fill-solid); }
+  .pen-stat[data-tone='bad']:hover { background: linear-gradient(150deg, rgba(255, 241, 240, .96), rgba(253, 232, 230, .8)); }
+
+  /* ---- primary buttons: blue with depth ---- */
+  .pen-btn-primary, .pen-btn-accent, .pen-connect {
+    background: linear-gradient(180deg, #1b7be3, #0066cc);
+    border-color: #0062c4;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .32), 0 1px 2px rgba(0, 51, 122, .22), 0 8px 18px -8px rgba(0, 102, 204, .55);
+    transition: translate .18s ease, box-shadow .18s ease, background .18s ease;
+  }
+  .pen-btn-primary:hover:not(:disabled), .pen-btn-accent:hover:not(:disabled), .pen-connect:hover {
+    background: linear-gradient(180deg, #2385ec, #0071e3);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .36), 0 2px 4px rgba(0, 51, 122, .24), 0 12px 24px -10px rgba(0, 102, 204, .62);
+  }
+  @media (hover: hover) and (prefers-reduced-motion: no-preference) {
+    .pen-btn-primary:hover:not(:disabled), .pen-btn-accent:hover:not(:disabled), .pen-connect:hover { translate: 0 -1px; }
+  }
+  .pen-btn-primary:disabled, .pen-btn-accent:disabled { box-shadow: none; }
+
+  /* ---- secondary buttons and chips: small glass pills, no big lift ---- */
+  .pen-btn:not(.pen-btn-primary):not(.pen-btn-accent), .pen-brief, .pen-brief-more, .pen-imenu-btn,
+  .pen-rail-new, .pen-rail-all, .pen-people-add, .pen-quick-btn, .pen-catpick-btn, .pen-do-btn,
+  .pen-set-chip, .pen-m-chip:not([data-on='true']), .pen-enhance, .pen-ov-back, .pen-acct2-btn {
+    background: var(--g-pill);
+    border: 1px solid var(--g-pill-line);
+    box-shadow: var(--g-pill-shadow);
+  }
+  .pen-btn:not(.pen-btn-primary):not(.pen-btn-accent):hover:not(:disabled), .pen-brief:hover:not(:disabled),
+  .pen-brief-more:hover, .pen-imenu-btn:hover, .pen-rail-new:hover, .pen-rail-all:hover, .pen-people-add:hover,
+  .pen-quick-btn:hover:not(:disabled), .pen-catpick-btn:hover, .pen-do-btn:hover, .pen-set-chip:hover, .pen-enhance:hover {
+    background: linear-gradient(180deg, #fff, rgba(255, 255, 255, .88));
+    border-color: rgba(29, 29, 31, .16);
+    box-shadow: inset 0 1px 0 #fff, 0 1px 2px rgba(29, 29, 31, .08), 0 6px 14px -6px rgba(29, 29, 31, .16);
+  }
+  /* The blue-tinted secondary actions keep their blue words on the glass. */
+  .pen-rail-new, .pen-quick-btn, .pen-catpick-btn { color: var(--accent-ink); }
+  /* Destructive stays destructive: red words, and a red glass on hover. */
+  .pen-btn-quiet:hover:not(:disabled), .pen-menu-danger:hover {
+    background: linear-gradient(180deg, rgba(255, 241, 240, .98), rgba(253, 232, 230, .9));
+    border-color: #f3c6c2; color: var(--bad);
+  }
+
+  /* ---- navigation: the active pill floats ---- */
+  .pen-cat[data-active='true'] {
+    background: linear-gradient(180deg, #fff, rgba(255, 255, 255, .86));
+    border-color: rgba(29, 29, 31, .06);
+    box-shadow: inset 0 1px 0 #fff, 0 1px 2px rgba(29, 29, 31, .06), 0 8px 18px -8px rgba(29, 29, 31, .18);
+  }
+
+  /* ---- small elements: a glass edge, no shadow ---- */
+  .pen-catpill, .pen-langpill, .pen-person, .pen-people span, .pen-avatar, .pen-card-icon, .pen-feat-ic {
+    border: 1px solid rgba(255, 255, 255, .8);
+  }
+  .pen-langpill { background: rgba(255, 255, 255, .6); border-color: var(--g-pill-line); }
+
+  /* ---- phone: frosted bars, plain small things ---- */
+  .pen-m { background: transparent; }
+  .pen-m-top, .pen-m-tabs {
+    background: rgba(248, 248, 251, .78);
+    -webkit-backdrop-filter: blur(20px) saturate(170%);
+    backdrop-filter: blur(20px) saturate(170%);
+  }
+  .pen-m-top { border-bottom: 1px solid rgba(29, 29, 31, .08); }
+  .pen-m-tabs { border-top: 1px solid rgba(29, 29, 31, .08); }
+  @media (max-width: 900px) {
+    /* Blur is the expensive part; on a phone it stays on the cards and the bars only. */
+    .pen-m-rec { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--g-fill-solid); }
+  }
+
+  /* ====================================================== public pages (Oct 13) */
+  /* Signup, the legal pages, how-to and the upload check. They borrow a few of the old landing
+     page's classes (.pen-lp, .pen-lp-btn, .pen-lp-eyebrow, .pen-lp-langs); restyled here, inside
+     this scope only, so the landing pages themselves are untouched. */
+
+  &.pen-lp, .pen-lp { background: transparent; color: var(--ink); }
+
+  .pen-su-wrap { max-width: 760px; padding-bottom: 96px; }
+  .pen-su-head { padding-top: 40px; }
+  .pen-su-back {
+    display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px 0 8px;
+    border-radius: 9999px; color: var(--soft);
+    background: var(--g-pill); border: 1px solid var(--g-pill-line); box-shadow: var(--g-pill-shadow);
+  }
+  .pen-su-back:hover { color: var(--ink); background: #fff; }
+  .pen-lp-eyebrow, .pen-su-eyebrow {
+    display: flex; margin-top: 28px; font-family: var(--ui); font-size: 15px; font-weight: 600;
+    letter-spacing: -0.01em; text-transform: none; color: var(--accent);
+  }
+  .pen-lp-eyebrow::before { display: none; }
+  .pen-su-h1 {
+    font-family: var(--ui); font-weight: 600; font-size: clamp(36px, 5.4vw, 58px); line-height: 1.04;
+    letter-spacing: -0.04em; color: var(--ink); text-wrap: balance; margin-top: 10px;
+  }
+  .pen-su-head > p { font-size: 18px; line-height: 1.5; color: var(--soft); }
+
+  /* The form sits on one glass card. */
+  .pen-su-form {
+    margin-top: 32px; padding: 32px; border-radius: 22px;
+    background: var(--g-fill); -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+    border: 1px solid var(--g-edge); box-shadow: var(--g-shadow);
+  }
+  .pen-su-field { gap: 7px; }
+  .pen-su-field .pen-label { color: var(--soft); }
+  .pen-su-field input, .pen-su-field select, .pen-su-field textarea {
+    min-height: 48px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line);
+    background: rgba(255, 255, 255, .92); color: var(--ink); font-family: var(--ui); font-size: 16px;
+    box-shadow: inset 0 1px 2px rgba(29, 29, 31, .04);
+  }
+  .pen-su-field input::placeholder, .pen-su-field textarea::placeholder { color: #8e8e93; }
+  .pen-su-field input:focus, .pen-su-field select:focus, .pen-su-field textarea:focus {
+    outline: none; border-color: var(--sk-blue-hi); background: #fff;
+    box-shadow: 0 0 0 4px rgba(0, 113, 227, .16);
+  }
+  /* Only after the visitor has touched a field, so an empty form isn't red on arrival. */
+  .pen-su-field input:user-invalid, .pen-su-field select:user-invalid {
+    border-color: var(--bad); box-shadow: 0 0 0 3px rgba(192, 40, 28, .12);
+  }
+  .pen-su-ship {
+    padding: 20px; border-radius: 18px; border: 0;
+    background: rgba(245, 245, 247, .85);
+  }
+  .pen-su-ship-head { color: var(--ink); }
+  .pen-su-err {
+    padding: 12px 14px; border-radius: 12px; border: 1px solid #f3c6c2;
+    background: var(--bad-wash); color: var(--bad); font-size: 15px;
+  }
+  .pen-su-fine { color: var(--dim); font-size: 14px; }
+  .pen-su-agree a { color: var(--accent-ink); }
+  .pen-su-terms li {
+    padding: 6px 12px; border-radius: 9999px; font-size: 13.5px; font-weight: 600; color: var(--soft);
+    background: var(--g-pill); border: 1px solid var(--g-pill-line); box-shadow: var(--g-pill-shadow);
+  }
+  .pen-su-terms li:first-child { background: var(--accent-wash); border-color: var(--accent-line); color: var(--accent-ink); }
+  .pen-su-gone { border: 1px solid var(--warn-line); background: var(--warn-wash); color: var(--warn); }
+  .pen-invited, .pen-invited-inline {
+    border-radius: 14px; border: 1px solid var(--accent-line); background: var(--accent-wash); color: var(--accent-ink);
+  }
+  .pen-su-done {
+    margin-top: 72px; padding: 40px 36px; max-width: 560px; border-radius: 22px;
+    background: var(--g-fill); -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+    border: 1px solid var(--g-edge); box-shadow: var(--g-shadow);
+  }
+  .pen-su-tick { background: var(--accent-wash); color: var(--accent); border-color: var(--accent-line); }
+
+  /* The old landing's buttons, as the new pills. */
+  .pen-lp-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 24px;
+    border-radius: 9999px; font-family: var(--ui); font-size: 16.5px; font-weight: 600; letter-spacing: -0.01em;
+    transform: none;
+  }
+  .pen-lp-btn-primary {
+    background: linear-gradient(180deg, #1b7be3, #0066cc); border: 1px solid #0062c4; color: #fff;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .32), 0 1px 2px rgba(0, 51, 122, .22), 0 8px 18px -8px rgba(0, 102, 204, .55);
+  }
+  .pen-lp-btn-primary:hover { background: linear-gradient(180deg, #2385ec, #0071e3); border-color: #0066cc; color: #fff; transform: none; }
+  .pen-lp-btn-primary:disabled { opacity: .55; box-shadow: none; }
+  .pen-lp-btn-ghost {
+    background: var(--g-pill); border: 1px solid var(--g-pill-line); color: var(--ink); box-shadow: var(--g-pill-shadow);
+  }
+  .pen-lp-btn-ghost:hover { background: #fff; border-color: rgba(29, 29, 31, .16); transform: none; }
+  .pen-lp-btn:focus-visible { outline: 2px solid var(--sk-blue-hi); outline-offset: 3px; }
+  @media (hover: hover) and (prefers-reduced-motion: no-preference) {
+    .pen-lp-btn-primary:hover:not(:disabled) { translate: 0 -1px; }
+  }
+  .pen-su-submit { width: 100%; min-height: 52px; font-size: 17px; }
+
+  /* ---- legal: the document on one glass card ---- */
+  .pen-legal-date { font-family: var(--ui); color: var(--dim); }
+  .pen-legal-lede { font-size: 19px; line-height: 1.55; color: var(--soft); }
+  .pen-legal-body {
+    margin-top: 32px; padding: 8px 36px 20px; border-top: 0; border-radius: 22px;
+    background: var(--g-fill-solid); -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+    border: 1px solid var(--g-edge); box-shadow: var(--g-shadow);
+  }
+  .pen-legal-sec { border-color: var(--hair); }
+  .pen-legal-sec:last-child { border-bottom: 0; }
+  .pen-legal-sec h2 { font-family: var(--ui); font-weight: 600; letter-spacing: -0.02em; }
+  .pen-legal-sec p, .pen-legal-sec li { font-size: 16.5px; line-height: 1.65; color: var(--soft); }
+  .pen-legal-num { color: var(--dim); }
+  .pen-legal a { color: var(--accent-ink); }
+  .pen-legal .pen-su-back { color: var(--soft); text-decoration: none; }
+  .pen-legal-draft, .pen-legal-note { border-radius: 12px; }
+  .pen-legal-foot { color: var(--dim); }
+  .pen-lp-langs {
+    display: inline-flex; gap: 2px; padding: 3px; border-radius: 9999px;
+    background: rgba(232, 232, 237, .9); border: 1px solid rgba(255, 255, 255, .8);
+  }
+  .pen-lp-lang {
+    display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border-radius: 9999px; border: 0;
+    font-family: var(--ui); font-size: 13.5px; font-weight: 500; color: var(--soft); background: transparent;
+  }
+  .pen-lp-lang:hover { color: var(--ink); border: 0; }
+  .pen-lp-lang[data-on='true'] {
+    background: #fff; color: var(--ink); border: 0; font-weight: 600;
+    box-shadow: 0 1px 2px rgba(29, 29, 31, .08), 0 4px 10px -4px rgba(29, 29, 31, .14);
+  }
+
+  /* ---- how-to ---- */
+  .howto-page { background: transparent; }
+  .howto-eyebrow { font-family: var(--ui); font-size: 15px; font-weight: 600; letter-spacing: -0.01em; text-transform: none; color: var(--accent); }
+  .howto-h1 { font-family: var(--ui); font-weight: 600; letter-spacing: -0.04em; color: var(--ink); }
+  .howto-frame { border-radius: 22px; border: 1px solid var(--g-edge); background: #f5f5f7; box-shadow: var(--g-shadow); }
+  .howto-play {
+    width: 44px; height: 44px; background: linear-gradient(180deg, #1b7be3, #0066cc);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .32), 0 6px 14px -6px rgba(0, 102, 204, .55);
+  }
+  .howto-scrub { accent-color: var(--sk-blue); }
+  .howto-time { font-family: var(--ui); color: var(--dim); font-variant-numeric: tabular-nums; }
+  .howto-chip {
+    min-height: 36px; font-family: var(--ui); color: var(--soft);
+    background: var(--g-pill); border: 1px solid var(--g-pill-line); box-shadow: var(--g-pill-shadow);
+  }
+  .howto-chip[data-on='true'] { background: var(--accent-wash); border-color: var(--accent-line); color: var(--accent-ink); }
+
+  @media (max-width: 640px) {
+    .pen-su-form { padding: 20px 16px; border-radius: 18px; }
+    .pen-su-grid { grid-template-columns: minmax(0, 1fr); }
+    .pen-su-ship { padding: 16px 12px; }
+    .pen-legal-body { padding: 4px 18px 12px; }
+    .pen-su-done { padding: 28px 20px; }
+  }
+
+  /* A pre-existing cascade slip, fixed here because the white card made it visible: between
+     901 and 1280px the rail is static and full width (pen-theme.css, "workspace, narrow"), but
+     the later min-width: 901px block re-caps its height, so the list ran out of the bottom of
+     its card. The intended value, restated. */
+  @media (min-width: 901px) and (max-width: 1280px) {
+    .pen-rail { max-height: none; }
+  }
+
+  /* ------------------------------------------------- phone: type and targets */
+  @media (max-width: 900px) {
+    /* Inter at 600 is wider and heavier than the serif it replaces; one step down keeps a
+       long title to two lines on a phone. */
+    .pen-title, .pen-title-input { font-size: 28px; line-height: 1.12; }
+    .pen-home-title { font-size: 28px; }
+
+    /* 44px touch targets. Primary controls simply grow; small chips keep their look and get
+       an invisible tap area above and below instead, so rows of them don't turn chunky. */
+    .pen-m-iconbtn, .pen-brief, .pen-brief-more, .pen-people-add, .pen-acct2-btn { min-height: 44px; }
+    .pen-m-iconbtn, .pen-brief-more { min-width: 44px; }
+    .pen-m button.pen-mono { min-height: 44px; }
+    .pen-do-btn, .pen-catpick-btn, .pen-enhance, .pen-person-add-email, .pen-notion-sent, .pen-cite-full {
+      position: relative;
+    }
+    .pen-do-btn::before, .pen-catpick-btn::before, .pen-enhance::before, .pen-person-add-email::before,
+    .pen-notion-sent::before, .pen-cite-full::before {
+      content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 44px; transform: translateY(-50%);
+    }
+  }
+}

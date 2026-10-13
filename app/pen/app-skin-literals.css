@@ -1,0 +1,90 @@
+/* GENERATED from pen-theme.css by a one-off script: every app rule that typed a warm literal
+   colour, a serif/mono face or the display face is restated here with the skin's cool
+   equivalent, scoped like app-skin.css (which loads after this file and wins on ties).
+   Re-generate rather than hand-edit if pen-theme.css changes. */
+
+.pen-root:has(.pen-page, .pen-m, .pen-set, .pen-cust, .pen-usage, .pen-su-wrap, .howto-page, .pen-check) {
+  .pen-display { font-weight: 600; letter-spacing: -0.025em; }
+  .pen-pill[data-s='transcribing'] { border-color: #f2d6a4; }
+  .pen-pill[data-s='noting'] { border-color: #f2d6a4; }
+  .pen-pill[data-s='noted'] { border-color: #c7e6d2; }
+  .pen-pill[data-s='error'] { border-color: #f3c6c2; }
+  .pen-btn:hover:not(:disabled) { border-color: #c7c7cc; }
+  .pen-btn-primary:hover:not(:disabled) { background: #3a3a3c; border-color: #3a3a3c; }
+  .pen-act-box { border: 1.5px solid #c7c7cc; }
+  .pen-missed { border: 1px solid #f2d6a4; }
+  .pen-chip:hover { background: #eef5fd; }
+  .pen-block[data-source='ai']   .pen-block-input { color: #86868b; }
+  .pen-block-reveal { color: #86868b; }
+  .pen-utt-input:focus { background: #fafafc; box-shadow: 0 0 0 6px #fafafc; }
+  .pen-cite-full:hover { background: #eef5fd; }
+  .pen-cmdk:hover { border-color: #c7c7cc; }
+  .pen-sheet { box-shadow: 0 -1px 2px rgba(0, 0, 0,.04), 0 -14px 34px -10px rgba(0, 0, 0,.17), 0 -44px 90px -30px rgba(0, 0, 0,.2); }
+  .pen-sheet-title { font-weight: 600; letter-spacing: -0.025em; }
+  .pen-copy:hover:not(:disabled) { background: #3a3a3c; }
+  .pen-brief:hover:not(:disabled) { border-color: #c7c7cc; }
+  .pen-brief[data-state='failed'] { border-color: #f3c6c2; }
+  .pen-brief-err { border: 1px solid #f3c6c2; box-shadow: 0 6px 18px -8px rgba(0, 0, 0,.2); }
+  .pen-btn-quiet:hover:not(:disabled) { border-color: #f3c6c2; }
+  .pen-confirm { border: 1px solid #f3c6c2; }
+  .pen-ov-back:hover { border-color: #c7c7cc; }
+  .pen-seg-pill { box-shadow: 0 1px 2px rgba(0, 0, 0,.07), 0 3px 8px -2px rgba(0, 0, 0,.13); border: 1px solid rgba(0, 0, 0,.06); }
+  .pen-title { font-weight: 600; letter-spacing: -0.025em; }
+  .pen-title-input { font-weight: 600; letter-spacing: -0.025em; }
+  .pen-chat-error { border: 1px solid #f3c6c2; }
+  .pen-quick-btn:hover:not(:disabled) { background: #eef5fd; }
+  .pen-composer-input { box-shadow: 0 1px 2px rgba(0, 0, 0, .04); }
+  .pen-doc-title { font-weight: 600; letter-spacing: -0.025em; }
+  .pen-md-h { font-weight: 600; letter-spacing: -0.025em; }
+  .pen-md-box { border: 1.5px solid #c7c7cc; }
+  .pen-meter-cta:hover { background: #eef5fd; }
+  .pen-side:hover::-webkit-scrollbar-thumb { background: #d2d2d7; }
+}
+@media (max-width: 900px) {
+  .pen-root:has(.pen-page, .pen-m, .pen-set, .pen-cust, .pen-usage, .pen-su-wrap, .howto-page, .pen-check) {
+    .pen-side { box-shadow: 0 0 60px -12px rgba(0, 0, 0,.3); }
+    .pen-scrim { background: rgba(0, 0, 0,.36); }
+  }
+}
+@media (max-width: 680px) {
+  .pen-root:has(.pen-page, .pen-m, .pen-set, .pen-cust, .pen-usage, .pen-su-wrap, .howto-page, .pen-check) {
+    .pen-brief-pop, .pen-catpick-menu { box-shadow: 0 -10px 46px -12px rgba(0, 0, 0, .34); }
+  }
+}
+.pen-root:has(.pen-page, .pen-m, .pen-set, .pen-cust, .pen-usage, .pen-su-wrap, .howto-page, .pen-check) {
+  .pen-imp { box-shadow: 0 -16px 50px -14px rgba(0, 0, 0, .34); }
+  .pen-consent[data-on='true'] { border-color: #c7e6d2; }
+  .pen-consent-knob { box-shadow: 0 1px 3px rgba(0, 0, 0,.3); }
+  .pen-imp-pct { font-weight: 600; letter-spacing: -0.025em; }
+  .pen-imp-tick { border: 1px solid #c7e6d2; }
+  .pen-scrim-on { background: rgba(0, 0, 0, .38); }
+  .pen-su-opt:hover { border-color: #c7c7cc; }
+  .pen-su-err { border: 1px solid #f3c6c2; }
+  .pen-su-tick { border: 1px solid #c7e6d2; }
+  .pen-quotecard p { font-weight: 600; letter-spacing: -0.025em; }
+  .pen-chip[data-tone='bad'] { border-color: #f3c6c2; }
+  .pen-hw-ground { background: radial-gradient(50% 50% at 50% 50%, rgba(0, 0, 0,.26) 0%, transparent 72%); }
+  .pen-set-h2 { font-weight: 600; letter-spacing: -0.025em; }
+  .pen-set-follow-head { font-weight: 600; letter-spacing: -0.025em; }
+  .pen-panel-scrim { background: rgba(0, 0, 0, .32); }
+  .pen-bigpanel-title { font-weight: 600; letter-spacing: -0.025em; }
+  .pen-toast button { color: #a9cdf2; }
+  .pen-pick-chip button:hover { background: rgba(0, 102, 204, .12); }
+  .pen-cust-pill[data-tone='bad'] { border-color: #f3c6c2; }
+  .pen-tximp-back { background: rgba(0, 0, 0, .38); }
+  .pen-tximp { box-shadow: 0 24px 60px -18px rgba(0, 0, 0, .45); }
+  .pen-tximp-preview { font-family: var(--font-ui); }
+  .pen-tour-dim { background: rgba(0, 0, 0, .52); }
+  .pen-tour-ring { box-shadow: 0 0 0 2px var(--accent), 0 0 0 6px rgba(0, 102, 204, .25); }
+  .pen-tour-card { box-shadow: 0 22px 50px -18px rgba(0, 0, 0, .5); }
+  .pen-tour-count { font-family: var(--font-ui); }
+  .pen-tour-title { font-family: var(--font-ui); font-weight: 600; letter-spacing: -0.025em; }
+  .pen-m-hist { box-shadow: 12px 0 40px -16px rgba(0, 0, 0, .35); }
+  .pen-plan-count strong { font-weight: 600; letter-spacing: -0.025em; }
+  .pen-cancel-confirm { border-color: #f3c6c2; }
+  .pen-invite-stats strong { font-weight: 600; letter-spacing: -0.025em; }
+  .pen-promo-dim { background: #1d1d1f; }
+  .pen-promo-card { box-shadow: 0 0 0 1px rgba(0, 0, 0, .12), 0 30px 80px -10px rgba(0, 0, 0, .55); }
+  .pen-upcard { box-shadow: var(--lift-2), 0 12px 32px -12px rgba(0, 0, 0, .28); }
+  .pen-d-menu { box-shadow: 0 18px 40px -16px rgba(0, 0, 0, .45); }
+}

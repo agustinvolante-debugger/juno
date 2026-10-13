@@ -98,6 +98,7 @@ export default function PenApp({
   loadError,
   email,
   name,
+  profileName = null,
   avatar,
   allowance: initialAllowance,
   whatsapp,
@@ -124,11 +125,16 @@ export default function PenApp({
   allowance: Allowance | null
   loadError: string | null
   name?: string | null
+  /** The name from Profile, when set. Home greets by its first word. */
+  profileName?: string | null
   avatar?: string | null
   email: string
 }) {
   const [sessions, setSessions] = useState<PenSession[]>(initial)
   const T = APP_COPY[appLang]
+  // First word of the name, for Home's greeting: Profile's name first, then the session's.
+  // "Agustin (Chaska)" -> "Agustin".
+  const firstName = (profileName || name)?.trim().split(/\s+/)[0] || null
   const accept = useAccept()
   const router = useRouter()
 
@@ -206,6 +212,20 @@ export default function PenApp({
   }, [navOpen])
   const [catAsk, setCatAsk] = useState<Record<string, string[]>>({})
   const fileInput = useRef<HTMLInputElement>(null)
+
+  // The CATEGORIES group in the sidebar can be folded away; the choice is remembered.
+  const [catsOpen, setCatsOpen] = useState(true)
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem('pen.cats.open') === '0') setCatsOpen(false)
+    } catch {}
+  }, [])
+  const toggleCats = useCallback(() => {
+    setCatsOpen((v) => {
+      try { window.localStorage.setItem('pen.cats.open', v ? '0' : '1') } catch {}
+      return !v
+    })
+  }, [])
 
   const refreshChats = useCallback(async () => {
     try {
@@ -732,6 +752,7 @@ export default function PenApp({
         <AskWhatsApp whatsapp={whatsapp ?? null} T={T} />
         <Overview
           stats={stats}
+          firstName={firstName}
           people={people}
           peopleLoading={!peopleLoaded}
           onChanged={() => void refresh()}
@@ -871,12 +892,11 @@ export default function PenApp({
                     <button type="button" key={x.id} className="pen-m-rec" onClick={() => { openSession(x.id); setTab('note'); setChatOpen(false) }}>
                       <span className="pen-m-rec-top">
                         <span className="pen-m-rec-title">{sessionTitle(x)}</span>
-                        <span className="pen-pill" data-s={x.status}>{T.status[x.status] ?? x.status}</span>
+                        <RecPills s={x} T={T} lang={appLang} />
                       </span>
                       <span className="pen-mono pen-m-rec-meta">
                         {fmtDur(partsOf(x).reduce((n, y) => n + (y.duration_sec ?? 0), 0))}
                         {partsOf(x).length > 1 ? ` · ${T.parts(partsOf(x).length)}` : ''}
-                        {x.meeting_type ? ` · ${typeLabel(x.meeting_type, appLang).toLowerCase()}` : ''}
                       </span>
                     </button>
                   ))}
@@ -1070,18 +1090,21 @@ export default function PenApp({
         </span>
       </button>
 
-      <button type="button" className="pen-tximp-open" onClick={() => { setNavOpen(false); setTxImport(true) }}>
-        <Icon name="quote" size={15} />
-        {T.importTranscript}
-      </button>
-      {notion && (
-        <button type="button" className="pen-tximp-open" onClick={() => { setNavOpen(false); setNImport(true) }}>
-          <Icon name="link" size={15} />
-          {T.importNotion}
-        </button>
-      )}
       </>
       )}
+
+      {/* The other ways in, behind one quiet button: a transcript, Notion, and WhatsApp from the
+          phone. Same handlers and links the separate buttons used. */}
+      <ImportMenu
+        T={T}
+        onTranscript={!readOnly && !paused ? () => { setNavOpen(false); setTxImport(true) } : null}
+        onNotion={!readOnly && !paused && notion ? () => { setNavOpen(false); setNImport(true) } : null}
+        whatsapp={whatsapp ? {
+          href: whatsapp.linked ? `https://wa.me/${whatsapp.number}` : '/pen/settings/whatsapp',
+          external: whatsapp.linked,
+          label: whatsapp.linked ? T.openWhatsApp : T.useWhatsApp,
+        } : null}
+      />
       {tourOpen && <Tour lang={appLang} onClose={closeTour} onUpload={() => fileInput.current?.click()} />}
       {promoOpen && !tourOpen && <ReferralPromo T={T} onClose={closePromo} />}
       {askOpen && !tourOpen && !promoOpen && <FeedbackAsk T={T} onClose={closeAsk} />}
@@ -1100,22 +1123,6 @@ export default function PenApp({
           onClose={() => setNImport(false)}
           onImported={(id) => { setNImport(false); void refresh(); openSession(id) }}
         />
-      )}
-
-      {/* The third way in: from the phone, over WhatsApp. Opens the chat once linked,
-          otherwise the page that links it. */}
-      {whatsapp && (
-        <a
-          className="pen-drop pen-drop-side pen-wa-side"
-          href={whatsapp.linked ? `https://wa.me/${whatsapp.number}` : '/pen/settings/whatsapp'}
-          {...(whatsapp.linked ? { target: '_blank', rel: 'noreferrer' } : {})}
-        >
-          <Icon name="chat" size={17} />
-          <span>
-            <strong>{whatsapp.linked ? T.openWhatsApp : T.useWhatsApp}</strong>
-            <em>{whatsapp.linked ? T.waLinkedSub : T.waUnlinkedSub}</em>
-          </span>
-        </a>
       )}
 
       <nav className="pen-cats">
@@ -1146,7 +1153,21 @@ export default function PenApp({
             recording row, where it is good description; navigation happens by bucket. Empty
             buckets are hidden so the nav only ever offers somewhere to go. */}
         {bucketCounts.length > 0 && (
-          <div className="pen-cats-list pen-cats-buckets">
+          <div className="pen-sec-toggle-wrap">
+            <button
+              type="button"
+              className="pen-sec-toggle pen-label"
+              aria-expanded={catsOpen}
+              aria-controls="pen-cats-buckets"
+              onClick={() => toggleCats()}
+            >
+              <span>{T.categories}</span>
+              <Icon name="chevron" size={14} className="pen-sec-chev" />
+            </button>
+          </div>
+        )}
+        {bucketCounts.length > 0 && catsOpen && (
+          <div className="pen-cats-list pen-cats-buckets" id="pen-cats-buckets">
             {bucketCounts.map(([b, n]) => (
               <button
                 key={b}
@@ -1165,13 +1186,9 @@ export default function PenApp({
 
       {/* --------------------------------- recordings (rail; ordered right in CSS) */}
 
-      <div className="pen-quotecard">
-        <p>&ldquo;{T.quote[0]}<br />{T.quote[1]}&rdquo;</p>
-      </div>
-
       <nav className="pen-saved">
         {/* ---------------------------------------------------------- chats */}
-        <div className="pen-cats-head pen-label pen-cats-head-row">
+        <div className="pen-cats-head pen-label pen-cats-head-row pen-sec-label">
           <span>{T.chats}</span>
           <button
             className="pen-cats-new"
@@ -1190,19 +1207,22 @@ export default function PenApp({
         ) : (
           <div className="pen-cats-list">
             {chats.slice(0, 4).map((c) => (
-              <button
+              <ChatRow
                 key={c.id}
-                className="pen-cat"
-                data-active={view.k === 'chat' && view.id === c.id}
-                onClick={() => {
+                chat={c}
+                T={T}
+                active={view.k === 'chat' && view.id === c.id}
+                onOpen={() => {
                   setChatSeed(null)
                   setView({ k: 'chat', id: c.id })
                   setNavOpen(false)
                 }}
-                title={c.title ?? T.untitledChat}
-              >
-                <span className="pen-cat-label">{c.title ?? T.untitledChat}</span>
-              </button>
+                onRenamed={() => void refreshChats()}
+                onDeleted={() => {
+                  if (view.k === 'chat' && view.id === c.id) setView({ k: 'archive' })
+                  void refreshChats()
+                }}
+              />
             ))}
           </div>
         )}
@@ -1392,6 +1412,7 @@ export default function PenApp({
               <AskWhatsApp whatsapp={whatsapp ?? null} T={T} />
               <Overview
                 stats={stats}
+                firstName={firstName}
                 people={people}
                 peopleLoading={!peopleLoaded}
                 onChanged={() => void refresh()}
@@ -1472,19 +1493,18 @@ export default function PenApp({
                 <div key={day} className="mb-5">
                   <div className="pen-label mb-1.5">{day}</div>
                   {rows.map((s) => (
-                    <div key={s.id} className="pen-row px-2.5 py-3" data-active={s.id === activeId}
+                    <div key={s.id} className="pen-row pen-recrow" data-active={s.id === activeId}
                          onClick={() => { openSession(s.id); setTab('note'); setChatOpen(false) }}>
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="pen-row-title min-w-0 flex-1 text-[14.5px] font-medium leading-snug">
+                      <div className="pen-recrow-main">
+                        <span className="pen-row-title pen-recrow-title">
                           {s.title || s.client_name || s.source_name || T.untitled}
                         </span>
-                        <span className="pen-pill" data-s={s.status}>{T.status[s.status] ?? s.status}</span>
+                        <span className="pen-recrow-dur">
+                          {fmtDur(partsOf(s).reduce((n, x) => n + (x.duration_sec ?? 0), 0))}
+                          {partsOf(s).length > 1 ? ` · ${T.parts(partsOf(s).length)}` : ''}
+                        </span>
                       </div>
-                      <div className="pen-mono mt-1.5 text-[13px]" style={{ color: 'var(--faint)' }}>
-                        {fmtDur(partsOf(s).reduce((n, x) => n + (x.duration_sec ?? 0), 0))}
-                        {partsOf(s).length > 1 ? ` · ${T.parts(partsOf(s).length)}` : ''}
-                        {s.meeting_type ? ` · ${typeLabel(s.meeting_type, appLang).toLowerCase()}` : ''}
-                      </div>
+                      <RecPills s={s} T={T} lang={appLang} />
                     </div>
                   ))}
                 </div>
@@ -3181,5 +3201,257 @@ function NotionButton({ sessionId, connected, sentUrl }: { sessionId: string; co
       <button type="button" className="pen-btn" onClick={send} disabled={busy}>{busy ? T.notionSending : T.notionSend}</button>
       {err && <span className="pen-ref-err">{err}</span>}
     </>
+  )
+}
+
+/* ------------------------------------------------------------ sidebar menus */
+
+/** Esc and an outside click close a small menu; Esc hands focus back to its button. */
+function useMenu() {
+  const [open, setOpen] = useState(false)
+  const wrap = useRef<HTMLDivElement>(null)
+  const btn = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        setOpen(false)
+        btn.current?.focus()
+      }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        const items = Array.from(wrap.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])
+        if (!items.length) return
+        e.preventDefault()
+        const at = items.indexOf(document.activeElement as HTMLElement)
+        const next = e.key === 'ArrowDown' ? (at + 1) % items.length : (at - 1 + items.length) % items.length
+        items[next].focus()
+      }
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    // Focus the first item, so the keyboard lands inside the menu it just opened.
+    requestAnimationFrame(() => wrap.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus())
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+  return { open, setOpen, wrap, btn }
+}
+
+/**
+ * "More ways to import": a transcript, Notion, WhatsApp. One secondary button under the drop
+ * zone instead of three separate rows. Each item is the handler or link the old row used.
+ */
+function ImportMenu({
+  T,
+  onTranscript,
+  onNotion,
+  whatsapp,
+}: {
+  T: AppCopy
+  onTranscript: (() => void) | null
+  onNotion: (() => void) | null
+  whatsapp: { href: string; external: boolean; label: string } | null
+}) {
+  const m = useMenu()
+  if (!onTranscript && !onNotion && !whatsapp) return null
+  const pick = (fn: () => void) => () => { m.setOpen(false); fn() }
+  return (
+    <div className="pen-imenu" ref={m.wrap}>
+      <button
+        ref={m.btn}
+        type="button"
+        className="pen-imenu-btn"
+        aria-haspopup="menu"
+        aria-expanded={m.open}
+        onClick={() => m.setOpen((v) => !v)}
+      >
+        <Icon name="plus" size={15} />
+        <span>{T.moreImports}</span>
+        <Icon name="chevron" size={14} className="pen-imenu-chev" />
+      </button>
+      {m.open && (
+        <div className="pen-menu" role="menu" aria-label={T.moreImports}>
+          {onTranscript && (
+            <button type="button" role="menuitem" className="pen-menu-item" onClick={pick(onTranscript)}>
+              <Icon name="quote" size={15} />{T.importTranscript}
+            </button>
+          )}
+          {onNotion && (
+            <button type="button" role="menuitem" className="pen-menu-item" onClick={pick(onNotion)}>
+              <Icon name="link" size={15} />{T.importNotion}
+            </button>
+          )}
+          {whatsapp && (
+            <a
+              role="menuitem"
+              className="pen-menu-item"
+              href={whatsapp.href}
+              onClick={() => m.setOpen(false)}
+              {...(whatsapp.external ? { target: '_blank', rel: 'noreferrer' } : {})}
+            >
+              <Icon name="chat" size={15} />{whatsapp.label}
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * A chat in the sidebar, with a "⋯" menu: rename in place (Enter saves, Esc cancels) or
+ * delete after a confirmation. Uses PATCH and DELETE on /api/pen/chats/[id], which only
+ * touch the signed-in user's own chats.
+ */
+function ChatRow({
+  chat,
+  T,
+  active,
+  onOpen,
+  onRenamed,
+  onDeleted,
+}: {
+  chat: ChatSummary
+  T: AppCopy
+  active: boolean
+  onOpen: () => void
+  onRenamed: () => void
+  onDeleted: () => void
+}) {
+  const m = useMenu()
+  const title = chat.title ?? T.untitledChat
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(title)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState(false)
+  const input = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (editing) requestAnimationFrame(() => { input.current?.focus(); input.current?.select() })
+  }, [editing])
+
+  const save = async () => {
+    const t = draft.trim()
+    if (!t || t === title) { setEditing(false); return }
+    setBusy(true)
+    try {
+      const r = await fetch(`/api/pen/chats/${chat.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: t }),
+      })
+      if (!r.ok) throw new Error(String(r.status))
+      setEditing(false)
+      setErr(false)
+      onRenamed()
+    } catch {
+      setErr(true)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const remove = async () => {
+    m.setOpen(false)
+    if (!window.confirm(T.confirmDeleteChat(title))) { m.btn.current?.focus(); return }
+    setBusy(true)
+    try {
+      const r = await fetch(`/api/pen/chats/${chat.id}`, { method: 'DELETE' })
+      if (!r.ok) throw new Error(String(r.status))
+      onDeleted()
+    } catch {
+      setErr(true)
+      setBusy(false)
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="pen-chatrow pen-chatrow-edit">
+        <input
+          ref={input}
+          className="pen-chatrow-input"
+          value={draft}
+          maxLength={140}
+          disabled={busy}
+          aria-label={T.renameChatAria}
+          aria-invalid={err || undefined}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); void save() }
+            if (e.key === 'Escape') { e.preventDefault(); setDraft(title); setEditing(false); setErr(false) }
+          }}
+          onBlur={() => { if (!busy) { setDraft(title); setEditing(false) } }}
+        />
+        {err && <span className="pen-chatrow-err" role="alert">{T.chatActionFailed}</span>}
+      </div>
+    )
+  }
+
+  return (
+    <div className="pen-chatrow" data-active={active} ref={m.wrap}>
+      <button type="button" className="pen-cat pen-chatrow-open" data-active={active} onClick={onOpen} title={title} disabled={busy}>
+        <span className="pen-cat-label">{title}</span>
+      </button>
+      <button
+        ref={m.btn}
+        type="button"
+        className="pen-chatrow-more"
+        aria-haspopup="menu"
+        aria-expanded={m.open}
+        aria-label={T.chatOptions(title)}
+        onClick={(e) => { e.stopPropagation(); m.setOpen((v) => !v) }}
+      >
+        <span aria-hidden>⋯</span>
+      </button>
+      {m.open && (
+        <div className="pen-menu pen-menu-right" role="menu" aria-label={T.chatOptions(title)}>
+          <button type="button" role="menuitem" className="pen-menu-item" onClick={() => { m.setOpen(false); setDraft(title); setEditing(true) }}>
+            <Icon name="pen" size={15} />{T.renameChat}
+          </button>
+          <button type="button" role="menuitem" className="pen-menu-item pen-menu-danger" onClick={() => void remove()}>
+            <Icon name="trash" size={15} />{T.deleteChat}
+          </button>
+        </div>
+      )}
+      {err && <span className="pen-chatrow-err" role="alert">{T.chatActionFailed}</span>}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------ recording pills */
+
+/** A handful of tints for the free-form category, matched on meaning; anything else is neutral. */
+function catTint(label: string): string {
+  const c = label.toLowerCase()
+  if (/(shopping|purchase|buying|store|grocer|order)/.test(c)) return 'shop'
+  if (/(to-?do|task|note|memo|admin|reminder)/.test(c)) return 'notes'
+  if (/(product|plan|strategy|brainstorm|idea|roadmap|design|pitch|demo)/.test(c)) return 'product'
+  if (/(talk|lecture|class|lesson|coach|mentor|course|conference|webinar|seminar)/.test(c)) return 'talk'
+  if (/(meeting|call|interview|one-on-one|1:1|sync|discussion|client|sales|discovery|board|review|catch|coffee|viewing)/.test(c)) return 'meet'
+  return 'neutral'
+}
+
+/**
+ * The pills on a recording row: its category (the recording's own label) and its language when
+ * the transcript has one. A recording that is still processing or has failed keeps its status
+ * pill, first, because that is the thing to know about it; a finished one doesn't need it.
+ */
+function RecPills({ s, T, lang }: { s: PenSession; T: AppCopy; lang: Lang }) {
+  const label = displayType(s.meeting_type) ? typeLabel(s.meeting_type, lang) : ''
+  const showStatus = s.status !== 'noted'
+  const code = (s.language ?? '').trim().slice(0, 2).toUpperCase()
+  if (!label && !showStatus && !code) return null
+  return (
+    <span className="pen-recpills">
+      {showStatus && <span className="pen-pill" data-s={s.status}>{T.status[s.status] ?? s.status}</span>}
+      {label && <span className="pen-catpill" data-tint={catTint(label)} title={label}>{label}</span>}
+      {code && <span className="pen-langpill">{code}</span>}
+    </span>
   )
 }

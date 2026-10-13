@@ -47,3 +47,64 @@
 .auth-foot, .auth-foot a { color: var(--faint); text-decoration: none; }
 .auth-foot span a { text-decoration: underline; text-underline-offset: 2px; }
 .auth-foot a:hover { color: var(--soft); }
+
+
+/* ------------------------------------------------------------------ Juno Pen (Oct 13)
+   The same page reached from Pen (callbackUrl under /pen; the card carries .auth-pen) takes
+   the Pen app's look: cool grey canvas, a glass card, Inter, one blue action colour. The page
+   reached from the Daily Brief, VC or anything else has no .auth-pen and keeps the rules above. */
+.auth-root:has(.auth-pen) {
+  --paper: #f2f3f7; --panel: #ffffff; --line: #d2d2d7; --hair: #e8e8ed;
+  --ink: #1d1d1f; --soft: #424245; --dim: #6e6e73; --faint: #6e6e73;
+  --accent: #0066cc; --accent-ink: #0055aa; --accent-wash: #e8f1fc;
+  --warn: #935400; --warn-wash: #fff3df; --bad: #c0281c;
+  background:
+    radial-gradient(1100px 760px at 6% -8%, rgba(168, 192, 232, .34), transparent 62%),
+    radial-gradient(980px 720px at 102% 6%, rgba(212, 202, 242, .32), transparent 60%),
+    radial-gradient(1000px 760px at 48% 112%, rgba(182, 212, 236, .30), transparent 62%),
+    #f2f3f7;
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.006em;
+}
+.auth-pen {
+  max-width: 420px; padding: 36px 32px 28px; border-radius: 24px;
+  background: linear-gradient(150deg, rgba(255, 255, 255, .9), rgba(255, 255, 255, .72));
+  -webkit-backdrop-filter: blur(20px) saturate(170%); backdrop-filter: blur(20px) saturate(170%);
+  border: 1px solid rgba(255, 255, 255, .9);
+  box-shadow: inset 0 1px 0 #fff, 0 1px 2px rgba(29, 29, 31, .04), 0 12px 24px -10px rgba(29, 29, 31, .12), 0 30px 60px -24px rgba(29, 29, 31, .18);
+}
+.auth-pen .auth-word { font-family: var(--font-ui), system-ui, sans-serif; font-weight: 600; font-size: 21px; letter-spacing: -0.03em; }
+.auth-pen .auth-title { font-family: var(--font-ui), system-ui, sans-serif; font-weight: 600; font-size: 32px; line-height: 1.08; letter-spacing: -0.035em; }
+.auth-pen .auth-sub { font-size: 16px; color: var(--soft); }
+.auth-pen .auth-btn { border-radius: 9999px; font-weight: 600; transition: background .15s ease, box-shadow .15s ease, translate .15s ease; }
+.auth-pen .auth-btn:focus-visible { outline: 2px solid #0071e3; outline-offset: 3px; }
+.auth-pen .auth-btn-google, .auth-pen .auth-btn-quiet {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .98), rgba(255, 255, 255, .8));
+  border: 1px solid rgba(29, 29, 31, .12); color: var(--ink);
+  box-shadow: inset 0 1px 0 #fff, 0 1px 2px rgba(29, 29, 31, .06), 0 3px 8px -3px rgba(29, 29, 31, .1);
+}
+.auth-pen .auth-btn-google:hover, .auth-pen .auth-btn-quiet:hover { background: #fff; border-color: rgba(29, 29, 31, .2); }
+.auth-pen .auth-btn-primary {
+  background: linear-gradient(180deg, #1b7be3, #0066cc); border: 1px solid #0062c4; color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .32), 0 1px 2px rgba(0, 51, 122, .22), 0 8px 18px -8px rgba(0, 102, 204, .55);
+}
+.auth-pen .auth-btn-primary:hover { background: linear-gradient(180deg, #2385ec, #0071e3); }
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .auth-pen .auth-btn-primary:hover:not([disabled]) { translate: 0 -1px; }
+}
+.auth-pen .auth-input { border-radius: 12px; border-color: var(--line); background: rgba(255, 255, 255, .95); }
+.auth-pen .auth-input:focus { border-color: #0071e3; box-shadow: 0 0 0 4px rgba(0, 113, 227, .16); }
+.auth-pen .auth-input:user-invalid { border-color: var(--bad); }
+.auth-pen .auth-input::placeholder { color: #8e8e93; }
+.auth-pen .auth-label { color: var(--soft); }
+.auth-pen .auth-alert { border: 1px solid #f2d6a4; }
+.auth-pen .auth-note a { color: var(--accent-ink); }
+.auth-pen .auth-sent-icon { border: 1px solid rgba(255, 255, 255, .8); }
+.auth-pen .auth-foot, .auth-pen .auth-foot a { color: var(--dim); }
+.auth-pen .auth-foot a:hover { color: var(--ink); }
+@media (max-width: 420px) {
+  .auth-pen { padding: 28px 20px 22px; border-radius: 20px; }
+}
+.auth-pen .auth-foot { flex-wrap: wrap; row-gap: 0; align-items: center; }
+.auth-pen .auth-foot a { display: inline-flex; align-items: center; min-height: 44px; }

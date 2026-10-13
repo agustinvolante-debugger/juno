@@ -36,7 +36,7 @@ function EmailLinkContent() {
   const fromPen = callbackUrl.includes('/pen')
 
   return (
-    <main className="auth-card">
+    <main className={`auth-card${fromPen ? ' auth-pen' : ''}`}>
       <div className="auth-brand">
         <Image src="/juno_mark.png" alt="" width={36} height={36} className="auth-mark" priority />
         <span className="auth-word">{fromPen ? 'Juno Pen' : 'Juno'}</span>

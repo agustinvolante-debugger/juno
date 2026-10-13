@@ -45,7 +45,7 @@ export default async function UsagePage() {
   const days = (iso: string) => Math.floor((now - new Date(iso).getTime()) / 86_400_000)
 
   return (
-    <main className="mx-auto max-w-[1000px] px-5 pb-24 pt-9 sm:px-8">
+    <main className="pen-usage mx-auto max-w-[1000px] px-5 pb-24 pt-9 sm:px-8">
       <header className="flex items-end justify-between gap-4 border-b pb-5" style={{ borderColor: 'var(--line)' }}>
         <div>
           <div className="pen-label">Owner only</div>
