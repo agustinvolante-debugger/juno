@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Instrument_Serif, Literata, IBM_Plex_Mono, Inter } from 'next/font/google'
+import { Instrument_Serif, Literata, IBM_Plex_Mono, Inter, Playfair_Display, Lora } from 'next/font/google'
 import './pen-theme.css'
 // The signed-in app's skin. Scoped to the app's own surfaces; the landing pages never match it.
 import './app-skin-literals.css'
@@ -38,6 +38,25 @@ const ui = Inter({
   display: 'swap',
   variable: '--font-ui',
 })
+// The landing pages' type (13 Oct): Playfair Display italic headlines, Lora for everything else,
+// Lora italic for the "J" of the wordmark. Only landing-apple.css uses them, and preload is off,
+// so the app never downloads them.
+const lpHead = Playfair_Display({
+  subsets: ['latin'],
+  weight: '400',
+  style: 'italic',
+  display: 'swap',
+  preload: false,
+  variable: '--font-lp-head',
+})
+const lpBody = Lora({
+  subsets: ['latin'],
+  weight: ['400', '600'],
+  style: ['normal', 'italic'],
+  display: 'swap',
+  preload: false,
+  variable: '--font-lp-body',
+})
 
 export const metadata: Metadata = {
   title: 'Juno Pen',
@@ -65,7 +84,7 @@ export const viewport: Viewport = {
 
 export default function PenLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className={`pen-root ${display.variable} ${serif.variable} ${mono.variable} ${ui.variable}`}>
+    <div className={`pen-root ${display.variable} ${serif.variable} ${mono.variable} ${ui.variable} ${lpHead.variable} ${lpBody.variable}`}>
       {children}
     </div>
   )

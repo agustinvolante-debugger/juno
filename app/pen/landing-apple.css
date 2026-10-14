@@ -24,12 +24,13 @@
   --lpa-r-lg: 18px;
   --lpa-r-xl: 28px;
   --lpa-pill: 9999px;
-  --lpa-font: var(--font-ui), Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --lpa-font: var(--font-lp-body), Lora, Georgia, "Times New Roman", serif;
+  --lpa-head: var(--font-lp-head), "Playfair Display", Georgia, serif;
   --lpa-gutter: 24px;
   --lpa-nav-h: 52px;
 
   font-family: var(--lpa-font);
-  font-feature-settings: "ss03", "cv11";
+  font-feature-settings: normal;
   font-size: 17px;
   line-height: 1.47;
   letter-spacing: -0.01em;
@@ -640,3 +641,18 @@
   .lpa-glass::before { display: none; }
   .lpa-plan-cta:active { transform: none; }
 }
+
+
+/* ------------------------------------------------------------- type (13 Oct) */
+/* Headlines: Playfair Display italic 400. Body, nav links and buttons: Lora 400. The "J" of the
+   wordmark: Lora italic. The old Inter values (weight 600, tight negative tracking) don't suit a
+   serif italic, so weight and tracking are reset here. */
+.lpa .lpa-hero-h1, .lpa .lpa-display, .lpa .lpa-h2, .lpa .lpa-h4, .lpa .lpa-h5, .lpa h1, .lpa h2, .lpa h3 {
+  font-family: var(--lpa-head);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+.lpa .lpa-hero-h1 { line-height: 1.04; }
+.lpa .lpa-navlink, .lpa .lpa-btn, .lpa button, .lpa a.lpa-btn { font-family: var(--lpa-font); font-weight: 400; }
+.lpa .lpa-j { font-family: var(--lpa-font); font-style: italic; font-weight: 400; }

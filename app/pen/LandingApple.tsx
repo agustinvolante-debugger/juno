@@ -14,6 +14,14 @@ import { AUD_PARAM, KITS, PLUS, type Kit } from './landing-audiences'
 import { INVITED, SIGN_IN, ownPlans, penPlans, signup, type PlanCard } from './Landing'
 import './landing-apple.css'
 
+/** The "J" of "Juno" in Lora italic (.lpa-j), wherever a heading or eyebrow says the name. */
+function jj(text: React.ReactNode): React.ReactNode {
+  if (typeof text !== 'string' || !text.includes('Juno')) return text
+  return text.split(/(Juno)/).map((part, i) =>
+    part === 'Juno' ? <span key={i}><span className="lpa-j">J</span>uno</span> : part,
+  )
+}
+
 // The landing page as a product gallery, in all three languages (Portuguese agreed Oct 12,
 // English and Spanish moved onto it Oct 13): edge-to-edge tiles that alternate black and light,
 // very large tight headlines, one blue action colour, and the pen as the object on the pedestal.
@@ -265,7 +273,7 @@ export default function LandingApple({ market, audience = null, invitedBy = null
         <div className="lpa-wrap lpa-nav-in">
           <Link href="/" className="lpa-brand" aria-label={t.nav.home}>
             <Image src="/juno_mark.png" alt="" width={26} height={26} className="lpa-mark" priority />
-            <span>Juno Pen</span>
+            <span><span className="lpa-j">J</span>uno Pen</span>
           </Link>
           <nav className="lpa-nav-links" aria-label="Juno Pen">
             <a href="#pen" className="lpa-navlink lpa-hide-sm">{t.nav.pen}</a>
@@ -288,14 +296,14 @@ export default function LandingApple({ market, audience = null, invitedBy = null
         <section className="lpa-tile lpa-tile-parch">
           <div className="lpa-wrap">
             <Reveal>
-              <span className="lpa-eyebrow">{x.how}</span>
-              <h2 className="lpa-h2">{p.how.h2}</h2>
+              <span className="lpa-eyebrow">{jj(x.how)}</span>
+              <h2 className="lpa-h2">{jj(p.how.h2)}</h2>
             </Reveal>
             <ol className="lpa-steps">
               {p.how.steps.map((st, i) => (
                 <Reveal key={st.h} as="li" delay={i * 0.1} className="lpa-step">
                   <span className="lpa-step-n" aria-hidden>{i + 1}</span>
-                  <h3 className="lpa-h4">{st.h}</h3>
+                  <h3 className="lpa-h4">{jj(st.h)}</h3>
                   <p>{st.p}</p>
                 </Reveal>
               ))}
@@ -311,14 +319,14 @@ export default function LandingApple({ market, audience = null, invitedBy = null
         <section id="features" className="lpa-tile lpa-tile-white">
           <div className="lpa-wrap">
             <Reveal className="lpa-center">
-              <span className="lpa-eyebrow">{t.nav.features}</span>
-              <h2 className="lpa-h2">{p.feat.noteTitle}.</h2>
+              <span className="lpa-eyebrow">{jj(t.nav.features)}</span>
+              <h2 className="lpa-h2">{jj(p.feat.noteTitle)}.</h2>
               <p className="lpa-lead">{p.feat.noteCopy}</p>
             </Reveal>
             <div className="lpa-cards" key={kit.key}>
               <Reveal className="lpa-card">
                 <span className="lpa-card-ic"><Icon name="sparkle" size={20} /></span>
-                <h3 className="lpa-h4">{kit.note.title}</h3>
+                <h3 className="lpa-h4">{jj(kit.note.title)}</h3>
                 <span className="lpa-label">{p.feat.summary}</span>
                 <p className="lpa-card-p">{kit.note.summary}</p>
                 <span className="lpa-label">{p.feat.actions}</span>
@@ -334,7 +342,7 @@ export default function LandingApple({ market, audience = null, invitedBy = null
               </Reveal>
               <Reveal className="lpa-card" delay={0.12}>
                 <span className="lpa-card-ic"><Icon name="mail" size={20} /></span>
-                <h3 className="lpa-h4">{p.feat.emailTitle}</h3>
+                <h3 className="lpa-h4">{jj(p.feat.emailTitle)}</h3>
                 <p className="lpa-card-p">{p.feat.emailCopy}</p>
                 <div className="lpa-mail">
                   <div className="lpa-mail-row"><span>{p.feat.to}</span>{kit.email.to}</div>
@@ -356,8 +364,8 @@ export default function LandingApple({ market, audience = null, invitedBy = null
         <section className="lpa-tile lpa-tile-parch">
           <div className="lpa-wrap lpa-priv">
             <Reveal>
-              <span className="lpa-eyebrow">{t.footer.privacy}</span>
-              <h2 className="lpa-h2">{p.priv.h2}</h2>
+              <span className="lpa-eyebrow">{jj(t.footer.privacy)}</span>
+              <h2 className="lpa-h2">{jj(p.priv.h2)}</h2>
               <p className="lpa-lead">{p.priv.sub}</p>
               <ul className="lpa-checks">
                 {p.priv.items.map((it) => <li key={it}><Icon name="check" size={16} />{it}</li>)}
@@ -376,7 +384,7 @@ export default function LandingApple({ market, audience = null, invitedBy = null
         {/* --------------------------------------------------------------- faq */}
         <section id="faq" className="lpa-tile lpa-tile-parch">
           <div className="lpa-wrap lpa-narrow">
-            <Reveal className="lpa-center"><h2 className="lpa-h2">{p.faq.h2}</h2></Reveal>
+            <Reveal className="lpa-center"><h2 className="lpa-h2">{jj(p.faq.h2)}</h2></Reveal>
             <Reveal delay={0.08} className="lpa-faq">
               {p.faq.items.map(([q, a]) => (
                 <details key={q} className="lpa-faq-item">
@@ -392,7 +400,7 @@ export default function LandingApple({ market, audience = null, invitedBy = null
         <section className="lpa-tile lpa-tile-black lpa-close">
           <div className="lpa-wrap lpa-center">
             <Reveal>
-              <h2 className="lpa-display">{t.closing.h2}</h2>
+              <h2 className="lpa-display">{jj(t.closing.h2)}</h2>
               <p className="lpa-lead lpa-on-dark-soft">{t.closing.sub(sold ? TRIAL_DAYS_POSTED : TRIAL_DAYS)}</p>
               <div className="lpa-ctas lpa-ctas-center">
                 <Link href={cta('closing')} className="lpa-btn lpa-btn-lg">{ctaLabel}</Link>
@@ -436,7 +444,7 @@ export default function LandingApple({ market, audience = null, invitedBy = null
               ))}
             </nav>
           </div>
-          <p className="lpa-copy">&copy; {new Date().getFullYear()} Juno Pen</p>
+          <p className="lpa-copy">&copy; {new Date().getFullYear()} <span className="lpa-j">J</span>uno Pen</p>
         </div>
       </footer>
 
@@ -468,11 +476,11 @@ function Hero({ ctaLabel, ctaHref, waitlistHref }: { ctaLabel: string; ctaHref: 
             <Icon name="chevron" size={14} />
           </a>
         ) : (
-          <p className="lpa-eyebrow lpa-eyebrow-dark lpa-in">Juno Pen</p>
+          <p className="lpa-eyebrow lpa-eyebrow-dark lpa-in"><span className="lpa-j">J</span>uno Pen</p>
         )}
         <h1 className="lpa-hero-h1">
-          <span className="lpa-in" style={{ animationDelay: '.08s' }}>{p.hero.h1a}</span>{' '}
-          <span className="lpa-hero-h1b lpa-in" style={{ animationDelay: '.22s' }}>{p.hero.h1b}</span>
+          <span className="lpa-in" style={{ animationDelay: '.08s' }}>{jj(p.hero.h1a)}</span>{' '}
+          <span className="lpa-hero-h1b lpa-in" style={{ animationDelay: '.22s' }}>{jj(p.hero.h1b)}</span>
         </h1>
         <p className="lpa-hero-lede lpa-in" style={{ animationDelay: '.36s' }}>{p.hero.lede}</p>
         <div className="lpa-ctas lpa-ctas-center lpa-in" style={{ animationDelay: '.46s' }}>
@@ -556,13 +564,13 @@ function PenOpens({ waitlistHref }: { waitlistHref: string }) {
         <div className="lpa-wrap lpa-scene-in">
           <div className="lpa-scene-caps">
             <motion.div className="lpa-scene-cap lpa-scene-cap1" style={{ opacity: cap1, y: cap1y }}>
-              {sold ? <span className="lpa-eyebrow lpa-eyebrow-dark">{t.nav.pen}</span> : <span className="lpa-chip">{t.pen.soon}</span>}
-              <h2 className="lpa-h2 lpa-on-dark">{t.pen.h2}</h2>
+              {sold ? <span className="lpa-eyebrow lpa-eyebrow-dark">{jj(t.nav.pen)}</span> : <span className="lpa-chip">{jj(t.pen.soon)}</span>}
+              <h2 className="lpa-h2 lpa-on-dark">{jj(t.pen.h2)}</h2>
               <p className="lpa-lead lpa-on-dark-soft">{t.pen.sub}</p>
             </motion.div>
             <motion.div className="lpa-scene-cap lpa-scene-cap2" style={{ opacity: cap2, y: cap2y }}>
               <span className="lpa-eyebrow lpa-eyebrow-dark">USB-C</span>
-              <h2 className="lpa-h2 lpa-on-dark">{t.pen.open}</h2>
+              <h2 className="lpa-h2 lpa-on-dark">{jj(t.pen.open)}</h2>
               <p className="lpa-lead lpa-on-dark-soft">{t.pen.specs[1].v}</p>
               {sold ? <PenBuy dark /> : <Link href={waitlistHref} className="lpa-link-dark">{t.pricing.soonCta}<Icon name="chevron" size={14} /></Link>}
             </motion.div>
@@ -592,8 +600,8 @@ function Specs({ waitlistHref }: { waitlistHref: string }) {
     <section className="lpa-tile lpa-tile-parch">
       <div className="lpa-wrap">
         <Reveal className="lpa-center">
-          <span className="lpa-eyebrow">{t.nav.pen}</span>
-          <h2 className="lpa-h2">{p.pen.allSpecs}.</h2>
+          <span className="lpa-eyebrow">{jj(t.nav.pen)}</span>
+          <h2 className="lpa-h2">{jj(p.pen.allSpecs)}.</h2>
         </Reveal>
         <div className="lpa-stats">
           <Reveal className="lpa-stat lpa-stat-dark">
@@ -611,7 +619,7 @@ function Specs({ waitlistHref }: { waitlistHref: string }) {
           {t.pen.specs.map((sp, i) => (
             <Reveal key={sp.k} as="li" delay={(i % 3) * 0.08} className="lpa-spec">
               <span className="lpa-card-ic"><Icon name={SPEC_ICONS[i]} size={20} /></span>
-              <h3 className="lpa-h5">{sp.k}</h3>
+              <h3 className="lpa-h5">{jj(sp.k)}</h3>
               <p>{sp.v}</p>
             </Reveal>
           ))}
@@ -673,7 +681,7 @@ function SoundToNotes({ kitIndex, setAud }: { kitIndex: number; setAud: (i: numb
     <section className="lpa-tile lpa-tile-white">
       <div className="lpa-wrap">
         <Reveal className="lpa-center">
-          <h2 className="lpa-h2">{p.feat.h2}</h2>
+          <h2 className="lpa-h2">{jj(p.feat.h2)}</h2>
           <p className="lpa-lead">{p.feat.sub}</p>
         </Reveal>
         <Reveal className="lpa-chips-row">
@@ -703,7 +711,7 @@ function SoundToNotes({ kitIndex, setAud }: { kitIndex: number; setAud: (i: numb
           </div>
           <div className="lpa-s2n-arrow" aria-hidden><Icon name="chevron" size={22} /></div>
           <div className="lpa-s2n-note">
-            <motion.h3 className="lpa-h4" {...item(3)}>{kit.seq.title}</motion.h3>
+            <motion.h3 className="lpa-h4" {...item(3)}>{jj(kit.seq.title)}</motion.h3>
             <motion.div className="lpa-note-row" {...item(4)}>
               <span className="lpa-label">{L.decided}</span>
               <p>{kit.seq.decided}</p>
@@ -745,7 +753,7 @@ function WhatsApp({ kitIndex, ctaLabel, ctaHref }: { kitIndex: number; ctaLabel:
       <div className="lpa-wrap lpa-wa">
         <Reveal>
           <span className="lpa-eyebrow lpa-eyebrow-dark">WhatsApp</span>
-          <h2 className="lpa-h2 lpa-on-dark">{p.wa.h2}</h2>
+          <h2 className="lpa-h2 lpa-on-dark">{jj(p.wa.h2)}</h2>
           <p className="lpa-lead lpa-on-dark-soft">{p.wa.sub}</p>
           <div className="lpa-ctas">
             <Link href={ctaHref} className="lpa-btn lpa-btn-lg">{ctaLabel}</Link>
@@ -804,8 +812,8 @@ function Pricing({ market, waitlistHref }: { market: Market; waitlistHref: strin
       <div className="lpa-pfield" aria-hidden><span /><span /><span /></div>
       <div className="lpa-wrap">
         <Reveal className="lpa-center">
-          <span className="lpa-eyebrow">{t.nav.pricing}</span>
-          <h2 className="lpa-h2">{P.h2}</h2>
+          <span className="lpa-eyebrow">{jj(t.nav.pricing)}</span>
+          <h2 className="lpa-h2">{jj(P.h2)}</h2>
           <p className="lpa-lead">{P.sub}</p>
           {!sold && <p className="lpa-own-sub">{P.ownSub}</p>}
         </Reveal>
@@ -841,7 +849,7 @@ function Pricing({ market, waitlistHref }: { market: Market; waitlistHref: strin
         )}
         <Reveal className="lpa-glass-slot lpa-included-slot">
           <GlassCard className="lpa-included">
-            <h3 className="lpa-h5">{P.includedTitle}</h3>
+            <h3 className="lpa-h5">{jj(P.includedTitle)}</h3>
             <ul className="lpa-checks lpa-checks-3">
               {P.included.map((it) => <li key={it}><Icon name="check" size={16} />{it}</li>)}
             </ul>
@@ -853,7 +861,7 @@ function Pricing({ market, waitlistHref }: { market: Market; waitlistHref: strin
               <div className="lpa-pensoon-art" aria-hidden><PenArt id="soon-pen" className="lpa-pen-svg" /></div>
               <div className="lpa-pensoon-copy">
                 <span className="lpa-chip lpa-chip-light">{t.pen.soon}</span>
-                <h3 className="lpa-h4">{P.soonTitle}</h3>
+                <h3 className="lpa-h4">{jj(P.soonTitle)}</h3>
                 <p>{P.soonBody}</p>
                 <Link href={waitlistHref} className="lpa-link">{P.soonCta}<Icon name="chevron" size={14} /></Link>
               </div>
@@ -942,8 +950,8 @@ function Film({ kit }: { kit: Kit }) {
     <section id="film" className="lpa-tile lpa-tile-white">
       <div className="lpa-wrap">
         <Reveal className="lpa-center">
-          <span className="lpa-eyebrow">{x.film}</span>
-          <h2 className="lpa-h2">{p.film.h2}</h2>
+          <span className="lpa-eyebrow">{jj(x.film)}</span>
+          <h2 className="lpa-h2">{jj(p.film.h2)}</h2>
           <p className="lpa-lead">{p.film.sub}</p>
         </Reveal>
         <Reveal className="lpa-film">
@@ -974,8 +982,8 @@ function NotionSec({ kit, ctaLabel, ctaHref }: { kit: Kit; ctaLabel: string; cta
     <section id="notion" className="lpa-tile lpa-tile-black">
       <div className="lpa-wrap lpa-nt">
         <Reveal>
-          <span className="lpa-eyebrow lpa-eyebrow-dark">{N.kicker}</span>
-          <h2 className="lpa-h2 lpa-on-dark">{N.h2}</h2>
+          <span className="lpa-eyebrow lpa-eyebrow-dark">{jj(N.kicker)}</span>
+          <h2 className="lpa-h2 lpa-on-dark">{jj(N.h2)}</h2>
           <p className="lpa-lead lpa-on-dark-soft">{N.sub}</p>
           <ul className="lpa-checks lpa-checks-1 lpa-checks-dark">
             {N.points.map((it) => <li key={it}><Icon name="check" size={16} />{it}</li>)}
