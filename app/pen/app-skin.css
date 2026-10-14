@@ -511,7 +511,11 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
     -webkit-backdrop-filter: blur(20px) saturate(170%);
     backdrop-filter: blur(20px) saturate(170%);
   }
-  .pen-m-top { border-bottom: 1px solid rgba(29, 29, 31, .08); }
+  /* The frosted bar is its own layer (backdrop-filter), so its account menu was painted under
+     the stat cards after it. The bar sits above the page; its menu is near-opaque, because a
+     blur inside a blurred bar only sees the bar. */
+  .pen-m-top { border-bottom: 1px solid rgba(29, 29, 31, .08); position: relative; z-index: 70; }
+  .pen-m-top .pen-acct2-menu { background: #fff; -webkit-backdrop-filter: none; backdrop-filter: none; }
   .pen-m-tabs { border-top: 1px solid rgba(29, 29, 31, .08); }
   @media (max-width: 900px) {
     /* Blur is the expensive part; on a phone it stays on the cards and the bars only. */
