@@ -1,0 +1,111 @@
+// iMessage through Sendblue (a test, 14 Oct 2026: free sandbox, shared line, verified contacts).
+//
+// The WhatsApp assistant (lib/pen/whatsapp) is channel-agnostic past provider.ts, so iMessage
+// is only this adapter: phone ids are prefixed `im:` (e.g. `im:15551234567`) wherever the bot
+// keeps a sender, and provider.ts routes anything with that prefix here. The account link is
+// the same row as WhatsApp (pen_whatsapp_links, digits only), so a number linked on WhatsApp
+// works on iMessage with no new code.
+//
+// Sendblue has no official Apple backing (real iPhones in their data centres). Inbound-first
+// only: people text Juno, Juno replies. No buttons in iMessage, so the consent tap becomes a
+// "reply YES" (bot.ts).
+
+import type { Inbound } from '../whatsapp/vonage'
+
+const BASE = 'https://api.sendblue.com'
+const PREFIX = 'im:'
+
+export function configured(): boolean {
+  return Boolean(process.env.SENDBLUE_API_KEY_ID && process.env.SENDBLUE_API_SECRET && process.env.SENDBLUE_NUMBER)
+}
+
+/**
+ * Whether this account sees iMessage in Settings. A test on Sendblue's free plan (10 contacts):
+ * only the emails in IMESSAGE_TESTERS (comma-separated). Unset means everyone, once it's paid for.
+ */
+export function imessageFor(email: string | null | undefined): boolean {
+  if (!configured() || !email) return false
+  const list = (process.env.IMESSAGE_TESTERS ?? '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean)
+  return !list.length || list.includes(email.toLowerCase())
+}
+
+export function isImessage(phone: string | null | undefined): boolean {
+  return !!phone && phone.startsWith(PREFIX)
+}
+
+/** `im:15551234567` or `+1 555…` → `+15551234567`. */
+export function e164(phone: string): string {
+  return `+${phone.replace(/\D/g, '')}`
+}
+
+function headers(): Record<string, string> {
+  return {
+    'sb-api-key-id': process.env.SENDBLUE_API_KEY_ID ?? '',
+    'sb-api-secret-key': process.env.SENDBLUE_API_SECRET ?? '',
+    'Content-Type': 'application/json',
+  }
+}
+
+async function post(path: string, body: Record<string, unknown>): Promise<unknown> {
+  const res = await fetch(`${BASE}${path}`, { method: 'POST', headers: headers(), body: JSON.stringify(body) })
+  const json = (await res.json().catch(() => ({}))) as { error_message?: string; message?: string }
+  if (!res.ok) throw new Error(`sendblue ${path} ${res.status}: ${json.error_message ?? json.message ?? ''}`.trim())
+  return json
+}
+
+/** iMessage has no hard length limit, but a wall of text reads badly: split like WhatsApp. */
+export async function sendText(to: string, text: string, split: (t: string, max: number) => string[]): Promise<void> {
+  for (const part of split(text, 3000)) {
+    await post('/api/send-message', { number: e164(to), from_number: process.env.SENDBLUE_NUMBER, content: part })
+  }
+}
+
+/** The "…" bubble while the assistant thinks. Best effort: needs an existing chat. */
+export async function typing(to: string): Promise<void> {
+  await post('/api/send-typing-indicator', { number: e164(to), from_number: process.env.SENDBLUE_NUMBER }).catch(() => {})
+}
+
+export async function markRead(to: string): Promise<void> {
+  await post('/api/mark-read', { number: e164(to), from_number: process.env.SENDBLUE_NUMBER }).catch(() => {})
+}
+
+type SbMessage = {
+  message_handle: string
+  content?: string | null
+  from_number?: string | null
+  number?: string | null
+  is_outbound?: boolean
+  media_url?: string | null
+  message_type?: string | null
+  date_sent?: string | null
+}
+
+const VOICE_EXT = /\.caf(\?|$)/i
+const IMAGE_EXT = /\.(jpe?g|png|heic|heif|gif|webp)(\?|$)/i
+
+/** One Sendblue message as the bot's Inbound. Group chats and outbound echoes are skipped. */
+export function toInbound(m: SbMessage): Inbound | null {
+  if (m.is_outbound || m.message_type === 'group') return null
+  const who = (m.from_number || m.number || '').trim()
+  // Apple Account emails can't be linked to a phone; they are left alone.
+  if (!who || who.includes('@')) return null
+  const from = `${PREFIX}${who.replace(/\D/g, '')}`
+  const base = { id: `im-${m.message_handle}`, from, name: null, text: (m.content ?? '').trim(), mediaUrl: null, fileName: null, replyId: null, raw: m }
+  const media = (m.media_url ?? '').trim()
+  if (media) {
+    const fileName = decodeURIComponent(media.split('?')[0].split('/').pop() ?? '') || null
+    if (IMAGE_EXT.test(media)) return { ...base, kind: 'image', mediaUrl: media, fileName }
+    // An iMessage voice note is a .caf; any other audio file is a recording to write up.
+    return { ...base, kind: 'media', voice: VOICE_EXT.test(media), mediaUrl: media, fileName }
+  }
+  return { ...base, kind: 'text' }
+}
+
+/** Received messages since `sinceIso`, oldest first. For the local poller (no public webhook). */
+export async function inboundSince(sinceIso: string): Promise<SbMessage[]> {
+  const q = new URLSearchParams({ is_outbound: 'false', created_at_gte: sinceIso, order_direction: 'asc', limit: '100', sendblue_number: process.env.SENDBLUE_NUMBER ?? '' })
+  const res = await fetch(`${BASE}/api/v2/messages?${q}`, { headers: headers() })
+  if (!res.ok) throw new Error(`sendblue list ${res.status}`)
+  const json = (await res.json()) as { data?: SbMessage[] }
+  return json.data ?? []
+}

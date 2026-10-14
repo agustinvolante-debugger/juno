@@ -31,7 +31,8 @@ export async function getLinkByEmail(email: string): Promise<Link | null> {
 }
 
 export async function getLinkByPhone(phone: string): Promise<Link | null> {
-  const { data, error } = await supabaseAdmin.from('pen_whatsapp_links').select('*').eq('phone', phone).not('linked_at', 'is', null).maybeSingle()
+  // Digits only: an iMessage sender (`im:1555…`) is the same link as the WhatsApp number.
+  const { data, error } = await supabaseAdmin.from('pen_whatsapp_links').select('*').eq('phone', phone.replace(/\D/g, '')).not('linked_at', 'is', null).maybeSingle()
   if (error) throw new Error(error.message)
   return (data as Link) ?? null
 }
@@ -53,6 +54,7 @@ export async function newCode(email: string): Promise<{ code: string; expiresAt:
  * whoever holds the phone and a signed-in code is the person it belongs to now.
  */
 export async function claimCode(code: string, phone: string): Promise<Link | null> {
+  phone = phone.replace(/\D/g, '')
   const { data } = await supabaseAdmin
     .from('pen_whatsapp_links')
     .select('*')

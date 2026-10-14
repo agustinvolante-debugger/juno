@@ -25,6 +25,7 @@ import { fmtHours } from '../plan'
 import type { Lang } from '../currency'
 import { userLang } from '../user-lang'
 import { sendText, sendButtons, openMedia, markRead, type Inbound } from './provider'
+import { isImessage } from '../imessage/sendblue'
 import {
   claimCode,
   getLinkByEmail,
@@ -69,6 +70,7 @@ const EN = {
   yourRecording: 'your recording',
   consent: (name: string) => `Got ${name}.\n\nOne tap before I write it up: did everyone on this recording agree to be recorded?`,
   agreed: 'Everyone agreed',
+  replyYes: 'Reply YES to confirm.',
   consentNudge: (name: string) => `Still holding ${name}. I'll write it up as soon as you confirm everyone agreed to be recorded.`,
   consentExpired: (name: string) => `No confirmation came for ${name}, so I let it go and didn't write it up. Send it again anytime if you want the notes.`,
   outOfHours: (hours: string) => `You're out of recording hours for this month. Buy more at ${hours} and send the file again.`,
@@ -116,6 +118,7 @@ const BOT: Record<Lang, typeof EN> = {
     yourRecording: 'tu grabación',
     consent: (name) => `Recibí ${name}.\n\nUn toque antes de escribir las notas: ¿todos en esta grabación aceptaron ser grabados?`,
     agreed: 'Todos aceptaron',
+    replyYes: 'Responde SÍ para confirmar.',
     consentNudge: (name) => `Sigo guardando ${name}. Escribo las notas apenas confirmes que todos aceptaron ser grabados.`,
     consentExpired: (name) => `No llegó la confirmación de ${name}, así que la descarté sin escribir notas. Mándamela otra vez cuando quieras las notas.`,
     outOfHours: (hours) => `Se acabaron tus horas de grabación de este mes. Compra más en ${hours} y vuelve a mandar el archivo.`,
@@ -160,6 +163,7 @@ const BOT: Record<Lang, typeof EN> = {
     yourRecording: 'sua gravação',
     consent: (name) => `Recebi ${name}.\n\nUm toque antes de escrever as notas: todos nesta gravação concordaram em ser gravados?`,
     agreed: 'Todos concordaram',
+    replyYes: 'Responda SIM para confirmar.',
     consentNudge: (name) => `Ainda estou com ${name}. Escrevo as notas assim que você confirmar que todos concordaram em ser gravados.`,
     consentExpired: (name) => `Não chegou a confirmação de ${name}, então descartei sem escrever notas. Mande de novo quando quiser as notas.`,
     outOfHours: (hours) => `Suas horas de gravação deste mês acabaram. Compre mais em ${hours} e mande o arquivo de novo.`,
@@ -195,6 +199,15 @@ async function langFor(phone: string, email?: string | null): Promise<Lang> {
   return email ? userLang(email) : langForPhone(phone)
 }
 
+/** A plain yes in any of the app languages ("yes", "sí", "sim", "everyone agreed"…). */
+const YES = /^\s*(yes|yep|yeah|y|ok|okay|s[ií]|sim|claro|todos (aceptaron|concordaram)|everyone agreed)\s*[.!👍]*\s*$/i
+
+/** The newest recording on this iMessage sender still waiting for the consent "yes". */
+async function pendingConsent(phone: string): Promise<string | null> {
+  const { data } = await supabaseAdmin.from('pen_whatsapp_messages').select('id').eq('phone', phone).eq('state', 'consent').order('created_at', { ascending: false }).limit(1)
+  return (data?.[0]?.id as string | undefined) ?? null
+}
+
 /** Everything that arrives at the inbound webhook ends up here, after the 200 has gone back. */
 export async function handleInbound(msg: Inbound): Promise<void> {
   const link = await getLinkByPhone(msg.from)
@@ -213,7 +226,7 @@ export async function handleInbound(msg: Inbound): Promise<void> {
   // Blue ticks the moment it lands, before the slow part, so the sender sees it was seen.
   // "typing…" too for a question or a file, which always get a reply; a button tap may not
   // (a second tap on "Everyone agreed" is ignored), so it gets the ticks only.
-  void markRead(msg.id, msg.kind === 'text' || msg.kind === 'media')
+  void markRead(msg.id, msg.kind === 'text' || msg.kind === 'media' || msg.kind === 'image', msg.from)
 
   const code = /^\s*link\s+(\d{6})\s*$/i.exec(msg.text)
   if (msg.kind === 'text' && code) return linkPhone(msg, code[1])
@@ -234,6 +247,11 @@ export async function handleInbound(msg: Inbound): Promise<void> {
   if (msg.kind === 'media') return askConsent(msg, L)
   if (msg.kind === 'image') return onImage(msg, link, L)
   if (msg.kind === 'reply') return onReply(msg, link, L)
+  // iMessage has no buttons: a "yes" right after a recording is the consent tap.
+  if (msg.kind === 'text' && isImessage(msg.from) && YES.test(msg.text)) {
+    const pending = await pendingConsent(msg.from)
+    if (pending) return onReply({ ...msg, kind: 'reply', replyId: `consent:${pending}` }, link, L)
+  }
   if (msg.kind === 'text') return onText(msg, link, L)
   await sendText(msg.from, L.unsupported)
 }
@@ -278,7 +296,7 @@ async function askConsent(msg: Inbound, L: typeof EN): Promise<void> {
   // professionals. Same rule as the web upload: refused until confirmed, never defaulted.
   await sendButtons(
     msg.from,
-    L.consent(msg.fileName ?? L.yourRecording),
+    L.consent(msg.fileName ?? L.yourRecording) + (isImessage(msg.from) ? `\n\n${L.replyYes}` : ''),
     // One button on purpose. Not tapping it is the "no": the file is never processed and
     // Vonage drops it after 48 hours.
     [{ id: `consent:${msg.id}`, title: L.agreed }],
@@ -649,7 +667,10 @@ export async function sendWhatsAppBriefing(session: PenSession, opts: { ask?: bo
       const { peopleOnSession } = await import('../people')
       if (!(await peopleOnSession(session.user_email, session.id).catch(() => [1])).length) text += `\n\n${L.whoWasThere}`
     }
-    await sendText(link.phone, text)
+    // A recording sent by iMessage is answered on iMessage (the message row remembers the sender).
+    const { data: via } = await supabaseAdmin.from('pen_whatsapp_messages').select('phone').eq('session_id', session.id).limit(1)
+    const to = via?.[0]?.phone && isImessage(via[0].phone as string) ? (via[0].phone as string) : link.phone
+    await sendText(to, text)
     // In the chat history, so a reply to the briefing ("Carlos and Titi") has its context.
     await setChat(session.user_email, [...(link.chat ?? []), { role: 'assistant', content: text, ts: Date.now() }]).catch(() => {})
   } catch (e) {

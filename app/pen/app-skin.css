@@ -738,4 +738,10 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
   }
   /* The sidebar is sticky (already positioned): only the layer changes. */
   .pen-side:has(.pen-peek, [role="menu"], [role="tooltip"], [role="listbox"], details[open]) { z-index: 60; }
+
+  /* "In testing" next to Juno Pen on iMessage (Settings, WhatsApp). */
+  .pen-im-beta {
+    display: inline-block; margin-left: 8px; padding: 2px 9px; border-radius: 999px; vertical-align: 3px;
+    font-size: 12px; font-weight: 600; color: var(--sk-blue, #0066cc); background: rgba(0, 102, 204, .1);
+  }
 }

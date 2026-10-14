@@ -26,6 +26,14 @@ const WA_EN = {
     'Tap “Everyone agreed” to confirm everyone on the call agreed to be recorded. The briefing comes back in the chat.',
   ],
   fine: 'Any audio file works. A pen WAV fits up to about 50 minutes; MP3 or M4A, much longer. For longer recordings, upload on the website. Recordings sent this way pass through Vonage and WhatsApp on their way to us.',
+  imTitle: 'Juno Pen on iMessage',
+  imBeta: 'In testing',
+  imLede: 'Prefer iMessage? Text Juno from your iPhone: the same assistant, in blue bubbles. Voice notes, questions and recordings all work. To confirm a recording, reply YES.',
+  imLinked: (p: string, n: string) => `Text Juno at ${n} from ${p}: it already knows it’s you.`,
+  imOpen: 'Open Messages',
+  imLink: 'Link with iMessage',
+  imMessage: (code: string, n: string) => `From your iPhone, text LINK ${code} to ${n}. The code lasts 30 minutes.`,
+  imOpenWith: 'Open Messages with the message',
 }
 
 const WA: Copy<typeof WA_EN> = {
@@ -52,6 +60,14 @@ const WA: Copy<typeof WA_EN> = {
       'Toca “Todos aceptaron” para confirmar que todos en la reunión aceptaron ser grabados. El resumen te llega en el chat.',
     ],
     fine: 'Sirve cualquier archivo de audio. Un WAV del lápiz aguanta hasta unos 50 minutos; un MP3 o M4A, mucho más. Para grabaciones más largas, súbelas en la web. Las grabaciones enviadas así pasan por Vonage y WhatsApp antes de llegar a nosotros.',
+    imTitle: 'Juno Pen en iMessage',
+    imBeta: 'En prueba',
+    imLede: '¿Prefieres iMessage? Escríbele a Juno desde tu iPhone: el mismo asistente, en burbujas azules. Notas de voz, preguntas y grabaciones funcionan igual. Para confirmar una grabación, responde SÍ.',
+    imLinked: (p, n) => `Escríbele a Juno al ${n} desde ${p}: ya sabe que eres tú.`,
+    imOpen: 'Abrir Mensajes',
+    imLink: 'Vincular con iMessage',
+    imMessage: (code, n) => `Desde tu iPhone, envía LINK ${code} al ${n}. El código dura 30 minutos.`,
+    imOpenWith: 'Abrir Mensajes con el mensaje',
   },
   pt: {
     startFailed: 'Não foi possível começar a vincular',
@@ -75,6 +91,14 @@ const WA: Copy<typeof WA_EN> = {
       'Toque em “Todos concordaram” para confirmar que todos na reunião concordaram em ser gravados. O resumo volta na conversa.',
     ],
     fine: 'Qualquer arquivo de áudio serve. Um WAV da caneta vai até uns 50 minutos; MP3 ou M4A, bem mais. Para gravações mais longas, envie pelo site. As gravações enviadas assim passam pela Vonage e pelo WhatsApp antes de chegar até nós.',
+    imTitle: 'Juno Pen no iMessage',
+    imBeta: 'Em teste',
+    imLede: 'Prefere o iMessage? Mande mensagem para o Juno do seu iPhone: o mesmo assistente, em balões azuis. Áudios, perguntas e gravações funcionam igual. Para confirmar uma gravação, responda SIM.',
+    imLinked: (p, n) => `Mande mensagem para o Juno no ${n} a partir de ${p}: ele já sabe que é você.`,
+    imOpen: 'Abrir Mensagens',
+    imLink: 'Vincular com iMessage',
+    imMessage: (code, n) => `Do seu iPhone, envie LINK ${code} para ${n}. O código vale por 30 minutos.`,
+    imOpenWith: 'Abrir Mensagens com a mensagem',
   },
 }
 
@@ -85,26 +109,40 @@ function pretty(n: string): string {
   return `+${d}`
 }
 
+/** Opens Messages with the number (and text) filled in. iOS reads `&body=`, others `?body=`. */
+function smsLink(n: string, body?: string): string {
+  const to = `+${n.replace(/\D/g, '')}`
+  if (!body) return `sms:${to}`
+  const ios = typeof navigator !== 'undefined' && /iPhone|iPad|Macintosh/.test(navigator.userAgent)
+  return `sms:${to}${ios ? '&' : '?'}body=${encodeURIComponent(body)}`
+}
+
 export default function WhatsAppLink({
   initialPhone,
   number,
   ready,
   loadError,
+  imessage = null,
 }: {
   initialPhone: string | null
   number: string
   ready: boolean
   loadError: string | null
+  /** Juno's iMessage number (Sendblue), when that channel is switched on. */
+  imessage?: string | null
 }) {
   const T = useCopy(WA)
   const [phone, setPhone] = useState(initialPhone)
   const [link, setLink] = useState<{ code: string; waLink: string; qr: string } | null>(null)
+  // Linking from the iMessage card: same code, but the message goes to Juno's iMessage number.
+  const [via, setVia] = useState<'wa' | 'im'>('wa')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(loadError)
 
   // On a phone the button goes straight to WhatsApp with the message typed. On a computer it
   // shows a QR to scan with the phone, since that is where WhatsApp (and the pen) lives.
-  async function start() {
+  async function start(channel: 'wa' | 'im' = 'wa') {
+    setVia(channel)
     setBusy(true)
     setErr(null)
     try {
@@ -112,7 +150,7 @@ export default function WhatsAppLink({
       const j = await r.json()
       if (!r.ok) throw new Error(j.error ?? T.startFailed)
       const phoneDevice = window.matchMedia('(pointer: coarse)').matches && window.innerWidth < 900
-      if (phoneDevice) window.location.href = j.waLink
+      if (phoneDevice) window.location.href = channel === 'im' && imessage ? smsLink(imessage, `LINK ${j.code}`) : j.waLink
       setLink({ code: j.code, waLink: j.waLink, qr: j.qr })
     } catch (e) {
       setErr((e as Error).message)
@@ -164,7 +202,7 @@ export default function WhatsAppLink({
               <button type="button" className="pen-btn" onClick={unlink} disabled={busy}>{T.unlink}</button>
             </div>
           </>
-        ) : link ? (
+        ) : link && via === 'wa' ? (
           <div className="pen-wa-link">
             <div className="pen-wa-qr" aria-label={T.qrAria} dangerouslySetInnerHTML={{ __html: link.qr }} />
             <div className="pen-wa-steps">
@@ -178,10 +216,39 @@ export default function WhatsAppLink({
           </div>
         ) : (
           <div className="pen-set-actions">
-            <button type="button" className="pen-btn pen-btn-accent" onClick={start} disabled={busy}>{T.link}</button>
+            <button type="button" className="pen-btn pen-btn-accent" onClick={() => start('wa')} disabled={busy}>{T.link}</button>
           </div>
         )}
       </div>
+
+      {imessage && (
+        <div className="pen-set-card">
+          <div className="pen-set-card-head">
+            <h2 className="pen-set-h2">{T.imTitle} <span className="pen-im-beta">{T.imBeta}</span></h2>
+            <p className="pen-set-lede">{T.imLede}</p>
+          </div>
+          {phone ? (
+            <>
+              <p className="pen-set-fine">{T.imLinked(pretty(phone), pretty(imessage))}</p>
+              <div className="pen-set-actions">
+                <a className="pen-btn pen-btn-accent" href={smsLink(imessage)}>{T.imOpen}</a>
+              </div>
+            </>
+          ) : link && via === 'im' ? (
+            <>
+              <p className="pen-set-fine">{T.imMessage(link.code, pretty(imessage))}</p>
+              <p className="pen-set-fine">{T.updates}</p>
+              <div className="pen-set-actions">
+                <a className="pen-btn pen-btn-accent" href={smsLink(imessage, `LINK ${link.code}`)}>{T.imOpenWith}</a>
+              </div>
+            </>
+          ) : (
+            <div className="pen-set-actions">
+              <button type="button" className="pen-btn" onClick={() => start('im')} disabled={busy}>{T.imLink}</button>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="pen-set-card">
         <div className="pen-set-card-head">
