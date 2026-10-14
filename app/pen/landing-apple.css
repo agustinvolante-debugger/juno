@@ -497,3 +497,146 @@
 }
 .lpa-plan > .lpa-chip { align-self: flex-start; }
 .lpa-scene-cap .lpa-soonline { margin-top: 14px; font-size: 15px; }
+
+/* ======================================================= pricing in liquid glass (Oct 13)
+   The pricing cards float in glass over a slow colour field, and answer the pointer: a light
+   follows the cursor, the plan cards lean a few degrees toward it and lift. All of it is
+   transform/opacity; the blur lives on the cards only. Touch gets a tap highlight instead;
+   prefers-reduced-motion gets static glass. The values the pointer sets (--mx, --my, --rx, --ry)
+   come from GlassCard in LandingApple.tsx. */
+
+.lpa-pricing { overflow: clip; isolation: isolate; }
+.lpa-pricing > .lpa-wrap { position: relative; z-index: 1; }
+
+/* ---- the colour field ---- */
+.lpa-pfield { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.lpa-pfield span {
+  position: absolute; border-radius: 50%; filter: blur(72px); will-change: transform;
+  animation: lpa-drift-a 26s ease-in-out infinite alternate;
+}
+.lpa-pfield span:nth-child(1) { width: 640px; height: 520px; left: 2%; top: 30%; background: rgba(0, 113, 227, .30); }
+.lpa-pfield span:nth-child(2) { width: 580px; height: 500px; right: 0; top: 44%; background: rgba(150, 128, 250, .30); animation-name: lpa-drift-b; animation-duration: 30s; }
+.lpa-pfield span:nth-child(3) { width: 520px; height: 420px; left: 34%; bottom: 0; background: rgba(40, 200, 200, .22); animation-name: lpa-drift-c; animation-duration: 22s; }
+@keyframes lpa-drift-a { from { transform: translate3d(0, 0, 0) scale(1); } to { transform: translate3d(140px, -70px, 0) scale(1.12); } }
+@keyframes lpa-drift-b { from { transform: translate3d(0, 0, 0) scale(1.05); } to { transform: translate3d(-160px, 50px, 0) scale(.94); } }
+@keyframes lpa-drift-c { from { transform: translate3d(0, 0, 0) scale(.96); } to { transform: translate3d(90px, -110px, 0) scale(1.1); } }
+
+/* ---- glass cards ---- */
+.lpa-glass-slot { display: flex; min-width: 0; }
+.lpa-glass-slot > .lpa-glass { flex: 1; min-width: 0; }
+.lpa-included-slot, .lpa-pensoon-slot { margin: 20px auto 0; max-width: 900px; }
+.lpa-pricing-wide .lpa-included-slot { max-width: 1132px; }
+.lpa-glass.lpa-included, .lpa-glass.lpa-pensoon { margin: 0; max-width: none; }
+
+.lpa-glass {
+  --mx: 50%; --my: 0%; --rx: 0deg; --ry: 0deg; --lift: 0px;
+  position: relative;
+  background: linear-gradient(150deg, rgba(255, 255, 255, .74), rgba(255, 255, 255, .5));
+  -webkit-backdrop-filter: blur(24px) saturate(180%); backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, .78);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .95), 0 0 0 1px rgba(29, 29, 31, .05),
+    0 1px 2px rgba(29, 29, 31, .05), 0 16px 32px -14px rgba(29, 29, 31, .16), 0 36px 72px -30px rgba(29, 29, 31, .22);
+  transform: perspective(1100px) rotateX(var(--rx)) rotateY(var(--ry)) translateY(var(--lift));
+  transition: transform .7s cubic-bezier(.2, .9, .25, 1.1), box-shadow .35s ease, background .35s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.lpa-glass > * { position: relative; z-index: 1; }
+/* The light that follows the pointer. */
+.lpa-glass::before {
+  content: ''; position: absolute; inset: 0; z-index: 0; border-radius: inherit; pointer-events: none;
+  background:
+    radial-gradient(circle 260px at var(--mx) var(--my), rgba(255, 255, 255, .9), rgba(255, 255, 255, 0) 70%),
+    radial-gradient(circle 420px at var(--mx) var(--my), rgba(0, 113, 227, .07), rgba(0, 113, 227, 0) 70%);
+  opacity: 0; transition: opacity .35s ease;
+}
+.lpa-glass[data-hot]::before { opacity: 1; }
+.lpa-glass[data-hot] { transition: transform .18s ease-out, box-shadow .35s ease, background .35s ease; }
+
+/* Featured plan: a touch of blue in the glass, a glow, and a slow light running round its edge. */
+.lpa-glass.lpa-plan-pro {
+  border: 1px solid rgba(255, 255, 255, .8);
+  background: linear-gradient(150deg, rgba(240, 246, 255, .86), rgba(226, 238, 255, .6));
+  box-shadow:
+    inset 0 1px 0 #fff, 0 0 0 1px rgba(0, 113, 227, .10),
+    0 1px 2px rgba(29, 29, 31, .05), 0 18px 40px -16px rgba(0, 102, 204, .28), 0 40px 80px -32px rgba(29, 29, 31, .24);
+}
+.lpa-ring {
+  position: absolute; inset: -1px; z-index: 2; border-radius: inherit; padding: 1.5px; overflow: hidden; pointer-events: none;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+}
+.lpa-ring-spin {
+  position: absolute; left: 50%; top: 50%; width: 170%; aspect-ratio: 1; translate: -50% -50%;
+  background: conic-gradient(from 0deg, #0071e3, #8db7ff, #7fd6df, #b6a6ff, #0071e3);
+  animation: lpa-spin 12s linear infinite; will-change: transform;
+}
+@keyframes lpa-spin { to { transform: rotate(1turn); } }
+
+/* Keyboard: focusing a card's button lights the whole card. */
+.lpa-glass:focus-within { box-shadow: inset 0 1px 0 #fff, 0 0 0 3px rgba(0, 113, 227, .28), 0 18px 40px -16px rgba(0, 102, 204, .3); }
+.lpa-glass:focus-within::before { opacity: .8; }
+
+/* Hover lift, for a real pointer only. */
+@media (hover: hover) {
+  .lpa-glass[data-tilt]:hover { --lift: -6px; }
+  .lpa-glass[data-tilt]:hover:not(.lpa-plan-pro) {
+    box-shadow:
+      inset 0 1px 0 #fff, 0 0 0 1px rgba(29, 29, 31, .06),
+      0 2px 4px rgba(29, 29, 31, .06), 0 24px 44px -16px rgba(29, 29, 31, .22), 0 48px 90px -34px rgba(29, 29, 31, .28);
+  }
+  .lpa-glass.lpa-plan-pro:hover {
+    box-shadow:
+      inset 0 1px 0 #fff, 0 0 0 1px rgba(0, 113, 227, .14),
+      0 2px 4px rgba(29, 29, 31, .06), 0 26px 52px -16px rgba(0, 102, 204, .36), 0 52px 96px -34px rgba(29, 29, 31, .28);
+  }
+}
+/* Touch: no follow or tilt, a soft brightening while pressed instead. */
+@media (hover: none) {
+  .lpa-glass:active { background: linear-gradient(150deg, rgba(255, 255, 255, .9), rgba(255, 255, 255, .7)); }
+  .lpa-glass.lpa-plan-pro:active { background: linear-gradient(150deg, rgba(244, 249, 255, .95), rgba(232, 242, 255, .78)); }
+}
+
+/* The CTA presses in. */
+.lpa-plan-cta { transition: transform .15s ease, background-color .2s, color .2s, box-shadow .2s; }
+.lpa-plan-cta:active { transform: scale(.96); }
+.lpa-glass:not(.lpa-plan-pro) .lpa-btn-ghost { background: rgba(255, 255, 255, .55); }
+.lpa-glass:not(.lpa-plan-pro) .lpa-btn-ghost:hover { background: var(--lpa-blue); }
+.lpa-plan-pro .lpa-plan-cta { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), 0 10px 22px -10px rgba(0, 102, 204, .6); }
+
+/* Chips on glass. */
+.lpa-glass .lpa-chip-light { background: rgba(255, 255, 255, .8); border-color: rgba(255, 255, 255, .9); box-shadow: 0 1px 2px rgba(29, 29, 31, .06); }
+
+/* ---- the coming-soon pen card: dark glass on the light section ---- */
+.lpa-glass.lpa-pensoon {
+  background: linear-gradient(150deg, rgba(18, 18, 20, .9), rgba(18, 18, 20, .78));
+  border: 1px solid rgba(255, 255, 255, .12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), 0 20px 44px -18px rgba(0, 0, 0, .45), 0 44px 90px -36px rgba(29, 29, 31, .4);
+}
+.lpa-glass.lpa-pensoon::before {
+  background: radial-gradient(circle 300px at var(--mx) var(--my), rgba(255, 255, 255, .14), rgba(255, 255, 255, 0) 70%);
+}
+.lpa-glass.lpa-pensoon .lpa-chip-light { background: rgba(255, 255, 255, .12); color: var(--lpa-on-dark); border-color: rgba(255, 255, 255, .2); box-shadow: none; }
+
+/* ---- the plan switcher in glass ---- */
+.lpa-pricing .lpa-tabs {
+  background: rgba(255, 255, 255, .5);
+  -webkit-backdrop-filter: blur(18px) saturate(170%); backdrop-filter: blur(18px) saturate(170%);
+  border: 1px solid rgba(255, 255, 255, .8);
+  box-shadow: inset 0 1px 0 #fff, 0 0 0 1px rgba(29, 29, 31, .05), 0 10px 24px -14px rgba(29, 29, 31, .22);
+}
+.lpa-pricing .lpa-tab[data-on="true"] { box-shadow: 0 1px 2px rgba(29, 29, 31, .1), 0 6px 14px -6px rgba(29, 29, 31, .2); }
+
+@media (max-width: 767px) {
+  .lpa-pfield span:nth-child(1) { width: 380px; height: 340px; left: -20%; top: 26%; }
+  .lpa-pfield span:nth-child(2) { width: 360px; height: 320px; right: -24%; top: 52%; }
+  .lpa-pfield span:nth-child(3) { width: 320px; height: 280px; left: 10%; bottom: 2%; }
+  .lpa-pfield span { filter: blur(56px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lpa-pfield span, .lpa-ring-spin { animation: none !important; }
+  .lpa-glass { transform: none !important; transition: none !important; }
+  .lpa-glass::before { display: none; }
+  .lpa-plan-cta:active { transform: none; }
+}

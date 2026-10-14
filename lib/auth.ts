@@ -22,6 +22,7 @@ export const ALLOWED_EMAILS = [
   'stephanie@pearsonlabs.ai',
   'lukebpadden31@gmail.com',
   'chrisdyas9@gmail.com', // realtor friend — Pen (/pen)
+  'jenna3b@gmail.com', // Jenna, Chris's partner — free Pen account (13 Oct)
 ]
 
 export const authOptions: NextAuthOptions = {

@@ -799,7 +799,9 @@ function Pricing({ market, waitlistHref }: { market: Market; waitlistHref: strin
     </div>
   )
   return (
-    <section id="pricing" className={plans.length === 3 ? 'lpa-tile lpa-tile-white lpa-pricing-wide' : 'lpa-tile lpa-tile-white'}>
+    <section id="pricing" className={plans.length === 3 ? 'lpa-tile lpa-tile-white lpa-pricing lpa-pricing-wide' : 'lpa-tile lpa-tile-white lpa-pricing'}>
+      {/* A slow colour field behind the glass, so the cards' blur has something to refract. */}
+      <div className="lpa-pfield" aria-hidden><span /><span /><span /></div>
       <div className="lpa-wrap">
         <Reveal className="lpa-center">
           <span className="lpa-eyebrow">{t.nav.pricing}</span>
@@ -837,21 +839,25 @@ function Pricing({ market, waitlistHref }: { market: Market; waitlistHref: strin
         ) : (
           grid
         )}
-        <Reveal className="lpa-included">
-          <h3 className="lpa-h5">{P.includedTitle}</h3>
-          <ul className="lpa-checks lpa-checks-3">
-            {P.included.map((it) => <li key={it}><Icon name="check" size={16} />{it}</li>)}
-          </ul>
+        <Reveal className="lpa-glass-slot lpa-included-slot">
+          <GlassCard className="lpa-included">
+            <h3 className="lpa-h5">{P.includedTitle}</h3>
+            <ul className="lpa-checks lpa-checks-3">
+              {P.included.map((it) => <li key={it}><Icon name="check" size={16} />{it}</li>)}
+            </ul>
+          </GlassCard>
         </Reveal>
         {!sold && (
-          <Reveal className="lpa-pensoon">
-            <div className="lpa-pensoon-art" aria-hidden><PenArt id="soon-pen" className="lpa-pen-svg" /></div>
-            <div className="lpa-pensoon-copy">
-              <span className="lpa-chip lpa-chip-light">{t.pen.soon}</span>
-              <h3 className="lpa-h4">{P.soonTitle}</h3>
-              <p>{P.soonBody}</p>
-              <Link href={waitlistHref} className="lpa-link">{P.soonCta}<Icon name="chevron" size={14} /></Link>
-            </div>
+          <Reveal className="lpa-glass-slot lpa-pensoon-slot">
+            <GlassCard className="lpa-pensoon">
+              <div className="lpa-pensoon-art" aria-hidden><PenArt id="soon-pen" className="lpa-pen-svg" /></div>
+              <div className="lpa-pensoon-copy">
+                <span className="lpa-chip lpa-chip-light">{t.pen.soon}</span>
+                <h3 className="lpa-h4">{P.soonTitle}</h3>
+                <p>{P.soonBody}</p>
+                <Link href={waitlistHref} className="lpa-link">{P.soonCta}<Icon name="chevron" size={14} /></Link>
+              </div>
+            </GlassCard>
           </Reveal>
         )}
       </div>
@@ -862,14 +868,67 @@ function Pricing({ market, waitlistHref }: { market: Market; waitlistHref: strin
 /** `pad`: another card in the row has a ribbon, so this one keeps the space and the names line up. */
 function PlanView({ plan, delay, pad = false }: { plan: PlanCard; delay: number; pad?: boolean }) {
   return (
-    <Reveal delay={delay} className={plan.pro ? 'lpa-plan lpa-plan-pro' : 'lpa-plan'}>
-      {plan.ribbon ? <span className="lpa-chip lpa-chip-light">{plan.ribbon}</span> : pad && <span className="lpa-chip lpa-chip-pad" aria-hidden>&nbsp;</span>}
-      <h3 className="lpa-plan-name">{plan.name}</h3>
-      <p className="lpa-price">{plan.price}<span>{plan.per}</span></p>
-      <p className="lpa-plan-line">{plan.line}</p>
-      <p className="lpa-plan-trade">{plan.trade}</p>
-      <Link href={plan.href} className={`lpa-btn lpa-btn-lg lpa-plan-cta${plan.pro ? '' : ' lpa-btn-ghost'}`}>{plan.cta}</Link>
+    // The Reveal moves the slot in; the card inside tilts. Two elements, so neither transform
+    // overwrites the other.
+    <Reveal delay={delay} className="lpa-glass-slot lpa-plan-slot">
+      <GlassCard tilt className={plan.pro ? 'lpa-plan lpa-plan-pro' : 'lpa-plan'}>
+        {plan.pro && <span className="lpa-ring" aria-hidden><span className="lpa-ring-spin" /></span>}
+        {plan.ribbon ? <span className="lpa-chip lpa-chip-light">{plan.ribbon}</span> : pad && <span className="lpa-chip lpa-chip-pad" aria-hidden>&nbsp;</span>}
+        <h3 className="lpa-plan-name">{plan.name}</h3>
+        <p className="lpa-price">{plan.price}<span>{plan.per}</span></p>
+        <p className="lpa-plan-line">{plan.line}</p>
+        <p className="lpa-plan-trade">{plan.trade}</p>
+        <Link href={plan.href} className={`lpa-btn lpa-btn-lg lpa-plan-cta${plan.pro ? '' : ' lpa-btn-ghost'}`}>{plan.cta}</Link>
+      </GlassCard>
     </Reveal>
+  )
+}
+
+/**
+ * A pricing card in glass that answers the pointer: a soft light follows the cursor across it
+ * and, with `tilt`, it leans a few degrees toward it. Set as CSS variables straight on the
+ * element, at most once a frame, so a pointer move never re-renders React. Mouse only: on touch
+ * there is no follow or tilt (CSS gives a tap highlight instead), and prefers-reduced-motion
+ * switches all of it off in landing-apple.css.
+ */
+function GlassCard({ className, tilt = false, children }: { className: string; tilt?: boolean; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const frame = useRef(0)
+  const pos = useRef({ x: 0, y: 0 })
+  useEffect(() => () => cancelAnimationFrame(frame.current), [])
+  const onMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== 'mouse') return
+    pos.current = { x: e.clientX, y: e.clientY }
+    if (frame.current) return
+    frame.current = requestAnimationFrame(() => {
+      frame.current = 0
+      const el = ref.current
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      const px = Math.min(1, Math.max(0, (pos.current.x - r.left) / r.width))
+      const py = Math.min(1, Math.max(0, (pos.current.y - r.top) / r.height))
+      el.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`)
+      el.style.setProperty('--my', `${(py * 100).toFixed(1)}%`)
+      if (tilt) {
+        el.style.setProperty('--ry', `${((px - 0.5) * 10).toFixed(2)}deg`)
+        el.style.setProperty('--rx', `${((0.5 - py) * 8).toFixed(2)}deg`)
+      }
+      el.dataset.hot = 'true'
+    })
+  }
+  const onLeave = () => {
+    cancelAnimationFrame(frame.current)
+    frame.current = 0
+    const el = ref.current
+    if (!el) return
+    el.style.setProperty('--rx', '0deg')
+    el.style.setProperty('--ry', '0deg')
+    delete el.dataset.hot
+  }
+  return (
+    <div ref={ref} className={`lpa-glass ${className}`} data-tilt={tilt || undefined} onPointerMove={onMove} onPointerLeave={onLeave}>
+      {children}
+    </div>
   )
 }
 
