@@ -199,6 +199,33 @@ async function langFor(phone: string, email?: string | null): Promise<Lang> {
   return email ? userLang(email) : langForPhone(phone)
 }
 
+/**
+ * The first message ever from this iMessage number: an email to the owners (PEN_SIGNUP_NOTIFY),
+ * with who it is if their number is linked, and how many of the free plan's 10 contacts are in
+ * use. Says what kind of message it was, never what it said.
+ */
+async function newImessageAlert(msg: Inbound, link: Link | null): Promise<void> {
+  const { count } = await supabaseAdmin.from('pen_whatsapp_messages').select('id', { count: 'exact', head: true }).eq('phone', msg.from).neq('id', msg.id)
+  if (count) return
+  const { data: phones } = await supabaseAdmin.from('pen_whatsapp_messages').select('phone').like('phone', 'im:%')
+  const contacts = new Set((phones ?? []).map((r) => r.phone as string)).size
+  const tail = `…${msg.from.slice(-4)}`
+  let who = link?.email ?? null
+  if (link?.email) {
+    const name = (await import('../profile').then((m) => m.getProfile(link.email)).catch(() => null))?.name?.trim()
+    if (name) who = `${name} (${link.email})`
+  }
+  const { notifyNote } = await import('../notify-owner')
+  await notifyNote(
+    `New on iMessage: ${who ?? 'an unlinked number'} (${tail})`,
+    [
+      who ? `${who} texted Juno on iMessage for the first time, from the number ending ${tail}.` : `A number ending ${tail} texted Juno on iMessage. It isn't linked to an account yet: they need to send the LINK code from Settings, WhatsApp & iMessage.`,
+      `First message: ${msg.kind === 'media' ? (msg.voice ? 'a voice note' : 'a recording') : msg.kind === 'image' ? 'a photo' : 'a text'}.`,
+      `iMessage contacts so far: ${contacts} of the free plan's 10.`,
+    ].join(' '),
+  )
+}
+
 /** A plain yes in any of the app languages ("yes", "sí", "sim", "everyone agreed"…). */
 const YES = /^\s*(yes|yep|yeah|y|ok|okay|s[ií]|sim|claro|todos (aceptaron|concordaram)|everyone agreed)\s*[.!👍]*\s*$/i
 
@@ -222,6 +249,9 @@ export async function handleInbound(msg: Inbound): Promise<void> {
     payload: { mediaUrl: msg.mediaUrl, fileName: msg.fileName, raw: msg.raw },
   })
   if (!fresh) return
+
+  // iMessage is a test with a 10-contact cap: tell the owners the first time a number shows up.
+  if (isImessage(msg.from)) await newImessageAlert(msg, link).catch((e) => console.warn(`pen imessage: alert failed: ${(e as Error).message}`))
 
   // Blue ticks the moment it lands, before the slow part, so the sender sees it was seen.
   // "typing…" too for a question or a file, which always get a reply; a button tap may not
