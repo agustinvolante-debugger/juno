@@ -698,6 +698,55 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
     .pen-rowmenu .pen-rowmenu-btn, .pen-person-actions .pen-rowmenu-btn { opacity: 1; width: 44px; height: 44px; }
   }
 
+  /* ---- "Combine with…" picker (CombinePicker.tsx) ---- */
+  .pen-combine-card { width: min(560px, 100%); max-height: min(86vh, 760px); padding: 22px 24px 22px; gap: 12px; overflow: hidden; }
+  .pen-combine-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .pen-combine-h { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.025em; color: var(--ink); }
+  .pen-combine-x { width: 40px; height: 40px; border-radius: 9999px; display: grid; place-items: center; color: var(--dim); transform: rotate(45deg); }
+  .pen-combine-x:hover { background: var(--sunk); color: var(--ink); }
+  .pen-combine-this { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--soft); }
+  .pen-combine-search { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 14px; border-radius: 9999px; border: 1px solid var(--line); background: #fff; color: var(--dim); }
+  .pen-combine-search:focus-within { border-color: var(--sk-blue-hi); box-shadow: 0 0 0 4px rgba(0, 113, 227, .15); }
+  .pen-combine-search input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; font: inherit; font-size: 15.5px; color: var(--ink); }
+  .pen-combine-list, .pen-combine-order { list-style: none; margin: 0; padding: 0; overflow-y: auto; min-height: 0; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .pen-combine-list { max-height: 46vh; }
+  .pen-combine-row { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 12px; border-radius: 14px; cursor: pointer; border: 1px solid transparent; }
+  .pen-combine-row:hover { background: var(--sunk); }
+  .pen-combine-row[data-on='true'] { background: var(--accent-wash); border-color: var(--accent-line); }
+  .pen-combine-row input { width: 20px; height: 20px; flex: none; accent-color: var(--sk-blue); }
+  .pen-combine-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .pen-combine-title { font-size: 15px; font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pen-combine-meta { font-size: 12.5px; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .pen-combine-empty { padding: 18px 12px; color: var(--dim); font-size: 14.5px; }
+  .pen-combine-sub { margin: 0; color: var(--soft); font-size: 14.5px; }
+  .pen-combine-orow { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; background: var(--sunk); }
+  .pen-combine-n { flex: none; width: 28px; height: 28px; border-radius: 9999px; display: grid; place-items: center; background: var(--sk-blue); color: #fff; font-size: 13px; font-weight: 600; }
+  .pen-combine-moves { flex: none; display: flex; gap: 4px; }
+  .pen-combine-mv { width: 40px; height: 40px; border-radius: 9999px; background: var(--g-pill); border: 1px solid var(--g-pill-line); box-shadow: var(--g-pill-shadow); font-size: 16px; color: var(--ink); }
+  .pen-combine-mv:disabled { opacity: .35; box-shadow: none; }
+  .pen-combine-confirm { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--accent-wash); color: var(--accent-ink); font-size: 14.5px; line-height: 1.45; }
+  .pen-combine-foot { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; padding-top: 4px; }
+  .pen-combine-foot .pen-btn { min-height: 44px; }
+  .pen-combine-working { margin: 0; display: flex; align-items: center; gap: 10px; font-size: 14.5px; color: var(--soft); }
+  .pen-combine-spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--accent-line); border-top-color: var(--sk-blue); animation: pen-spin 0.9s linear infinite; flex: none; }
+  @media (prefers-reduced-motion: reduce) { .pen-combine-spin { animation: none; } }
+  @media (max-width: 640px) {
+    .pen-combine { align-items: end; padding: 0; }
+    .pen-combine-card { width: 100%; max-height: 90dvh; border-radius: 22px 22px 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); }
+    .pen-combine-foot .pen-btn { flex: 1; justify-content: center; }
+  }
+
+  /* ---- a join suggestion (join-suggest.ts), in the run banner's place ---- */
+  .pen-suggest-reason { display: block; margin-top: 4px; color: var(--soft); }
+  .pen-suggest-pair { display: block; margin-top: 4px; font-size: 13px; color: var(--dim); }
+  .pen-suggest-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  /* The join suggestion sits above the Home greeting: keep them apart. */
+  div:has(> div > .pen-suggest-btns) { margin-bottom: 20px; }
+  /* "Ready to import" opens above the Home grid: give the greeting and the Recent recordings
+     card room below it instead of butting against its bottom edge. */
+  .pen-import-panel { margin-bottom: 32px; }
+  .pen-suggest-btns .pen-btn { min-height: 40px; }
+
   /* A pre-existing cascade slip, fixed here because the white card made it visible: between
      901 and 1280px the rail is static and full width (pen-theme.css, "workspace, narrow"), but
      the later min-width: 901px block re-caps its height, so the list ran out of the bottom of
@@ -744,4 +793,79 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
     display: inline-block; margin-left: 8px; padding: 2px 9px; border-radius: 999px; vertical-align: 3px;
     font-size: 12px; font-weight: 600; color: var(--sk-blue, #0066cc); background: rgba(0, 102, 204, .1);
   }
+
+  /* ---- the recording's action row (14 Oct): one control size for every action ----
+     Send briefing, its "+", Redo notes, Ask, Combine, Notion and Delete came from four
+     different rules (14.5 vs 16.5px type, 32 vs 42px boxes, an icon stacked over its label,
+     Notion as a bare link). One height, one type size, icons inline; Delete moves to the far
+     end, in the destructive colour instead of a disabled-looking grey. */
+  .pen-d-actions { gap: 8px; row-gap: 10px; }
+  .pen-d-actions :is(.pen-brief, .pen-btn, .pen-notion-sent, .pen-confirm) {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    height: 40px; min-height: 40px; padding: 0 16px; border-radius: 9999px;
+    font-family: var(--ui); font-size: 14.5px; font-weight: 600; letter-spacing: -0.005em; line-height: 1;
+    white-space: nowrap;
+  }
+  .pen-d-actions :is(.pen-brief, .pen-btn) svg { flex: none; }
+  /* The "+" that adds recipients is a square companion to Send briefing, not a pill of its own. */
+  .pen-d-actions .pen-brief-more {
+    width: 40px; min-width: 40px; height: 40px; padding: 0; border-radius: 9999px;
+    display: inline-flex; align-items: center; justify-content: center; font-size: 16px;
+  }
+  /* Notion, once sent, opens the page: a button like its neighbours, not an underlined link. */
+  .pen-d-actions .pen-notion-sent {
+    text-decoration: none; color: var(--ink);
+    background: var(--g-pill); border: 1px solid var(--g-pill-line); box-shadow: var(--g-pill-shadow);
+  }
+  .pen-d-actions .pen-notion-sent:hover {
+    background: linear-gradient(180deg, #fff, rgba(255, 255, 255, .88)); border-color: rgba(29, 29, 31, .16);
+  }
+  /* Destructive, and apart from the rest. */
+  .pen-d-actions .pen-btn-quiet, .pen-d-actions .pen-confirm { margin-left: auto; }
+  .pen-d-actions .pen-btn-quiet { color: #c4302b; }
+  .pen-d-actions .pen-confirm { padding: 0 6px 0 14px; font-family: var(--ui); font-size: 13.5px; font-weight: 500; }
+  .pen-d-actions .pen-confirm button { height: 30px; padding: 0 12px; border-radius: 9999px; font-weight: 600; }
+  .pen-d-actions :is(.pen-brief, .pen-btn, .pen-notion-sent):focus-visible { outline: 2px solid var(--sk-blue-hi); outline-offset: 2px; }
+  /* Phone keeps its own layout (Send full width + "More"), at the 44px touch size. */
+  .pen-m-body .pen-d-actions :is(.pen-brief, .pen-btn) { height: 44px; min-height: 44px; }
+  .pen-m-body .pen-d-actions .pen-brief-more { width: 44px; min-width: 44px; height: 44px; }
+
+  /* ---- the recording's lists, mock (14 Oct) ----
+     Next actions full width first; Decided + Still open as a two-up reference row that
+     collapses to one column when either is empty or the column is narrow. The per-item
+     "Draft email · Memo · Tracker" buttons wait for hover or keyboard focus on a mouse
+     device (they doubled every item's height); touch screens keep them visible. */
+  .pen-notes2 { display: flex; flex-direction: column; gap: 16px; margin-top: 20px; }
+  .pen-notes2-tally { margin: 0; font-size: 14px; color: var(--soft); }
+  .pen-notes2-tally a { color: var(--accent-ink); font-weight: 600; text-decoration: none; }
+  .pen-notes2-tally a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .pen-notes2 > .pen-card, .pen-n2-ref > .pen-card { margin: 0 !important; padding: 18px 20px 20px; scroll-margin-top: 90px; }
+  .pen-n2-ref { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; container-type: inline-size; }
+  @media (min-width: 900px) {
+    .pen-n2-ref:has(> .pen-card + .pen-card) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  /* One line per task where it fits: owner and due sit beside the buttons, not under them. */
+  .pen-n2-actions .pen-act { padding: 12px 0; }
+  .pen-n2-actions .pen-act + .pen-act { border-top: 1px solid var(--hair, rgba(29, 29, 31, .08)); }
+  /* (b): on a mouse device the buttons sit at the right end of the item's first line and
+     fade in on hover or keyboard focus, over a short white fade, so they take no room of
+     their own (no gap under each item) and nothing moves when they appear. */
+  @media (hover: hover) and (pointer: fine) {
+    .pen-notes2 .pen-doable { position: relative; }
+    .pen-notes2 .pen-doable .pen-do {
+      position: absolute; top: 0; right: 0; z-index: 1;
+      padding-left: 36px; margin: 0;
+      background: linear-gradient(90deg, rgba(255, 255, 255, 0), #fff 32px);
+      opacity: 0; pointer-events: none; transition: opacity .15s ease;
+    }
+    .pen-notes2 .pen-act.pen-doable .pen-do { top: 10px; }
+    .pen-notes2 .pen-doable:hover .pen-do, .pen-notes2 .pen-doable:focus-within .pen-do { opacity: 1; pointer-events: auto; }
+    /* The wrappers that used to hold the buttons on their own line now hold nothing. */
+    .pen-notes2 li.pen-doable > div:has(> .pen-do:only-child) { margin: 0; height: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) { .pen-notes2 .pen-doable .pen-do { transition: none; } }
+}
+
+/* Top level: a @keyframes inside the scoped block above is invalid CSS and would take the block with it. */
+@keyframes pen-spin { to { transform: rotate(1turn); }
 }

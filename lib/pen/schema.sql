@@ -383,3 +383,19 @@ alter table public.pen_usage enable row level security;  -- service role only
 
 -- 2026-10-10: contact phone numbers (WhatsApp: business cards, "text the Garcías" links)
 alter table public.pen_people add column if not exists phone text;
+
+-- 2026-10-14 · join suggestions (lib/pen/join-suggest.ts): the model's verdict on whether two
+-- recordings the filename rule can't place are one conversation. One row per pair judged, so a
+-- pair is asked about once; dismissed_at makes "Not the same" stick. Service role only.
+create table if not exists public.pen_join_suggestions (
+  user_email   text not null,
+  a_id         uuid not null references public.pen_sessions(id) on delete cascade,
+  b_id         uuid not null references public.pen_sessions(id) on delete cascade,
+  same         boolean not null,
+  confidence   real not null default 0,
+  reason       text,
+  dismissed_at timestamptz,
+  created_at   timestamptz not null default now(),
+  primary key (user_email, a_id, b_id)
+);
+alter table public.pen_join_suggestions enable row level security;  -- service role only

@@ -36,10 +36,12 @@ import PhoneShell, { type PhoneTab } from './PhoneShell'
 import Link from 'next/link'
 import { ACCEPT_DESKTOP, acceptFor } from '@/lib/pen/file-accept'
 import { findRuns } from '@/lib/pen/merge-detect'
+import CombinePicker from './CombinePicker'
 import { LangProvider, useCopy, useLang } from './LangContext'
 import { APP_COPY, type AppCopy } from './PenApp.copy'
 import { typeLabel, bucketLabel, plural, shortDate, fmtDate, LOCALE, type Lang } from '@/lib/pen/i18n'
 import { SUPPORT_EMAIL } from '@/lib/support'
+
 
 /**
  * What the main column is showing. Chat and pages are views, not overlays: the whole point
@@ -683,26 +685,80 @@ export default function PenApp({
   const runs = useMemo(() => findRuns(sessions), [sessions])
   const [joining, setJoining] = useState(false)
 
-  const joinRun = async (ids: string[]) => {
+  const joinRun = async (ids: string[]): Promise<boolean> => {
     setJoining(true)
     setErr(null)
     try {
       const j = await postJson<{ primaryId: string; briefed: boolean }>('/api/pen/merge', { action: 'join', ids })
       await refresh()
+      void refreshSuggest()
       openSession(j.primaryId)
       setTab('note')
+      return true
     } catch (e) {
       setErr(errMessage(e))
+      return false
     } finally {
       setJoining(false)
     }
   }
+
+  // "Combine with…" on a recording: which one the picker is open for.
+  const [combineFor, setCombineFor] = useState<string | null>(null)
+
+  // Join suggestions for pairs the filename rule can't place (lib/pen/join-suggest.ts). Empty
+  // until their table exists; a failure just means no suggestion is shown.
+  const [suggest, setSuggest] = useState<{ a_id: string; b_id: string; reason: string }[]>([])
+  const refreshSuggest = useCallback(async () => {
+    try {
+      setSuggest((await getJson<{ suggestions?: { a_id: string; b_id: string; reason: string }[] }>('/api/pen/merge')).suggestions ?? [])
+    } catch {}
+  }, [])
+  useEffect(() => { void refreshSuggest() }, [refreshSuggest])
+  const dismissSuggest = async (a: string, b: string) => {
+    setSuggest((xs) => xs.filter((x) => !(x.a_id === a && x.b_id === b)))
+    try { await postJson('/api/pen/merge', { action: 'dismiss', a, b }) } catch (e) { setErr(errMessage(e)) }
+  }
+  // Shown on Home, and on either of the two recordings' pages.
+  const suggestHere = suggest.filter((x) => {
+    const a = sessions.find((s) => s.id === x.a_id), b = sessions.find((s) => s.id === x.b_id)
+    if (!a || !b || a.merge_group || b.merge_group) return false
+    return view.k === 'archive' || activeId === x.a_id || activeId === x.b_id
+  })
+  const suggestBanners = !locked && suggestHere.map((x) => {
+    const a = sessions.find((s) => s.id === x.a_id)!, b = sessions.find((s) => s.id === x.b_id)!
+    const nm = (s: PenSession) => s.title || s.client_name || s.source_name || T.untitled
+    return (
+      <Banner key={`${x.a_id}:${x.b_id}`} tone="warn">
+        <strong style={{ color: 'var(--ink)' }}>{T.suggestTitle}</strong>
+        {x.reason && <span className="pen-suggest-reason">{x.reason}</span>}
+        <span className="pen-suggest-pair">{nm(a)}  →  {nm(b)}</span>
+        <span className="pen-suggest-btns">
+          <button className="pen-btn pen-btn-primary" disabled={joining} onClick={() => void joinRun([x.a_id, x.b_id])}>
+            <Icon name="link" size={15} />{joining ? T.joining : T.suggestJoin}
+          </button>
+          <button className="pen-btn" disabled={joining} onClick={() => void dismissSuggest(x.a_id, x.b_id)}>{T.suggestNo}</button>
+        </span>
+      </Banner>
+    )
+  })
+  const combineSheet = combineFor && sessions.find((s) => s.id === combineFor) ? (
+    <CombinePicker
+      session={sessions.find((s) => s.id === combineFor)!}
+      sessions={sessions}
+      T={T}
+      lang={appLang}
+      onJoin={joinRun}
+      onClose={() => setCombineFor(null)}
+    />
+  ) : null
 
   const splitGroup = async (group: string) => {
     setJoining(true)
     try {
       await postJson('/api/pen/merge', { action: 'split', group })
       await refresh()
+      void refreshSuggest()
     } catch (e) {
       setErr(errMessage(e))
     } finally {
@@ -724,6 +780,8 @@ export default function PenApp({
         {loadError && <Banner tone="bad">{T.loadError(loadError)}</Banner>}
         {err && <Banner tone="bad" onClose={() => setErr(null)}>{err}</Banner>}
         {heldNotice && <Banner tone="warn" onClose={() => setHeldNotice(false)}>{T.heldNotice}</Banner>}
+        {phoneTab !== 'search' && suggestBanners}
+        {combineSheet}
         {phoneTab !== 'search' && runs.map((r) => (
           <Banner key={r.sessions[0].id} tone="warn">
             <strong style={{ color: 'var(--ink)' }}>{T.runTitle(r.sessions.length, fmtDur(r.totalSec))}</strong>{' '}
@@ -846,6 +904,7 @@ export default function PenApp({
               parts={partsOf(active)}
               splitting={joining}
               onSplit={() => active.merge_group && void splitGroup(active.merge_group)}
+              onCombine={locked ? undefined : () => setCombineFor(active.id)}
               chatOpen={chatOpen} onToggleChat={() => setChatOpen((v) => !v)}
               onNotes={(type) => makeNotes(active.id, type)}
               askCategory={catAsk[active.id]}
@@ -1332,6 +1391,8 @@ export default function PenApp({
           halves. Normally they are joined the moment the second transcript lands; this is
           for the ones already sitting in the archive from before, or an upload that arrived
           days late. */}
+      {suggestBanners}
+      {combineSheet}
       {runs.map((r) => (
         <Banner key={r.sessions[0].id} tone="warn">
           <strong style={{ color: 'var(--ink)' }}>
@@ -1451,6 +1512,7 @@ export default function PenApp({
                 parts={partsOf(active)}
                 splitting={joining}
                 onSplit={() => active.merge_group && void splitGroup(active.merge_group)}
+                onCombine={locked ? undefined : () => setCombineFor(active.id)}
                 chatOpen={chatOpen} onToggleChat={() => setChatOpen((v) => !v)}
                 onNotes={(type) => makeNotes(active.id, type)}
                 askCategory={catAsk[active.id]}
@@ -2032,7 +2094,7 @@ function ImportTray({
   }
 
   return (
-    <section className="pen-panel mt-6 p-6">
+    <section className="pen-panel pen-import-panel mt-6 p-6">
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="pen-display text-[21px]">
           {penName ? T.onPen(pending.length, penName) : T.readyImport}
@@ -2172,8 +2234,10 @@ function PartTranscript({ part, onUpdateNotes }: { part: PenSession; onUpdateNot
 
 function Detail({
   session, tab, setTab, chatOpen, onToggleChat, onNotes, onDelete, onPatch, askCategory, selfEmail, onBack, notion,
-  parts, onSplit, splitting, onPeopleChanged,
+  parts, onSplit, splitting, onPeopleChanged, onCombine,
 }: {
+  /** "Combine with…": open the picker. Absent on a read-only or paused account. */
+  onCombine?: () => void
   session: PenSession
   /** People on this recording changed; the @ picker's list needs refreshing. */
   onPeopleChanged: () => void
@@ -2401,6 +2465,11 @@ function Detail({
               {chatOpen ? T.hideChat : T.askMeeting}
             </button>
           )}
+          {onCombine && !joined && utts.length > 0 && (
+            <button className="pen-btn" onClick={onCombine}>
+              <Icon name="link" size={15} />{T.combineWith}
+            </button>
+          )}
 
           {notion && (n.summary || n.actions?.length) ? <NotionButton key={session.id} sessionId={session.id} connected={notion.connected} sentUrl={notion.sent?.[session.id] ?? null} /> : null}
           {/* Two-step, inline. Deletion takes the audio with it and cannot be undone, so it
@@ -2431,6 +2500,11 @@ function Detail({
           {utts.length > 0 && (
             <button className={`pen-btn ${chatOpen ? 'pen-btn-accent' : ''}`} onClick={onToggleChat}>
               {chatOpen ? T.hideChat : T.askMeeting}
+            </button>
+          )}
+          {onCombine && !joined && utts.length > 0 && (
+            <button className="pen-btn" onClick={onCombine}>
+              <Icon name="link" size={15} />{T.combineWith}
             </button>
           )}
 
@@ -2602,43 +2676,21 @@ function Detail({
             </div>
           )}
 
-          {/* Still open / decided / to do, side by side as in the mock. Three short lists
-              stacked vertically read as one long undifferentiated column; side by side you can
-              see at a glance whether a meeting produced decisions, work, or neither.
-              Still open leads so the unresolved thing sits directly under the summary, rather
-              than last — it is the part most likely to need acting on. */}
+          {/* Mock (14 Oct): Next actions first and full width (it is the work: checkboxes,
+              "0/4 done"), then Decided and Still open side by side as a reference row, each
+              taking the full width when the other is empty. A one-line tally under the summary
+              jumps to each list. */}
           {(!!n.decisions?.length || !!n.actions?.length || !!n.open_questions?.length) && (
-            <div className="pen-trio">
-            {!!n.open_questions?.length && (
-              <div className="pen-sec pen-card">
-                <span className="pen-sec-head"><span className="pen-badge" data-tone="warn"><Icon name="question" size={13} /></span>{T.stillOpen}</span>
-                <ul className="mt-2 list-disc space-y-2.5 pl-5 text-[16.5px]">
-                  {n.open_questions.map((q, i) => (
-                    <li key={i} className="pen-doable">
-                      {q}
-                      <div className="mt-1.5">
-                        <DeliverableActions onPick={(kind) => setSheet({ kind, item: q })} />
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {!!n.decisions?.length && (
-              <div className="pen-sec pen-card">
-                <span className="pen-sec-head"><span className="pen-badge" data-tone="good"><Icon name="check" size={13} /></span>{T.decided}</span>
-                <ul className="mt-2 space-y-2">
-                  {n.decisions.map((d, i) => (
-                    <li key={i} className="text-[16.5px]">
-                      {d.decision}
-                      {d.who && <span className="pen-mono ml-2 text-[13px]" style={{ color: 'var(--dim)' }}>{d.who}</span>}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            <div className="pen-notes2">
+              <p className="pen-notes2-tally">
+                {[
+                  n.actions?.length ? <a key="a" href="#pen-n2-actions">{T.tallyActions(n.actions.length - done.size)}</a> : null,
+                  n.decisions?.length ? <a key="d" href="#pen-n2-decided">{T.tallyDecided(n.decisions.length)}</a> : null,
+                  n.open_questions?.length ? <a key="o" href="#pen-n2-open">{T.tallyOpen(n.open_questions.length)}</a> : null,
+                ].filter(Boolean).reduce<React.ReactNode[]>((acc, x, i) => (i ? [...acc, <span key={`s${i}`} aria-hidden="true"> · </span>, x] : [x]), [])}
+              </p>
             {!!n.actions?.length && (
-              <div className="pen-sec pen-card">
+              <div id="pen-n2-actions" className="pen-sec pen-card pen-n2-actions">
                 <div className="mb-1 flex items-baseline justify-between">
                   <span className="pen-sec-head"><span className="pen-badge" data-tone="accent"><Icon name="checklist" size={13} /></span>{T.nextActions}</span>
                   <span className="pen-mono text-[13px]" style={{ color: 'var(--faint)' }}>
@@ -2667,6 +2719,38 @@ function Detail({
                 </div>
               </div>
             )}
+              {(!!n.decisions?.length || !!n.open_questions?.length) && (
+                <div className="pen-n2-ref">
+            {!!n.decisions?.length && (
+              <div id="pen-n2-decided" className="pen-sec pen-card">
+                <span className="pen-sec-head"><span className="pen-badge" data-tone="good"><Icon name="check" size={13} /></span>{T.decided}</span>
+                <ul className="mt-2 space-y-2">
+                  {n.decisions.map((d, i) => (
+                    <li key={i} className="text-[16.5px]">
+                      {d.decision}
+                      {d.who && <span className="pen-mono ml-2 text-[13px]" style={{ color: 'var(--dim)' }}>{d.who}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {!!n.open_questions?.length && (
+              <div id="pen-n2-open" className="pen-sec pen-card">
+                <span className="pen-sec-head"><span className="pen-badge" data-tone="warn"><Icon name="question" size={13} /></span>{T.stillOpen}</span>
+                <ul className="mt-2 list-disc space-y-2.5 pl-5 text-[16.5px]">
+                  {n.open_questions.map((q, i) => (
+                    <li key={i} className="pen-doable">
+                      {q}
+                      <div className="mt-1.5">
+                        <DeliverableActions onPick={(kind) => setSheet({ kind, item: q })} />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+                </div>
+              )}
             </div>
           )}
 

@@ -10,11 +10,19 @@ import { writeNotes, EmptyRecording } from './pipeline'
 import { briefBatch } from './batch'
 import { sendBriefing, sendFailureNotice, sendReadyNotice, hasSomethingToSay } from './briefing'
 import { autoJoin } from './merge'
+import { checkJoinSuggestions } from './join-suggest'
 import { enrichPerson, peopleOnSession } from './people'
 import { sendWhatsAppBriefing, sendWhatsAppFailure } from './whatsapp/bot'
 
 /** Notes, then the briefing. Runs with nobody watching, so every failure has to say so. */
 export async function runUnattended(sessionId: string, email: string) {
+  await notesAndBriefing(sessionId, email)
+  // Then, with the briefing already out: does this recording look like part of another one the
+  // filename rule couldn't place? Only ever a suggestion, and never allowed to throw.
+  await checkJoinSuggestions(email, sessionId).catch(() => 0)
+}
+
+async function notesAndBriefing(sessionId: string, email: string) {
   let sourceName = 'your recording'
   let whatsapp = false
   let createdAt: string | null = null

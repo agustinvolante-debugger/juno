@@ -5,6 +5,7 @@ import { getSession, updateSession, listSessions } from '@/lib/pen/store'
 import { writeNotes } from '@/lib/pen/pipeline'
 import { joinSegments, splitGroup, groupSessions, findRuns } from '@/lib/pen/merge'
 import { sendBriefing, hasSomethingToSay } from '@/lib/pen/briefing'
+import { openJoinSuggestions, dismissJoinSuggestion } from '@/lib/pen/join-suggest'
 
 export const dynamic = 'force-dynamic'
 // Rewrites the notes over the combined transcript — the same Opus call the notes route makes.
@@ -12,9 +13,11 @@ export const maxDuration = 300
 
 // Joining the halves of a recording the pen split at its 60-minute file limit.
 //
-// GET  — runs the detector and reports which recordings look like one meeting.
+// GET  — runs the detector and reports which recordings look like one meeting, plus the
+//        model's join suggestions for pairs the filename rule can't place (join-suggest.ts).
 // POST — { action: 'join', ids } links them and rewrites the notes over the whole thing.
 //        { action: 'split', group } undoes it.
+//        { action: 'dismiss', a, b } turns down a suggestion for good.
 //
 // Nothing is destroyed either way: each segment keeps its own audio and its own transcript,
 // so a join that reads badly is one button from being undone.
@@ -30,6 +33,8 @@ export async function GET() {
       names: r.sessions.map((s) => s.source_name),
       totalSec: r.totalSec,
     })),
+    // Empty until the pen_join_suggestions table exists; never an error.
+    suggestions: await openJoinSuggestions(email).catch(() => []),
   })
 }
 
@@ -44,6 +49,14 @@ export async function POST(req: Request) {
     action?: string
     ids?: string[]
     group?: string
+    a?: string
+    b?: string
+  }
+
+  if (b.action === 'dismiss') {
+    if (!b.a || !b.b) return NextResponse.json({ error: 'a and b required' }, { status: 400 })
+    await dismissJoinSuggestion(email, b.a, b.b)
+    return NextResponse.json({ ok: true })
   }
 
   if (b.action === 'split') {
