@@ -15,7 +15,7 @@ export async function GET(req: Request) {
   if (!gcalConfigured()) return NextResponse.redirect(new URL('/pen/settings/calendar?error=setup', req.url))
   if (await readOnlyRefusal(email)) return NextResponse.redirect(new URL('/pen/settings/calendar?error=readonly', req.url))
   const nonce = crypto.randomBytes(16).toString('hex')
-  const res = NextResponse.redirect(authorizeUrl(email, makeState(email, nonce)))
+  const res = NextResponse.redirect(authorizeUrl(email, makeState(email, nonce), new URL(req.url).origin))
   res.cookies.set(STATE_COOKIE, nonce, { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 600, secure: new URL(req.url).protocol === 'https:' })
   return res
 }

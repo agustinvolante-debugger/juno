@@ -23,7 +23,7 @@ export async function GET(req: Request) {
   if (!code || !verifyState(u.searchParams.get('state'), email, nonce)) return back('error=state')
   if (await readOnlyRefusal(email)) return back('error=readonly')
   try {
-    await connectGcal(email, code)
+    await connectGcal(email, code, u.origin)
     return back('connected=1')
   } catch (e) {
     console.warn(`pen gcal connect: ${(e as Error).message}`)

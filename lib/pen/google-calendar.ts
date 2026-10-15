@@ -36,10 +36,10 @@ export function gcalConfigured(): boolean {
   return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
 }
 
-const baseUrl = () => (process.env.PEN_PUBLIC_URL || process.env.NEXTAUTH_URL || 'https://www.tryjunoapp.com').replace(/\/$/, '')
 
-export function redirectUri(): string {
-  return `${baseUrl()}/api/pen/google-calendar/callback`
+/** From the request's own origin, like Notion: localhost:3100 and www both work. */
+export function redirectUri(origin: string): string {
+  return `${origin.replace(/\/$/, '')}/api/pen/google-calendar/callback`
 }
 
 /* ------------------------------------------------------------ secrets */
@@ -89,10 +89,10 @@ export function verifyState(state: string | null | undefined, email: string, non
   }
 }
 
-export function authorizeUrl(email: string, state: string): string {
+export function authorizeUrl(email: string, state: string, origin: string): string {
   const q = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID!,
-    redirect_uri: redirectUri(),
+    redirect_uri: redirectUri(origin),
     response_type: 'code',
     scope: GCAL_SCOPE,
     access_type: 'offline',
@@ -157,8 +157,8 @@ function idTokenEmail(idToken: string | undefined): string | null {
 }
 
 /** The OAuth callback: swap the code for tokens, keep the refresh token sealed. */
-export async function connectGcal(email: string, code: string): Promise<GcalConnection> {
-  const t = await tokenCall({ code, grant_type: 'authorization_code', redirect_uri: redirectUri() })
+export async function connectGcal(email: string, code: string, origin: string): Promise<GcalConnection> {
+  const t = await tokenCall({ code, grant_type: 'authorization_code', redirect_uri: redirectUri(origin) })
   if (t.status >= 400 || !t.access_token) throw new Error(t.error_description ?? t.error ?? 'Google didn’t accept the connection.')
   if (!t.refresh_token) throw new Error('Google didn’t give Juno lasting access. Try connecting again.')
   const granted = (t.scope ?? '').split(/\s+/)
