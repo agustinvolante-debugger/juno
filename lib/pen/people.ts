@@ -113,7 +113,11 @@ export function cleanAbout(v: unknown): string | null {
   return t || null
 }
 
-export async function updatePerson(userEmail: string, id: string, patch: { name?: unknown; email?: unknown; about?: unknown }): Promise<PenPerson> {
+export async function updatePerson(
+  userEmail: string,
+  id: string,
+  patch: { name?: unknown; email?: unknown; about?: unknown; role?: unknown; company?: unknown },
+): Promise<PenPerson> {
   const body: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (patch.name !== undefined) {
     const n = cleanName(patch.name)
@@ -129,6 +133,11 @@ export async function updatePerson(userEmail: string, id: string, patch: { name?
     }
   }
   if (patch.about !== undefined) body.about = cleanAbout(patch.about)
+  // Role and company are normally the model's (enrichPerson), but a correction from the user
+  // stands: enrichment only overwrites them with something the notes actually say.
+  for (const k of ['role', 'company'] as const) {
+    if (patch[k] !== undefined) body[k] = typeof patch[k] === 'string' ? (patch[k] as string).replace(/\s+/g, ' ').trim().slice(0, 120) || null : null
+  }
   const { data, error } = await supabaseAdmin.from('pen_people').update(body).eq('id', id).eq('user_email', userEmail).select('*').single()
   if (error?.code === '23505') throw new Error('Someone with that name already exists.')
   if (error) throw new Error(schemaHint(error.message))
@@ -162,6 +171,65 @@ export async function deletePerson(userEmail: string, id: string) {
   if (e1) throw new Error(schemaHint(e1.message))
   const { error: e2 } = await supabaseAdmin.from('pen_people').delete().eq('user_email', userEmail).eq('id', id)
   if (e2) throw new Error(schemaHint(e2.message))
+}
+
+/**
+ * Two contacts that are one person ("Titi" and "Titi Dyas"): everything `dropId` was on moves to
+ * `keepId`, then `dropId` is deleted. Moved: the recordings they are linked to, the event
+ * conversations confirmed as theirs, and the voices named as them in each recording's Who's who.
+ * The kept contact's blank fields (email, about, role, company, phone) take the other's values;
+ * nothing already on the kept one is overwritten. Every query is scoped to the user.
+ */
+export async function mergePeople(userEmail: string, keepId: string, dropId: string): Promise<{ kept: PenPerson; recordings: number }> {
+  if (keepId === dropId) throw new Error('That is the same contact.')
+  const [keep, drop] = await Promise.all([ownedPeople(userEmail, [keepId]), ownedPeople(userEmail, [dropId])]).then((r) => [r[0][0], r[1][0]])
+  if (!keep || !drop) throw new Error('Contact not found.')
+
+  // Recordings: link the kept one wherever the dropped one was. ignoreDuplicates skips a
+  // recording both were already on; the dropped one's own links go with it in deletePerson.
+  const { data: links, error: e1 } = await supabaseAdmin
+    .from('pen_session_people').select('session_id,source').eq('user_email', userEmail).eq('person_id', dropId)
+  if (e1) throw new Error(schemaHint(e1.message))
+  const rows = (links ?? []) as { session_id: string; source: string }[]
+  if (rows.length) {
+    const { error } = await supabaseAdmin
+      .from('pen_session_people')
+      .upsert(rows.map((l) => ({ session_id: l.session_id, person_id: keepId, user_email: userEmail, source: l.source })), { onConflict: 'session_id,person_id', ignoreDuplicates: true })
+    if (error) throw new Error(schemaHint(error.message))
+  }
+
+  // Event conversations confirmed as the dropped contact. Before the segments table exists
+  // there are none.
+  const { error: e2 } = await supabaseAdmin
+    .from('pen_segments').update({ person_id: keepId, confirmed_name: keep.name }).eq('user_email', userEmail).eq('person_id', dropId)
+  if (e2 && !isMissingSchema(e2.message)) throw new Error(e2.message)
+
+  // Who's who: a voice named as the dropped contact is the kept one now, under the kept name.
+  const ids = rows.map((l) => l.session_id)
+  if (ids.length) {
+    const { data: sessions, error: e3 } = await supabaseAdmin.from('pen_sessions').select('id,speaker_map').eq('user_email', userEmail).in('id', ids)
+    if (e3) throw new Error(e3.message)
+    for (const s of (sessions ?? []) as { id: string; speaker_map: Record<string, { person_id?: string | null; name: string }> | null }[]) {
+      const map = s.speaker_map
+      if (!map || !Object.values(map).some((e) => e?.person_id === dropId)) continue
+      const next = Object.fromEntries(Object.entries(map).map(([l, e]) => [l, e?.person_id === dropId ? { ...e, person_id: keepId, name: keep.name } : e]))
+      const { error } = await supabaseAdmin.from('pen_sessions').update({ speaker_map: next, updated_at: new Date().toISOString() }).eq('user_email', userEmail).eq('id', s.id)
+      if (error) throw new Error(error.message)
+    }
+  }
+
+  // Blank fields on the kept card take the dropped card's values.
+  const k = keep as unknown as Record<string, unknown>
+  const d = drop as unknown as Record<string, unknown>
+  const fill: Record<string, unknown> = {}
+  for (const f of ['email', 'about', 'role', 'company', 'phone']) if (!k[f] && d[f]) fill[f] = d[f]
+  if (Object.keys(fill).length) {
+    const { error } = await supabaseAdmin.from('pen_people').update({ ...fill, updated_at: new Date().toISOString() }).eq('user_email', userEmail).eq('id', keepId)
+    if (error) throw new Error(schemaHint(error.message))
+  }
+
+  await deletePerson(userEmail, dropId)
+  return { kept: { ...keep, ...fill } as PenPerson, recordings: (await sessionsWith(userEmail, [keepId])).length }
 }
 
 /** People linked to one recording. */

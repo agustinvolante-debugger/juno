@@ -2,5 +2,6 @@
 
 import type { ToolModule } from './types'
 import { confirmModule } from '../confirm'
+import { parityModule } from './parity'
 
-export const MODULES: ToolModule[] = [confirmModule]
+export const MODULES: ToolModule[] = [confirmModule, parityModule]
