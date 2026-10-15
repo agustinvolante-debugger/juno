@@ -447,3 +447,16 @@ create table if not exists public.pen_segments (
 );
 create index if not exists pen_segments_user on public.pen_segments(user_email);
 alter table public.pen_segments enable row level security;  -- service role only
+
+-- Proactive assistant (15 Oct 2026). pen_whatsapp_links.pending = the action waiting for the
+-- user's yes (whatsapp/confirm.ts). pen_suggestions = what Juno heard and can offer to help with
+-- (suggestions-types.ts). pen_proactive_log = every message Juno sends first (daily max, dedupe).
+-- alter table public.pen_whatsapp_links add column if not exists pending jsonb;
+-- create table if not exists public.pen_suggestions (id uuid primary key default gen_random_uuid(), user_email text not null, session_id uuid, kind text not null, title text not null, detail jsonb not null default '{}'::jsonb, quote text, person text, starts_at timestamptz, due_at timestamptz, state text not null default 'suggested', dedupe text, offered_at timestamptz, decided_at timestamptz, created_at timestamptz not null default now());
+-- create unique index if not exists pen_suggestions_dedupe on public.pen_suggestions(user_email, dedupe);
+-- create index if not exists pen_suggestions_user_state on public.pen_suggestions(user_email, state, created_at desc);
+-- alter table public.pen_suggestions enable row level security;
+-- create table if not exists public.pen_proactive_log (id uuid primary key default gen_random_uuid(), user_email text not null, kind text not null, ref text, suggestion_ids uuid[] not null default '{}', channel text, template text, status text not null default 'sent', error text, sent_at timestamptz not null default now());
+-- create unique index if not exists pen_proactive_log_ref on public.pen_proactive_log(user_email, kind, ref);
+-- create index if not exists pen_proactive_log_user_sent on public.pen_proactive_log(user_email, sent_at desc);
+-- alter table public.pen_proactive_log enable row level security;

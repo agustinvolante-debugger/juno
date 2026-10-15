@@ -52,6 +52,8 @@ import { addReminder, cancelReminder, pendingReminders, MAX_AHEAD_MS } from '../
 import type { Lang } from '../currency'
 import { isMine, type ActionMeta, type Mine } from '../todo-labels'
 import { getDraft, setDraft, type Draft } from './store'
+import { MODULES } from './tools'
+import { getPending, type Pending } from './confirm'
 
 const anthropic = penAnthropic('whatsapp-agent')
 // Haiku 5.5 (14 Oct, was Sonnet 5.5): a twentieth of the price, and the search stage now reads
@@ -64,7 +66,7 @@ const MAX_ROUNDS = 8
  *  caller does it after sending the text, and sends the new briefing when it is done. */
 export type AgentResult = { text: string; citations: Citation[]; redo?: { sessionId: string; type?: string }; split?: string; after?: () => Promise<void> }
 
-type Ctx = {
+export type Ctx = {
   email: string
   msgId: string
   question: string
@@ -85,6 +87,8 @@ type Ctx = {
   recentTitle?: string | null
   /** Contacts added this turn, whose cards are refreshed after the reply. */
   enrich: Set<string>
+  /** Slow work queued by tool modules, run after the reply is sent (tools/types.ts). */
+  later: (() => Promise<void>)[]
 }
 
 const TOOLS: Anthropic.Tool[] = [
@@ -466,7 +470,7 @@ const TOOLS: Anthropic.Tool[] = [
   },
 ]
 
-function system(ctx: Ctx, pending: Draft | null): string {
+function system(ctx: Ctx, pending: Draft | null, asked: Pending | null): string {
   const today = new Date().toISOString().slice(0, 10)
   return (
     `You are Juno Pen on WhatsApp: the user's assistant for their own recorded meetings. Today is ${today}.\n\n` +
@@ -528,7 +532,9 @@ function system(ctx: Ctx, pending: Draft | null): string {
     (ctx.agentBrief ? `\nAbout the user:\n${ctx.agentBrief}\n` : '') +
     (pending
       ? `\nPending draft (shown to the user earlier): to ${pending.toName}${pending.toEmail ? ` <${pending.toEmail}>` : ' (no email yet)'}, subject "${pending.subject}".\n`
-      : '\nNo draft is pending.\n')
+      : '\nNo draft is pending.\n') +
+    MODULES.map((m) => (m.prompt ? `${m.prompt}\n` : '')).join('') +
+    (asked ? `\nWaiting for the user's yes (asked earlier): ${asked.summary}\n` : '')
   )
 }
 
@@ -1269,8 +1275,13 @@ async function runTool(ctx: Ctx, name: string, input: Record<string, unknown>): 
       return whatsappLink(ctx, { to_name: str('to_name'), phone: str('phone'), text: str('text') })
     case 'cancel_reminder':
       return (await cancelReminder(ctx.email, str('id'))) ? { ok: true } : { error: 'no such pending reminder' }
-    default:
+    default: {
+      for (const m of MODULES) {
+        const out = m.run(ctx, name, input)
+        if (out !== undefined) return out
+      }
       return { error: `unknown tool ${name}` }
+    }
   }
 }
 
@@ -1319,8 +1330,9 @@ export async function runAgent(opts: {
 }): Promise<AgentResult> {
   const userName = (await getProfile(opts.email).catch(() => null))?.name?.trim() || null
   const recentTitle = opts.recent ? ((await getSession(opts.email, opts.recent).catch(() => null))?.title ?? null) : null
-  const ctx: Ctx = { ...opts, userName, recentTitle, citations: [], drafted: null, sent: false, enrich: new Set() }
+  const ctx: Ctx = { ...opts, userName, recentTitle, citations: [], drafted: null, sent: false, enrich: new Set(), later: [] }
   const pending = await getDraft(opts.email).catch(() => null)
+  const asked = await getPending(opts.email).catch(() => null)
 
   if (pending?.toEmail && SEND_IT.test(opts.question)) {
     const r = (await sendDraft(ctx)) as { ok?: boolean; error?: string }
@@ -1354,8 +1366,8 @@ export async function runAgent(opts: {
       max_tokens: 16000,
       // Medium: a WhatsApp reply should arrive while "typing…" is still showing.
       output_config: { effort: 'medium' },
-      system: system(ctx, pending),
-      tools: TOOLS,
+      system: system(ctx, pending, asked),
+      tools: [...TOOLS, ...MODULES.flatMap((m) => m.tools)],
       messages,
     })
     text = res.content.filter((b): b is Anthropic.TextBlock => b.type === 'text').map((b) => b.text).join('\n').trim()
@@ -1386,13 +1398,19 @@ export async function runAgent(opts: {
   // Sources only if the reply actually carries the markers.
   const citations = ctx.citations.filter((c) => text.includes(`[${c.marker}]`))
   const enrich = [...ctx.enrich]
+  const later = ctx.later
   return {
     text: text || '…',
     citations,
     ...(ctx.redo ? { redo: ctx.redo } : {}),
     ...(ctx.split ? { split: ctx.split } : {}),
-    ...(enrich.length
-      ? { after: async () => { await Promise.all(enrich.map((id) => enrichPerson(opts.email, id).catch((e) => console.warn(`pen whatsapp: enrich ${id}: ${(e as Error).message}`)))) } }
+    ...(enrich.length || later.length
+      ? {
+          after: async () => {
+            await Promise.all(enrich.map((id) => enrichPerson(opts.email, id).catch((e) => console.warn(`pen whatsapp: enrich ${id}: ${(e as Error).message}`))))
+            for (const job of later) await job().catch((e) => console.warn(`pen whatsapp: after-reply job failed: ${(e as Error).message}`))
+          },
+        }
       : {}),
   }
 }
