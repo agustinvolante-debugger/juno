@@ -10,6 +10,10 @@ import { appLangFor } from '../app-lang'
 import { getAccount } from '@/lib/pen/accounts'
 import { notionConfigured } from '@/lib/pen/notion'
 import { gcalConfigured } from '@/lib/pen/google-calendar'
+import { getLinkByEmail } from '@/lib/pen/whatsapp/store'
+import { botNumber } from '@/lib/pen/whatsapp/provider'
+import { channelFor } from '@/lib/pen/proactive'
+import SettingsTabs from './SettingsTabs'
 
 const COPY = {
   en: { back: 'Back to recordings', title: 'Settings' },
@@ -26,6 +30,16 @@ export default async function SettingsLayout({ children }: { children: React.Rea
   if (!email) redirect('/pen')
   const [lang, account] = await Promise.all([appLangFor(email), getAccount(email)])
   const T = COPY[lang]
+  // The phone tab bar's Chat: WhatsApp or iMessage when linked (as in the app), else the web chat.
+  let chatLink: { href: string; label: string } | null = null
+  if (whatsappReady() || imessageFor(email)) {
+    const link = await getLinkByEmail(email).catch(() => null)
+    if (link?.linked_at) {
+      const channel = await channelFor(email).catch(() => null)
+      const im = channel?.imessage ? process.env.SENDBLUE_NUMBER : null
+      chatLink = im ? { href: `sms:+${im.replace(/\D/g, '')}`, label: 'iMessage' } : { href: `https://wa.me/${botNumber()}`, label: 'WhatsApp' }
+    }
+  }
 
   return (
     <LangProvider lang={lang}>
@@ -45,6 +59,7 @@ export default async function SettingsLayout({ children }: { children: React.Rea
         </aside>
         <section className="pen-set-main">{children}</section>
       </div>
+      <SettingsTabs chatLink={chatLink} />
     </main>
     </LangProvider>
   )

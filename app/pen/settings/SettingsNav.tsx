@@ -19,7 +19,7 @@ const ITEMS: { href: string; label: 'profile' | 'WhatsApp'; icon: IconName }[] =
 ]
 
 /**
- * `whatsapp` is false until the Vonage env vars exist, so nobody finds a page that can't work.
+ * `whatsapp` is false until WhatsApp (Meta Cloud API) or iMessage is configured, so nobody finds a page that can't work.
  * `billing` is true for anyone Stripe knows: pause, and the way into Stripe's portal.
  */
 export default function SettingsNav({ whatsapp = false, billing = false, notion = false, calendar = false, imessage = false }: { whatsapp?: boolean; billing?: boolean; notion?: boolean; calendar?: boolean; imessage?: boolean }) {

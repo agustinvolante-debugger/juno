@@ -132,6 +132,8 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
   }
   .pen-cats-list, .pen-side-meter { border-color: var(--hair); }
   .pen-meter-n strong { white-space: nowrap; font-weight: 600; letter-spacing: -0.02em; }
+  .pen-meter-n { flex-wrap: wrap; row-gap: 2px; }
+  .pen-meter-un { white-space: nowrap; }
   .pen-side {
     background: var(--panel);
     border-color: transparent;
@@ -227,8 +229,10 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
 
   /* ---- sidebar: scrolls on its own; the month's recording meter pinned at the foot ---- */
   .pen-side-meter {
-    position: sticky; bottom: -12px; z-index: 2;
-    margin-top: auto; padding-bottom: 10px;
+    /* bottom 0 and room under the last line: at -12px the "Resets Nov 1." line was cut off by
+       the sidebar's rounded foot (critique 15 Oct). */
+    position: sticky; bottom: 0; z-index: 2;
+    margin-top: auto; padding-bottom: 16px;
     background: var(--panel); border-color: var(--hair);
   }
   .pen-saved { border-color: var(--hair); }
@@ -303,18 +307,24 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
   /* ---- header ---- */
   .pen-home-title[data-ready='false'] { visibility: hidden; }
 
-  /* ---- stats row ---- */
-  .pen-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
-  .pen-stat {
-    display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 0;
-    padding: 18px 20px 18px; border-radius: var(--sk-r-card); background: var(--panel);
-    text-align: left; color: var(--ink); transition: background .15s, transform .15s;
+  /* ---- stats: a quiet ledger under Today (15 Oct) ----
+     The four totals used to lead Home as big glass tiles ("Nearly missed 208" was the loudest
+     thing on the page). Now one row of figures on the canvas, hairline-divided, no card and no
+     shadow: reference, still one click from each full list. */
+  .pen-stats {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0;
+    border-top: 1px solid rgba(29, 29, 31, .08); border-bottom: 1px solid rgba(29, 29, 31, .08);
   }
-  .pen-stat:hover { background: #fbfbfd; }
-  .pen-stat:active { transform: scale(.985); }
-  .pen-stat-label { font-size: 13.5px; font-weight: 600; color: var(--soft); }
+  .pen-stat {
+    display: flex; flex-direction: column; align-items: stretch; gap: 2px; min-width: 0;
+    padding: 12px 16px; border-radius: 12px; background: transparent;
+    text-align: left; color: var(--ink); transition: background .15s;
+  }
+  .pen-stat + .pen-stat { box-shadow: -1px 0 0 rgba(29, 29, 31, .08); border-radius: 0 12px 12px 0; }
+  .pen-stat:hover { background: rgba(255, 255, 255, .6); }
+  .pen-stat-label { font-size: 12.5px; font-weight: 600; color: var(--soft); }
   .pen-stat-n {
-    font-size: clamp(32px, 3vw, 42px); font-weight: 600; line-height: 1.05; letter-spacing: -0.035em;
+    font-size: 22px; font-weight: 600; line-height: 1.2; letter-spacing: -0.02em;
     font-variant-numeric: tabular-nums; color: var(--ink);
   }
   .pen-stat[data-tone='bad'] .pen-stat-n { color: var(--bad); }
@@ -386,8 +396,10 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
 
   /* ---- narrow ---- */
   @media (max-width: 900px) {
-    .pen-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-    .pen-stat { padding: 14px 16px; }
+    .pen-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .pen-stat { padding: 10px 12px; min-height: 44px; }
+    .pen-stat:nth-child(3) { box-shadow: none; border-top: 1px solid rgba(29, 29, 31, .08); }
+    .pen-stat:nth-child(4) { border-top: 1px solid rgba(29, 29, 31, .08); }
     .pen-home-pair { grid-template-columns: minmax(0, 1fr); }
     .pen-today-cols { grid-template-columns: minmax(0, 1fr); }
   }
@@ -396,7 +408,7 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
 
 
   /* ---- top-level cards: translucent fill, blur, bright edge, layered shadow ---- */
-  .pen-side, .pen-stat, .pen-today, .pen-card, .pen-rail, .pen-panel, .pen-aicard, .pen-missed,
+  .pen-side, .pen-today, .pen-card, .pen-rail, .pen-panel, .pen-aicard, .pen-missed, .pen-jn, .pen-wait,
   .pen-set-card, .pen-cust-tile, .pen-cust-wrap, .pen-turn-a, .pen-search, .pen-m-rec,
   .pen-composer-input {
     background: var(--g-fill);
@@ -414,14 +426,12 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
   /* Status cards keep their colour: the glass is tinted, not replaced with white. */
   .pen-aicard {
     background: linear-gradient(150deg, rgba(232, 241, 252, .9), rgba(222, 235, 251, .66));
-    border-left: 3px solid var(--accent);
   }
   .pen-missed {
     background:
       repeating-linear-gradient(135deg, rgba(147, 84, 0, .04) 0 1px, transparent 1px 7px),
       linear-gradient(150deg, rgba(255, 246, 228, .92), rgba(255, 240, 214, .7));
   }
-  .pen-stat[data-tone='bad'] { background: linear-gradient(150deg, rgba(255, 241, 240, .9), rgba(253, 232, 230, .66)); }
 
   /* The sticky month meter fades in over the scrolling sidebar instead of sitting as a slab. */
   /* Pinned at the bottom of a scrolling sidebar: it must hide what scrolls under it (it was a
@@ -430,7 +440,7 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
   .pen-side-meter { background: #fbfbfd; box-shadow: 0 -14px 14px -6px #fbfbfd; z-index: 1; }
 
   /* ---- things that pop over the page: glass, more opaque for legibility, deeper shadow ---- */
-  .pen-menu, .pen-d-menu, .pen-acct2-menu, .pen-catpick-menu, .pen-search-sugg, .pen-promo-card,
+  .pen-menu, .pen-d-menu, .pen-do-menu, .pen-acct2-menu, .pen-catpick-menu, .pen-search-sugg, .pen-promo-card,
   .pen-tximp, .pen-bigpanel, .pen-sheet, .pen-upcard, .pen-tour-card {
     background: var(--g-fill-solid);
     -webkit-backdrop-filter: var(--g-blur);
@@ -440,17 +450,15 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
   }
 
   /* ---- gentle lift on hover, only for cards you act on, only with a real pointer ---- */
-  .pen-stat, .pen-card, .pen-today, .pen-cust-tile {
+  .pen-card, .pen-today, .pen-cust-tile {
     transition: translate .22s ease, box-shadow .22s ease, background .22s ease;
   }
   @media (hover: hover) and (prefers-reduced-motion: no-preference) {
-    .pen-stat:hover, .pen-card:hover, .pen-today:hover, .pen-cust-tile:hover {
+    .pen-card:hover, .pen-today:hover, .pen-cust-tile:hover {
       translate: 0 -2px;
       box-shadow: var(--g-shadow-hi);
     }
   }
-  .pen-stat:hover { background: var(--g-fill-solid); }
-  .pen-stat[data-tone='bad']:hover { background: linear-gradient(150deg, rgba(255, 241, 240, .96), rgba(253, 232, 230, .8)); }
 
   /* ---- primary buttons: blue with depth ---- */
   .pen-btn-primary, .pen-btn-accent, .pen-connect {
@@ -779,7 +787,7 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
   /* A card's pop-up (task/person preview, menus, pickers) must sit above the cards after it.
      Glass (backdrop-filter, hover translate) makes every card its own stacking layer, so a
      pop-up inside one was painted under the next card. Lift the card that holds an open one. */
-  :is(.pen-stat, .pen-today, .pen-card, .pen-rail, .pen-panel, .pen-aicard, .pen-missed,
+  :is(.pen-stat, .pen-today, .pen-card, .pen-rail, .pen-panel, .pen-aicard, .pen-missed, .pen-jn, .pen-wait,
       .pen-set-card, .pen-cust-tile, .pen-cust-wrap, .pen-turn-a, .pen-search, .pen-m-rec, .pen-composer-input):has(
       .pen-peek, [role="menu"], [role="tooltip"], [role="listbox"], .pen-brief-pop, .pen-catpick-menu, details[open]) {
     position: relative;
@@ -791,7 +799,7 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
   /* "In testing" next to Juno Pen on iMessage (Settings, WhatsApp). */
   .pen-im-beta {
     display: inline-block; margin-left: 8px; padding: 2px 9px; border-radius: 999px; vertical-align: 3px;
-    font-size: 12px; font-weight: 600; color: var(--sk-blue, #0066cc); background: rgba(0, 102, 204, .1);
+    font-size: 12px; font-weight: 600; color: var(--accent-ink); background: rgba(0, 102, 204, .08);
   }
 
   /* ---- the recording's action row (14 Oct): one control size for every action ----

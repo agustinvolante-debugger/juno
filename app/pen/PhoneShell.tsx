@@ -30,6 +30,7 @@ const PS: Copy<Record<PhoneTab, string> & { back: string; tabs: string }> = {
 export default function PhoneShell({
   tab,
   onTab,
+  chatLink = null,
   title,
   onBack,
   left,
@@ -41,6 +42,8 @@ export default function PhoneShell({
 }: {
   tab: PhoneTab
   onTab: (t: PhoneTab) => void
+  /** Linked to WhatsApp or iMessage: the Chat tab opens that chat instead of the web chat. */
+  chatLink?: { href: string; label: string } | null
   title: string
   /** Shows a back arrow in place of `left`. */
   onBack?: () => void
@@ -114,7 +117,12 @@ export default function PhoneShell({
       </main>
 
       <nav className="pen-m-tabs" aria-label={T.tabs}>
-        {TABS.map((t) => (
+        {TABS.map((t) => t.id === 'search' && chatLink ? (
+          <a key={t.id} className="pen-m-tab" href={chatLink.href} target="_blank" rel="noreferrer">
+            <Icon name="chat" size={23} />
+            <span>{chatLink.label}</span>
+          </a>
+        ) : (
           <button
             key={t.id}
             type="button"
