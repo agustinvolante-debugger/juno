@@ -24,6 +24,7 @@ export async function sendEmailResult({
   bcc,
   text,
   headers,
+  attachments,
 }: {
   to: string | string[]
   subject: string
@@ -36,6 +37,8 @@ export async function sendEmailResult({
   text?: string
   /** Extra headers, e.g. List-Unsubscribe on announcements. */
   headers?: Record<string, string>
+  /** Files to attach, e.g. a calendar invite (.ics). */
+  attachments?: { filename: string; content: Buffer | string; contentType?: string }[]
 }): Promise<SendResult> {
   if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) {
     return { ok: false, error: 'Email is not configured (RESEND_API_KEY / RESEND_FROM_EMAIL).' }
@@ -50,6 +53,7 @@ export async function sendEmailResult({
       replyTo: replyTo || SUPPORT_EMAIL,
       ...(bcc ? { bcc } : {}),
       ...(headers ? { headers } : {}),
+      ...(attachments?.length ? { attachments } : {}),
     })
     if (error) return { ok: false, error: error.message || 'The mail provider rejected it.' }
     return { ok: true }

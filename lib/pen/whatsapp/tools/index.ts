@@ -3,5 +3,7 @@
 import type { ToolModule } from './types'
 import { confirmModule } from '../confirm'
 import { parityModule } from './parity'
+import { timezoneModule } from './timezone'
+import { calendarModule } from './calendar'
 
-export const MODULES: ToolModule[] = [confirmModule, parityModule]
+export const MODULES: ToolModule[] = [confirmModule, parityModule, timezoneModule, calendarModule]

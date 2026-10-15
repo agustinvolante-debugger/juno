@@ -172,6 +172,22 @@ export default function PenApp({
     window.history.replaceState(null, '', u.toString())
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  // The browser's time zone, so WhatsApp reminders and calendar links use the right clock
+  // (lib/pen/timezone.ts). Once a day per browser; the server skips it while a zone the user
+  // gave on WhatsApp ("in SF until Friday") is still in force.
+  useEffect(() => {
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+      const key = 'pen-tz-sent'
+      const [was, at] = (localStorage.getItem(key) ?? '').split('|')
+      if (!tz || (was === tz && Date.now() - Number(at) < 24 * 60 * 60 * 1000)) return
+      fetch('/api/pen/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ timeZone: tz }) })
+        .then((r) => r.ok && localStorage.setItem(key, `${tz}|${Date.now()}`))
+        .catch(() => {})
+    } catch {
+      // No Intl zone or no storage: the phone's country code still gives a guess.
+    }
+  }, [])
   const [view, setView] = useState<View>({ k: 'archive' })
   const [chatSeed, setChatSeed] = useState<{ text: string; mentions: Mention[] } | null>(null)
   const [chats, setChats] = useState<ChatSummary[]>([])

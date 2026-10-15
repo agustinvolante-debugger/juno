@@ -53,6 +53,7 @@ import type { Lang } from '../currency'
 import { isMine, type ActionMeta, type Mine } from '../todo-labels'
 import { getDraft, setDraft, type Draft } from './store'
 import { MODULES } from './tools'
+import { userZone, zonePromptLine, type Zone } from '../timezone'
 import { getPending, type Pending } from './confirm'
 
 const anthropic = penAnthropic('whatsapp-agent')
@@ -89,6 +90,8 @@ export type Ctx = {
   enrich: Set<string>
   /** Slow work queued by tool modules, run after the reply is sent (tools/types.ts). */
   later: (() => Promise<void>)[]
+  /** The user's time zone, resolved once per turn (lib/pen/timezone.ts); set_timezone updates it. */
+  zone?: Zone
 }
 
 const TOOLS: Anthropic.Tool[] = [
@@ -484,7 +487,7 @@ function system(ctx: Ctx, pending: Draft | null, asked: Pending | null): string 
     (ctx.recent
       ? `"This call", "the recording", "it" with no other recording named means the one they sent here last: session_id ${ctx.recent}${ctx.recentTitle ? `, "${ctx.recentTitle}"` : ''}.\n\n`
       : '') +
-    `Now: ${nowLine(ctx.phone)}\n` +
+    `Now: ${zonePromptLine(ctx.zone)}\n` +
     '- Reminders can be at most 23 hours ahead (WhatsApp only lets Juno message within a day of their last message). ' +
     'For later ones, add it as a to-do with that due date instead (add_todo, on the recording it relates to) and say ' +
     'so in one line; don\'t ask first. For a clock time with no timezone given, ' +
@@ -715,23 +718,6 @@ async function sendDraft(ctx: Ctx): Promise<unknown> {
   return { ok: true, sent_to: `${d.toName} <${d.toEmail}>`, subject: d.subject, note: 'A copy went to the user by BCC; replies go to their inbox.' }
 }
 
-/** A timezone guess from the phone's country code. The US spans six zones, so +1 is left unknown. */
-function zoneFor(phone: string): string | null {
-  const d = phone.replace(/\D/g, '')
-  const table: [string, string][] = [
-    ['56', 'America/Santiago'], ['55', 'America/Sao_Paulo'], ['54', 'America/Argentina/Buenos_Aires'], ['52', 'America/Mexico_City'],
-    ['57', 'America/Bogota'], ['51', 'America/Lima'], ['34', 'Europe/Madrid'], ['44', 'Europe/London'],
-  ]
-  return table.find(([p]) => d.startsWith(p))?.[1] ?? null
-}
-
-function nowLine(phone: string): string {
-  const now = new Date()
-  const zone = zoneFor(phone)
-  const local = zone ? now.toLocaleString('sv-SE', { timeZone: zone, hour12: false }).slice(0, 16) : null
-  return `${now.toISOString().slice(0, 16)}Z (UTC).` + (local ? ` The user's likely timezone is ${zone}, where it is ${local}.` : ' The user\'s timezone is unknown.')
-}
-
 async function setReminder(ctx: Ctx, i: { text: string; in_minutes: number; at: string }): Promise<unknown> {
   const text = i.text.trim()
   if (!text) return { error: 'text is required' }
@@ -746,7 +732,7 @@ async function setReminder(ctx: Ctx, i: { text: string; in_minutes: number; at: 
   if (due.getTime() < Date.now() + 30 * 1000) return { error: 'that time has already passed' }
   if (due.getTime() - Date.now() > MAX_AHEAD_MS) return { error: 'more than 23 hours ahead; WhatsApp only allows reminders within a day' }
   const r = await addReminder({ email: ctx.email, phone: ctx.phone, text, dueAt: due, lang: ctx.lang })
-  const zone = zoneFor(ctx.phone)
+  const zone = ctx.zone?.tz
   return {
     ok: true,
     id: r.id,
@@ -1330,7 +1316,8 @@ export async function runAgent(opts: {
 }): Promise<AgentResult> {
   const userName = (await getProfile(opts.email).catch(() => null))?.name?.trim() || null
   const recentTitle = opts.recent ? ((await getSession(opts.email, opts.recent).catch(() => null))?.title ?? null) : null
-  const ctx: Ctx = { ...opts, userName, recentTitle, citations: [], drafted: null, sent: false, enrich: new Set(), later: [] }
+  const zone = await userZone(opts.email, opts.phone).catch((): Zone => ({ tz: null, source: 'none', sure: false }))
+  const ctx: Ctx = { ...opts, userName, recentTitle, citations: [], drafted: null, sent: false, enrich: new Set(), later: [], zone }
   const pending = await getDraft(opts.email).catch(() => null)
   const asked = await getPending(opts.email).catch(() => null)
 

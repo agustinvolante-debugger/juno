@@ -172,6 +172,16 @@ export type AgentProfile = {
   /** First-run state, set by the app (never by the form): when the sample was made, when the
    *  tour was finished or skipped. */
   onboarding?: { sample?: string; tour?: string; referral?: string; feedback?: string }
+  /** Time zone, set by the app (never by the form; lib/pen/timezone.ts). The browser's zone and
+   *  when it was last seen, from visits to the web app. */
+  timeZone?: string
+  timeZoneSeenAt?: string
+  /** The zone the user told Juno on WhatsApp, when, and for how long ("until Friday"); the
+   *  zone said before a temporary one, which comes back when it ends. */
+  timeZoneSaid?: string
+  timeZoneSaidAt?: string
+  timeZoneUntil?: string
+  timeZoneBefore?: string
   /** Answers to the role's own questions, keyed by Question.key. */
   answers?: Record<string, string | string[]>
 }
