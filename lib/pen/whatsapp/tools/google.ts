@@ -3,6 +3,8 @@
 //   send_to_google_docs     a recording's notes as a Google Doc ("Send to Google Docs" on the web)
 //   export_todos_sheet      the user's to-dos as a Google Sheet (task, owner, due, done, recording, link)
 //   export_contacts_sheet   their contacts as a Google Sheet
+//   create_doc / create_sheet   anything else they ask to have written up or tabled ("put the new
+//                           prices in a Doc and a Sheet"), from their recordings or this chat
 //
 // The files land in a "Juno Pen" folder in the user's own Drive; Juno can only open files it made.
 // Making a file in their own Drive is what they asked for, so it runs at once (like
@@ -36,6 +38,30 @@ const TOOLS: Anthropic.Tool[] = [
     description: 'Make a Google Sheet of the user\'s contacts (name, email, role, company, their note, recordings, last seen).',
     input_schema: obj({}, []),
   },
+  {
+    name: 'create_doc',
+    description:
+      'Write a Google Doc the user asked for (a summary, prices, a plan, a memo) in their Drive. Content only from their recordings ' +
+      '(search first) or this chat; never invented. Blocks in order: heading / paragraph / bullet.',
+    input_schema: obj({
+      title: { type: 'string' },
+      blocks: {
+        type: 'array',
+        items: obj({ type: { type: 'string', enum: ['heading', 'paragraph', 'bullet'] }, text: { type: 'string' } }, ['type', 'text']),
+      },
+    }, ['title', 'blocks']),
+  },
+  {
+    name: 'create_sheet',
+    description:
+      'Make a Google Sheet the user asked for (a price table, a comparison, a list) in their Drive. Content only from their ' +
+      'recordings (search first) or this chat; never invented. Numbers as numbers where they are numbers.',
+    input_schema: obj({
+      title: { type: 'string' },
+      headers: { type: 'array', items: { type: 'string' } },
+      rows: { type: 'array', items: { type: 'array', items: { type: ['string', 'number', 'boolean', 'null'] } } },
+    }, ['title', 'headers', 'rows']),
+  },
 ]
 
 /** Not connected: the one-tap link to connect Google Docs & Sheets. */
@@ -45,7 +71,10 @@ async function needDrive(ctx: Ctx): Promise<Record<string, unknown> | null> {
   return {
     error: 'Google Docs & Sheets is not connected',
     connect_link: connectLink(ctx.email, 'gdrive', undefined, viaOf(ctx.phone)),
-    next: 'say so in one line with this one-tap link on its own line (works once, 15 minutes; Juno can only open files it makes); Juno confirms here when it is connected, then try again',
+    next:
+      'Put this link in your reply NOW, on its own line, with one line saying Docs & Sheets needs connecting once (tap, approve, ' +
+      'works once within 15 minutes; Juno can only open files it makes). Do not ask whether to send it. Juno confirms here when it ' +
+      'is connected; then they say "try again".',
   }
 }
 
@@ -76,6 +105,32 @@ async function contactsSheet(ctx: Ctx): Promise<unknown> {
   return { ok: true, url: r.url, rows: r.rows, note: 'Say how many contacts are in it and give the link on its own line (a new Sheet in the "Juno Pen" folder).' }
 }
 
+async function freeDoc(ctx: Ctx, input: Record<string, unknown>): Promise<unknown> {
+  const need = await needDrive(ctx)
+  if (need) return need
+  const blocks = (Array.isArray(input.blocks) ? input.blocks : [])
+    .map((b) => b as { type?: string; text?: string })
+    .filter((b) => typeof b.text === 'string' && b.text.trim() && ['heading', 'paragraph', 'bullet'].includes(String(b.type)))
+    .map((b) => ({ type: b.type as 'heading' | 'paragraph' | 'bullet', text: b.text!.trim() }))
+  if (!blocks.length) return { error: 'nothing to write: give the content as blocks' }
+  const { createDoc } = await import('../../google-drive')
+  const r = await createDoc(ctx.email, { title: str(input, 'title') || 'Juno Pen', blocks })
+  return { ok: true, url: r.url, note: 'Give the link on its own line (a new Doc in the "Juno Pen" folder of their Drive).' }
+}
+
+async function freeSheet(ctx: Ctx, input: Record<string, unknown>): Promise<unknown> {
+  const need = await needDrive(ctx)
+  if (need) return need
+  const headers = (Array.isArray(input.headers) ? input.headers : []).map((h) => String(h ?? '').slice(0, 100)).filter(Boolean)
+  if (!headers.length) return { error: 'give the column headers' }
+  const rows = (Array.isArray(input.rows) ? input.rows : [])
+    .filter(Array.isArray)
+    .map((r) => (r as unknown[]).slice(0, headers.length).map((c) => (typeof c === 'number' || typeof c === 'boolean' || c === null ? c : String(c ?? '').slice(0, 1000))))
+  const { createSheet } = await import('../../google-drive')
+  const r = await createSheet(ctx.email, { title: str(input, 'title') || 'Juno Pen', headers, rows })
+  return { ok: true, url: r.url, rows: rows.length, note: 'Give the link on its own line (a new Sheet in the "Juno Pen" folder of their Drive).' }
+}
+
 export const googleModule: ToolModule = {
   tools: TOOLS,
   run: (ctx, name, input) => {
@@ -83,12 +138,16 @@ export const googleModule: ToolModule = {
       case 'send_to_google_docs': return toDocs(ctx, str(input, 'session_id'))
       case 'export_todos_sheet': return todosSheet(ctx, input)
       case 'export_contacts_sheet': return contactsSheet(ctx)
+      case 'create_doc': return freeDoc(ctx, input)
+      case 'create_sheet': return freeSheet(ctx, input)
       default: return undefined
     }
   },
   prompt:
     '- Google Docs & Sheets: "send the notes to Google Docs" / "pásalo a un Google Doc" → send_to_google_docs (Notion is ' +
     'send_to_notion: use the one they name). "Export my to-dos to a sheet" / "exporta mis pendientes a una planilla" → ' +
-    'export_todos_sheet; "my contacts in a spreadsheet" → export_contacts_sheet. Each makes a file in their own Drive, so run it at ' +
-    'once and give the link. Not connected: the tool returns a one-tap connect_link; send it as is.',
+    'export_todos_sheet; "my contacts in a spreadsheet" → export_contacts_sheet. Anything else written up or put in a table ' +
+    '("the new prices in a Doc and a Sheet") → create_doc / create_sheet, with content from search_recordings or this chat only. ' +
+    'Each makes a file in their own Drive, so run it at once and give the link. Not connected: the tool returns a one-tap ' +
+    'connect_link; put it in the reply right away, never ask "should I send a link?". Never say you can only make to-do or contact sheets.',
 }
