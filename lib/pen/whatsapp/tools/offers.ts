@@ -8,8 +8,9 @@
 //               "Add it to your calendar?"), then a Meet link and an invite are offered. Not
 //               connected (or Google refuses): calendar links (.ics for Apple Calendar, Google
 //               template), alarm inside; offer an invite. Without a known time zone it asks first.
-//   followup  → a WhatsApp reminder when it falls within the 24-hour window, else it stays an
-//               accepted suggestion with detail.remind_at for the scheduler (and a dated to-do).
+//   followup  → a WhatsApp reminder (pen_reminders) when it is within maxAheadMs (a day, or 30
+//               days with the user_reminder template); later than that, only the dated to-do,
+//               and the model says so.
 //   notion    → the page in Notion (+ dated to-dos), or, not connected, the Settings link and a
 //               plain to-do plan on the next yes.
 //   other     → accepted; the model helps with the other tools.
@@ -146,7 +147,7 @@ async function acceptMeeting(ctx: Ctx, s: Suggestion, tzIn: string, startLocal: 
   if (await gcalConnected(ctx.email)) {
     try {
       const e = await createEvent(ctx.email, ev, { ref: s.id })
-      await decideSuggestion(ctx.email, s.id, 'done', { local, tz, gcal_event_id: e.id, gcal_link: e.link })
+      await decideSuggestion(ctx.email, s.id, 'done', { local, tz, gcal_event_id: e.id, gcal_link: e.link }, { starts_at: start.toISOString() })
       return {
         ok: true,
         added_to: 'Google Calendar',
@@ -166,7 +167,9 @@ async function acceptMeeting(ctx: Ctx, s: Suggestion, tzIn: string, startLocal: 
   }
   try {
     const links = calendarLinks(ev)
-    await decideSuggestion(ctx.email, s.id, 'done', { local, tz, calendar: links })
+    // starts_at = the confirmed start (a corrected time too): the scheduler's meeting briefs and
+    // morning brief read it (proactive.ts acceptedMeetings).
+    await decideSuggestion(ctx.email, s.id, 'done', { local, tz, calendar: links }, { starts_at: start.toISOString() })
     return {
       ok: true,
       when,
@@ -182,7 +185,7 @@ async function acceptMeeting(ctx: Ctx, s: Suggestion, tzIn: string, startLocal: 
     // Calendar links not available: keep the date as a to-do so it isn't lost.
     console.warn(`pen offers: calendar links for ${s.id}: ${(e as Error).message}`)
     if (s.session_id) await addDatedTodos(ctx.email, s.session_id, [{ action: `${title} — ${when}`, due_date: local.slice(0, 10), waiting: s.person }])
-    await decideSuggestion(ctx.email, s.id, 'accepted', { local, tz, calendar_error: (e as Error).message.slice(0, 200) })
+    await decideSuggestion(ctx.email, s.id, 'accepted', { local, tz, calendar_error: (e as Error).message.slice(0, 200) }, { starts_at: start.toISOString() })
     return {
       ok: true,
       when,
@@ -203,20 +206,22 @@ async function acceptFollowup(ctx: Ctx, s: Suggestion, tzIn: string): Promise<un
   // A to-do the notes don't have yet (the model found this promise), dated, so it shows on Today.
   if (s.detail.source !== 'todo' && s.session_id) await addDatedTodos(ctx.email, s.session_id, [{ action: text, due_date: dueDate, waiting: s.person }])
   const ahead = at ? at.getTime() - Date.now() : -1
-  if (at && ctx.phone && ahead > 30_000 && ahead <= maxAheadMs()) {
+  if (at && ctx.phone && ahead > 30_000 && ahead <= maxAheadMs(ctx.lang)) {
     const r = await addReminder({ email: ctx.email, phone: ctx.phone, text, dueAt: at, lang: ctx.lang })
     await decideSuggestion(ctx.email, s.id, 'done', { tz, reminder_id: r.id, remind_at: r.due_at })
     return { ok: true, reminder_set: whenText({ starts_at: r.due_at, detail: { tz } }, ctx.lang), time_zone: `${tz} (${ZONE_NOTE})`, text }
   }
-  // Further out than WhatsApp's window: the scheduler sends it (detail.remind_at) when due.
-  await decideSuggestion(ctx.email, s.id, 'accepted', { tz, remind_at: at?.toISOString() ?? null })
+  // Further out than a reminder can be sent (or no time): the dated to-do is all there is.
+  await decideSuggestion(ctx.email, s.id, 'accepted', { tz, to_do_only: true })
   return {
     ok: true,
-    will_remind: at ? whenText({ starts_at: at.toISOString(), detail: { tz } }, ctx.lang) : null,
+    reminder_set: false,
     time_zone: tz ? `${tz} (${ZONE_NOTE})` : null,
     due_date: dueDate,
     text,
-    note: 'Confirm in one line: it is on their to-dos for the due date and Juno will remind them at that time.',
+    note:
+      'No reminder message is set for this one: it is too far ahead for a WhatsApp reminder. Say honestly, in one line, that ' +
+      'it is on their to-dos' + (dueDate ? ' for the due date' : '') + ' (it shows on Today), not a reminder at a set time.',
   }
 }
 

@@ -344,6 +344,9 @@ async function linkPhone(msg: Inbound, code: string): Promise<void> {
     await sendText(msg.from, BOT[langForPhone(msg.from)].badCode(appUrl('/settings/whatsapp')))
     return
   }
+  // The LINK message came in before there was a link, so it was stored without the email; with
+  // it, channelFor sees the window this message just opened.
+  await supabaseAdmin.from('pen_whatsapp_messages').update({ email: link.email }).eq('id', msg.id).is('email', null).then(() => {}, () => {})
   const L = BOT[await langFor(msg.from, link.email)]
   // The opt-in Meta asks for before Juno writes first (plan section I).
   await sendText(msg.from, `${L.linked(link.email)}\n\n${L.help}\n\n${L.optIn}`)
@@ -354,6 +357,9 @@ async function linkPhone(msg: Inbound, code: string): Promise<void> {
 type ProactiveCommand = { on: boolean; kind?: ProactiveKind }
 
 const STOP_WORDS = 'stop|para|parar|basta|pare|sair|detener|unsubscribe'
+// "para" / "pare" / "parar" are everyday words too ("para todos", "para isso", "para mañana"):
+// they stop only alone or with an exact kind name, never with "all / that".
+const SOFT_STOP = /^(para|pare|parar)$/
 const START_WORDS = 'start|empezar|activar|iniciar|reanudar|come[cç]ar|voltar|ativar'
 // What each kind is called in a command, in the three languages ("stop morning brief").
 const KIND_WORDS: [ProactiveKind, string][] = [
@@ -371,7 +377,7 @@ export function proactiveCommand(text: string): ProactiveCommand | null {
   if (!m) return null
   const on = new RegExp(`^(${START_WORDS})$`).test(m[1])
   if (!m[2]) return { on }
-  if (/^(it|that|all|everything|eso|esto|todo|todos|isso|tudo|messages?|mensajes?|mensagens?)$/.test(m[2])) return { on }
+  if (/^(it|that|all|everything|eso|esto|todo|todos|isso|tudo|messages?|mensajes?|mensagens?)$/.test(m[2])) return SOFT_STOP.test(m[1]) ? null : { on }
   const kind = KIND_WORDS.find(([, re]) => new RegExp(`^(${re})$`).test(m[2]))?.[0]
   return kind ? { on, kind } : null
 }

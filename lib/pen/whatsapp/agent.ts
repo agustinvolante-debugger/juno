@@ -54,7 +54,7 @@ import { isMine, type ActionMeta, type Mine } from '../todo-labels'
 import { getDraft, setDraft, type Draft } from './store'
 import { MODULES } from './tools'
 import { userZone, zonePromptLine, type Zone } from '../timezone'
-import { getPending, type Pending } from './confirm'
+import { getPending, dropIfUnanswered, type Pending } from './confirm'
 
 const anthropic = penAnthropic('whatsapp-agent')
 // Haiku 5.5 (14 Oct, was Sonnet 5.5): a twentieth of the price, and the search stage now reads
@@ -92,6 +92,8 @@ export type Ctx = {
   later: (() => Promise<void>)[]
   /** The user's time zone, resolved once per turn (lib/pen/timezone.ts); set_timezone updates it. */
   zone?: Zone
+  /** confirm_pending or a new ask ran this turn (confirm.ts); else an earlier ask is dropped. */
+  pendingTouched?: boolean
 }
 
 const TOOLS: Anthropic.Tool[] = [
@@ -488,7 +490,7 @@ function system(ctx: Ctx, pending: Draft | null, asked: Pending | null): string 
       ? `"This call", "the recording", "it" with no other recording named means the one they sent here last: session_id ${ctx.recent}${ctx.recentTitle ? `, "${ctx.recentTitle}"` : ''}.\n\n`
       : '') +
     `Now: ${zonePromptLine(ctx.zone)}\n` +
-    (maxAheadMs() > MAX_AHEAD_MS
+    (maxAheadMs(ctx.lang) > MAX_AHEAD_MS
       ? '- Reminders can be up to 30 days ahead. For later ones, add it as a to-do with that due date instead (add_todo, on ' +
         'the recording it relates to) and say so in one line; don\'t ask first. For a clock time with no timezone given, '
       : '- Reminders can be at most 23 hours ahead (WhatsApp only lets Juno message within a day of their last message). ' +
@@ -733,8 +735,8 @@ async function setReminder(ctx: Ctx, i: { text: string; in_minutes: number; at: 
   }
   if (Number.isNaN(due.getTime())) return { error: 'could not read that time' }
   if (due.getTime() < Date.now() + 30 * 1000) return { error: 'that time has already passed' }
-  if (due.getTime() - Date.now() > maxAheadMs()) {
-    return { error: maxAheadMs() > MAX_AHEAD_MS ? 'more than 30 days ahead; reminders go up to 30 days' : 'more than 23 hours ahead; WhatsApp only allows reminders within a day' }
+  if (due.getTime() - Date.now() > maxAheadMs(ctx.lang)) {
+    return { error: maxAheadMs(ctx.lang) > MAX_AHEAD_MS ? 'more than 30 days ahead; reminders go up to 30 days' : 'more than 23 hours ahead; WhatsApp only allows reminders within a day' }
   }
   const r = await addReminder({ email: ctx.email, phone: ctx.phone, text, dueAt: due, lang: ctx.lang })
   const zone = ctx.zone?.tz
@@ -1345,7 +1347,10 @@ export async function runAgent(opts: {
 
   if (pending?.toEmail && SEND_IT.test(opts.question)) {
     const r = (await sendDraft(ctx)) as { ok?: boolean; error?: string }
-    if (r.ok) return { text: SENT[opts.lang](`${pending.toName} <${pending.toEmail}>`, pending.subject), citations: [] }
+    if (r.ok) {
+      await dropIfUnanswered(ctx, asked).catch(() => {})
+      return { text: SENT[opts.lang](`${pending.toName} <${pending.toEmail}>`, pending.subject), citations: [] }
+    }
     // Not sent (daily cap, provider error): let the model explain it in context.
   }
 
@@ -1403,6 +1408,8 @@ export async function runAgent(opts: {
     })
   }
 
+  // This message wasn't the yes to an earlier ask: that ask is over (confirm.ts).
+  await dropIfUnanswered(ctx, asked).catch((e) => console.warn(`pen whatsapp: drop pending: ${(e as Error).message}`))
   if (ctx.drafted) text = `${text ? `${text}\n\n` : ''}${draftPreview(ctx.drafted, opts.lang)}`
   // Sources only if the reply actually carries the markers.
   const citations = ctx.citations.filter((c) => text.includes(`[${c.marker}]`))

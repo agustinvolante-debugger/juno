@@ -7,9 +7,9 @@
 //                     carry, and things Juno could help with (an exam → a study plan in Notion,
 //                     "I'll write a memo" → a Notion doc). Plus the user's own dated to-dos, which
 //                     need no model: a reminder the day before is the offer.
-//   composeOffers     the 1–3 best for one recording as ONE short WhatsApp message, each a yes/no,
-//                     numbered when more than one; marks them offered. WHEN it is sent is the
-//                     scheduler's call, not this file's.
+//   renderOffers      the 1–3 best for one recording as ONE short WhatsApp message, each a yes/no,
+//                     numbered when more than one. Writes nothing; markOffered marks them once
+//                     the message has really gone out. WHEN it is sent is the scheduler's call.
 //
 // Times: the model resolves "next Tuesday at 2" against the recording's date into a local wall
 // time; the zone is what was said ("2 PT"), else the user's (profile.timeZone, else the phone's
@@ -430,17 +430,18 @@ const FOOT: Record<Lang, string> = {
 
 /**
  * The offer message for one recording: its 1–3 best unanswered suggestions, each a yes/no,
- * numbered when more than one. Marks them offered (detail.offer_no = their number), so
- * "yes to 1" finds them. Null when there is nothing to offer. Sending is the caller's job.
+ * numbered when more than one. Pure: writes nothing, so a send the scheduler's rules refuse
+ * (quiet hours, the daily max, a dry run) leaves them 'suggested' for the next try. Null when
+ * there is nothing to offer. `offered` is what markOffered takes once the message has gone out.
  */
-export async function composeOffers(
+export async function renderOffers(
   email: string,
   sessionId: string,
   lang: Lang,
-  /** Several recordings in one message: numbers run on across them (`from`), all share `at`
-   *  so "yes to 3" finds the right one, and the bundle carries one footer. */
-  bundle?: { from: number; at: string; footer: boolean },
-): Promise<{ text: string; ids: string[] } | null> {
+  /** Several recordings in one message: numbers run on across them (`from`) and the bundle
+   *  carries one footer. */
+  bundle?: { from: number; footer: boolean },
+): Promise<{ text: string; ids: string[]; offered: { id: string; no: number }[] } | null> {
   const pick = (await listSuggestions(email, { sessionId, states: ['suggested'] })).sort(rank).slice(0, MAX_OFFERS)
   if (!pick.length) return null
   const s = await getSession(email, sessionId).catch(() => null)
@@ -450,11 +451,28 @@ export async function composeOffers(
   const lines = pick.map((x, i) => (numbered ? `${from + i}. ${offerLine(x, lang)}` : offerLine(x, lang)))
   const footer = bundle ? bundle.footer : pick.length > 1
   const text = [title ? HEAD[lang](title) : '', ...lines, footer ? FOOT[lang] : ''].filter(Boolean).join('\n')
-  const now = bundle?.at ?? new Date().toISOString()
-  await Promise.all(pick.map((x, i) =>
-    supabaseAdmin.from('pen_suggestions').update({ state: 'offered', offered_at: now, detail: { ...x.detail, offer_no: from + i } }).eq('id', x.id).eq('user_email', email),
+  return { text, ids: pick.map((x) => x.id), offered: pick.map((x, i) => ({ id: x.id, no: from + i })) }
+}
+
+/**
+ * After the offer message went out: each suggestion 'offered' with its number (detail.offer_no)
+ * and the message's time (offered_at, shared by a bundle), so "yes to 3" finds the right one.
+ * Only rows still 'suggested' move.
+ */
+export async function markOffered(email: string, offered: { id: string; no: number }[], at: string): Promise<void> {
+  if (!offered.length) return
+  const { data } = await supabaseAdmin.from('pen_suggestions').select('id,detail').eq('user_email', email).in('id', offered.map((o) => o.id))
+  const detail = new Map(((data ?? []) as { id: string; detail: Record<string, unknown> | null }[]).map((r) => [r.id, r.detail ?? {}]))
+  await Promise.all(offered.map((o) =>
+    supabaseAdmin.from('pen_suggestions').update({ state: 'offered', offered_at: at, detail: { ...(detail.get(o.id) ?? {}), offer_no: o.no } }).eq('id', o.id).eq('user_email', email).eq('state', 'suggested'),
   ))
-  return { text, ids: pick.map((x) => x.id) }
+}
+
+/** render + mark, for callers that send the text themselves right away (tests, the web). */
+export async function composeOffers(email: string, sessionId: string, lang: Lang, bundle?: { from: number; at: string; footer: boolean }): Promise<{ text: string; ids: string[] } | null> {
+  const r = await renderOffers(email, sessionId, lang, bundle)
+  if (r) await markOffered(email, r.offered, bundle?.at ?? new Date().toISOString())
+  return r && { text: r.text, ids: r.ids }
 }
 
 /** "1" (in the latest offer message) or an id, among the user's open suggestions. */
@@ -470,11 +488,18 @@ export async function resolveSuggestion(email: string, ref: string): Promise<Sug
   return open.find((x) => x.offered_at === latest && Number(x.detail.offer_no ?? 1) === n) ?? null
 }
 
-export async function decideSuggestion(email: string, id: string, state: 'accepted' | 'dismissed' | 'done', extra: Record<string, unknown> = {}): Promise<void> {
+export async function decideSuggestion(
+  email: string,
+  id: string,
+  state: 'accepted' | 'dismissed' | 'done',
+  extra: Record<string, unknown> = {},
+  /** Columns to set with it (a confirmed meeting's starts_at, read by the scheduler). */
+  set: { starts_at?: string } = {},
+): Promise<void> {
   const { data } = await supabaseAdmin.from('pen_suggestions').select('detail').eq('user_email', email).eq('id', id).maybeSingle()
   const { error } = await supabaseAdmin
     .from('pen_suggestions')
-    .update({ state, decided_at: new Date().toISOString(), ...(Object.keys(extra).length ? { detail: { ...((data?.detail as Record<string, unknown>) ?? {}), ...extra } } : {}) })
+    .update({ state, decided_at: new Date().toISOString(), ...set, ...(Object.keys(extra).length ? { detail: { ...((data?.detail as Record<string, unknown>) ?? {}), ...extra } } : {}) })
     .eq('user_email', email)
     .eq('id', id)
   if (error) throw new Error(error.message)

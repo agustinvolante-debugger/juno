@@ -150,14 +150,22 @@ export function zoneOffsetMin(tz: string, at: Date | number): number {
   return Math.round((asUtc - Math.floor(d.getTime() / 1000) * 1000) / 60000)
 }
 
-/** "2026-10-20T13:00" said in `tz` -> the instant. A time skipped by DST lands an hour later. */
+/**
+ * "2026-10-20T13:00" said in `tz` -> the instant. A wall time DST skips moves later by the gap
+ * (02:30 on a spring-forward night is 03:30; Santiago's midnight on its DST day is 01:00, where
+ * that local day really starts). A time that happens twice (fall back) is the first one.
+ */
 export function localToUtc(local: string, tz: string): Date | null {
   const m = /^(\d{4})-(\d\d)-(\d\d)[T ](\d\d):(\d\d)(?::(\d\d))?$/.exec(local.trim())
   if (!m) return null
   const wall = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] ?? 0))
-  let t = wall - zoneOffsetMin(tz, wall) * 60000
-  t = wall - zoneOffsetMin(tz, t) * 60000
-  return new Date(t)
+  const a = wall - zoneOffsetMin(tz, wall) * 60000
+  const b = wall - zoneOffsetMin(tz, a) * 60000
+  const shows = (t: number) => t + zoneOffsetMin(tz, t) * 60000 === wall
+  if (shows(b)) return new Date(Math.min(b, shows(a) ? a : b))
+  if (shows(a)) return new Date(a)
+  // In the gap: neither offset gives that wall time. The later reading is the wall time plus the gap.
+  return new Date(Math.max(a, b))
 }
 
 /** The wall-clock fields of an instant in `tz`. */

@@ -29,12 +29,26 @@ function viaImessage(to: string): boolean {
 const plain = (to: string) => to.replace(/\D/g, '')
 
 /**
- * PEN_PROACTIVE_DRY=1: nothing leaves the server. Every send below is logged instead, so the
- * proactive scheduler (lib/pen/proactive.ts) and the bot can be tested against the real database
- * without texting anyone. Never set in production.
+ * PEN_PROACTIVE_DRY=1 is for tests, never production (ignored there, with an error in the log).
+ *
+ *   in the app (Next sets NEXT_RUNTIME): only the proactive scheduler is dry (lib/pen/proactive.ts
+ *     logs what it would send). The bot's replies and due reminders go out as usual.
+ *   in a script (.pentest/*.mts, no NEXT_RUNTIME), or with PEN_PROACTIVE_DRY=all: nothing at all
+ *     leaves the server. Every send below is logged instead, so the scheduler and the bot can be
+ *     tested against the real database without texting anyone.
  */
+export function proactiveDry(): boolean {
+  const v = process.env.PEN_PROACTIVE_DRY
+  if (v !== '1' && v !== 'all') return false
+  if (process.env.VERCEL_ENV === 'production') {
+    console.error('pen: PEN_PROACTIVE_DRY is set in production; ignored')
+    return false
+  }
+  return true
+}
+/** Every provider send is refused (logged): a test script, or PEN_PROACTIVE_DRY=all. */
 export function dryRun(): boolean {
-  return process.env.PEN_PROACTIVE_DRY === '1'
+  return proactiveDry() && (process.env.PEN_PROACTIVE_DRY === 'all' || !process.env.NEXT_RUNTIME)
 }
 function dry(what: string, to: string, body: string): true {
   console.log(`[pen dry-run] ${what} to …${to.replace(/\D/g, '').slice(-4)}:\n${body}\n`)

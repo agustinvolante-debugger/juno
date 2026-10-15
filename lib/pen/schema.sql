@@ -462,7 +462,8 @@ alter table public.pen_segments enable row level security;  -- service role only
 -- alter table public.pen_proactive_log enable row level security;
 -- Proactive scheduler (15 Oct 2026, lib/pen/proactive.ts, app/api/pen/proactive). No new tables:
 -- prefs live in pen_profiles.profile.proactive; the log is pen_proactive_log above (rows of one
--- bundled message share sent_at; status sending|sent|dry|no_template|failed|empty). pg_cron job
+-- bundled message share sent_at; status sending|sent|dry|no_template|failed|empty; one row per user
+-- with kind 'lock', ref 'send' while a send is being checked and made: the per-user lock). pg_cron job
 -- 'pen-proactive' every 15 minutes with PEN_HEALTH_SECRET (add to .pentest/health-cron.sql):
 -- select cron.schedule('pen-proactive', '*/15 * * * *', $$ select net.http_get(url := 'https://www.tryjunoapp.com/api/pen/proactive', headers := jsonb_build_object('Authorization', 'Bearer <PEN_HEALTH_SECRET>'), timeout_milliseconds := 120000); $$);
 -- Google Calendar (plan F2, 15 Oct 2026, lib/pen/google-calendar.ts). One row per connected account;
