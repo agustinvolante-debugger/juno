@@ -49,7 +49,7 @@ export type NoteBlock = { id: string; text: string; source: 'user' | 'ai' }
 
 export type Deliverable = {
   id: string
-  kind: 'email' | 'memo' | 'tracker'
+  kind: 'email' | 'memo' | 'tracker' | 'linkedin'
   title: string
   body: string
   ref: string
@@ -113,6 +113,11 @@ export type PenSession = {
   speaker_map?: Record<string, unknown> | null
   /** Language AssemblyAI detected, e.g. 'es'. */
   language?: string | null
+  /** "This was an event with many people": split into conversations. See lib/pen/conference.ts. */
+  event_mode?: boolean
+  /** When names heard (lib/pen/names.ts) / conversations last ran. Null = never. */
+  names_at?: string | null
+  segments_at?: string | null
   /** On-demand translation: { lang, utterances: string[] } parallel to transcript.utterances. */
   translation?: { lang: string; utterances: string[] } | null
   created_at: string

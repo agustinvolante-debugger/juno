@@ -15,6 +15,13 @@ function freePenMessage(usd: number): string {
   return `Your Juno pen is free and the first 30 days are free. You won't be charged until ${day}, then $${usd}/month. The free pen comes with a ${FREE_PEN_MIN_MONTHS}-month minimum: if your plan ends before then, the pen is charged at $${PEN_USD}. We'll email you before your trial ends.`
 }
 
+/** Under the pay button for a pen handed over in person: 60 days free, the pen is theirs. */
+function givenPenMessage(usd: number): string {
+  const end = new Date(Date.now() + trialDaysFor('given-pen') * 86_400_000)
+  const day = end.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  return `Your first 60 days of Juno are free. You won't be charged until ${day}, then $${usd}/month. Cancel anytime before then and you pay nothing; the pen is yours to keep either way. We'll email you before your trial ends.`
+}
+
 export type PlanCheckout = { url: string } | { error: string }
 
 export async function startPlanCheckout(opts: {
@@ -79,6 +86,7 @@ export async function startPlanCheckout(opts: {
     },
     locale: stripeLocale(opts.lang ?? 'en'),
     ...(opts.offer === 'free-pen' && !opts.returning ? { submitMessage: freePenMessage(price.usd) } : {}),
+    ...(opts.offer === 'given-pen' && !opts.returning ? { submitMessage: givenPenMessage(price.usd) } : {}),
   })
   return { url: session.url }
 }

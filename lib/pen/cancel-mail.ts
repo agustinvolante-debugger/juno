@@ -93,7 +93,7 @@ export async function sendCancelScheduled(email: string, cancelAt: string, offer
     subject: M.scheduledSubject,
     html: shell(
       M.scheduled(day(lastFullDay(cancelAt), lang), day(plusKeep(cancelAt), lang)) +
-        (penFee ? M.penFee(PEN_USD) : offer === 'free-pen' || offer === 'posted-pen' ? M.pen : '') +
+        (penFee ? M.penFee(PEN_USD) : offer === 'free-pen' || offer === 'posted-pen' || offer === 'given-pen' ? M.pen : '') +
         link(billingLink(), M.changed) +
         `<p style="color:#514E45">${M.reply}</p>`,
     ),

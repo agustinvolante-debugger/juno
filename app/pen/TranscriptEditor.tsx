@@ -22,7 +22,10 @@ export default function TranscriptEditor({
   saveState,
   speakerMap,
   translation,
+  anchor,
 }: {
+  /** Prefix for each line's id ("<anchor>-<index>"), so Names heard and Conversations can jump to a line. */
+  anchor?: string
   /** Names for the speaker labels, where known. */
   speakerMap?: SpeakerMap | null
   /** Shown under each line, read-only, when the user has switched the translation on. */
@@ -57,7 +60,7 @@ export default function TranscriptEditor({
       {utterances.map((u, i) => {
         const edited = typeof edits[String(i)] === 'string' && edits[String(i)] !== u.text
         return (
-          <div key={i} className="pen-utt" data-edited={edited}>
+          <div key={i} className="pen-utt" data-edited={edited} id={anchor ? `${anchor}-${i}` : undefined}>
             <div className="pen-label pen-spk-tag pt-0.5">{speakerName(speakerMap, u.speaker, { word: SPEAKER_WORD[lang] })}</div>
             <textarea
               ref={(el) => { refs.current[i] = el; autoGrow(el) }}

@@ -13,6 +13,7 @@ import { userLang } from './user-lang'
 import Anthropic from '@anthropic-ai/sdk'
 import { penAnthropic } from './anthropic'
 import { isSelfName } from './speakers'
+import { eventName } from './name-hints'
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
 import { supabaseAdmin } from '@/lib/supabase'
 import { isMissingSchema } from './allowance'
@@ -273,17 +274,26 @@ export async function enrichPerson(userEmail: string, personId: string): Promise
   if (!ids.length) return
   const { data } = await supabaseAdmin
     .from('pen_sessions')
-    .select('title,recorded_at,created_at,notes')
+    .select('id,title,recorded_at,created_at,notes')
     .eq('user_email', userEmail)
     .in('id', ids)
-  const notes = (data ?? []) as { title: string | null; recorded_at: string | null; created_at: string; notes: PenNotes }[]
+  const notes = (data ?? []) as { id: string; title: string | null; recorded_at: string | null; created_at: string; notes: PenNotes }[]
   const written = notes.filter((n) => n.notes && Object.keys(n.notes).length)
   if (!written.length) return
 
+  // At an event the notes describe a whole afternoon of strangers. Where the user confirmed which
+  // conversation was this person's (lib/pen/conference.ts), the card reads that conversation only.
+  const { data: segs } = await supabaseAdmin
+    .from('pen_segments').select('session_id,topic,gist').eq('user_email', userEmail).eq('person_id', personId)
+  const met = new Map<string, { topic: string; gist: string | null }[]>()
+  for (const g of (segs ?? []) as { session_id: string; topic: string; gist: string | null }[]) met.set(g.session_id, [...(met.get(g.session_id) ?? []), g])
+
   const corpus = written
     .map((n) =>
-      `--- ${n.title ?? 'untitled'} (${(n.recorded_at ?? n.created_at).slice(0, 10)})\n` +
-      JSON.stringify({ summary: n.notes.summary, people: n.notes.people, decisions: n.notes.decisions, actions: n.notes.actions }),
+      `--- ${(met.has(n.id) ? eventName(n.title) : n.title) || 'untitled'} (${(n.recorded_at ?? n.created_at).slice(0, 10)})\n` +
+      (met.has(n.id)
+        ? JSON.stringify({ event: 'Recorded at an event; only these conversations were with this person', conversations: met.get(n.id) })
+        : JSON.stringify({ summary: n.notes.summary, people: n.notes.people, decisions: n.notes.decisions, actions: n.notes.actions })),
     )
     .join('\n')
 

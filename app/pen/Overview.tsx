@@ -15,7 +15,7 @@ import { createPortal } from 'react-dom'
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion, useIsPresent, animate } from 'motion/react'
 import type { ArchiveStats, OpenAction, OpenMissed, ClientCard } from '@/lib/pen/stats'
 import type { PersonCard } from '@/lib/pen/people'
-import { postJson, patchJson, del, errMessage } from '@/lib/pen/http'
+import { getJson, postJson, patchJson, del, errMessage } from '@/lib/pen/http'
 import { RowMenu, RenameInput } from './RowMenu'
 import Icon, { type IconName } from './Icon'
 import DeliverableSheet, { type SheetRequest } from './DeliverableSheet'
@@ -24,6 +24,7 @@ import { useCopy, useLang } from './LangContext'
 import { shortDate as fmtShort, ago as fmtAgo, plural, type Copy } from '@/lib/pen/i18n'
 
 type Kind = 'todo' | 'missed' | 'people'
+type Heard = { name: string; count: number; moments: { session_id: string; title: string; when: string; at_sec: number; context: string | null }[] }
 
 const MORPH = { type: 'spring' as const, stiffness: 420, damping: 40, mass: 0.8 }
 const EASE_OUT = [0.16, 1, 0.3, 1] as const
@@ -80,6 +81,8 @@ const OV_EN = {
   missedFilter: 'Filter by words or recording',
   last7: 'Last 7 days',
   peopleFilter: 'Filter by name, email or role',
+  heardIn: 'Heard in your recordings',
+  heardTimes: (n: number) => `said ${n}×`,
   recent: 'Recent',
   mostCalls: 'Most calls',
   az: 'A to Z',
@@ -168,6 +171,8 @@ const OV: Copy<typeof OV_EN> = {
     missedFilter: 'Filtra por palabras o grabación',
     last7: 'Últimos 7 días',
     peopleFilter: 'Filtra por nombre, correo o cargo',
+    heardIn: 'Escuchados en tus grabaciones',
+    heardTimes: (n) => `dicho ${n}×`,
     recent: 'Recientes',
     mostCalls: 'Más reuniones',
     az: 'A a Z',
@@ -252,6 +257,8 @@ const OV: Copy<typeof OV_EN> = {
     missedFilter: 'Filtre por palavras ou gravação',
     last7: 'Últimos 7 dias',
     peopleFilter: 'Filtre por nome, e-mail ou cargo',
+    heardIn: 'Ouvidos nas suas gravações',
+    heardTimes: (n) => `dito ${n}×`,
     recent: 'Recentes',
     mostCalls: 'Mais reuniões',
     az: 'A a Z',
@@ -567,7 +574,7 @@ export default function Overview({
             <MissedPanel missed={missed} count={missedCount} onHandle={handle} onPromote={promote} onOpen={(id) => { setOpen(null); onOpen(id) }} />
           )}
           {open === 'people' && (
-            <PeoplePanel people={people} clients={stats.clients} clientsByName={clientsByName} onAsk={(p) => { setOpen(null); onAskPerson(p) }} actions={personActions} />
+            <PeoplePanel people={people} clients={stats.clients} clientsByName={clientsByName} onAsk={(p) => { setOpen(null); onAskPerson(p) }} actions={personActions} onOpenRecording={(id) => { setOpen(null); onOpen(id) }} />
           )}
         </Panel>
       </LayoutGroup>
@@ -1259,7 +1266,9 @@ function MissedPanel({ missed, count, onHandle, onPromote, onOpen }: {
   )
 }
 
-function PeoplePanel({ people, clients, clientsByName, onAsk, actions }: {
+function PeoplePanel({ people, clients, clientsByName, onAsk, actions, onOpenRecording }: {
+  /** Opens a recording, for a name heard in it. */
+  onOpenRecording?: (sessionId: string) => void
   people: PersonCard[]
   clients: ClientCard[]
   clientsByName: Map<string, ClientCard>
@@ -1277,6 +1286,18 @@ function PeoplePanel({ people, clients, clientsByName, onAsk, actions }: {
   // Profiles learned for someone not yet in People. Kept visible rather than dropped.
   const names = new Set(people.map((p) => p.name.toLowerCase()))
   const orphans = clients.filter((c) => !names.has(c.name.toLowerCase()) && match(q, c.name))
+  // Names said in recordings (lib/pen/names.ts), for people never saved: "Dimitri" finds the
+  // calls where he came up even though he is nobody's contact.
+  const [heard, setHeard] = useState<Heard[]>([])
+  useEffect(() => {
+    const term = q.trim()
+    if (term.length < 2) { setHeard([]); return }
+    const t = setTimeout(() => {
+      getJson<{ heard: Heard[] }>(`/api/pen/names?q=${encodeURIComponent(term)}`).then((j) => setHeard(j.heard ?? [])).catch(() => setHeard([]))
+    }, 250)
+    return () => clearTimeout(t)
+  }, [q])
+  const heardShown = heard.filter((h) => !names.has(h.name.toLowerCase()))
   return (
     <>
       <Toolbar
@@ -1288,7 +1309,7 @@ function PeoplePanel({ people, clients, clientsByName, onAsk, actions }: {
         setFilter={setFilter}
         count={list.length}
       />
-      <ul className="pen-bigpanel-list">
+      <ul className="pen-bigpanel-list" hidden={!list.length && !orphans.length && heardShown.length > 0}>
         {list.map((p) => (
           <li key={p.id} className="pen-row2" data-full>
             <div className="pen-row2-inner">
@@ -1316,8 +1337,31 @@ function PeoplePanel({ people, clients, clientsByName, onAsk, actions }: {
             </AnimatePresence>
           </li>
         ))}
-        {!list.length && !orphans.length && <li className="pen-card-empty">{T.nobodyMatches}</li>}
+        {!list.length && !orphans.length && !heardShown.length && <li className="pen-card-empty">{T.nobodyMatches}</li>}
       </ul>
+      {heardShown.length > 0 && (
+        <div className="pen-bigpanel-orphans">
+          <h4 className="pen-bigpanel-subhead">{T.heardIn}</h4>
+          <ul className="pen-heard-list">
+            {heardShown.map((h) => (
+              <li key={h.name} className="pen-heard-item">
+                <div className="pen-heard-across">
+                  <span className="pen-heard-name">{h.name}</span>
+                  <span className="pen-heard-count">{T.heardTimes(h.count)}</span>
+                </div>
+                <ul className="pen-heard-where">
+                  {h.moments.map((m) => (
+                    <li key={m.session_id}>
+                      <button type="button" className="pen-heard-time" onClick={() => onOpenRecording?.(m.session_id)}>{m.title}</button>
+                      <span className="pen-heard-mctx">{[fmtAgo(m.when, lang), m.context].filter(Boolean).join(' · ')}</span>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {orphans.length > 0 && (
         <div className="pen-bigpanel-orphans">
           <h4 className="pen-bigpanel-subhead">{T.orphans}</h4>

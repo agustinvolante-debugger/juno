@@ -18,8 +18,12 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { stripMarkdown } from './plaintext'
 import type { ArchiveTurn, PenNotes, MeetingType, Transcript, Mention } from './store'
 import { ownedPeople, sessionsWith } from './people'
-import { namedDialogue, type SpeakerMap } from './speakers'
+import { namedDialogue, foldName, type SpeakerMap } from './speakers'
 import { REPLY_LANGUAGE, inQuestionLanguage } from './reply-language'
+import { isMissingSchema } from './allowance'
+import { mentionsFor } from './names'
+import { segmentsFor } from './conference'
+import { clock, namesHeard, segmentOptions, reasonEn } from './name-hints'
 
 const anthropic = penAnthropic('archive-chat')
 // Both stages are retrieval, not synthesis — pick the recordings, then answer from what is in
@@ -98,15 +102,22 @@ const ANSWER_SCHEMA = {
 // recordings that survive selection comfortably can — which is why stage 1 stays on the notes
 // index and stage 2 now reads the actual words.
 const MAX_TRANSCRIPT_CHARS = 24000
+
 // 12 transcripts at the cap below is ~66k tokens, comfortable inside Haiku's window, and it
 // covers a real early archive without selection ever running.
 const MAX_ANSWER_ROWS = 12
+// The answer stage's whole transcript budget (12 recordings at the old cap, ~70k tokens). Shared
+// out among the recordings actually read: two recordings get ~144k characters each, not 24k.
+// A 60-minute part is ~45k characters, so one long event reads in full instead of its first
+// half hour.
+const ANSWER_TRANSCRIPT_BUDGET = MAX_ANSWER_ROWS * MAX_TRANSCRIPT_CHARS
 
 const STOPWORDS = new Set(
   ('a about all also am an and any are as at be been but by can did do does for from get got had has have ' +
    'he her him his how i if in into is it its just me more my no not of on or our out said say she should ' +
    'so some than that the their them then there these they this to was we were what when where which who ' +
    'why will with would you your anything everything something did do tell show find search across recording ' +
+   'name named called guy girl person someone talked talk wanted want ' +
    'recordings meeting meetings').split(' '),
 )
 
@@ -117,11 +128,68 @@ const STOPWORDS = new Set(
  * an HOA fee, a name said once — is invisible to it even though the transcript contains it.
  * This is the cheap safety net: quoted phrases and uncommon words, matched literally.
  */
-export function keyTerms(question: string): string[] {
+export function keyTerms(question: string, max = 6): string[] {
   const quoted = Array.from(question.matchAll(/"([^"]{3,60})"/g)).map((m) => m[1].toLowerCase())
-  const words = (question.toLowerCase().match(/[a-z0-9][a-z0-9'-]{3,}/g) ?? [])
-    .filter((w) => !STOPWORDS.has(w))
-  return Array.from(new Set([...quoted, ...words])).slice(0, 6)
+  // Letters in any language: "teléfono" used to come out as "fono".
+  const words = (question.toLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}'-]{3,}/gu) ?? [])
+    .filter((w) => !STOPWORDS.has(w) && !STOPWORDS_ES_PT.has(w))
+  return Array.from(new Set([...quoted, ...words])).slice(0, max)
+}
+
+// Spanish and Portuguese question words, so "¿cómo se llamaba el que…?" searches for the
+// subject, not for "cómo".
+const STOPWORDS_ES_PT = new Set(
+  ('para como cómo quien quién quiénes cual cuál cuales cuando cuándo donde dónde este esta esto ese esa eso ' +
+   'aquel aquella pero porque sobre entre tiene tenía tengo hablé habló hablamos dijo dije quería quiere ' +
+   'nombre llamaba llama llamado mandar enviar enviarle mandarle todo todos algo nada desde hasta ' +
+   'qual quais quem quando onde esse essa isso aquele aquela porque sobre entre tinha tenho falei falou ' +
+   'disse queria quer nome chamava chamado mandar enviar tudo todos algo nada desde também muito').split(' '),
+)
+
+/**
+ * A transcript cut to fit `cap` characters without losing what the question is about. A long
+ * recording used to keep only its opening, so anything said after the first half hour was
+ * invisible to the answer. Now: the opening for context, then every stretch around a line that
+ * contains one of the question's words, then whatever fits from the start, in transcript order,
+ * with the gaps marked. Pure, for testing.
+ */
+export function fitTranscript(lines: string[], cap: number, terms: string[]): string {
+  const total = lines.reduce((t, l) => t + l.length + 1, 0)
+  if (total <= cap) return lines.join('\n')
+  const want = terms.map((t) => foldName(t)).filter((t) => t.length >= 3)
+  const keep = new Array<boolean>(lines.length).fill(false)
+  let used = 0
+  const take = (i: number) => {
+    if (i < 0 || i >= lines.length || keep[i] || used + lines[i].length + 1 > cap) return
+    keep[i] = true
+    used += lines[i].length + 1
+  }
+  for (let i = 0; i < Math.min(20, lines.length); i++) take(i)
+  if (want.length) {
+    const folded = lines.map((l) => foldName(l))
+    // Rare words first, and none that is everywhere: "send" or "want" in a two-hour chat would
+    // spend the whole budget on noise before "Georgia" got its turn.
+    const common = Math.max(12, lines.length * 0.03)
+    const byTerm = want
+      .map((w) => folded.flatMap((l, i) => (l.includes(w) ? [i] : [])))
+      .filter((h) => h.length && h.length <= common)
+      .sort((a, b) => a.length - b.length)
+    // Nearest lines first around every hit, so many hits each keep their core before any one
+    // keeps a wide margin.
+    for (const hits of byTerm) for (let r = 0; r <= 12; r++) for (const h of hits) { take(h - r); take(h + r) }
+  }
+  for (let i = 0; i < lines.length && used < cap; i++) take(i)
+  const out: string[] = []
+  let skipped = 0
+  lines.forEach((l, i) => {
+    if (keep[i]) {
+      if (skipped) out.push(`[… ${skipped} lines not shown …]`)
+      skipped = 0
+      out.push(l)
+    } else skipped++
+  })
+  if (skipped) out.push(`[… ${skipped} lines not shown …]`)
+  return out.join('\n')
 }
 
 /**
@@ -144,8 +212,35 @@ async function transcriptMatches(userEmail: string, terms: string[]): Promise<st
   return (data ?? []).map((r) => r.id as string)
 }
 
+type NameIndex = Map<string, { names: string[]; convos: string[] }>
+
+/**
+ * Names heard and conversation topics per recording, for the selection index: "who did I talk
+ * to about concierge cards?" has to find an event recording whose notes are one paragraph about
+ * a whole afternoon. Two light reads over the user's rows; empty until the tables exist.
+ */
+async function nameIndex(userEmail: string): Promise<NameIndex> {
+  const out: NameIndex = new Map()
+  const [m, sg] = await Promise.all([
+    supabaseAdmin.from('pen_name_mentions').select('session_id,name').eq('user_email', userEmail).limit(10000),
+    supabaseAdmin.from('pen_segments').select('session_id,idx,start_sec,topic,confirmed_name').eq('user_email', userEmail).order('idx').limit(4000),
+  ])
+  for (const e of [m.error, sg.error]) if (e && !isMissingSchema(e.message)) console.warn(`pen: name index: ${e.message}`)
+  for (const r of (m.data ?? []) as { session_id: string; name: string }[]) {
+    const x = out.get(r.session_id) ?? { names: [], convos: [] }
+    if (!x.names.some((n) => n.toLowerCase() === r.name.toLowerCase())) x.names.push(r.name)
+    out.set(r.session_id, x)
+  }
+  for (const r of (sg.data ?? []) as { session_id: string; start_sec: number; topic: string; confirmed_name: string | null }[]) {
+    const x = out.get(r.session_id) ?? { names: [], convos: [] }
+    x.convos.push(`${clock(r.start_sec)} ${r.topic}${r.confirmed_name ? ` (with ${r.confirmed_name})` : ''}`)
+    out.set(r.session_id, x)
+  }
+  return out
+}
+
 /** Compact enough that hundreds of recordings still fit in the selection prompt. */
-function indexLine(r: IndexRow) {
+function indexLine(r: IndexRow, extra?: { names: string[]; convos: string[] }) {
   const when = (r.recorded_at ?? r.created_at).slice(0, 10)
   const who = r.notes?.people?.map((p) => p.name || p.role).filter(Boolean).slice(0, 5).join(', ')
   return [
@@ -156,6 +251,8 @@ function indexLine(r: IndexRow) {
     r.client_name ? `with: ${r.client_name}` : '',
     who ? `people: ${who}` : '',
     r.notes?.summary ? `summary: ${r.notes.summary.slice(0, 320)}` : '',
+    extra?.names.length ? `names heard: ${extra.names.slice(0, 15).join(', ')}` : '',
+    extra?.convos.length ? `conversations: ${extra.convos.slice(0, 12).join('; ')}` : '',
   ]
     .filter(Boolean)
     .join(' | ')
@@ -166,14 +263,23 @@ function indexLine(r: IndexRow) {
  * applied on top. Searching the uncorrected original would find the garbled version of a name
  * the user has already fixed.
  */
-function dialogueOf(t: Transcript | null | undefined, edits: Record<string, string> | null | undefined, map?: SpeakerMap | null): string {
+function dialogueOf(
+  t: Transcript | null | undefined,
+  edits: Record<string, string> | null | undefined,
+  map?: SpeakerMap | null,
+  fit: { cap: number; terms: string[] } = { cap: MAX_TRANSCRIPT_CHARS, terms: [] },
+): string {
   if (!t) return '(not transcribed)'
-  // Names instead of "Speaker A" where known, so "what did Chris say" can find Chris.
-  const body = t.utterances?.length ? namedDialogue(t.utterances, map, edits) : (t.text ?? '')
-  if (!body) return '(not transcribed)'
-  return body.length > MAX_TRANSCRIPT_CHARS
-    ? `${body.slice(0, MAX_TRANSCRIPT_CHARS)}\n[transcript truncated]`
-    : body
+  // Names instead of "Speaker A" where known, so "what did Chris say" can find Chris. Each
+  // line carries its minute, so an answer can point to the moment.
+  const lines = t.utterances?.length
+    ? t.utterances.map((u, i) => {
+        const m = Math.floor(u.start / 60000)
+        return `[${Math.floor(m / 60) ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}` : `${m}`}m] ${namedDialogue([u], map, edits?.[String(i)] !== undefined ? { '0': edits[String(i)] } : null)}`
+      })
+    : (t.text ?? '').split(/(?<=[.!?])\s+/)
+  if (!lines.join('').trim()) return '(not transcribed)'
+  return fitTranscript(lines, fit.cap, fit.terms)
 }
 
 export async function askArchive(opts: {
@@ -253,6 +359,7 @@ export async function askArchive(opts: {
     return answerFrom(Array.from(new Set([...tagged, ...all])), rows, withMentions, today)
   }
 
+  const names = await nameIndex(opts.userEmail).catch(() => new Map() as NameIndex)
   const sel = await anthropic.messages.parse({
     model: opts.model ?? MODEL,
     // max_tokens is a budget for thinking AND output, not just output. Opus 5 reasons by
@@ -276,7 +383,7 @@ export async function askArchive(opts: {
       {
         role: 'user',
         content:
-          `Today is ${today}.\n\nIndex of recordings:\n${rows.map(indexLine).join('\n')}\n\n` +
+          `Today is ${today}.\n\nIndex of recordings:\n${rows.map((r) => indexLine(r, names.get(r.id))).join('\n')}\n\n` +
           (opts.history.length
             ? `Earlier in this conversation:\n${opts.history.slice(-4).map((t) => `${t.role}: ${t.content.slice(0, 300)}`).join('\n')}\n\n`
             : '') +
@@ -340,6 +447,33 @@ async function answerFrom(
 
   const byId = new Map((full ?? []).map((r) => [r.id as string, r]))
   const marked = wanted.map((id, i) => ({ marker: i + 1, id, row: byId.get(id) }))
+  const [heard, convos] = await Promise.all([
+    mentionsFor(opts.userEmail, wanted).catch(() => ({}) as Awaited<ReturnType<typeof mentionsFor>>),
+    segmentsFor(opts.userEmail, wanted).catch(() => ({}) as Awaited<ReturnType<typeof segmentsFor>>),
+  ])
+  /** Every name said, and for an event each conversation with its name options. The transcript above is cut at 24k characters; these cover the whole recording. */
+  const namesBlock = (id: string, labels: string[]) => {
+    const ms = heard[id] ?? []
+    const segs = convos[id] ?? []
+    const lines: string[] = []
+    if (ms.length) {
+      lines.push('names heard (time, how used, context):')
+      for (const n of namesHeard(ms, null, labels).slice(0, 40)) {
+        lines.push(`  ${n.name} ×${n.count}: ` + n.moments.slice(0, 3).map((m) => `${clock(m.at_sec)} ${m.kind}${m.context ? ` "${m.context}"` : ''}`).join('; '))
+      }
+    }
+    if (segs.length) {
+      lines.push('conversations in this recording (an event; the user met people one after another):')
+      for (const g of segs) {
+        const o = segmentOptions(ms, g)
+        const who = g.confirmed_name
+          ? `confirmed by the user: ${g.confirmed_name}`
+          : o.likely.length ? `name not confirmed; options: ${o.likely.map((x) => `${x.name} (${reasonEn(x)})`).join(', ')}` : 'name not said'
+        lines.push(`  ${clock(g.start_sec)}–${clock(g.end_sec)} ${g.kind === 'continues' ? 'conversation (carries on the last one of the previous file of this event)' : g.kind} · ${g.topic} · ${g.gist ?? ''} · ${who}` + (o.mentioned.length ? ` · also mentioned: ${o.mentioned.map((x) => x.name).join(', ')}` : ''))
+      }
+    }
+    return lines.length ? `${lines.join('\n')}\n` : ''
+  }
 
   // "@Recruiter screen" in the question means one specific recording. Say which marker it is,
   // so the model does not have to match a title to a recording by guesswork.
@@ -371,6 +505,8 @@ async function answerFrom(
         'their real title or name, never by the @ label.\n\n'
       : '')
 
+  const reading = marked.filter((m) => m.row).length || 1
+  const fit = { cap: Math.max(MAX_TRANSCRIPT_CHARS, Math.floor(ANSWER_TRANSCRIPT_BUDGET / reading)), terms: keyTerms(opts.question, 10) }
   const corpus = marked
     .filter((m) => m.row)
     .map((m) => {
@@ -388,7 +524,8 @@ async function answerFrom(
         (r.client_name ? `with: ${r.client_name}\n` : '') +
         (r.user_notes ? `their own notes: ${r.user_notes.slice(0, 1500)}\n` : '') +
         `extracted notes: ${JSON.stringify(r.notes ?? {})}\n` +
-        `transcript:\n${dialogueOf(r.transcript, r.transcript_edits, r.speaker_map)}\n`
+        namesBlock(r.id, (r.transcript?.utterances ?? []).map((u) => u.speaker)) +
+        `transcript:\n${dialogueOf(r.transcript, r.transcript_edits, r.speaker_map, fit)}\n`
       )
     })
     .join('\n')
@@ -416,6 +553,14 @@ async function answerFrom(
       'without saying which is them. Do not decide who the user was. Say "the interviewer" and ' +
       '"the candidate", or name people the transcript names; never write "you said" or "you ' +
       'interviewed" unless the transcript makes it explicit.\n' +
+      '- Some recordings list "names heard" and, for events, "conversations" with time ranges. ' +
+      'For "who did I talk to about X": give the conversation\'s time range, and either the name ' +
+      'the user confirmed or the name options with why (e.g. "probably Pedro: he was called Pedro ' +
+      'twice"), saying plainly when no name was said. Suggest confirming the name on the recording ' +
+      'page. Never present an unconfirmed option as certain.\n' +
+      '- Long transcripts show the stretches around the question\'s words, with "[… N lines not shown …]" ' +
+      'where lines were left out, and each line starts with its minute ([12m], [1:05m]). If the answer ' +
+      'could be in a part not shown, say so rather than guessing.\n' +
       '- Never invent names, numbers, dates or identifiers.' +
       (opts.agent ?? '') +
       REPLY_LANGUAGE,

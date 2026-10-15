@@ -21,6 +21,9 @@ import DocView from './DocView'
 import Overview from './Overview'
 import SignOut from './SignOut'
 import PeoplePanel from './PeoplePanel'
+import type { Part as NamePart } from './NamesHeard'
+import Conversations from './Conversations'
+import { useNames, startSplit, useSplitting } from './names-store'
 import { isOwner } from '@/lib/pen/owner'
 import PeoplePicker, { type Picked } from './PeoplePicker'
 import type { ArchiveStats } from '@/lib/pen/stats'
@@ -147,6 +150,7 @@ export default function PenApp({
   const [pending, setPending] = useState<Pending[]>([])
   const [penName, setPenName] = useState<string | null>(null)
   const [consent, setConsent] = useState(false)
+  const [eventMode, setEventMode] = useState(false)
   const [callPeople, setCallPeople] = useState<Picked[]>([])
   const [progress, setProgress] = useState<Progress | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -504,7 +508,7 @@ export default function PenApp({
   }, [uploading])
 
   /** One file: prepare, upload, save, send for transcription. 'held' = saved, waiting for hours. */
-  async function uploadOne(file: File, people: Picked[], step: (p: { phase: string; pct: number }) => void): Promise<'done' | 'held'> {
+  async function uploadOne(file: File, people: Picked[], step: (p: { phase: string; pct: number }) => void, event = false): Promise<'done' | 'held'> {
     const callPeople = people
     // What goes up, and where it lands. Normally the audio is prepared (compressed) in the
     // browser first. A file too big to prepare safely on this device (a long recording on a
@@ -574,6 +578,7 @@ export default function PenApp({
         // The first person also names the call, which older parts of the app read.
         client_name: callPeople[0]?.name || undefined,
         ...(callPeople.length ? { people: callPeople.map((p) => (p.id ? { id: p.id } : { name: p.name })) } : {}),
+        ...(event ? { event_mode: true } : {}),
       }),
     })
     if (!sRes.ok) throw new Error((await sRes.json()).error ?? T.saveRecordingFailed)
@@ -611,6 +616,7 @@ export default function PenApp({
       return setErr(T.consentFirst)
     }
     const people = callPeople
+    const event = eventMode
     const batch = picked.map((p, i) => ({ key: `${Date.now()}-${i}-${p.file.name}`, file: p.file }))
     // Finished rows from an earlier batch make way for this one; rows still going stay.
     setUploads((prev) => [
@@ -619,6 +625,7 @@ export default function PenApp({
     ])
     setPending([])
     setCallPeople([])
+    setEventMode(false)
     setImportDone(false)
 
     let next = 0
@@ -627,7 +634,7 @@ export default function PenApp({
         const b = batch[next++]
         patchUpload(b.key, { state: 'working', phase: T.phasePreparing, pct: 2 })
         try {
-          const r = await uploadOne(b.file, people, ({ phase, pct }) => patchUpload(b.key, { phase, pct }))
+          const r = await uploadOne(b.file, people, ({ phase, pct }) => patchUpload(b.key, { phase, pct }), event)
           patchUpload(b.key, { state: r, pct: 100 })
         } catch (e) {
           patchUpload(b.key, { state: 'error', error: (e as Error).message })
@@ -1064,6 +1071,7 @@ export default function PenApp({
             <ImportTray
               pending={pending} setPending={setPending} penName={penName}
               consent={consent} setConsent={setConsent}
+              eventMode={eventMode} setEventMode={setEventMode}
               people={people} callPeople={callPeople} setCallPeople={setCallPeople}
               progress={progress} onImport={importPicked}
               phone onClose={closeSheet} done={importDone}
@@ -1419,6 +1427,7 @@ export default function PenApp({
           <ImportTray
             pending={pending} setPending={setPending} penName={penName}
             consent={consent} setConsent={setConsent}
+            eventMode={eventMode} setEventMode={setEventMode}
             people={people} callPeople={callPeople} setCallPeople={setCallPeople}
             progress={progress} onImport={importPicked}
             phone={isPhone} onClose={closeSheet} done={importDone}
@@ -1985,8 +1994,10 @@ function CategoryPicker({
 /* ============================================================== import tray */
 
 function ImportTray({
-  pending, setPending, penName, consent, setConsent, people, callPeople, setCallPeople, progress, onImport, phone, onClose, done,
+  pending, setPending, penName, consent, setConsent, eventMode, setEventMode, people, callPeople, setCallPeople, progress, onImport, phone, onClose, done,
 }: {
+  eventMode: boolean
+  setEventMode: (v: boolean) => void
   pending: Pending[]
   setPending: React.Dispatch<React.SetStateAction<Pending[]>>
   penName: string | null
@@ -2071,6 +2082,19 @@ function ImportTray({
                   {T.consentPhone}
                 </span>
               </button>
+              <button
+                className="pen-consent pen-event-switch"
+                data-on={eventMode}
+                onClick={() => setEventMode(!eventMode)}
+                role="switch"
+                aria-checked={eventMode}
+              >
+                <span className="pen-consent-track"><span className="pen-consent-knob" /></span>
+                <span className="pen-consent-text">
+                  <strong>{T.eventToggle}</strong>
+                  <span className="pen-event-hint">{T.eventHint}</span>
+                </span>
+              </button>
             </>
           )}
         </div>
@@ -2134,6 +2158,13 @@ function ImportTray({
           <input type="checkbox" className="pen-act-box mt-0" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
           <span className="text-[14.5px] leading-snug" style={{ color: 'var(--warn)' }}>
             {T.consentDesk}
+          </span>
+        </label>
+        <label className="pen-event-row sm:col-span-2">
+          <input type="checkbox" className="pen-act-box mt-0" checked={eventMode} onChange={(e) => setEventMode(e.target.checked)} />
+          <span>
+            <strong>{T.eventToggle}</strong>
+            <span className="pen-event-hint">{T.eventHint}</span>
           </span>
         </label>
       </div>
@@ -2209,7 +2240,7 @@ function PartTranscript({ part, onUpdateNotes }: { part: PenSession; onUpdateNot
       <SpeakerNames
         sessionId={part.id}
         utterances={utts}
-        initialMap={(part.speaker_map as SpeakerMap | null) ?? null}
+        initialMap={map}
         language={part.language ?? null}
         translation={translation}
         showTranslation={showTr}
@@ -2224,6 +2255,7 @@ function PartTranscript({ part, onUpdateNotes }: { part: PenSession; onUpdateNot
         saveState={state}
         speakerMap={map}
         translation={showTr ? translation?.utterances : null}
+        anchor={`pen-u-${part.id}`}
         onEdit={(i, text) => { dirty.current = true; setEdits((prev) => ({ ...prev, [String(i)]: text })) }}
       />
     </>
@@ -2333,6 +2365,45 @@ function Detail({
     [parts, speakerMap],
   )
   const done = new Set(Array.isArray(session.action_done) ? session.action_done : [])
+
+  // Names heard and conversations read every part of a joined meeting, each at its own start.
+  const nameParts = useMemo<NamePart[]>(() => {
+    let offset = 0
+    return parts.map((x, i) => {
+      const p: NamePart = {
+        id: x.id,
+        offset,
+        labels: (x.transcript?.utterances ?? []).map((u) => u.speaker),
+        map: i === 0 ? speakerMap : ((x.speaker_map as SpeakerMap | null) ?? null),
+        // Written up in the last quarter hour: its names are probably still on the way.
+        fresh: !x.names_at && x.status === 'noted' && Date.now() - Date.parse(x.updated_at) < 15 * 60_000,
+      }
+      offset += x.duration_sec ?? 0
+      return p
+    })
+  }, [parts, speakerMap])
+
+  /** Opens the transcript at one line and marks it for a moment. */
+  function jumpTo(sessionId: string, utterance: number) {
+    setTab('transcript')
+    let tries = 0
+    const go = () => {
+      const el = document.getElementById(`pen-u-${sessionId}-${utterance}`)
+      if (!el) { if (++tries < 20) setTimeout(go, 50); return }
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      el.setAttribute('data-flash', '1')
+      setTimeout(() => el.removeAttribute('data-flash'), 2400)
+    }
+    setTimeout(go, 30)
+  }
+
+  // Conference mode: offered for long recordings with many voices, on demand otherwise.
+  const nameIds = nameParts.map((p) => p.id)
+  const { data: namesData } = useNames(utts.length ? nameIds : [])
+  const { running: splittingConvos } = useSplitting(nameIds)
+  const hasConvos = !!namesData && nameIds.some((id) => (namesData.recordings[id]?.segments.length ?? 0) > 0)
+  const suggestEvent = totalSec >= 25 * 60 && speakerCount >= 4
+  const canSplit = utts.length > 0 && totalSec >= 10 * 60
 
   async function toggleAction(i: number) {
     const next = new Set(done)
@@ -2470,6 +2541,11 @@ function Detail({
               <Icon name="link" size={15} />{T.combineWith}
             </button>
           )}
+          {onCombine && canSplit && (
+            <button className="pen-btn" disabled={splittingConvos} onClick={() => { setTab('note'); void startSplit(nameIds) }}>
+              <Icon name="chat" size={15} />{hasConvos ? T.resplitConvos : T.splitConvos}
+            </button>
+          )}
 
           {notion && (n.summary || n.actions?.length) ? <NotionButton key={session.id} sessionId={session.id} connected={notion.connected} sentUrl={notion.sent?.[session.id] ?? null} /> : null}
           {/* Two-step, inline. Deletion takes the audio with it and cannot be undone, so it
@@ -2505,6 +2581,11 @@ function Detail({
           {onCombine && !joined && utts.length > 0 && (
             <button className="pen-btn" onClick={onCombine}>
               <Icon name="link" size={15} />{T.combineWith}
+            </button>
+          )}
+          {onCombine && canSplit && (
+            <button className="pen-btn" disabled={splittingConvos} onClick={() => { setTab('note'); void startSplit(nameIds) }}>
+              <Icon name="chat" size={15} />{hasConvos ? T.resplitConvos : T.splitConvos}
             </button>
           )}
 
@@ -2589,7 +2670,9 @@ function Detail({
               <SpeakerNames
                 sessionId={session.id}
                 utterances={utts}
-                initialMap={(session.speaker_map as SpeakerMap | null) ?? null}
+                // The live names, not the copy the page loaded with: switching tabs remounts this,
+                // and the loaded copy forgot every name given since.
+                initialMap={speakerMap}
                 language={session.language ?? null}
                 translation={translation}
                 showTranslation={showTr}
@@ -2604,6 +2687,7 @@ function Detail({
                 saveState={tState}
                 speakerMap={speakerMap}
                 translation={showTr ? translation?.utterances : null}
+                anchor={`pen-u-${session.id}`}
                 onEdit={(i, text) => { dirtyT.current = true; setTEdits((prev) => ({ ...prev, [String(i)]: text })) }}
               />
             </>
@@ -2674,6 +2758,10 @@ function Detail({
               </div>
               <p className="pen-aicard-body">{n.summary}</p>
             </div>
+          )}
+
+          {utts.length > 0 && (
+            <Conversations parts={nameParts} suggest={suggestEvent} onJump={jumpTo} onPeopleChanged={onPeopleChanged} onDraft={setSheet} />
           )}
 
           {/* Mock (14 Oct): Next actions first and full width (it is the work: checkboxes,
@@ -2754,7 +2842,7 @@ function Detail({
             </div>
           )}
 
-          <PeoplePanel sessionId={session.id} notes={n} status={session.status} onChanged={onPeopleChanged} />
+          <PeoplePanel sessionId={session.id} notes={n} status={session.status} onChanged={onPeopleChanged} parts={utts.length ? nameParts : undefined} onJump={jumpTo} />
 
           {!!n.missed?.length && (
             <div className="pen-sec">

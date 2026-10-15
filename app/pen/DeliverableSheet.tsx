@@ -15,8 +15,10 @@ import type { Copy } from '@/lib/pen/i18n'
 const SPRING = { type: 'spring' as const, stiffness: 340, damping: 32, mass: 0.9 }
 
 const DS_EN = {
-  kinds: { email: 'Draft email', memo: 'Memo', tracker: 'Tracker entry' } as Record<Deliverable['kind'], string>,
-  buttons: { email: 'Draft email', memo: 'Memo', tracker: 'Tracker' } as Record<Deliverable['kind'], string>,
+  kinds: { email: 'Draft email', memo: 'Memo', tracker: 'Tracker entry', linkedin: 'LinkedIn note' } as Record<Deliverable['kind'], string>,
+  buttons: { email: 'Draft email', memo: 'Memo', tracker: 'Tracker', linkedin: 'LinkedIn note' } as Record<Deliverable['kind'], string>,
+  findOnLinkedIn: (n: string) => `Find ${n} on LinkedIn`,
+  chars: (n: number) => `${n} / 300 characters`,
   draftFailed: 'Could not draft that.',
   copyBlocked: 'Copying is blocked here — select the text and copy it manually.',
   drafting: 'Drafting…',
@@ -31,8 +33,10 @@ const DS_EN = {
 const DS: Copy<typeof DS_EN> = {
   en: DS_EN,
   es: {
-    kinds: { email: 'Borrador de correo', memo: 'Memo', tracker: 'Registro de seguimiento' },
-    buttons: { email: 'Borrador de correo', memo: 'Memo', tracker: 'Seguimiento' },
+    kinds: { email: 'Borrador de correo', memo: 'Memo', tracker: 'Registro de seguimiento', linkedin: 'Nota de LinkedIn' },
+    buttons: { email: 'Borrador de correo', memo: 'Memo', tracker: 'Seguimiento', linkedin: 'Nota de LinkedIn' },
+    findOnLinkedIn: (n) => `Buscar a ${n} en LinkedIn`,
+    chars: (n) => `${n} / 300 caracteres`,
     draftFailed: 'No se pudo redactar.',
     copyBlocked: 'Aquí no se puede copiar automáticamente: selecciona el texto y cópialo a mano.',
     drafting: 'Redactando…',
@@ -44,8 +48,10 @@ const DS: Copy<typeof DS_EN> = {
     copy: 'Copiar',
   },
   pt: {
-    kinds: { email: 'Rascunho de e-mail', memo: 'Memorando', tracker: 'Registro de acompanhamento' },
-    buttons: { email: 'Rascunho de e-mail', memo: 'Memorando', tracker: 'Acompanhamento' },
+    kinds: { email: 'Rascunho de e-mail', memo: 'Memorando', tracker: 'Registro de acompanhamento', linkedin: 'Nota do LinkedIn' },
+    buttons: { email: 'Rascunho de e-mail', memo: 'Memorando', tracker: 'Acompanhamento', linkedin: 'Nota do LinkedIn' },
+    findOnLinkedIn: (n) => `Buscar ${n} no LinkedIn`,
+    chars: (n) => `${n} / 300 caracteres`,
     draftFailed: 'Não foi possível redigir.',
     copyBlocked: 'Não dá para copiar automaticamente aqui — selecione o texto e copie manualmente.',
     drafting: 'Redigindo…',
@@ -58,7 +64,12 @@ const DS: Copy<typeof DS_EN> = {
   },
 }
 
-export type SheetRequest = { kind: Deliverable['kind']; item: string }
+export type SheetRequest = {
+  kind: Deliverable['kind']
+  item: string
+  /** One conversation of an event: drafted from its own lines. `name` is who it was with, if confirmed. */
+  conversation?: { pieces: { session: string; segment: string }[]; name?: string | null; search?: string | null }
+}
 
 export default function DeliverableSheet({
   request,
@@ -100,6 +111,7 @@ export default function DeliverableSheet({
       id: sessionId,
       kind: request.kind,
       item: request.item,
+      ...(request.conversation ? { conversation: { pieces: request.conversation.pieces } } : {}),
     })
       .then((j) => {
         if (!alive) return
@@ -112,7 +124,7 @@ export default function DeliverableSheet({
       alive = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [request?.kind, request?.item, sessionId])
+  }, [request?.kind, request?.item, request?.conversation?.pieces[0]?.segment, sessionId])
 
   async function copy() {
     if (await writeClipboard(draft)) {
@@ -198,6 +210,21 @@ export default function DeliverableSheet({
 
                 {request.kind === 'email' && deliverable && !loading && (
                   <EmailOpen draft={draft} sessionId={sessionId} onCopy={writeClipboard} />
+                )}
+
+                {request.kind === 'linkedin' && deliverable && !loading && (
+                  <div className="pen-sheet-li">
+                    <span data-over={draft.length > 300}>{T.chars(draft.length)}</span>
+                    {request.conversation?.name && (
+                      <a
+                        href={`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(request.conversation.search || request.conversation.name)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {T.findOnLinkedIn(request.conversation.name)}
+                      </a>
+                    )}
+                  </div>
                 )}
               </div>
 

@@ -89,6 +89,12 @@ const EN = {
   full: (home: string) => `Full note: ${home}\nAsk me anything about this call.`,
   whoWasThere: 'Who was on this call? Tell me their names (and emails, if you want follow-ups) and I\'ll add them, like on the website.',
   redoFailed: (title: string) => `I couldn't rewrite the notes for "${title}". They're unchanged; you can try again on the website.`,
+  convosHead: (n: number, title: string) => `*${n} conversations* in "${title}":`,
+  convosProbably: (n: string) => `probably ${n}`,
+  convosWith: (n: string) => `with ${n}`,
+  convosNoName: 'name not said',
+  convosTail: 'Reply with a number and a name to save someone, e.g. "4 is Pedro".',
+  splitFailed: (title: string) => `I couldn't split "${title}" into conversations. Try again in a minute, or on the website.`,
   writeFailed: (name: string, home: string) => `I couldn't write up ${name}. Nothing is lost: open it at ${home} and press "Write the notes" to try again.`,
   agentFailed: 'Sorry, something went wrong on my side and I couldn\'t answer that. Try again in a minute.',
 }
@@ -137,6 +143,12 @@ const BOT: Record<Lang, typeof EN> = {
     full: (home) => `Nota completa: ${home}\nPregúntame lo que quieras de esta reunión.`,
     whoWasThere: '¿Quiénes estaban en esta reunión? Dime sus nombres (y emails, si quieres hacer seguimiento) y los agrego, como en el sitio web.',
     redoFailed: (title) => `No pude reescribir las notas de "${title}". Quedaron como estaban; puedes intentarlo de nuevo en el sitio web.`,
+    convosHead: (n, title) => `*${n} conversaciones* en "${title}":`,
+    convosProbably: (n) => `probablemente ${n}`,
+    convosWith: (n) => `con ${n}`,
+    convosNoName: 'no se dijo el nombre',
+    convosTail: 'Responde con un número y un nombre para guardar a alguien, p. ej. "4 es Pedro".',
+    splitFailed: (title) => `No pude separar "${title}" en conversaciones. Inténtalo en un minuto, o en el sitio web.`,
     writeFailed: (name, home) => `No pude escribir las notas de ${name}. No se perdió nada: ábrela en ${home} y presiona "Escribir las notas" para intentarlo otra vez.`,
     agentFailed: 'Perdón, algo falló de mi lado y no pude responder eso. Inténtalo de nuevo en un minuto.',
   },
@@ -182,6 +194,12 @@ const BOT: Record<Lang, typeof EN> = {
     full: (home) => `Nota completa: ${home}\nPergunte qualquer coisa sobre esta reunião.`,
     whoWasThere: 'Quem estava nesta reunião? Me diga os nomes (e emails, se quiser fazer follow-up) e eu adiciono, como no site.',
     redoFailed: (title) => `Não consegui reescrever as notas de "${title}". Ficaram como estavam; você pode tentar de novo no site.`,
+    convosHead: (n, title) => `*${n} conversas* em "${title}":`,
+    convosProbably: (n) => `provavelmente ${n}`,
+    convosWith: (n) => `com ${n}`,
+    convosNoName: 'nome não dito',
+    convosTail: 'Responda com um número e um nome para salvar alguém, ex.: "4 é Pedro".',
+    splitFailed: (title) => `Não consegui separar "${title}" em conversas. Tente de novo em um minuto, ou no site.`,
     writeFailed: (name, home) => `Não consegui escrever as notas de ${name}. Nada se perdeu: abra em ${home} e aperte "Escrever as notas" para tentar de novo.`,
     agentFailed: 'Desculpe, algo deu errado do meu lado e não consegui responder. Tente de novo em um minuto.',
   },
@@ -619,6 +637,27 @@ async function onText(
   // Work the reply promised but that is too slow to wait for: contact cards, rewritten notes.
   if (later?.after) await later.after().catch(() => {})
   if (later?.redo) await redoNotes(link.email, later.redo.sessionId, later.redo.type, L)
+  if (later?.split) await splitAndList(link.email, later.split, msg.from, L)
+}
+
+/** Splits an event recording (asked for in the chat) and sends the conversations back, numbered. */
+async function splitAndList(email: string, sessionId: string, to: string, L: typeof EN): Promise<void> {
+  const { getSession } = await import('../store')
+  const session = await getSession(email, sessionId)
+  if (!session) return
+  const title = session.title ?? session.source_name ?? L.titleFallback
+  try {
+    const { splitEvent } = await import('../conference')
+    const { emailConversations } = await import('../briefing')
+    if (!(await splitEvent(email, session))) throw new Error('split failed')
+    const list = await emailConversations(session)
+    if (!list.length) throw new Error('no conversations')
+    const lines = list.map((c, i) => `${i + 1}. ${c.when} · ${c.topic} · ${c.confirmed ? L.convosWith(c.confirmed) : c.likely ? L.convosProbably(c.likely) : L.convosNoName}`)
+    await sendText(to, `${L.convosHead(list.length, title)}\n\n${lines.join('\n')}\n\n${L.convosTail}`)
+  } catch (e) {
+    console.warn(`pen whatsapp: split ${sessionId} failed: ${(e as Error).message}`)
+    await sendText(to, L.splitFailed(title)).catch(() => {})
+  }
 }
 
 /** Rewrites one recording's notes (asked for on WhatsApp) and sends the new briefing here. */

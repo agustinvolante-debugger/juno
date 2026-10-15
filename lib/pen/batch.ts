@@ -8,7 +8,7 @@
 import { supabaseAdmin } from '@/lib/supabase'
 import { sendEmailResult } from '@/lib/news/email'
 import type { PenSession } from './store'
-import { sendBriefing, sendReadyNotice, hasSomethingToSay } from './briefing'
+import { sendBriefing, sendReadyNotice, hasSomethingToSay, emailConversations } from './briefing'
 import { userLang } from './user-lang'
 import { LOCALE } from './i18n'
 import type { Lang } from './currency'
@@ -65,9 +65,9 @@ export async function briefBatch(email: string, session: { id: string; created_a
 }
 
 const T = {
-  en: { subject: (n: number) => `${n} recordings ready in Juno Pen`, lead: (n: number) => `${n} recordings are transcribed and written up.`, todo: 'To do', open: 'Open', nothing: 'Nothing to follow up.', untitled: 'Untitled recording', all: 'Open Juno Pen' },
-  es: { subject: (n: number) => `${n} grabaciones listas en Juno Pen`, lead: (n: number) => `${n} grabaciones están transcritas y con sus notas.`, todo: 'Pendientes', open: 'Abrir', nothing: 'Nada pendiente.', untitled: 'Grabación sin título', all: 'Abrir Juno Pen' },
-  pt: { subject: (n: number) => `${n} gravações prontas no Juno Pen`, lead: (n: number) => `${n} gravações estão transcritas e com as notas.`, todo: 'Tarefas', open: 'Abrir', nothing: 'Nada pendente.', untitled: 'Gravação sem título', all: 'Abrir o Juno Pen' },
+  en: { convos: (n: number) => `${n} conversations at this event: name the people you met`, subject: (n: number) => `${n} recordings ready in Juno Pen`, lead: (n: number) => `${n} recordings are transcribed and written up.`, todo: 'To do', open: 'Open', nothing: 'Nothing to follow up.', untitled: 'Untitled recording', all: 'Open Juno Pen' },
+  es: { convos: (n: number) => `${n} conversaciones en este evento: ponle nombre a quienes conociste`, subject: (n: number) => `${n} grabaciones listas en Juno Pen`, lead: (n: number) => `${n} grabaciones están transcritas y con sus notas.`, todo: 'Pendientes', open: 'Abrir', nothing: 'Nada pendiente.', untitled: 'Grabación sin título', all: 'Abrir Juno Pen' },
+  pt: { convos: (n: number) => `${n} conversas neste evento: dê nome a quem você conheceu`, subject: (n: number) => `${n} gravações prontas no Juno Pen`, lead: (n: number) => `${n} gravações estão transcritas e com as notas.`, todo: 'Tarefas', open: 'Abrir', nothing: 'Nada pendente.', untitled: 'Gravação sem título', all: 'Abrir o Juno Pen' },
 } satisfies Record<Lang, unknown>
 
 async function sendBatchEmail(email: string, sessions: PenSession[]) {
@@ -76,7 +76,8 @@ async function sendBatchEmail(email: string, sessions: PenSession[]) {
   const base = (process.env.PEN_PUBLIC_URL || 'https://www.tryjunoapp.com').replace(/\/$/, '')
   const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   const clip = (t: string, n: number) => (t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t)
-  const items = sessions.map((s) => {
+  const convos = await Promise.all(sessions.map((s) => emailConversations(s)))
+  const items = sessions.map((s, i) => {
     const n = s.notes ?? {}
     const title = esc(s.title || s.source_name || M.untitled)
     const when = new Date(s.recorded_at ?? s.created_at).toLocaleString(LOCALE[lang], { dateStyle: 'medium', timeStyle: 'short' })
@@ -86,6 +87,7 @@ async function sendBatchEmail(email: string, sessions: PenSession[]) {
       `<div style="font-size:12px;color:#8E8A80;margin:2px 0 8px">${esc(when)}</div>` +
       (n.summary ? `<div style="font-size:14px;line-height:1.55;color:#3A372F">${esc(clip(n.summary, 320))}</div>` : '') +
       (acts ? `<div style="font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#8E8A80;margin:10px 0 2px">${M.todo}</div><ul style="margin:0;padding-left:18px;font-size:14px;color:#3A372F">${acts}</ul>` : (n.summary ? '' : `<div style="font-size:14px;color:#8E8A80">${M.nothing}</div>`)) +
+      (convos[i].length ? `<div style="margin-top:10px;font-size:14px;color:#2C5F7C;font-weight:600">${esc(M.convos(convos[i].length))}</div>` : '') +
       `<div style="margin-top:10px"><a href="${base}/pen?open=${encodeURIComponent(s.id)}" style="color:#0B6B44;font-size:14px;font-weight:600;text-decoration:none">${M.open} →</a></div>` +
       `</td></tr>`
   }).join('')

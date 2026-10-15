@@ -117,7 +117,7 @@ export async function POST(req: Request) {
     try {
       const offer: Offer = offerIn
       // The free pen is a monthly plan only, whatever the link says.
-      const plan: Plan = offer === 'free-pen' ? 'monthly' : parsePlan(b.plan)
+      const plan: Plan = offer === 'free-pen' || offer === 'given-pen' ? 'monthly' : parsePlan(b.plan)
       // Came through a friend's link (/r/<code>): their first month is on us, and the friend
       // who sent it is credited once they pay (lib/pen/referrals.ts). Anything doubtful just
       // signs up without the referral.

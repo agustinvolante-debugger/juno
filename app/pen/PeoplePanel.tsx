@@ -14,6 +14,7 @@ import Icon from './Icon'
 import { useCopy } from './LangContext'
 import { RowMenu } from './RowMenu'
 import type { Copy } from '@/lib/pen/i18n'
+import NamesHeard, { type Part } from './NamesHeard'
 
 type Suggestion = { name: string; role: string | null; note: string | null }
 type Loaded = { people: PenPerson[]; suggestions: Suggestion[] }
@@ -127,8 +128,14 @@ export default function PeoplePanel({
   notes,
   status,
   onChanged,
+  parts,
+  onJump,
 }: {
   sessionId: string
+  /** This recording and a joined meeting's later parts, for Names heard. */
+  parts?: Part[]
+  /** Opens the transcript at a line. */
+  onJump?: (sessionId: string, utterance: number) => void
   notes: PenNotes
   /** Reloads when the notes land, because that is when suggestions appear. */
   status: string
@@ -329,6 +336,16 @@ export default function PeoplePanel({
           )}
         </div>
       )}
+
+      {parts?.length ? (
+        <NamesHeard
+          parts={parts}
+          linked={data?.people.map((p) => p.name) ?? []}
+          busy={busy}
+          onAdd={(n) => void add(n, undefined, undefined, true)}
+          onJump={onJump}
+        />
+      ) : null}
 
       {adding ? (
         <form

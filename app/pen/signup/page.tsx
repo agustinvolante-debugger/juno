@@ -35,6 +35,13 @@ const SU = {
       submit: 'Claim my free pen', fine: 'Your card is saved for after the trial. The free pen comes with a 3-month minimum (the free month plus two paid months at $15); if your plan ends sooner, the pen is charged at $50. We email you before the trial ends. Manage or cancel in Settings, Billing.',
       gone: 'All the free pens for this offer have been claimed.',
     },
+    given: {
+      eyebrow: 'Your Juno pen', h1: 'Your Juno pen is ready.',
+      lede: 'You already have the pen. Open your account here: your first 60 days of Juno are free. We save a card for after the trial: nothing is charged today.',
+      terms: ['$0 today', 'The pen is yours', '60 days free', 'Then $15/month', 'Cancel anytime'],
+      submit: 'Start my 60 days free', fine: 'Your card is saved for after the trial and charged only if you keep Juno past 60 days. We email you before the trial ends. Cancel anytime in Settings, Billing; the pen stays yours.',
+      gone: '',
+    },
     ph: { name: 'Mark Ellis', email: 'you@company.com', phone: '(305) 555 0142', line1: '1200 Brickell Ave', city: 'Miami', state: 'FL', postcode: '33131', country: 'United States' },
   },
   es: {
@@ -58,6 +65,13 @@ const SU = {
       terms: ['$0 hoy', 'Lápiz gratis', '30 días gratis', 'Luego US$15/mes', 'Mínimo 3 meses'],
       submit: 'Pedir mi lápiz gratis', fine: 'Tu tarjeta queda guardada para después de la prueba. El lápiz gratis viene con un mínimo de 3 meses (el mes gratis más dos meses pagados a US$15); si tu plan termina antes, se cobran US$50 por el lápiz. Te escribimos antes de que termine la prueba. Gestiona o cancela en Configuración, Facturación.',
       gone: 'Ya se reclamaron todos los lápices gratis de esta oferta.',
+    },
+    given: {
+      eyebrow: 'Tu lápiz Juno', h1: 'Tu lápiz Juno está listo.',
+      lede: 'Ya tienes el lápiz. Abre tu cuenta aquí: tus primeros 60 días de Juno son gratis. Guardamos una tarjeta para después de la prueba: hoy no se cobra nada.',
+      terms: ['$0 hoy', 'El lápiz es tuyo', '60 días gratis', 'Luego US$15/mes', 'Cancela cuando quieras'],
+      submit: 'Empezar mis 60 días gratis', fine: 'Tu tarjeta queda guardada para después de la prueba y solo se cobra si sigues con Juno pasados los 60 días. Te escribimos antes de que termine. Cancela cuando quieras en Configuración, Facturación; el lápiz sigue siendo tuyo.',
+      gone: '',
     },
     ph: { name: 'Sofía Henríquez', email: 'tu@empresa.cl', phone: '+56 9 1234 5678', line1: 'Av. Apoquindo 3000', city: 'Santiago', state: 'RM', postcode: '7550000', country: 'Chile' },
   },
@@ -83,6 +97,13 @@ const SU = {
       submit: 'Pedir minha caneta grátis', fine: 'Seu cartão fica salvo para depois do teste. A caneta grátis vem com um mínimo de 3 meses (o mês grátis mais dois meses pagos a US$15); se o plano terminar antes, US$50 são cobrados pela caneta. Avisamos antes de o teste acabar. Gerencie ou cancele em Configurações, Cobrança.',
       gone: 'Todas as canetas grátis desta oferta já foram resgatadas.',
     },
+    given: {
+      eyebrow: 'Sua caneta Juno', h1: 'Sua caneta Juno está pronta.',
+      lede: 'Você já tem a caneta. Abra sua conta aqui: seus primeiros 60 dias de Juno são grátis. Guardamos um cartão para depois do teste: nada é cobrado hoje.',
+      terms: ['US$0 hoje', 'A caneta é sua', '60 dias grátis', 'Depois US$15/mês', 'Cancele quando quiser'],
+      submit: 'Começar meus 60 dias grátis', fine: 'Seu cartão fica salvo para depois do teste e só é cobrado se você continuar com o Juno após 60 dias. Avisamos antes de o teste acabar. Cancele quando quiser em Configurações, Cobrança; a caneta continua sua.',
+      gone: '',
+    },
     ph: { name: 'Sofia Henriques', email: 'voce@empresa.com.br', phone: '+55 11 91234 5678', line1: 'Av. Paulista 1000', city: 'São Paulo', state: 'SP', postcode: '01310-100', country: 'Brasil' },
   },
 } as const
@@ -107,21 +128,26 @@ export default function SignupPage() {
   const T = SU[lang]
   // The invited-agent link (?offer=free-pen): pen free, 30 days free, capped at 25 claims.
   const [freePen, setFreePen] = useState(false)
+  // A pen handed over in person (?offer=given-pen): nothing to post, 60 days free, no cap.
+  const [givenPen, setGivenPen] = useState(false)
   const [remaining, setRemaining] = useState<number | null>(null)
   // The offer is read from the URL after mount; until then the header stays invisible so an
   // invited agent never sees the paid-plan copy flash before "Your Juno pen is on us".
   const [ready, setReady] = useState(false)
   const [invitedBy, setInvitedBy] = useState<string | null>(null)
-  const F = T.free
+  const F = givenPen ? T.given : T.free
+  // Either special offer swaps the header, terms and button for its own copy.
+  const offerCopy = freePen || givenPen
 
   useEffect(() => {
     firstField.current?.focus()
     const q = new URLSearchParams(window.location.search)
-    setShipsPen(q.get('offer') !== 'own-recorder' && q.get('waitlist') !== 'pen')
+    setShipsPen(q.get('offer') !== 'own-recorder' && q.get('offer') !== 'given-pen' && q.get('waitlist') !== 'pen')
+    setGivenPen(q.get('offer') === 'given-pen')
     setWaitlist(q.get('waitlist') === 'pen')
     setReady(true)
     // Came through a friend's link: say so, and that their first month is free.
-    if (q.get('offer') !== 'free-pen') {
+    if (q.get('offer') !== 'free-pen' && q.get('offer') !== 'given-pen') {
       fetch('/api/pen/signup?status=invite').then((r) => r.json()).then((j) => setInvitedBy(typeof j.first === 'string' ? j.first : null)).catch(() => {})
     }
     if (q.get('offer') === 'free-pen') {
@@ -148,7 +174,7 @@ export default function SignupPage() {
         // on ?offer=posted-pen and gets the longer trial; someone who already owns a recorder
         // starts today and gets fourteen days.
         plan: url.get('plan') === 'annual' ? 'annual' : url.get('plan') === 'halfyear' ? 'halfyear' : 'monthly',
-        offer: url.get('offer') === 'own-recorder' ? 'own-recorder' : url.get('offer') === 'free-pen' ? 'free-pen' : 'posted-pen',
+        offer: url.get('offer') === 'own-recorder' ? 'own-recorder' : url.get('offer') === 'free-pen' ? 'free-pen' : url.get('offer') === 'given-pen' ? 'given-pen' : 'posted-pen',
         name: f.get('name'),
         email: f.get('email'),
         phone: f.get('phone'),
@@ -207,13 +233,13 @@ export default function SignupPage() {
             <Image src="/juno_mark.png" alt="Juno" width={24} height={24} className="pen-mark" />
             <span aria-hidden>&larr;</span>
           </Link>
-          <div className="pen-lp-eyebrow pen-su-eyebrow">{freePen ? F.eyebrow : T.eyebrow}</div>
-          <h1 className="pen-display pen-su-h1">{freePen ? F.h1 : T.h1}</h1>
+          <div className="pen-lp-eyebrow pen-su-eyebrow">{offerCopy ? F.eyebrow : T.eyebrow}</div>
+          <h1 className="pen-display pen-su-h1">{offerCopy ? F.h1 : T.h1}</h1>
           <p className="mt-4 max-w-[52ch] text-[16.5px] leading-relaxed" style={{ color: 'var(--soft)' }}>
-            {freePen ? F.lede : waitlist ? T.ledeWait : shipsPen ? T.ledePen : T.ledeOwn}
+            {offerCopy ? F.lede : waitlist ? T.ledeWait : shipsPen ? T.ledePen : T.ledeOwn}
           </p>
-          {invitedBy && !freePen && !waitlist && <p className="pen-invited pen-invited-inline" role="status">{INVITED[lang](invitedBy)}</p>}
-          {freePen && (
+          {invitedBy && !offerCopy && !waitlist && <p className="pen-invited pen-invited-inline" role="status">{INVITED[lang](invitedBy)}</p>}
+          {offerCopy && (
             <ul className="pen-su-terms" aria-label="Offer terms">
               {F.terms.map((t) => <li key={t}>{t}</li>)}
             </ul>
@@ -299,11 +325,11 @@ export default function SignupPage() {
           {error && <div className="pen-su-err" role="alert">{error}</div>}
 
           <button className="pen-lp-btn pen-lp-btn-primary pen-su-submit" disabled={state === 'sending'}>
-            {state === 'sending' ? T.sending : freePen ? F.submit : T.submit}
+            {state === 'sending' ? T.sending : offerCopy ? F.submit : T.submit}
           </button>
 
           <p className="pen-su-fine">
-            {freePen ? F.fine : shipsPen ? T.finePen : T.fineOwn}
+            {offerCopy ? F.fine : shipsPen ? T.finePen : T.fineOwn}
           </p>
           {/* Relative links: this page is /signup on the Pen domain (→ /privacy) and /pen/signup
               elsewhere (→ /pen/privacy), and both resolve to the Pen versions. */}

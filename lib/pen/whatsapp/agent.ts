@@ -13,6 +13,7 @@
 //   recording_people    who is on a recording: contacts, speaker labels (with sample lines), names heard
 //   add_person / remove_person   the web's People section: link a contact to a recording
 //   name_speaker        the web's "Who's who": Speaker B is Carlos (or me)
+//   recording_conversations / name_conversation   an event split into conversations; who each was with
 //   update_recording    rename it, change its category
 //   redo_notes          rewrite the notes (after naming speakers); runs after the reply is sent
 //   person_brief        "I'm meeting the Garcías": their card, last calls, open promises both ways
@@ -36,9 +37,13 @@ import Anthropic from '@anthropic-ai/sdk'
 import { penAnthropic } from '../anthropic'
 import { supabaseAdmin } from '@/lib/supabase'
 import { askArchive } from '../archive'
-import { getSession, updateSession, type ArchiveTurn, type Citation, type PenNotes, type NoteBlock } from '../store'
+import { getSession, updateSession, type ArchiveTurn, type Citation, type PenNotes, type NoteBlock, type PenSession } from '../store'
 import { cleanEmail, cleanName, upsertByName, linkPerson, unlinkPerson, peopleOnSession, enrichPerson, suggestionsFrom } from '../people'
-import { foldName, speakerName, type SpeakerMap } from '../speakers'
+import { mentionsFor } from '../names'
+import { segmentsFor, confirmName } from '../conference'
+import { clock, namesHeard, reasonEn, speakerSuggestions, stitch, type Segment } from '../name-hints'
+import { groupSessions } from '../merge'
+import { foldName, speakerName, resolve as resolveLabel, type SpeakerMap } from '../speakers'
 import { COMMON_TYPES } from '../categories'
 import { sendFollowUp } from '../follow-up'
 import { getProfile } from '../profile'
@@ -48,13 +53,15 @@ import { isMine, type ActionMeta, type Mine } from '../todo-labels'
 import { getDraft, setDraft, type Draft } from './store'
 
 const anthropic = penAnthropic('whatsapp-agent')
-const MODEL = 'claude-sonnet-5-5'
+// Haiku 5.5 (14 Oct, was Sonnet 5.5): a twentieth of the price, and the search stage now reads
+// far more transcript per question. Same test questions, same tool use, answers as grounded.
+const MODEL = process.env.PEN_AGENT_MODEL || 'claude-haiku-5-5'
 /** Tool rounds per message. A normal turn uses one to three. */
 const MAX_ROUNDS = 8
 
 /** `redo`: a recording whose notes the user asked to rewrite. Too slow for the reply, so the
  *  caller does it after sending the text, and sends the new briefing when it is done. */
-export type AgentResult = { text: string; citations: Citation[]; redo?: { sessionId: string; type?: string }; after?: () => Promise<void> }
+export type AgentResult = { text: string; citations: Citation[]; redo?: { sessionId: string; type?: string }; split?: string; after?: () => Promise<void> }
 
 type Ctx = {
   email: string
@@ -72,6 +79,8 @@ type Ctx = {
   drafted: Draft | null
   sent: boolean
   redo?: { sessionId: string; type?: string }
+  /** A recording to split into conversations after the reply (split_conversations). */
+  split?: string
   recentTitle?: string | null
   /** Contacts added this turn, whose cards are refreshed after the reply. */
   enrich: Set<string>
@@ -268,6 +277,52 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'recording_conversations',
+    description:
+      'For a recording of an event (many people, one after another): each separate conversation with its number, ' +
+      'time range, topic, a line on who it seemed to be with, and the name the user confirmed or the name options ' +
+      'heard in it (with why). Use for "who did I talk to about X at the conference?" once you know the recording; ' +
+      'otherwise search_recordings first. If the recording was never split, says so (the user can split it on the website).',
+    input_schema: {
+      type: 'object',
+      properties: { session_id: { type: 'string' } },
+      required: ['session_id'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'split_conversations',
+    description:
+      'The user says a recording was from an event (a conference, a fair, a party) with many people: split it into ' +
+      'the separate conversations in it, with the names said in each. Takes about a minute: it runs after your reply ' +
+      'and the list is sent here when ready, so tell the user that. Also use it when recording_conversations says the ' +
+      'recording was never split and the user wants to know who they talked to.',
+    input_schema: {
+      type: 'object',
+      properties: { session_id: { type: 'string' } },
+      required: ['session_id'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'name_conversation',
+    description:
+      'Say who one conversation of an event recording was with, as the user decided: saves them as a contact, links ' +
+      'them to the recording, and notes where they met and what about. Use the conversation number from ' +
+      'recording_conversations. Never pick a name for the user; offer the options and let them choose or type one. ' +
+      'A reply like "4 is Pedro" right after the list of conversations means conversation 4 of that recording.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        session_id: { type: 'string' },
+        conversation: { type: 'integer', description: 'The conversation number from recording_conversations (1 = first).' },
+        name: { type: 'string', description: 'The name the user chose.' },
+      },
+      required: ['session_id', 'conversation', 'name'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'update_recording',
     description:
       'Rename a recording and/or change its category. "" leaves a field as it is. Changing the category only ' +
@@ -436,6 +491,9 @@ function system(ctx: Ctx, pending: Draft | null): string {
     'spoke, what you owe them, what they owe you, anything open. Dates as "Oct 3", not ISO.\n' +
     '- Sharing notes: by email with save_draft (as usual); on WhatsApp with whatsapp_link, which the user sends ' +
     'themselves. Never say Juno sent a WhatsApp to someone else.\n' +
+    '- Not sure who a speaker or a person was? recording_people lists the names said on the call and likely ' +
+    'names per voice; for an event, recording_conversations lists each conversation with name options. Offer the ' +
+    'options with why ("Pedro: called Pedro twice") and let the user pick or type one; never choose for them.\n' +
     '- When the user lists who was on a call ("Carlos and Titi"), add each with add_person. If it is clear from ' +
     'recording_people which speaker each one is, name the speakers too; then offer to rewrite the notes with the names.\n' +
     '- Emails: write like a busy professional to someone they know. Four to eight sentences, a concrete next step. ' +
@@ -753,7 +811,83 @@ async function recordingPeople(ctx: Ctx, id: string): Promise<unknown> {
       samples: [...lines].sort((a, b) => b.length - a.length).slice(0, 2).map((t) => t.slice(0, 200)),
     })),
     heard_not_linked: suggestionsFrom(s.notes, linked, ctx.userName).map((x) => (x.role ? `${x.name} (${x.role})` : x.name)),
+    ...(await heardFor(ctx, s)),
   }
+}
+
+/** Names said on the recording and the likely name per voice, for recording_people. Empty when never scanned. */
+async function heardFor(ctx: Ctx, s: PenSession): Promise<Record<string, unknown>> {
+  const ms = (await mentionsFor(ctx.email, [s.id]))[s.id] ?? []
+  if (!ms.length) return {}
+  const labels = (s.transcript?.utterances ?? []).map((u) => u.speaker)
+  const map = (s.speaker_map ?? null) as SpeakerMap | null
+  const sug = speakerSuggestions(ms, labels, { me: ctx.userName, resolve: (l) => resolveLabel(map, l).label })
+  return {
+    names_heard: namesHeard(ms, ctx.userName, labels).filter((n) => !n.me).slice(0, 25).map((n) => ({
+      name: n.name, times: n.count, first_at: clock(n.moments[0].at_sec), spoken_to: n.present, context: n.moments.find((m) => m.context)?.context ?? null,
+    })),
+    likely_names_by_speaker: Object.fromEntries(Object.entries(sug).map(([l, o]) => [l, o.map((x) => `${x.me ? `${x.name} (the user)` : x.name}: ${reasonEn(x)}`)])),
+    note_on_names: 'likely names are suggestions from names said on the call; offer them, the user decides.',
+  }
+}
+
+/** Every conversation across a joined meeting's parts, numbered straight through, a chat the pen cut at the hour shown once. */
+async function eventConversations(ctx: Ctx, s: PenSession) {
+  const parts = s.merge_group ? await groupSessions(ctx.email, s.merge_group) : [s]
+  const ids = parts.map((p) => p.id)
+  const [segs, ms] = await Promise.all([segmentsFor(ctx.email, ids), mentionsFor(ctx.email, ids)])
+  let offset = 0
+  const input = parts.map((p) => {
+    const x = { id: p.id, offset, segments: segs[p.id] ?? [], mentions: ms[p.id] ?? [] }
+    offset += p.duration_sec ?? 0
+    return x
+  })
+  return { parts, list: stitch(input, { me: ctx.userName }) }
+}
+
+async function recordingConversations(ctx: Ctx, id: string): Promise<unknown> {
+  const s = await ownSession(ctx, id)
+  if (!s) return { error: 'no such recording' }
+  const { list } = await eventConversations(ctx, s)
+  if (!list.length) return { recording: s.title ?? s.source_name, conversations: [], note: 'This recording has not been split into conversations. The user can do it on the website: open the recording, "Split into conversations".' }
+  return {
+    recording: s.title ?? s.source_name,
+    conversations: list.map((c, i) => ({
+      number: i + 1,
+      time: `${clock(c.start_sec)}–${clock(c.end_sec)}`,
+      kind: c.kind,
+      topic: c.topic,
+      gist: c.gist,
+      ...(c.confirmed_name ? { with: c.confirmed_name } : { name_options: c.likely.map((x) => `${x.name}: ${reasonEn(x)}`), also_mentioned: c.mentioned.map((x) => x.name) }),
+    })),
+  }
+}
+
+async function queueSplit(ctx: Ctx, id: string): Promise<unknown> {
+  const s = await ownSession(ctx, id)
+  if (!s) return { error: 'no such recording; find it with list_recordings' }
+  if (!s.transcript?.utterances?.length) return { error: 'this recording has no transcript yet' }
+  if (ctx.split) return { error: 'one split per message' }
+  ctx.split = s.id
+  return { ok: true, queued: true, recording: s.title ?? s.source_name, note: 'Starts after your reply; the list of conversations is sent here in about a minute.' }
+}
+
+async function nameConversation(ctx: Ctx, i: { session_id: string; conversation: number; name: string }): Promise<unknown> {
+  const s = await ownSession(ctx, i.session_id)
+  if (!s) return { error: 'no such recording' }
+  const { parts, list } = await eventConversations(ctx, s)
+  const hit = list[i.conversation - 1]
+  if (!hit) return { error: `no conversation ${i.conversation}; there are ${list.length}` }
+  const name = cleanName(i.name)
+  if (!name) return { error: 'a name is required' }
+  let done: Segment | null = null
+  for (const piece of hit.pieces) {
+    const part = parts.find((p) => p.id === piece.partId)
+    if (part) done = await confirmName(ctx.email, part, piece.seg.id, name)
+  }
+  if (!done?.person_id) return { error: 'could not save it' }
+  ctx.enrich.add(done.person_id)
+  return { ok: true, conversation: i.conversation, topic: hit.topic, with: done.confirmed_name, recording: s.title ?? s.source_name, note: 'Saved as a contact, linked to the recording, with where they met.' }
 }
 
 async function addPerson(ctx: Ctx, i: { session_id: string; name: string; email: string }): Promise<unknown> {
@@ -1056,6 +1190,12 @@ async function runTool(ctx: Ctx, name: string, input: Record<string, unknown>): 
       return removePerson(ctx, { session_id: str('session_id'), name: str('name') })
     case 'name_speaker':
       return nameSpeaker(ctx, { session_id: str('session_id'), label: str('label'), name: str('name'), is_me: input.is_me === true })
+    case 'recording_conversations':
+      return recordingConversations(ctx, str('session_id'))
+    case 'split_conversations':
+      return queueSplit(ctx, str('session_id'))
+    case 'name_conversation':
+      return nameConversation(ctx, { session_id: str('session_id'), conversation: Number(input.conversation) || 0, name: str('name') })
     case 'update_recording':
       return updateRecording(ctx, { session_id: str('session_id'), title: str('title'), category: str('category') })
     case 'redo_notes':
@@ -1195,6 +1335,7 @@ export async function runAgent(opts: {
     text: text || '…',
     citations,
     ...(ctx.redo ? { redo: ctx.redo } : {}),
+    ...(ctx.split ? { split: ctx.split } : {}),
     ...(enrich.length
       ? { after: async () => { await Promise.all(enrich.map((id) => enrichPerson(opts.email, id).catch((e) => console.warn(`pen whatsapp: enrich ${id}: ${(e as Error).message}`)))) } }
       : {}),

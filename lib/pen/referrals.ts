@@ -118,7 +118,7 @@ export async function referrerFor(code: string): Promise<{ email: string; first:
  * with no reason given: the signup simply goes ahead without a referral.
  */
 export async function eligibleReferral(code: string | null, refereeEmail: string, offer: string): Promise<string | null> {
-  if (!code || offer === 'free-pen') return null
+  if (!code || offer === 'free-pen' || offer === 'given-pen') return null
   const ref = await referrerFor(code).catch(() => null)
   if (!ref) return null
   if (normalizeEmail(ref.email) === normalizeEmail(refereeEmail)) return null

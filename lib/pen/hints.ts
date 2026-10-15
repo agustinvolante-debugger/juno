@@ -9,6 +9,7 @@ import type { SubmitHints } from './aai'
 import { getProfile } from './profile'
 import { roleOf } from './profile-fields'
 import { listPeople, peopleOnSession } from './people'
+import { supabaseAdmin } from '@/lib/supabase'
 
 /** AssemblyAI's cap is 1,000 terms of at most 6 words; far fewer keeps each one weighty. */
 const MAX_TERMS = 150
@@ -30,10 +31,11 @@ function terms(list: (string | null | undefined)[]): string[] {
 }
 
 export async function hintsFor(email: string, sessionId: string): Promise<SubmitHints> {
-  const [profile, onCall, contacts] = await Promise.all([
+  const [profile, onCall, contacts, event] = await Promise.all([
     getProfile(email).catch(() => ({}) as Awaited<ReturnType<typeof getProfile>>),
     peopleOnSession(email, sessionId).catch(() => []),
     listPeople(email).catch(() => []),
+    isEvent(sessionId),
   ])
   const role = roleOf(profile.role)
   const me = profile.name?.trim() || null
@@ -49,14 +51,17 @@ export async function hintsFor(email: string, sessionId: string): Promise<Submit
   const who = [me, ...onCall.map((p) => p.name)].filter(Boolean)
   if (role && role.value !== 'other') parts.push(`A recorded conversation involving someone who works in ${role.title.toLowerCase()}${profile.org ? ` at ${profile.org}` : ''}.`)
   if (who.length > 1) parts.push(`Speakers include ${who.join(', ')}.`)
+  if (event) parts.push('Recorded at an event: many short conversations with different people, with background voices.')
   const context = parts.join(' ') || undefined
 
   // Who was there, when the user said. They plus the people they tagged; one extra allowed,
   // because people forget to tag someone. Nothing tagged means nothing is assumed.
-  const speakers = onCall.length ? { min: onCall.length + 1, max: onCall.length + 2 } : undefined
+  // An event has more voices than any call: a loose range so the diarizer can keep strangers apart.
+  const speakers = event ? { min: 2, max: 16 } : onCall.length ? { min: onCall.length + 1, max: onCall.length + 2 } : undefined
 
-  // Speaker identification needs names for everyone it is to tell apart, the user included.
-  const names = onCall.length
+  // Speaker identification needs names for everyone it is to tell apart, the user included,
+  // which an event never has.
+  const names = onCall.length && !event
     ? [
         { name: me || 'The user', description: `The person recording${role && role.value !== 'other' ? `, who works in ${role.title.toLowerCase()}` : ''}.` },
         ...onCall.map((p) => ({
@@ -73,4 +78,10 @@ export async function hintsFor(email: string, sessionId: string): Promise<Submit
     speakers,
     names,
   }
+}
+
+/** "This was an event with many people" was ticked at import. False until the column exists. */
+async function isEvent(sessionId: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin.from('pen_sessions').select('event_mode').eq('id', sessionId).maybeSingle()
+  return !error && (data as { event_mode?: boolean } | null)?.event_mode === true
 }

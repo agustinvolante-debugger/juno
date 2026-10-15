@@ -11,6 +11,10 @@ import { briefBatch } from './batch'
 import { sendBriefing, sendFailureNotice, sendReadyNotice, hasSomethingToSay } from './briefing'
 import { autoJoin } from './merge'
 import { checkJoinSuggestions } from './join-suggest'
+import { scanNames } from './names'
+import { splitConversations, isEventLike } from './conference'
+import { groupSessions } from './merge'
+import type { PenSession } from './store'
 import { enrichPerson, peopleOnSession } from './people'
 import { sendWhatsAppBriefing, sendWhatsAppFailure } from './whatsapp/bot'
 
@@ -20,6 +24,36 @@ export async function runUnattended(sessionId: string, email: string) {
   // Then, with the briefing already out: does this recording look like part of another one the
   // filename rule couldn't place? Only ever a suggestion, and never allowed to throw.
   await checkJoinSuggestions(email, sessionId).catch(() => 0)
+  await namesAndConversations(email, sessionId).catch(() => {})
+}
+
+/**
+ * Every name said on the recording (lib/pen/names.ts), and for an event, the conversations in
+ * it (lib/pen/conference.ts). After the briefing, best effort, every part of a joined meeting
+ * on its own: names and conversations are tied to that file's own lines and times.
+ */
+export async function namesAndConversations(email: string, sessionId: string) {
+  const s = await getSession(email, sessionId)
+  if (!s?.transcript?.utterances?.length) return
+  // Once per recording on this path: an event is split before its briefing (prepareEvent), and
+  // the buttons on the recording page re-run on purpose through /api/pen/names.
+  if (!s.names_at) await scanNames(email, s)
+  if (!s.segments_at && (await isEventLike(email, s))) await splitConversations(email, s)
+}
+
+/**
+ * An event's conversations, ready before its email goes out, so the briefing can say "you had 9
+ * conversations, name them" while the faces are fresh. Every part of a joined meeting, at once.
+ * Best effort: a failure here sends the briefing without the list.
+ */
+async function prepareEvent(email: string, s: PenSession) {
+  try {
+    if (!(await isEventLike(email, s))) return
+    const parts = s.merge_group ? await groupSessions(email, s.merge_group) : [s]
+    await Promise.all(parts.map((p) => namesAndConversations(email, p.id).catch(() => {})))
+  } catch (e) {
+    console.warn(`pen: event prep for ${s.id}: ${(e as Error).message}`)
+  }
 }
 
 async function notesAndBriefing(sessionId: string, email: string) {
@@ -77,6 +111,9 @@ async function notesAndBriefing(sessionId: string, email: string) {
     if (!noted) return
     // A tail part on its own says nothing worth an email — the combined briefing covers it.
     if (joined && noted.id !== joined.segments[0].id) return
+
+    // An event: its conversations first, so the email can list them.
+    await prepareEvent(email, noted)
 
     // To the customer's Notion as well, if they connected it (lib/pen/notion.ts). Once per
     // recording, never throws.

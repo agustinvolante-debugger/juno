@@ -25,6 +25,13 @@ const EN = {
   cta: 'Open the full note &rarr;',
   why: 'Sent because you pressed Send briefing on this recording.',
   check: 'Generated from the recording. Check anything before you act on it.',
+  convos: (n: number) => `Conversations \u00B7 ${n}`,
+  convosLede: 'Who you talked to, one by one. Name them while you still remember the faces.',
+  probably: (n: string) => `probably ${n}`,
+  saved: (n: string) => `with ${n}`,
+  noName: 'name not said',
+  more: (n: number) => `and ${n} more`,
+  nameThem: 'Name the people you met',
 }
 export const BRIEFING_COPY: Record<Lang, typeof EN> = {
   en: EN,
@@ -41,6 +48,13 @@ export const BRIEFING_COPY: Record<Lang, typeof EN> = {
     cta: 'Abrir la nota completa &rarr;',
     why: 'Te llega porque se envió el resumen de esta grabación.',
     check: 'Generado a partir de la grabación. Revisa todo antes de actuar.',
+    convos: (n) => `Conversaciones \u00B7 ${n}`,
+    convosLede: 'Con quién hablaste, una por una. Ponles nombre mientras recuerdas las caras.',
+    probably: (n) => `probablemente ${n}`,
+    saved: (n) => `con ${n}`,
+    noName: 'no se dijo el nombre',
+    more: (n) => `y ${n} más`,
+    nameThem: 'Ponle nombre a quienes conociste',
   },
   pt: {
     summary: 'Resumo',
@@ -55,6 +69,13 @@ export const BRIEFING_COPY: Record<Lang, typeof EN> = {
     cta: 'Abrir a nota completa &rarr;',
     why: 'Você recebeu porque o resumo desta gravação foi enviado.',
     check: 'Gerado a partir da gravação. Confira tudo antes de agir.',
+    convos: (n) => `Conversas \u00B7 ${n}`,
+    convosLede: 'Com quem você falou, uma por uma. Dê nome enquanto ainda lembra dos rostos.',
+    probably: (n) => `provavelmente ${n}`,
+    saved: (n) => `com ${n}`,
+    noName: 'nome não dito',
+    more: (n) => `e mais ${n}`,
+    nameThem: 'Dê nome a quem você conheceu',
   },
 }
 
@@ -93,6 +114,9 @@ export function buildBriefingHtml(opts: {
   lang?: Lang
   /** Only in the owner's own copy: a link to ask about this meeting on WhatsApp. */
   ask?: { href: string; label: string } | null
+  /** An event's conversations (lib/pen/conference.ts) and where to name them. */
+  conversations?: { when: string; topic: string; confirmed: string | null; likely: string | null }[]
+  nameUrl?: string
 }): string {
   const { notes: n, title, dateStr, clientName, durationStr, appUrl } = opts
   const C = BRIEFING_COPY[opts.lang ?? 'en']
@@ -103,6 +127,34 @@ export function buildBriefingHtml(opts: {
     rows.push(
       section(
         `${label(C.summary)}<div style="font-size:16px;line-height:1.62;color:${INK}">${esc(n.summary)}</div>`,
+      ),
+    )
+  }
+
+  // An event: the conversations right under the summary. The point of the email is to get the
+  // names in while the user still remembers who was who.
+  if (opts.conversations?.length) {
+    const SHOWN = 12
+    const list = opts.conversations.slice(0, SHOWN)
+      .map((c) => {
+        const who = c.confirmed ? C.saved(c.confirmed) : c.likely ? C.probably(c.likely) : C.noName
+        return `<tr>
+          <td width="62" valign="top" style="padding:7px 0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:${ACCENT}">${esc(c.when)}</td>
+          <td valign="top" style="padding:7px 0;border-bottom:1px solid ${LINE}">
+            <div style="font-size:15px;line-height:1.4;color:${INK}">${esc(c.topic)}</div>
+            <div style="font-size:13px;color:${c.confirmed ? SOFT : DIM};margin-top:2px">${esc(who)}</div>
+          </td></tr>`
+      })
+      .join('')
+    const more = opts.conversations.length > SHOWN ? `<div style="font-size:13px;color:${DIM};margin-top:8px">${esc(C.more(opts.conversations.length - SHOWN))}</div>` : ''
+    const button = opts.nameUrl
+      ? `<div style="margin-top:14px"><a href="${esc(opts.nameUrl)}" style="display:inline-block;background:${ACCENT};color:#fff;text-decoration:none;font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:14px;font-weight:600;padding:10px 16px;border-radius:8px">${esc(C.nameThem)} &rarr;</a></div>`
+      : ''
+    rows.push(
+      section(
+        `${label(C.convos(opts.conversations.length))}
+         <div style="font-size:14px;line-height:1.5;color:${SOFT};margin:0 0 6px">${esc(C.convosLede)}</div>
+         <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">${list}</table>${more}${button}`,
       ),
     )
   }

@@ -66,6 +66,11 @@ export const FREE_PEN_CAP = 25
  * Applies to free-pen checkouts made after the change only: the subscription carries
  * `pen_min_until` in its metadata, and earlier ones (whose terms said "never charged") don't.
  */
+/** Agreed 14 Oct: a pen the founders hand over in person. Nothing to post, so no address; 60
+ *  days free, then the monthly plan; the pen is never charged and there is no cap (a forwarded
+ *  link only gets a trial with a card on file, no hardware). */
+export const GIVEN_PEN_TRIAL_DAYS = 60
+
 export const FREE_PEN_MIN_MONTHS = 3
 export const FREE_PEN_MIN_DAYS = 85
 
@@ -76,20 +81,21 @@ export function penFeeDue(meta: Record<string, unknown> | null | undefined, ends
   return new Date(endsAt).getTime() < until
 }
 
-export type Offer = 'own-recorder' | 'posted-pen' | 'free-pen'
+export type Offer = 'own-recorder' | 'posted-pen' | 'free-pen' | 'given-pen'
 export type Plan = 'monthly' | 'halfyear' | 'annual'
 
 export function parsePlan(v: unknown): Plan {
   return v === 'annual' ? 'annual' : v === 'halfyear' ? 'halfyear' : 'monthly'
 }
 export function parseOffer(v: unknown): Offer {
-  return v === 'own-recorder' ? 'own-recorder' : v === 'free-pen' ? 'free-pen' : 'posted-pen'
+  return v === 'own-recorder' ? 'own-recorder' : v === 'free-pen' ? 'free-pen' : v === 'given-pen' ? 'given-pen' : 'posted-pen'
 }
 
 /** Free days before the first charge. Prepaid plans have none. */
 export function trialDaysFor(offer: Offer, plan: Plan = 'monthly'): number {
   if (plan !== 'monthly') return 0
   if (offer === 'free-pen') return FREE_PEN_TRIAL_DAYS
+  if (offer === 'given-pen') return GIVEN_PEN_TRIAL_DAYS
   return offer === 'posted-pen' ? TRIAL_DAYS_POSTED : TRIAL_DAYS
 }
 
@@ -99,7 +105,7 @@ export function trialDaysFor(offer: Offer, plan: Plan = 'monthly'): number {
  */
 export function planPrice(offer: Offer, plan: Plan): { usd: number; months: number; env: string } | null {
   // Free pen: monthly only, the same price as the pen plan; the pen itself is never charged.
-  if (offer === 'free-pen') return plan === 'monthly' ? { usd: PLAN_MONTHLY_USD, months: 1, env: 'STRIPE_PRICE_MONTHLY' } : null
+  if (offer === 'free-pen' || offer === 'given-pen') return plan === 'monthly' ? { usd: PLAN_MONTHLY_USD, months: 1, env: 'STRIPE_PRICE_MONTHLY' } : null
   if (offer === 'posted-pen') {
     if (plan === 'monthly') return { usd: PLAN_MONTHLY_USD, months: 1, env: 'STRIPE_PRICE_MONTHLY' }
     if (plan === 'halfyear') return { usd: PLAN_HALFYEAR_USD, months: 6, env: 'STRIPE_PRICE_HALFYEAR' }

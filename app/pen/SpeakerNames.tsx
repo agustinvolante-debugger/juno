@@ -10,7 +10,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Utterance } from '@/lib/pen/store'
-import { speakersIn, type SpeakerMap, type SpeakerEntry } from '@/lib/pen/speakers'
+import { speakersIn, resolve, foldName, type SpeakerMap, type SpeakerEntry } from '@/lib/pen/speakers'
+import { speakerSuggestions, namesHeard, type NameOption } from '@/lib/pen/name-hints'
+import { useNames } from './names-store'
 import { LANGUAGES } from '@/lib/pen/profile-fields'
 import { useCopy, useLang } from './LangContext'
 import { languageLabel, SPEAKER_WORD, type Copy } from '@/lib/pen/i18n'
@@ -43,6 +45,10 @@ const SN_EN = {
   translateAria: 'Translate to',
   translating: 'Translating…',
   translate: 'Translate',
+  likely: 'Likely',
+  pickAria: (n: string, s: string) => `${s} is ${n}`,
+  heardGroup: 'Names heard on this call',
+  why: (o: NameOption) => o.self ? 'says it’s their name' : o.introduced && !o.called ? 'introduced by name' : `called by name ${o.called + o.introduced}×`,
 }
 
 const SN: Copy<typeof SN_EN> = {
@@ -71,6 +77,10 @@ const SN: Copy<typeof SN_EN> = {
     translateAria: 'Traducir al',
     translating: 'Traduciendo…',
     translate: 'Traducir',
+    likely: 'Puede ser',
+    pickAria: (n, s) => `${s} es ${n}`,
+    heardGroup: 'Nombres escuchados en esta reunión',
+    why: (o) => o.self ? 'dice que se llama así' : o.introduced && !o.called ? 'lo presentaron por su nombre' : `le dicen así ${o.called + o.introduced}×`,
   },
   pt: {
     saveFailed: 'Não foi possível salvar os nomes.',
@@ -96,6 +106,10 @@ const SN: Copy<typeof SN_EN> = {
     translateAria: 'Traduzir para',
     translating: 'Traduzindo…',
     translate: 'Traduzir',
+    likely: 'Pode ser',
+    pickAria: (n, s) => `${s} é ${n}`,
+    heardGroup: 'Nomes ouvidos nesta reunião',
+    why: (o) => o.self ? 'diz que se chama assim' : o.introduced && !o.called ? 'apresentado pelo nome' : `chamado assim ${o.called + o.introduced}×`,
   },
 }
 
@@ -154,6 +168,44 @@ export default function SpeakerNames({
   }, [sessionId])
 
   const labels = useMemo(() => speakersIn(utterances), [utterances])
+
+  // Names said on the call, turned into likely names per voice (lib/pen/name-hints.ts).
+  const { data: heard } = useNames([sessionId])
+  const mentions = heard?.recordings[sessionId]?.mentions
+  const suggest = useMemo(
+    () => (mentions?.length ? speakerSuggestions(mentions, utterances.map((u) => u.speaker), { me: heard?.me, resolve: (l) => resolve(map, l).label }) : {}),
+    [mentions, utterances, heard?.me, map],
+  )
+  const heardNames = useMemo(
+    () => (mentions?.length ? namesHeard(mentions, heard?.me, utterances.map((u) => u.speaker)).filter((n) => n.present && !n.me).map((n) => n.name) : []),
+    [mentions, heard?.me, utterances],
+  )
+  const [naming, setNaming] = useState<string | null>(null)
+  /** Options not already given to another voice (and "You" only while nobody is you). */
+  const free = (opts: NameOption[] | undefined) => {
+    const taken = new Set(Object.values(map).filter((x) => x.name).map((x) => foldName(x.name)))
+    const meTaken = Object.values(map).some((x) => x.me)
+    return (opts ?? []).filter((o) => (o.me ? !meTaken : !taken.has(foldName(o.name))))
+  }
+
+  /** A suggested or heard name: names the voice and saves them as a contact on this recording. */
+  async function pickHeard(label: string, name: string) {
+    setNaming(label)
+    setErr(null)
+    try {
+      await queue.current
+      const j = await postJson<{ speaker_map: SpeakerMap; person: Person }>('/api/pen/names', { action: 'speaker', id: sessionId, label, name })
+      // A new contact joins the menu, so the select can show who this voice now is.
+      setPeople((prev) => (prev.some((p) => p.id === j.person.id) ? prev : [...prev, j.person].sort((a, b) => a.name.localeCompare(b.name))))
+      setMap(j.speaker_map)
+      onMap(j.speaker_map)
+      setChanged(true)
+    } catch (e) {
+      setErr(errMessage(e, T.saveFailed))
+    } finally {
+      setNaming(null)
+    }
+  }
   // Share of the words per label, so "Speaker C · 2%" reads as the stray it probably is.
   const share = useMemo(() => {
     const w: Record<string, number> = {}
@@ -184,6 +236,7 @@ export default function SpeakerNames({
 
   function pick(label: string, value: string) {
     const next: SpeakerMap = { ...latest.current }
+    if (value.startsWith('heard:')) return void pickHeard(label, value.slice(6))
     if (value === '') delete next[label]
     else if (value === 'me') next[label] = { name: me || T.you, me: true, source: 'user' }
     else if (value.startsWith('same:')) next[label] = { name: '', same_as: value.slice(5), source: 'user' }
@@ -263,6 +316,13 @@ export default function SpeakerNames({
                   {people.map((p) => (
                     <option key={p.id} value={`p:${p.id}`}>{p.name}</option>
                   ))}
+                  {heardNames.filter((h) => !people.some((p) => foldName(p.name) === foldName(h))).length > 0 && (
+                    <optgroup label={T.heardGroup}>
+                      {heardNames.filter((h) => !people.some((p) => foldName(p.name) === foldName(h))).map((h) => (
+                        <option key={h} value={`heard:${h}`}>{h}</option>
+                      ))}
+                    </optgroup>
+                  )}
                   {e?.name && !e.me && !e.person_id && !e.same_as && <option value="other">{e.name}</option>}
                   <option value="other">{T.someoneElse}</option>
                   {labels.filter((x) => x !== l).map((x) => (
@@ -271,6 +331,24 @@ export default function SpeakerNames({
                 </select>
               )}
               {e?.source === 'auto' && <span className="pen-spkn-auto">{T.byVoice}</span>}
+              {!e && typing !== l && !!free(suggest[l]).length && (
+                <div className="pen-spkn-sugg">
+                  <span className="pen-spkn-sugg-label">{T.likely}</span>
+                  {free(suggest[l]).map((o) => (
+                    <button
+                      key={o.name}
+                      type="button"
+                      className="pen-spkn-chip"
+                      disabled={naming === l}
+                      aria-label={T.pickAria(o.me ? (me ? T.youAre(me) : T.you) : o.name, spk(l))}
+                      onClick={() => (o.me ? pick(l, 'me') : void pickHeard(l, o.name))}
+                    >
+                      <strong>{o.me ? (me ? T.youAre(me) : T.you) : o.name}</strong>
+                      <em>{T.why(o)}</em>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )
         })}

@@ -51,9 +51,32 @@ const MAIL = {
   },
 } satisfies Record<Lang, unknown>
 
-export function renderBriefing(session: PenSession, lang: Lang = 'en', ask: { href: string; label: string } | null = null): string {
+type EmailConvo = { when: string; topic: string; confirmed: string | null; likely: string | null }
+
+/** An event's conversations for the email, empty for everything else. Never throws. */
+export async function emailConversations(session: PenSession): Promise<EmailConvo[]> {
+  try {
+    const { conversationsOf } = await import('./conference')
+    const { clock } = await import('./name-hints')
+    const list = await conversationsOf(session.user_email, session)
+    // A name already given to one conversation is not the guess for another.
+    const taken = new Set(list.flatMap((c) => (c.confirmed_name ? [c.confirmed_name.toLowerCase()] : [])))
+    return list.filter((c) => c.kind !== 'other').map((c) => ({
+      when: clock(c.start_sec),
+      topic: c.topic,
+      confirmed: c.confirmed_name,
+      likely: c.likely.find((o) => !taken.has(o.name.toLowerCase()))?.name ?? null,
+    }))
+  } catch {
+    return []
+  }
+}
+
+export function renderBriefing(session: PenSession, lang: Lang = 'en', ask: { href: string; label: string } | null = null, conversations: EmailConvo[] = []): string {
   const base = (process.env.PEN_PUBLIC_URL || process.env.NEXTAUTH_URL || '').replace(/\/$/, '')
   return buildBriefingHtml({
+    conversations,
+    nameUrl: conversations.length ? `${(process.env.PEN_PUBLIC_URL || base || 'https://www.tryjunoapp.com').replace(/\/$/, '')}/pen?open=${encodeURIComponent(session.id)}` : undefined,
     notes: session.notes ?? {},
     title: session.title ?? session.source_name ?? MAIL[lang].untitled,
     dateStr: new Date(session.recorded_at ?? session.created_at).toLocaleString(LOCALE[lang], {
@@ -117,7 +140,14 @@ export async function sendBriefing(opts: {
     to: opts.to,
     subject: `${prefix}${title}`,
     // The WhatsApp line only in the owner's own copy, never in one forwarded to a client.
-    html: renderBriefing(opts.session, lang, isOwnCopy(opts) ? await askLink(opts.session, lang).catch(() => null) : null),
+    // An event's conversations only in the owner's own copy: names said at a conference are not
+    // for a forwarded briefing.
+    html: renderBriefing(
+      opts.session,
+      lang,
+      isOwnCopy(opts) ? await askLink(opts.session, lang).catch(() => null) : null,
+      isOwnCopy(opts) ? await emailConversations(opts.session) : [],
+    ),
     replyTo: opts.replyTo,
   })
 }

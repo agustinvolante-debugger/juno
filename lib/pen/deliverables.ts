@@ -52,6 +52,12 @@ If the notes do not make the recipient obvious, use the role, e.g. "the listing 
 decided or is outstanding, then what happens next and who owns it. No headings — flowing
 paragraphs. Something a colleague could read in thirty seconds and be caught up.`,
 
+  linkedin: `Write a LinkedIn connection note to someone the user met and wants to stay in touch
+with. At most 280 characters in total (LinkedIn cuts at 300). First person, warm and specific:
+where they met and the one thing they talked about, then a light reason to connect. No hashtags,
+no emojis, no subject line, no "I hope this finds you well". Start with "Hi <first name>," when
+the name is known; otherwise "Hi," . Set recipient to their name if known, subject to "".`,
+
   tracker: `Produce a tracker entry, one field per line, in exactly this shape and nothing else:
 
 Task: <imperative, specific>
@@ -70,6 +76,11 @@ export async function draftDeliverable(opts: {
   sessionDate: string
   clientName?: string | null
   userNotes?: string | null
+  /**
+   * One conversation of an event recording: drafted from what was said in it, not from the
+   * whole recording's notes, which describe everyone else the user met that day too.
+   */
+  conversation?: { name: string | null; event: string; when: string; topic: string; gist: string | null; transcript: string }
 }): Promise<Omit<Deliverable, 'id' | 'ts'>> {
   const res = await anthropic.messages.parse({
     model: MODEL,
@@ -83,12 +94,18 @@ export async function draftDeliverable(opts: {
     messages: [
       {
         role: 'user',
-        content:
-          `Meeting: ${opts.sessionTitle} (${opts.sessionDate})\n` +
-          (opts.clientName ? `With: ${opts.clientName}\n` : '') +
-          (opts.userNotes ? `\nTheir own notes:\n${opts.userNotes.slice(0, 3000)}\n` : '') +
-          `\nExtracted notes:\n${JSON.stringify(opts.notes)}\n\n` +
-          `Draft a ${opts.kind} for this specific item:\n"${opts.item}"`,
+        content: opts.conversation
+          ? `Event: ${opts.conversation.event} (${opts.sessionDate})\n` +
+            `One conversation there, ${opts.conversation.when}, about: ${opts.conversation.topic}\n` +
+            (opts.conversation.gist ? `Summary: ${opts.conversation.gist}\n` : '') +
+            `The other person: ${opts.conversation.name ?? 'name not known'}\n` +
+            `\nWhat was said in this conversation:\n${opts.conversation.transcript}\n\n` +
+            `Draft a ${opts.kind === 'linkedin' ? 'LinkedIn note' : opts.kind} for this specific item:\n"${opts.item}"`
+          : `Meeting: ${opts.sessionTitle} (${opts.sessionDate})\n` +
+            (opts.clientName ? `With: ${opts.clientName}\n` : '') +
+            (opts.userNotes ? `\nTheir own notes:\n${opts.userNotes.slice(0, 3000)}\n` : '') +
+            `\nExtracted notes:\n${JSON.stringify(opts.notes)}\n\n` +
+            `Draft a ${opts.kind} for this specific item:\n"${opts.item}"`,
       },
     ],
     output_config: { format: jsonSchemaOutputFormat(SCHEMA) },
@@ -103,5 +120,7 @@ export async function draftDeliverable(opts: {
       ? `To: ${p.recipient || '[recipient]'}\nSubject: ${p.subject || '[subject]'}\n\n${p.body}`
       : p.body
 
-  return { kind: opts.kind, title: p.title, body, ref: opts.item.slice(0, 240) }
+  // LinkedIn stops at 300 characters; a note that runs over is cut at the last full sentence.
+  const fitted = opts.kind === 'linkedin' && body.length > 300 ? body.slice(0, 300).replace(/[^.!?]*$/, '').trim() || body.slice(0, 297) + '…' : body
+  return { kind: opts.kind, title: p.title, body: fitted, ref: opts.item.slice(0, 240) }
 }

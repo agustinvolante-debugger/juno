@@ -1,3 +1,4 @@
+import { supabaseAdmin } from '@/lib/supabase'
 import { NextResponse } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
 import { pausedRefusal } from '@/lib/pen/pause'
@@ -59,6 +60,13 @@ export async function POST(req: Request) {
     // "Who was this call?" at import puts those people on the call. `people` is the picker:
     // existing contacts by id, new ones by name. Older clients send one name as client_name.
     // Never fails the upload: the recording matters more than the contact list.
+    // "This was an event with many people": split into conversations once written up.
+    // Separate write so a missing column (migration not run yet) never fails the upload.
+    if (!duplicate && b.event_mode === true) {
+      const { error: evErr } = await supabaseAdmin.from('pen_sessions').update({ event_mode: true }).eq('id', session.id)
+      if (evErr) console.warn(`pen: event_mode not saved for ${session.id}: ${evErr.message}`)
+      else session.event_mode = true
+    }
     if (!duplicate) {
       const picked = Array.isArray(b.people) ? (b.people as { id?: unknown; name?: unknown }[]).slice(0, 12) : []
       const who = typeof b.client_name === 'string' ? b.client_name.trim() : ''

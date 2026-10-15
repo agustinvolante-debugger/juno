@@ -399,3 +399,51 @@ create table if not exists public.pen_join_suggestions (
   primary key (user_email, a_id, b_id)
 );
 alter table public.pen_join_suggestions enable row level security;  -- service role only
+
+-- 2026-10-14 (b) · names heard, conversations, event mode (lib/pen/names.ts, lib/pen/conference.ts).
+-- pen_name_mentions  every personal name said on a recording: who said it, when, to whom, context.
+-- pen_segments       the separate conversations inside an event recording. person_id is the
+--                    contact the user confirmed for it. Name options are worked out from the
+--                    mentions on read, not stored. Service role only.
+-- pen_sessions.event_mode   "This was an event with many people" (import toggle or later).
+-- pen_sessions.names_at / segments_at   when each pass last ran (null = never).
+alter table public.pen_sessions add column if not exists event_mode boolean not null default false;
+alter table public.pen_sessions add column if not exists names_at timestamptz;
+alter table public.pen_sessions add column if not exists segments_at timestamptz;
+create table if not exists public.pen_name_mentions (
+  id           bigint generated always as identity primary key,
+  user_email   text not null,
+  session_id   uuid not null references public.pen_sessions(id) on delete cascade,
+  name         text not null,
+  utterance    int not null,
+  at_sec       real not null default 0,
+  said_by      text,
+  addressed_to text,
+  kind         text not null default 'mentioned',
+  context      text,
+  created_at   timestamptz not null default now()
+);
+create index if not exists pen_name_mentions_session on public.pen_name_mentions(session_id);
+create index if not exists pen_name_mentions_user_name on public.pen_name_mentions(user_email, lower(name));
+alter table public.pen_name_mentions enable row level security;  -- service role only
+create table if not exists public.pen_segments (
+  id             uuid primary key default gen_random_uuid(),
+  user_email     text not null,
+  session_id     uuid not null references public.pen_sessions(id) on delete cascade,
+  idx            int not null,
+  first_utt      int not null,
+  last_utt       int not null,
+  start_sec      real not null,
+  end_sec        real not null,
+  topic          text not null,
+  gist           text,
+  kind           text not null default 'conversation',
+  speakers       text[] not null default '{}',
+  person_id      uuid references public.pen_people(id) on delete set null,
+  confirmed_name text,
+  confirmed_at   timestamptz,
+  created_at     timestamptz not null default now(),
+  unique (session_id, idx)
+);
+create index if not exists pen_segments_user on public.pen_segments(user_email);
+alter table public.pen_segments enable row level security;  -- service role only

@@ -44,6 +44,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
               'Recordings: the audio files you upload or send on WhatsApp, their name, date and length, and any transcripts you paste in.',
               'What we make from them: transcripts, speaker names, notes, summaries, to-dos, translations, chat answers and documents, plus any edits you make.',
               'People: the names, email addresses, roles and short descriptions of people you add, or that you accept from our suggestions.',
+              'Names heard: personal names said in your recordings, when they were said, who said them and a few words of context, and, for recordings of events, the separate conversations in them. They are found automatically so you can search them and pick who was who. Nobody becomes a contact unless you choose them.',
               'WhatsApp: your phone number once you link it, the messages and files you send to Juno Pen, and our replies.',
               'Payments: your plan, trial and renewal dates, and purchase records. Your card is collected and held by Stripe. We never see or store your full card number.',
               'Usage: the pages you visit on our site, the page that sent you, your browser type and an approximate location (country and city) supplied by our hosting provider. We don’t store your IP address in our own database; our providers keep standard server logs.',
@@ -70,6 +71,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
         h: 'The people in your recordings',
         body: [
           'Your recordings usually include other people. You decide what to record and upload, and you are responsible for having their permission where the law requires it. In many places, Florida and California among them, everyone in the conversation must agree. Juno Pen asks you to confirm consent before it processes a recording, and a recording without that confirmation is not processed.',
+          'Juno Pen also lists the names said in a recording, including people who are only mentioned. They stay in your account, are never shown to anyone else, and are deleted with the recording.',
           'People who appear in a recording can write to [CONTACT EMAIL]. We will usually need to involve the account holder to respond.',
         ],
       },
@@ -222,6 +224,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
               'Grabaciones: los archivos de audio que subes o envías por WhatsApp, su nombre, fecha y duración, y las transcripciones que pegas.',
               'Lo que generamos a partir de ellas: transcripciones, nombres de quién habla, notas, resúmenes, tareas, traducciones, respuestas del chat y documentos, además de lo que edites.',
               'Personas: nombres, correos, roles y descripciones breves de las personas que agregas o que aceptas de nuestras sugerencias.',
+              'Nombres escuchados: los nombres de personas dichos en tus grabaciones, cuándo se dijeron, quién los dijo y unas palabras de contexto y, en grabaciones de eventos, las distintas conversaciones que contienen. Se detectan automáticamente para que puedas buscarlos y elegir quién era quién. Nadie pasa a tus contactos a menos que tú lo elijas.',
               'WhatsApp: tu número cuando lo vinculas, los mensajes y archivos que envías a Juno Pen, y nuestras respuestas.',
               'Pagos: tu plan, las fechas de prueba y renovación, y los registros de compra. Tu tarjeta la recibe y guarda Stripe. Nunca vemos ni guardamos el número completo.',
               'Uso: las páginas que visitas en nuestro sitio, la página desde la que llegaste, tu tipo de navegador y una ubicación aproximada (país y ciudad) que entrega nuestro proveedor de hosting. No guardamos tu dirección IP en nuestra base de datos; nuestros proveedores mantienen registros estándar de servidor.',
@@ -248,6 +251,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
         h: 'Las personas en tus grabaciones',
         body: [
           'Tus grabaciones casi siempre incluyen a otras personas. Tú decides qué grabar y subir, y eres responsable de contar con su permiso cuando la ley lo exige. En muchos lugares, como Florida y California, todas las personas de la conversación deben estar de acuerdo. Juno Pen te pide confirmar el consentimiento antes de procesar una grabación, y una grabación sin esa confirmación no se procesa.',
+          'Juno Pen también anota los nombres dichos en una grabación, incluidas las personas que solo se mencionan. Quedan en tu cuenta, nunca se muestran a nadie más y se borran junto con la grabación.',
           'Quien aparezca en una grabación puede escribir a [CONTACT EMAIL]. Normalmente tendremos que involucrar al titular de la cuenta para responder.',
         ],
       },
@@ -400,6 +404,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
               'Gravações: os arquivos de áudio que você envia pelo site ou pelo WhatsApp, o nome, a data e a duração deles, e as transcrições que você cola.',
               'O que geramos a partir delas: transcrições, nomes de quem fala, notas, resumos, tarefas, traduções, respostas do chat e documentos, além das suas edições.',
               'Pessoas: nomes, e-mails, funções e descrições curtas das pessoas que você adiciona ou aceita das nossas sugestões.',
+              'Nomes ouvidos: os nomes de pessoas ditos nas suas gravações, quando foram ditos, quem os disse e algumas palavras de contexto e, em gravações de eventos, as diferentes conversas que elas contêm. São detectados automaticamente para você poder buscá-los e escolher quem era quem. Ninguém vira contato a menos que você escolha.',
               'WhatsApp: seu número quando você o vincula, as mensagens e arquivos que você envia ao Juno Pen e as nossas respostas.',
               'Pagamentos: seu plano, as datas de teste e renovação e os registros de compra. Seu cartão é coletado e guardado pela Stripe. Nunca vemos nem guardamos o número completo.',
               'Uso: as páginas que você visita no site, a página de onde você veio, o tipo de navegador e uma localização aproximada (país e cidade) informada pelo nosso provedor de hospedagem. Não guardamos seu endereço IP no nosso banco de dados; nossos fornecedores mantêm registros padrão de servidor.',
@@ -426,6 +431,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
         h: 'As pessoas nas suas gravações',
         body: [
           'Suas gravações quase sempre incluem outras pessoas. Você decide o que gravar e enviar, e é responsável por ter a permissão delas quando a lei exigir. Em muitos lugares, como a Flórida e a Califórnia, todos na conversa precisam concordar. O Juno Pen pede que você confirme o consentimento antes de processar uma gravação, e uma gravação sem essa confirmação não é processada.',
+          'O Juno Pen também anota os nomes ditos em uma gravação, incluindo pessoas que são só mencionadas. Ficam na sua conta, nunca são mostrados a mais ninguém e são apagados junto com a gravação.',
           'Quem aparece em uma gravação pode escrever para [CONTACT EMAIL]. Normalmente precisaremos envolver o titular da conta para responder.',
         ],
       },
