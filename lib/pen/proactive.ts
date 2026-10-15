@@ -20,12 +20,20 @@
 //
 // Every attempt is a row in pen_proactive_log (unique per user, kind, ref = the dedupe). Rows
 // of one bundled message share sent_at, which is how the daily max counts messages, not items.
+// The check-and-send runs under a per-user lock row (kind 'lock'), so the after-notes hook and
+// the 15-minute cron can't both send, or both squeeze under the max or the hour's gap.
 //
-// Dry run: PEN_PROACTIVE_DRY=1 (or { dry: true }) logs what would be sent and sends nothing;
-// provider.ts refuses to send anything at all while the env is set.
+// No known zone (a +1 number that never said where it is, no web visit): nothing is sent, except
+// the after-upload offers while the user is evidently awake (they wrote in the last 45 minutes).
+// The agent asks for the zone when a clock time matters (tools/timezone.ts).
+//
+// Dry run: PEN_PROACTIVE_DRY=1 in the app (or { dry: true }) logs what would be sent and sends
+// nothing. A dry row is not final: it doesn't count toward the max, nothing is marked offered,
+// and a later real run sends the item. Ignored in production. In a test script the provider
+// refuses every send instead, so the real path can be tested (provider.ts).
 
-import { composeOffers } from './suggestions'
-import { userZone } from './timezone'
+import { renderOffers, markOffered } from './suggestions'
+import { userZone, localToUtc } from './timezone'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ALLOWED_EMAILS } from '@/lib/auth'
 import type { Lang } from './currency'
@@ -35,7 +43,7 @@ import { userLang } from './user-lang'
 import { isActive } from './accounts'
 import { isMine, type ActionMeta } from './todo-labels'
 import { getLinkByEmail } from './whatsapp/store'
-import { sendText, sendTemplate, dryRun } from './whatsapp/provider'
+import { sendText, sendTemplate, proactiveDry, dryRun } from './whatsapp/provider'
 import * as imessage from './imessage/sendblue'
 
 export const PROACTIVE_KINDS: ProactiveKind[] = ['offers', 'meeting_brief', 'nudges', 'morning_brief', 'notion']
@@ -50,6 +58,13 @@ export const DAILY_MAX = 3
 export const MIN_GAP_MS = HOUR
 /** Meta's customer service window, with a margin for the 15-minute tick. */
 const WINDOW_MS = 23.5 * HOUR
+/** With no known zone, the user wrote this recently: awake, so the after-upload offers can go. */
+export const AWAKE_MS = 45 * MIN
+/** A failed send is tried again this much later, this many times in all. */
+const RETRY_MS = 30 * MIN
+const MAX_TRIES = 2
+/** A lock row older than this belongs to a run that died; the next run takes it over. */
+const LOCK_STALE_MS = 5 * MIN
 
 /* ------------------------------------------------------------------ prefs */
 
@@ -92,11 +107,11 @@ export async function setPrefs(email: string, on: boolean, kind?: ProactiveKind)
 
 /**
  * The user's zone (timezone.ts: said on WhatsApp, the browser's, then the phone's country code).
- * +1 with nothing else known gives no zone; Pacific then, where most users are.
+ * +1 with nothing else known gives none: null, never a guess (a guess sends at night somewhere).
  */
-export async function zoneFor(email: string, phone: string | null | undefined): Promise<string> {
+export async function zoneFor(email: string, phone: string | null | undefined): Promise<string | null> {
   const z = await userZone(email, phone ?? undefined).catch(() => null)
-  return z?.tz || 'America/Los_Angeles'
+  return z?.tz || null
 }
 
 /** Local calendar date and minutes past midnight of `at` in `tz`. */
@@ -109,18 +124,15 @@ export function localParts(at: Date, tz: string): { date: string; minutes: numbe
   return { date: `${p.year}-${p.month}-${p.day}`, minutes: Number(p.hour) * 60 + Number(p.minute) }
 }
 
-/** The instant that is `date` at `minutes` past midnight in `tz` (DST-safe to the minute). */
+/**
+ * The instant that is `date` at `minutes` past midnight in `tz`. A wall time DST skips moves
+ * later (timezone.ts localToUtc): Santiago's midnight on its spring-forward day is 01:00, the
+ * real start of that local day.
+ */
 export function zonedTime(date: string, minutes: number, tz: string): Date {
   const [y, m, d] = date.split('-').map(Number)
-  const guess = Date.UTC(y, m - 1, d, 0, minutes)
-  let t = guess
-  for (let i = 0; i < 2; i++) {
-    const lp = localParts(new Date(t), tz)
-    const [ly, lm, ld] = lp.date.split('-').map(Number)
-    const asUtc = Date.UTC(ly, lm - 1, ld, 0, lp.minutes)
-    t += guess - asUtc
-  }
-  return new Date(t)
+  const wall = new Date(Date.UTC(y, m - 1, d, 0, minutes)).toISOString().slice(0, 16)
+  return localToUtc(wall, tz) as Date
 }
 
 function addDays(date: string, n: number): string {
@@ -144,7 +156,15 @@ function clock(at: Date, tz: string, lang: Lang): string {
 
 /* ---------------------------------------------------- channel and window */
 
-export type Channel = { to: string; imessage: boolean; lastInbound: number | null; window: boolean }
+export type Channel = {
+  to: string
+  imessage: boolean
+  /** The last WhatsApp message in (what Meta's window counts from). */
+  lastInbound: number | null
+  /** The last message in on any channel (is the user awake right now). */
+  lastAny: number | null
+  window: boolean
+}
 
 /**
  * Where to write and whether the WhatsApp window is open. The channel is the one the user last
@@ -163,71 +183,154 @@ export async function channelFor(email: string, now = new Date()): Promise<Chann
     const ts = (link.chat ?? []).filter((t) => t.role === 'user' && typeof t.ts === 'number').map((t) => t.ts as number)
     last = ts.length ? Math.max(...ts) : null
   }
+  const any = rows[0] ? Date.parse(rows[0].created_at) : last
   return {
     to: viaIm ? rows[0].phone : link.phone,
     imessage: viaIm,
     lastInbound: last,
+    lastAny: any,
     window: viaIm || (last != null && now.getTime() - last < WINDOW_MS),
   }
 }
 
-/** Templates Meta has approved (PEN_WA_TEMPLATES, comma list). Unlisted = treated as pending. */
-export function templateApproved(name: string): boolean {
-  return (process.env.PEN_WA_TEMPLATES ?? '').split(',').map((s) => s.trim()).filter(Boolean).includes(name)
+/**
+ * Templates Meta has approved (PEN_WA_TEMPLATES, comma list). Unlisted = treated as pending.
+ * Meta approves each language on its own: an entry is `name` (every language) or `name:lang`
+ * (en, es, pt; pt_BR also accepted). With `lang`, that language has to be approved; without
+ * it, only a bare `name` counts. There is no fallback to English: Meta refuses a language the
+ * template doesn't have.
+ */
+export function templateApproved(name: string, lang?: Lang): boolean {
+  const list = (process.env.PEN_WA_TEMPLATES ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+  if (list.includes(name)) return true
+  if (!lang) return false
+  const codes = lang === 'pt' ? ['pt', 'pt_br'] : [lang]
+  return list.some((e) => {
+    const [n, l] = e.split(':')
+    return n === name && !!l && codes.includes(l.trim().toLowerCase())
+  })
 }
 
 /* ------------------------------------------------------------------- log */
 
 type LogStatus = 'sending' | 'sent' | 'dry' | 'no_template' | 'failed' | 'empty'
-/** Statuses that mean "done with this item": never sent again. 'no_template' waits for a window. */
-const FINAL: LogStatus[] = ['sending', 'sent', 'dry', 'failed', 'empty']
+type LogRow = { kind: string; ref: string | null; status: LogStatus; sent_at: string; error: string | null }
 
-async function logged(email: string): Promise<{ kind: string; ref: string | null; status: LogStatus; sent_at: string }[]> {
+/** How many times a failed item was tried (kept in its error as "[try n] …"). */
+function tries(r: Pick<LogRow, 'status' | 'error'>): number {
+  if (r.status !== 'failed') return 0
+  return Number(/^\[try (\d+)\]/.exec(r.error ?? '')?.[1] ?? 1)
+}
+
+/**
+ * Done with this item: never sent again. 'no_template' and 'dry' wait for a real send; 'failed'
+ * is tried again RETRY_MS later, MAX_TRIES times in all.
+ */
+function settled(r: LogRow, now: number): boolean {
+  if (r.status === 'sent' || r.status === 'sending' || r.status === 'empty') return true
+  if (r.status === 'failed') return tries(r) >= MAX_TRIES || now - Date.parse(r.sent_at) < RETRY_MS
+  return false
+}
+
+const keyOf = (it: { kind: string; ref: string | null }) => `${it.kind}|${it.ref}`
+
+async function logged(email: string): Promise<LogRow[]> {
   const { data, error } = await supabaseAdmin
     .from('pen_proactive_log')
-    .select('kind,ref,status,sent_at')
+    .select('kind,ref,status,sent_at,error')
     .eq('user_email', email.toLowerCase())
+    .neq('kind', 'lock')
     .gt('sent_at', new Date(Date.now() - 45 * 24 * HOUR).toISOString())
     .order('sent_at', { ascending: false })
     .limit(500)
   if (error) throw new Error(error.message)
-  return (data ?? []) as { kind: string; ref: string | null; status: LogStatus; sent_at: string }[]
+  return (data ?? []) as LogRow[]
 }
 
-/** Messages (not items) sent since local midnight, and the last one's time. */
-function sentToday(rows: Awaited<ReturnType<typeof logged>>, now: Date, tz: string): { count: number; last: number | null } {
+/** Messages (not items) out since local midnight, and the last one's time. A 'sending' row
+ *  counts: that message may be on its way right now. */
+function sentToday(rows: LogRow[], now: Date, tz: string): { count: number; last: number | null } {
   const since = zonedTime(localParts(now, tz).date, 0, tz).getTime()
-  const times = rows.filter((r) => r.status === 'sent' || r.status === 'dry').map((r) => Date.parse(r.sent_at))
+  const times = rows.filter((r) => r.status === 'sent' || r.status === 'sending').map((r) => Date.parse(r.sent_at))
   return { count: new Set(times.filter((t) => t >= since)).size, last: times.length ? Math.max(...times) : null }
 }
 
+/**
+ * One run at a time per user: a lock row (kind 'lock'), taken by insert (the unique index on
+ * user, kind, ref decides) or, when the holder died, by an update conditional on its old time.
+ * Returns the lock's time (to release it), or null when another run holds it.
+ */
+async function lock(email: string): Promise<string | null> {
+  const at = new Date().toISOString()
+  const row = { user_email: email.toLowerCase(), kind: 'lock', ref: 'send', status: 'lock', sent_at: at }
+  const { error } = await supabaseAdmin.from('pen_proactive_log').insert(row)
+  if (!error) return at
+  if (error.code !== '23505') throw new Error(error.message)
+  const { data } = await supabaseAdmin
+    .from('pen_proactive_log')
+    .update({ sent_at: at })
+    .eq('user_email', row.user_email)
+    .eq('kind', 'lock')
+    .eq('ref', 'send')
+    .lt('sent_at', new Date(Date.now() - LOCK_STALE_MS).toISOString())
+    .select('id')
+  return data?.length ? at : null
+}
+
+async function unlock(email: string, at: string): Promise<void> {
+  await supabaseAdmin.from('pen_proactive_log').delete().eq('user_email', email.toLowerCase()).eq('kind', 'lock').eq('ref', 'send').eq('sent_at', at)
+}
+
 type Item = { kind: ProactiveKind; ref: string }
+/** What a claimed item was before (null = no row), to put back if the send doesn't happen. */
+type Claimed = Item & { prior: Pick<LogRow, 'status' | 'sent_at' | 'error'> | null }
 
 /**
- * Claims items for one send: inserts 'sending' rows, or takes over a 'no_template' row. Returns
- * the items this run owns; an item another run (or an earlier send) holds is left out.
+ * Claims items for one send: inserts 'sending' rows, or takes over a row that isn't settled
+ * ('no_template', 'dry', a 'failed' due for its retry). Returns the items this run owns; an item
+ * another run (or an earlier send) holds is left out.
  */
-async function claim(email: string, items: Item[], at: string): Promise<Item[]> {
-  const mine: Item[] = []
+async function claim(email: string, items: Item[], at: string, now: number): Promise<Claimed[]> {
+  const mine: Claimed[] = []
   for (const it of items) {
     const row = { user_email: email.toLowerCase(), kind: it.kind, ref: it.ref, status: 'sending', sent_at: at, error: null }
     const { error } = await supabaseAdmin.from('pen_proactive_log').insert(row)
     if (!error) {
-      mine.push(it)
+      mine.push({ ...it, prior: null })
       continue
     }
     if (error.code !== '23505') throw new Error(error.message)
-    const { data } = await supabaseAdmin
+    const { data: cur } = await supabaseAdmin
       .from('pen_proactive_log')
-      .update(row)
+      .select('kind,ref,status,sent_at,error')
       .eq('user_email', row.user_email)
       .eq('kind', it.kind)
       .eq('ref', it.ref)
-      .eq('status', 'no_template')
+      .maybeSingle()
+    const prior = cur as LogRow | null
+    if (!prior || settled(prior, now)) continue
+    // Conditional on what was read, so two runs can't both take it over.
+    const { data } = await supabaseAdmin
+      .from('pen_proactive_log')
+      .update({ ...row, error: prior.status === 'failed' ? prior.error : null })
+      .eq('user_email', row.user_email)
+      .eq('kind', it.kind)
+      .eq('ref', it.ref)
+      .eq('status', prior.status)
+      .eq('sent_at', prior.sent_at)
       .select('id')
-    if (data?.length) mine.push(it)
+    if (data?.length) mine.push({ ...it, prior: { status: prior.status, sent_at: prior.sent_at, error: prior.error } })
   }
   return mine
+}
+
+/** Puts claimed items back as they were: a send that didn't happen leaves no trace. */
+async function release(email: string, items: Claimed[], at: string): Promise<void> {
+  for (const it of items) {
+    const q = () => supabaseAdmin.from('pen_proactive_log')
+    if (it.prior) await q().update(it.prior).eq('user_email', email.toLowerCase()).eq('kind', it.kind).eq('ref', it.ref).eq('status', 'sending').eq('sent_at', at)
+    else await q().delete().eq('user_email', email.toLowerCase()).eq('kind', it.kind).eq('ref', it.ref).eq('status', 'sending').eq('sent_at', at)
+  }
 }
 
 async function mark(email: string, items: Item[], patch: { status: LogStatus; channel?: string | null; template?: string | null; error?: string | null; sent_at?: string }): Promise<void> {
@@ -236,13 +339,16 @@ async function mark(email: string, items: Item[], patch: { status: LogStatus; ch
   }
 }
 
-/** Records items that can't go now (no approved template), without blocking them for later. */
+/**
+ * Records items that can't go now ('no_template': waits for a window; 'empty': nothing to offer).
+ * Only a new row, or one that was itself waiting: never over a sent, sending or failed one.
+ */
 async function noteSkipped(email: string, items: Item[], why: LogStatus): Promise<void> {
   for (const it of items) {
-    await supabaseAdmin
-      .from('pen_proactive_log')
-      .upsert({ user_email: email.toLowerCase(), kind: it.kind, ref: it.ref, status: why, sent_at: new Date().toISOString() }, { onConflict: 'user_email,kind,ref', ignoreDuplicates: false })
-      .then(() => {})
+    const row = { user_email: email.toLowerCase(), kind: it.kind, ref: it.ref, status: why, sent_at: new Date().toISOString() }
+    const { error } = await supabaseAdmin.from('pen_proactive_log').insert(row)
+    if (!error || error.code !== '23505') continue
+    await supabaseAdmin.from('pen_proactive_log').update(row).eq('user_email', row.user_email).eq('kind', it.kind).eq('ref', it.ref).in('status', ['no_template', 'dry'])
   }
 }
 
@@ -257,69 +363,111 @@ export type ProactiveMessage = {
   text: string
   /** For WhatsApp outside the window. Without one (or not approved yet) the item waits. */
   template?: Template
-  /** Other items this message carries (a bundle): logged with it, so none is sent twice. */
+  /** Other items the free-form text carries (a bundle): logged with it, so none is sent twice. */
   also?: Item[]
+  /** Other items the template carries, when it carries fewer than the text (the morning brief's
+   *  template has the meetings, not the to-dos). Default: none. */
+  templateAlso?: Item[]
+  /** Offers in the free-form text: marked offered (with their numbers) only once it went out. */
+  offered?: { id: string; no: number }[]
 }
 
-export type SendResult = { status: 'sent' | 'dry' | 'off' | 'quiet' | 'max' | 'gap' | 'dupe' | 'no_template' | 'not_linked' | 'failed'; channel?: string; template?: string; text?: string; error?: string }
+export type SendResult = {
+  status: 'sent' | 'dry' | 'off' | 'quiet' | 'max' | 'gap' | 'dupe' | 'busy' | 'no_zone' | 'no_template' | 'not_linked' | 'inactive' | 'failed'
+  channel?: string
+  template?: string
+  text?: string
+  error?: string
+}
+
+/** No known zone and the user wrote in the last AWAKE_MS (on the open channel). */
+function awake(ch: Channel, now: Date): boolean {
+  return ch.window && ch.lastAny != null && now.getTime() - ch.lastAny < AWAKE_MS
+}
 
 /**
  * Sends one proactive message, checking every rule first. `now` is injectable for tests;
- * `dry` (or PEN_PROACTIVE_DRY=1) logs instead of sending.
+ * `dry` (or PEN_PROACTIVE_DRY=1) logs instead of sending. `tz`: the zone already looked up
+ * (null = none known), else looked up here.
  */
-export async function sendProactive(email: string, msg: ProactiveMessage, opts: { now?: Date; dry?: boolean; tz?: string } = {}): Promise<SendResult> {
+export async function sendProactive(email: string, msg: ProactiveMessage, opts: { now?: Date; dry?: boolean; tz?: string | null } = {}): Promise<SendResult> {
   const now = opts.now ?? new Date()
-  const dry = opts.dry || dryRun()
-  const items: Item[] = [{ kind: msg.kind, ref: msg.ref }, ...(msg.also ?? [])]
+  // In a test script the provider itself refuses every send (provider.ts dryRun), so there the
+  // real path runs end to end (rows 'sent', offers marked) with nothing leaving; { dry: true }
+  // still gives the dry path.
+  const dry = opts.dry ?? (proactiveDry() && !dryRun())
   const prefs = await getPrefs(email)
   if (!kindOn(prefs, msg.kind)) return { status: 'off' }
   const ch = await channelFor(email, now)
   if (!ch) return { status: 'not_linked' }
-  const tz = opts.tz ?? (await zoneFor(email, ch.to))
-  if (quiet(now, tz)) return { status: 'quiet' }
-  const log = await logged(email)
-  const today = sentToday(log, now, tz)
-  if (today.count >= DAILY_MAX) return { status: 'max' }
-  if (today.last && now.getTime() - today.last < MIN_GAP_MS) return { status: 'gap' }
-  const done = new Set(log.filter((r) => FINAL.includes(r.status)).map((r) => `${r.kind}|${r.ref}`))
-  if (done.has(`${msg.kind}|${msg.ref}`)) return { status: 'dupe' }
+  const zone = opts.tz !== undefined ? opts.tz : await zoneFor(email, ch.to)
+  if (!zone && !awake(ch, now)) return { status: 'no_zone' }
+  const tz = zone ?? 'UTC'
+  if (zone && quiet(now, tz)) return { status: 'quiet' }
 
   const lang = await userLang(email)
   const useTemplate = !ch.window
-  if (useTemplate && (!msg.template || !templateApproved(msg.template.name))) {
+  const items: Item[] = [{ kind: msg.kind, ref: msg.ref }, ...((useTemplate ? msg.templateAlso : msg.also) ?? [])]
+  if (useTemplate && (!msg.template || !templateApproved(msg.template.name, lang))) {
     await noteSkipped(email, items, 'no_template')
     return { status: 'no_template', template: msg.template?.name }
   }
-  const at = now.toISOString()
-  const owned = await claim(email, items, at)
-  if (!owned.some((i) => i.kind === msg.kind && i.ref === msg.ref)) return { status: 'dupe' }
-  const channel = ch.imessage ? 'imessage' : 'whatsapp'
-  const template = useTemplate ? msg.template!.name : null
+
+  const held = await lock(email)
+  if (!held) return { status: 'busy' }
   try {
-    if (dry) {
-      console.log(
-        `[pen proactive dry] ${email} via ${channel}${template ? ` template ${template}` : ''} at ${localParts(now, tz).date} ${clockOf(now, tz)} ${tz}:\n` +
-          (template ? `vars ${JSON.stringify(msg.template!.vars)}` : msg.text) +
-          '\n',
-      )
-    } else if (useTemplate) {
-      await sendTemplate(ch.to, msg.template!.name, lang, msg.template!.vars, msg.template!.buttons ?? [])
-    } else {
-      await sendText(ch.to, msg.text)
+    const log = await logged(email)
+    const today = sentToday(log, now, tz)
+    if (today.count >= DAILY_MAX) return { status: 'max' }
+    if (today.last && now.getTime() - today.last < MIN_GAP_MS) return { status: 'gap' }
+    const done = new Set(log.filter((r) => settled(r, now.getTime())).map(keyOf))
+    if (done.has(keyOf(msg))) return { status: 'dupe' }
+
+    const at = now.toISOString()
+    const owned = await claim(email, items, at, now.getTime())
+    if (!owned.some((i) => i.kind === msg.kind && i.ref === msg.ref)) {
+      await release(email, owned, at)
+      return { status: 'dupe' }
     }
-    await mark(email, owned, { status: dry ? 'dry' : 'sent', channel, template, sent_at: at })
-    // In the chat history, so a reply ("yes", a button tap, "the second one") has its context.
+    const channel = ch.imessage ? 'imessage' : 'whatsapp'
+    const template = useTemplate ? msg.template!.name : null
+    try {
+      if (dry) {
+        console.log(
+          `[pen proactive dry] ${email} via ${channel}${template ? ` template ${template}` : ''} at ${localParts(now, tz).date} ${clockOf(now, tz)} ${tz}:\n` +
+            (template ? `vars ${JSON.stringify(msg.template!.vars)}` : msg.text) +
+            '\n',
+        )
+      } else if (useTemplate) {
+        await sendTemplate(ch.to, msg.template!.name, lang, msg.template!.vars, msg.template!.buttons ?? [])
+      } else {
+        await sendText(ch.to, msg.text)
+      }
+    } catch (e) {
+      const error = (e as Error).message.slice(0, 480)
+      for (const it of owned) {
+        const n = (it.prior ? tries({ status: it.prior.status, error: it.prior.error }) : 0) + 1
+        await mark(email, [it], { status: 'failed', channel, template, error: `[try ${n}] ${error}` })
+      }
+      return { status: 'failed', error }
+    }
+    // A dry row is a note, not a send: nothing below happens for it.
+    await mark(email, owned, { status: dry ? 'dry' : 'sent', channel, template, error: null, sent_at: at })
     if (!dry) {
-      const content = msg.text || `(${template}: ${msg.template?.vars.join(' · ') ?? ''})`
+      // The offers in the text are now really in front of the user, with these numbers.
+      if (!useTemplate && msg.offered?.length) await markOffered(email, msg.offered, at).catch((e) => console.warn(`pen proactive: mark offered: ${(e as Error).message}`))
+      // A "yes" from here on answers this message, not a question asked before it (confirm.ts).
+      const { setPending } = await import('./whatsapp/confirm')
+      await setPending(email, null).catch(() => {})
+      // In the chat history, so a reply ("yes", a button tap, "the second one") has its context.
+      const content = msg.text && !useTemplate ? msg.text : `(${template}: ${msg.template?.vars.join(' · ') ?? ''})`
       const link = await getLinkByEmail(email)
       const { setChat } = await import('./whatsapp/store')
       if (link) await setChat(email, [...(link.chat ?? []), { role: 'assistant', content, ts: now.getTime() }]).catch(() => {})
     }
     return { status: dry ? 'dry' : 'sent', channel, ...(template ? { template } : {}), text: template ? JSON.stringify(msg.template!.vars) : msg.text }
-  } catch (e) {
-    const error = (e as Error).message.slice(0, 500)
-    await mark(email, owned, { status: 'failed', channel, template, error })
-    return { status: 'failed', error }
+  } finally {
+    await unlock(email, held).catch(() => {})
   }
 }
 
@@ -398,6 +546,8 @@ type Session = {
   id: string
   title: string | null
   source_name: string | null
+  source_channel: string | null
+  storage_path: string | null
   status: string
   notes: { actions?: { action: string }[] } | null
   action_meta: ActionMeta[] | null
@@ -412,7 +562,8 @@ async function acceptedMeetings(email: string, from: Date, to: Date): Promise<Me
     .select('id,person,title,detail,starts_at,decided_at')
     .eq('user_email', email.toLowerCase())
     .eq('kind', 'meeting')
-    .eq('state', 'accepted')
+    // Accepting with a calendar link makes it 'done' (tools/offers.ts); still a meeting to brief.
+    .in('state', ['accepted', 'done'])
     .gte('starts_at', from.toISOString())
     .lt('starts_at', to.toISOString())
     .order('starts_at')
@@ -428,14 +579,15 @@ async function acceptedMeetings(email: string, from: Date, to: Date): Promise<Me
 async function recentSessions(email: string, since: Date): Promise<Session[]> {
   const { data, error } = await supabaseAdmin
     .from('pen_sessions')
-    .select('id,title,source_name,status,notes,action_meta,action_done,created_at,updated_at')
+    .select('id,title,source_name,source_channel,storage_path,status,notes,action_meta,action_done,created_at,updated_at')
     .eq('user_email', email)
     .or('merge_index.is.null,merge_index.eq.0')
     .gte('created_at', since.toISOString())
     .order('created_at', { ascending: false })
     .limit(400)
   if (error) throw new Error(error.message)
-  return (data ?? []) as unknown as Session[]
+  // The sample recording is nobody's meeting (NULL channel = an ordinary upload, kept).
+  return ((data ?? []) as unknown as Session[]).filter((s) => s.source_channel !== 'sample' && !String(s.storage_path ?? '').startsWith('sample'))
 }
 
 /** The user's own open to-dos due on `date` (YYYY-MM-DD, their local day). */
@@ -509,8 +661,10 @@ export async function dueFor(email: string, now: Date, tz: string, lang: Lang, p
     const lines = [C.morning(name)]
     if (list.length) lines.push(`${C.meetingsToday} ${joinList(list, lang)}.`)
     if (dueToday.length) lines.push(`${C.dueToday} ${joinList(dueToday.map((d) => lower(d.action)), lang)}.`)
-    // Covered here, so they don't come again at 9:00 or as a separate brief.
-    morningCovers = [...(dueToday.length ? [{ kind: 'nudges' as const, ref: today }] : []), ...meetingsToday.map((m) => ({ kind: 'meeting_brief' as const, ref: m.id }))]
+    // Covered here, so they don't come again at 9:00 or as a separate brief. The template has
+    // the meetings only: sent that way, the to-dos still get their 9:00 nudge.
+    const meetingItems = meetingsToday.map((m) => ({ kind: 'meeting_brief' as const, ref: m.id }))
+    morningCovers = [...(dueToday.length ? [{ kind: 'nudges' as const, ref: today }] : []), ...meetingItems]
     parts.push({
       kind: 'morning_brief',
       ref: today,
@@ -518,6 +672,7 @@ export async function dueFor(email: string, now: Date, tz: string, lang: Lang, p
       // {{1}} is their first name; with none, only English has a natural stand-in ("there").
       ...(list.length && (name || lang === 'en') ? { template: { name: 'morning_brief', vars: [name || 'there', joinList(list, lang)], buttons: [`proactive:brief:${today}`, `proactive:no:${today}`] } } : {}),
       also: morningCovers,
+      templateAlso: meetingItems,
       order: 0,
       staleAt: zonedTime(today, 11 * 60, tz).getTime(),
     })
@@ -548,7 +703,8 @@ export async function dueFor(email: string, now: Date, tz: string, lang: Lang, p
   }
 
   // (c) Nudges: to-dos due today, from 9:00, one line.
-  if (kindOn(prefs, 'nudges') && dueToday.length && mins >= 9 * 60 && !morningCovers.some((c) => c.kind === 'nudges')) {
+  // Due alongside a morning brief that carries them, runForUser drops it from the bundle.
+  if (kindOn(prefs, 'nudges') && dueToday.length && mins >= 9 * 60) {
     const first = dueToday[0]
     const todo = lower(first.action) + (dueToday.length > 1 ? ` (${C.more(dueToday.length - 1)})` : '')
     parts.push({
@@ -583,43 +739,51 @@ export async function dueFor(email: string, now: Date, tz: string, lang: Lang, p
   return parts.filter((p) => t < p.staleAt).sort((a, b) => a.order - b.order)
 }
 
-async function compose(email: string, sessionId: string, lang: Lang, bundle?: { from: number; at: string; footer: boolean }): Promise<{ text: string; ids: string[] } | null> {
-  return composeOffers(email, sessionId, lang, bundle)
-}
-
 /* ------------------------------------------------------------------- tick */
 
-export type UserRun = { email: string; tz: string; local: string; window: boolean; due: string[]; result: SendResult | null }
+export type UserRun = { email: string; tz: string | null; local: string; window: boolean; due: string[]; result: SendResult | null }
 
-/** One user's tick: what's due, bundled into one message, through sendProactive's rules. */
+async function allowedUser(email: string): Promise<boolean> {
+  return ALLOWED_EMAILS.includes(email.toLowerCase()) || (await isActive(email).catch(() => false))
+}
+
+/**
+ * One user's tick: what's due, bundled into one message, through sendProactive's rules. The cron
+ * and the after-notes hook (unattended.ts) both come here, so both skip inactive accounts.
+ */
 export async function runForUser(email: string, opts: { now?: Date; dry?: boolean } = {}): Promise<UserRun> {
   const now = opts.now ?? new Date()
   const ch = await channelFor(email, now)
-  const tz = await zoneFor(email, ch?.to)
+  const zone = await zoneFor(email, ch?.to)
+  const tz = zone ?? 'UTC'
   const lp = localParts(now, tz)
-  const run: UserRun = { email, tz, local: `${lp.date} ${clockOf(now, tz)}`, window: !!ch?.window, due: [], result: null }
+  const run: UserRun = { email, tz: zone, local: `${lp.date} ${clockOf(now, tz)}`, window: !!ch?.window, due: [], result: null }
   if (!ch) return { ...run, result: { status: 'not_linked' } }
+  if (!(await allowedUser(email))) return { ...run, result: { status: 'inactive' } }
   const prefs = await getPrefs(email)
   if (prefs.off) return { ...run, result: { status: 'off' } }
+  // No zone: quiet hours can't be known. Only the after-upload offers, only while they're awake.
+  if (!zone && !awake(ch, now)) return { ...run, result: { status: 'no_zone' } }
   // Cheap checks first: nothing below runs a query on the user's recordings at night.
-  if (quiet(now, tz)) return { ...run, result: { status: 'quiet' } }
+  if (zone && quiet(now, tz)) return { ...run, result: { status: 'quiet' } }
   const lang = await userLang(email)
   let parts = await dueFor(email, now, tz, lang, prefs, ch.window)
+  if (!zone) parts = parts.filter((p) => p.kind === 'offers')
   // Done before (sent, or covered by an earlier bundle) is not due.
-  const done = new Set((await logged(email)).filter((r) => FINAL.includes(r.status)).map((r) => `${r.kind}|${r.ref}`))
-  parts = parts.filter((p) => !done.has(`${p.kind}|${p.ref}`))
+  const done = new Set((await logged(email)).filter((r) => settled(r, now.getTime())).map(keyOf))
+  parts = parts.filter((p) => !done.has(keyOf(p)))
   run.due = parts.map((p) => `${p.kind}:${p.ref}`)
   if (!parts.length) return run
 
   if (!ch.window) {
     // Outside the window one template carries one item: the first with an approved template.
     // The rest wait (until the user writes back and the window opens, or they go stale).
-    const lead = parts.find((p) => p.template && templateApproved(p.template.name))
+    const lead = parts.find((p) => p.template && templateApproved(p.template.name, lang))
     if (!lead) {
       await noteSkipped(email, parts, 'no_template')
       return { ...run, result: { status: 'no_template' } }
     }
-    run.result = await sendProactive(email, { kind: lead.kind, ref: lead.ref, text: lead.text, template: lead.template, also: lead.also }, { now, dry: opts.dry, tz })
+    run.result = await sendProactive(email, { kind: lead.kind, ref: lead.ref, text: lead.text, template: lead.template, templateAlso: lead.templateAlso }, { now, dry: opts.dry, tz: zone })
     return run
   }
 
@@ -627,16 +791,20 @@ export async function runForUser(email: string, opts: { now?: Date; dry?: boolea
   const texts: string[] = []
   const carried: Item[] = []
   const empty: Item[] = []
-  // Offers from several recordings share one numbering ("yes to 3") and one footer.
+  const offered: { id: string; no: number }[] = []
+  // Offers from several recordings share one numbering ("yes to 3") and one footer. Rendered
+  // only: they are marked offered by sendProactive once the message has really gone out.
   const offerParts = parts.filter((p) => p.kind === 'offers')
-  const at = now.toISOString()
   let nextNo = 1
   for (const p of parts) {
+    // Already in this bundle (the morning brief carries the day's to-dos).
+    if (carried.some((c) => c.kind === p.kind && c.ref === p.ref)) continue
     let text = p.text
     if (p.kind === 'offers') {
       const last = p === offerParts[offerParts.length - 1]
-      const c = await compose(email, p.ref, lang, offerParts.length > 1 ? { from: nextNo, at, footer: last } : undefined).catch(() => null)
+      const c = await renderOffers(email, p.ref, lang, offerParts.length > 1 ? { from: nextNo, footer: last } : undefined).catch(() => null)
       nextNo += c?.ids.length ?? 0
+      offered.push(...(c?.offered ?? []))
       text = c?.text ?? ''
       // Nothing to offer: done with it, but only once the suggestions have had time to land.
       if (!text) {
@@ -651,7 +819,7 @@ export async function runForUser(email: string, opts: { now?: Date; dry?: boolea
   if (empty.length) await noteSkipped(email, empty, 'empty')
   if (!texts.length) return run
   const [lead, ...rest] = carried
-  run.result = await sendProactive(email, { kind: lead.kind, ref: lead.ref, text: texts.join('\n\n'), also: rest }, { now, dry: opts.dry, tz })
+  run.result = await sendProactive(email, { kind: lead.kind, ref: lead.ref, text: texts.join('\n\n'), also: rest, offered }, { now, dry: opts.dry, tz: zone })
   return run
 }
 
@@ -667,8 +835,8 @@ export async function runProactive(opts: { now?: Date; dry?: boolean; only?: str
   const runs: UserRun[] = []
   for (const { email } of (data ?? []) as { email: string }[]) {
     try {
-      if (!ALLOWED_EMAILS.includes(email) && !(await isActive(email).catch(() => false))) continue
-      runs.push(await runForUser(email, opts))
+      const r = await runForUser(email, opts)
+      if (r.result?.status !== 'inactive') runs.push(r)
     } catch (e) {
       console.warn(`pen proactive: ${email} failed: ${(e as Error).message}`)
     }

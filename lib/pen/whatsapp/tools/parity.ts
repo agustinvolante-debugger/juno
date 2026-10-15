@@ -26,6 +26,7 @@ import { cleanEmail, deletePerson, mergePeople, sessionsWith, updatePerson, type
 import { foldName } from '../../speakers'
 import { groupSessions, joinSegments, splitGroup } from '../../merge'
 import { dayCandidates, joinAsEvent, startMs } from '../../event-day'
+import { zoneOf } from './timezone'
 import { openJoinSuggestions, dismissJoinSuggestion } from '../../join-suggest'
 import { applyItemOp, missedDoneOf } from '../../item-ops'
 import { getProfile, saveProfile, LANGUAGES } from '../../profile'
@@ -168,7 +169,11 @@ const TOOLS: Anthropic.Tool[] = [
 const UUID = /^[0-9a-f-]{36}$/i
 const own = (ctx: Ctx, id: string) => (UUID.test(id) ? getSession(ctx.email, id) : Promise.resolve(null))
 const titleOf = (s: PenSession) => s.title ?? s.source_name ?? 'Untitled'
-const dayOf = (s: PenSession) => new Date(startMs(s)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+/** "Oct 14" / "14:05" where the user is (timezone.ts; UTC while their zone is unknown). */
+const dayOf = (s: PenSession, tz?: string | null) => new Date(startMs(s)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: tz || 'UTC' })
+const hmOf = (iso: string | null, tz?: string | null) =>
+  iso ? new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: tz || 'UTC' }) : '?'
+const tzOf = async (ctx: Ctx) => (await zoneOf(ctx)).tz
 
 function appUrl(): string {
   return (process.env.PEN_PUBLIC_URL || process.env.NEXTAUTH_URL || 'https://www.tryjunoapp.com').replace(/\/$/, '')
@@ -306,7 +311,7 @@ async function askDeleteRecording(ctx: Ctx, id: string): Promise<unknown> {
     kind: 'delete_recording',
     args: { id: s.id },
     summary:
-      `Delete "${titleOf(s)}" (${dayOf(s)}${s.duration_sec ? `, ${fmtHours(s.duration_sec)}` : ''}) for good? The audio, transcript and notes go, and it can't be undone.` +
+      `Delete "${titleOf(s)}" (${dayOf(s, await tzOf(ctx))}${s.duration_sec ? `, ${fmtHours(s.duration_sec)}` : ''}) for good? The audio, transcript and notes go, and it can't be undone.` +
       (parts > 1 ? ` It was combined from ${parts} recordings; the other ${parts - 1} stay as separate recordings.` : '') +
       ' Reply yes.',
   })
@@ -320,10 +325,11 @@ async function askCombine(ctx: Ctx, ids: string[]): Promise<unknown> {
   const list = (rows as PenSession[]).sort((a, b) => startMs(a) - startMs(b))
   if (list.some((s) => !transcribed(s))) return { error: 'every recording has to finish transcribing first' }
   if (list.some((s) => s.merge_group)) return { error: 'one of these is already part of a combined meeting; separate it first' }
+  const tz = await tzOf(ctx)
   return askConfirm(ctx, {
     kind: 'combine_recordings',
     args: { ids: list.map((s) => s.id) },
-    summary: `Combine ${list.map((s) => `"${titleOf(s)}" (${dayOf(s)})`).join(', ')} into one meeting? The notes are rewritten over all of it (a few minutes); you can separate them again later. Reply yes.`,
+    summary: `Combine ${list.map((s) => `"${titleOf(s)}" (${dayOf(s, tz)})`).join(', ')} into one meeting? The notes are rewritten over all of it (a few minutes); you can separate them again later. Reply yes.`,
   })
 }
 
@@ -375,18 +381,31 @@ async function askDay(ctx: Ctx, id: string): Promise<unknown> {
   const c = await dayCandidates(ctx.email, s.id)
   if (c.recordings < 2) return { error: 'there is nothing else from this day to combine' }
   if (!c.ready) return { error: 'some recordings from this day are still being transcribed; try again when they are done' }
-  const hm = (iso: string | null) => (iso ? new Date(iso).toTimeString().slice(0, 5) : '?')
+  const tz = await tzOf(ctx)
+  // What each file was part of when asked: doDay checks nothing moved before it joins them.
+  const groups = Object.fromEntries((await Promise.all(c.ids.map((id) => own(ctx, id)))).map((x, i) => [c.ids[i], x?.merge_group ?? null]))
   return askConfirm(ctx, {
     kind: 'combine_day',
-    args: { ids: c.ids },
+    args: { ids: c.ids, focus: s.id, groups },
     summary:
-      `Combine the ${c.recordings} recordings from ${dayOf(s)} (${fmtHours(c.totalSec)} of audio, ${hm(c.from)}–${hm(c.to)}) into one event? ` +
+      `Combine the ${c.recordings} recordings from ${dayOf(s, tz)} (${fmtHours(c.totalSec)} of audio, ${hmOf(c.from, tz)}–${hmOf(c.to, tz)}) into one event? ` +
       'The conversations and the event\'s notes follow in a few minutes; you can separate them again later. Reply yes.',
   })
 }
 
 async function doDay(ctx: Ctx, a: Record<string, unknown>): Promise<unknown> {
-  const segments = await joinAsEvent(ctx.email, (a.ids as string[]) ?? [])
+  // As doCombine: the day may have changed between the ask and the yes (a file deleted, joined
+  // elsewhere, a new one still transcribing). Re-read it; anything different and nothing happens.
+  const ids = (a.ids as string[]) ?? []
+  const groups = (a.groups ?? {}) as Record<string, string | null>
+  const rows = await Promise.all(ids.map((id) => own(ctx, id)))
+  const changed = () => ({ error: 'those recordings changed since I asked; nothing was combined. Ask again (combine_day).' })
+  if (ids.length < 2 || rows.some((r) => !r)) return changed()
+  if (rows.some((r) => (r!.merge_group ?? null) !== (groups[r!.id] ?? null))) return changed()
+  const now = await dayCandidates(ctx.email, String(a.focus ?? ids[0]))
+  if (!now.ready) return { error: 'some recordings from this day are still being transcribed; nothing was combined yet. Try again when they are done.' }
+  if (now.ids.length !== ids.length || now.ids.some((id) => !ids.includes(id))) return changed()
+  const segments = await joinAsEvent(ctx.email, ids)
   const primary = segments[0]
   ctx.later.push(async () => {
     try {

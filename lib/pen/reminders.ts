@@ -12,7 +12,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase'
 import type { Lang } from './currency'
-import { sendText, sendTemplate } from './whatsapp/provider'
+import { sendText, sendTemplate, dryRun } from './whatsapp/provider'
 import { channelFor, templateApproved } from './proactive'
 import { isImessage } from './imessage/sendblue'
 
@@ -22,9 +22,10 @@ export const MAX_AHEAD_MS = 23.5 * 60 * 60 * 1000
 export const MAX_AHEAD_TEMPLATE_MS = 30 * 24 * 60 * 60 * 1000
 export const REMINDER_TEMPLATE = 'user_reminder'
 
-/** How far ahead set_reminder accepts: a day, or 30 days once the template is approved. */
-export function maxAheadMs(): number {
-  return templateApproved(REMINDER_TEMPLATE) ? MAX_AHEAD_TEMPLATE_MS : MAX_AHEAD_MS
+/** How far ahead set_reminder accepts: a day, or 30 days once the template is approved (in the
+ *  user's language, when given: Meta approves each language on its own). */
+export function maxAheadMs(lang?: Lang): number {
+  return templateApproved(REMINDER_TEMPLATE, lang) ? MAX_AHEAD_TEMPLATE_MS : MAX_AHEAD_MS
 }
 
 export type Reminder = { id: string; text: string; due_at: string }
@@ -62,6 +63,8 @@ const PREFIX: Record<Lang, string> = { en: '⏰ Reminder', es: '⏰ Recordatorio
 
 /** Sends every due reminder once. The claim (sent_at set where null) makes overlapping runs safe. */
 export async function fireDue(): Promise<{ sent: number; failed: number }> {
+  // A test script with every send refused: leave them due rather than claim and lose them.
+  if (dryRun()) return { sent: 0, failed: 0 }
   const now = new Date().toISOString()
   const { data, error } = await supabaseAdmin
     .from('pen_reminders')
@@ -78,7 +81,7 @@ export async function fireDue(): Promise<{ sent: number; failed: number }> {
       // don't count toward the proactive daily max or quiet hours: the user picked the time.
       const ch = isImessage(r.phone) ? null : await channelFor(r.user_email).catch(() => null)
       if (ch && !ch.imessage && !ch.window) {
-        if (!templateApproved(REMINDER_TEMPLATE)) throw new Error('outside the 24-hour window and user_reminder is not approved')
+        if (!templateApproved(REMINDER_TEMPLATE, r.lang ?? 'en')) throw new Error('outside the 24-hour window and user_reminder is not approved')
         await sendTemplate(ch.to, REMINDER_TEMPLATE, r.lang ?? 'en', [r.text], [`reminder:done:${r.id}`, `reminder:snooze:${r.id}`])
       } else {
         await sendText(r.phone, `${PREFIX[r.lang] ?? PREFIX.en}: ${r.text}`)

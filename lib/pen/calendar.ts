@@ -100,7 +100,7 @@ const wallStamp = (w: ReturnType<typeof wallIn>) => `${w.y}${pad(w.mo)}${pad(w.d
 
 /** RFC 5545 TEXT escaping. */
 export function icsEscape(t: string): string {
-  return t.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n')
+  return t.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r\n|\r|\n/g, '\\n')
 }
 
 /** Folds a content line at 75 octets (CRLF + space), never inside a UTF-8 character. */
