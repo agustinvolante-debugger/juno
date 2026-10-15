@@ -28,7 +28,21 @@ function viaImessage(to: string): boolean {
 }
 const plain = (to: string) => to.replace(/\D/g, '')
 
+/**
+ * PEN_PROACTIVE_DRY=1: nothing leaves the server. Every send below is logged instead, so the
+ * proactive scheduler (lib/pen/proactive.ts) and the bot can be tested against the real database
+ * without texting anyone. Never set in production.
+ */
+export function dryRun(): boolean {
+  return process.env.PEN_PROACTIVE_DRY === '1'
+}
+function dry(what: string, to: string, body: string): true {
+  console.log(`[pen dry-run] ${what} to …${to.replace(/\D/g, '').slice(-4)}:\n${body}\n`)
+  return true
+}
+
 export async function sendText(to: string, text: string): Promise<void> {
+  if (dryRun() && dry('text', to, text)) return
   if (viaImessage(to)) return imessage.sendText(to, text, vonage.splitText)
   to = plain(to)
   return provider() === 'meta' ? meta.sendText(to, text, vonage.splitText) : vonage.sendText(to, text)
@@ -36,12 +50,24 @@ export async function sendText(to: string, text: string): Promise<void> {
 
 /** iMessage has no buttons: the body goes as text and the bot accepts a typed reply instead. */
 export async function sendButtons(to: string, body: string, buttons: vonage.Button[]): Promise<void> {
+  if (dryRun() && dry('buttons', to, `${body}\n[${buttons.map((b) => b.title).join('] [')}]`)) return
   if (viaImessage(to)) return imessage.sendText(to, body, vonage.splitText)
   to = plain(to)
   return provider() === 'meta' ? meta.sendButtons(to, body, buttons) : vonage.sendButtons(to, body, buttons)
 }
 
+/**
+ * A Meta-approved template (WhatsApp only; outside the 24-hour window). `lang` is the app
+ * language; `buttons` the quick-reply payloads by position. iMessage never needs one.
+ */
+export async function sendTemplate(to: string, name: string, lang: 'en' | 'es' | 'pt', vars: string[], buttons: string[] = []): Promise<void> {
+  if (dryRun() && dry(`template ${name}/${meta.TEMPLATE_LANG[lang]}`, to, `vars: ${JSON.stringify(vars.map(meta.templateVar))} buttons: ${JSON.stringify(buttons)}`)) return
+  if (provider() !== 'meta') throw new Error('templates need the Meta Cloud API')
+  return meta.sendTemplate(plain(to), name, meta.TEMPLATE_LANG[lang], vars, buttons)
+}
+
 export async function markRead(messageId: string, typing = false, from?: string): Promise<boolean> {
+  if (dryRun()) return true
   if (messageId.startsWith('im-')) {
     if (from && imessage.configured()) {
       await imessage.markRead(from)

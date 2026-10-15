@@ -1,0 +1,679 @@
+// Messages Juno sends first, on WhatsApp or iMessage (plan 15 Oct, sections C, D, I).
+//
+//   offers         after a recording is written up: the 1–3 best things Juno can help with
+//                  (composeOffers, lib/pen/suggestions.ts)
+//   meeting_brief  the evening before an accepted meeting (18:00 local), or the morning of it:
+//                  last time with that person, open promises both ways
+//   nudges         to-dos due today, at 9:00 local, one bundled line
+//   morning_brief  7:30–8:00 local: today's meetings and to-dos, only when there is something
+//   notion         Notion doc offers (composed with the offers for now)
+//
+// Rules, every send: the user hasn't said STOP (all, or that kind); quiet hours 7:30–20:00 in
+// their zone; at most 3 a local day and an hour apart; each (kind, ref) once ever; whatever is due
+// in the same tick goes as ONE message. Everything is an offer or a question: Juno never acts
+// on one of these without the user's yes.
+//
+// Channel: where the user last wrote from. iMessage (Sendblue) is always free-form. WhatsApp is
+// free-form inside Meta's 24-hour window (last inbound < 24 h); outside it only an approved
+// template can go (PEN_WA_TEMPLATES lists the approved names), else the item waits, logged
+// 'no_template', until the window opens again or it goes stale.
+//
+// Every attempt is a row in pen_proactive_log (unique per user, kind, ref = the dedupe). Rows
+// of one bundled message share sent_at, which is how the daily max counts messages, not items.
+//
+// Dry run: PEN_PROACTIVE_DRY=1 (or { dry: true }) logs what would be sent and sends nothing;
+// provider.ts refuses to send anything at all while the env is set.
+
+import { userZone } from './timezone'
+import { supabaseAdmin } from '@/lib/supabase'
+import { ALLOWED_EMAILS } from '@/lib/auth'
+import type { Lang } from './currency'
+import type { ProactiveKind } from './suggestions-types'
+import { getProfileRaw, cleanProfile } from './profile'
+import { userLang } from './user-lang'
+import { isActive } from './accounts'
+import { isMine, type ActionMeta } from './todo-labels'
+import { getLinkByEmail } from './whatsapp/store'
+import { sendText, sendTemplate, dryRun } from './whatsapp/provider'
+import * as imessage from './imessage/sendblue'
+
+export const PROACTIVE_KINDS: ProactiveKind[] = ['offers', 'meeting_brief', 'nudges', 'morning_brief', 'notion']
+
+const MIN = 60 * 1000
+const HOUR = 60 * MIN
+
+/** Quiet hours: nothing before 7:30 or from 20:00 on, local time (the user's call, 15 Oct). */
+export const QUIET = { start: 7 * 60 + 30, end: 20 * 60 }
+export const DAILY_MAX = 3
+/** Two proactive messages never land within this of each other. */
+export const MIN_GAP_MS = HOUR
+/** Meta's customer service window, with a margin for the 15-minute tick. */
+const WINDOW_MS = 23.5 * HOUR
+
+/* ------------------------------------------------------------------ prefs */
+
+export type ProactivePrefs = { off?: boolean; offKinds?: ProactiveKind[] }
+
+export async function getPrefs(email: string): Promise<ProactivePrefs> {
+  const p = await getProfileRaw(email).catch(() => null)
+  return (p?.proactive ?? {}) as ProactivePrefs
+}
+
+export function kindOn(prefs: ProactivePrefs, kind: ProactiveKind): boolean {
+  return !prefs.off && !(prefs.offKinds ?? []).includes(kind)
+}
+
+/**
+ * STOP / START from the chat. No kind = everything. START for one kind while everything is off
+ * turns that one on and leaves the rest off.
+ */
+export async function setPrefs(email: string, on: boolean, kind?: ProactiveKind): Promise<ProactivePrefs> {
+  const current = (await getProfileRaw(email)) ?? {}
+  const prefs = (current.proactive ?? {}) as ProactivePrefs
+  let next: ProactivePrefs
+  if (!kind) next = on ? {} : { off: true }
+  else if (on && prefs.off) next = { offKinds: PROACTIVE_KINDS.filter((k) => k !== kind) }
+  else {
+    const set = new Set(prefs.offKinds ?? [])
+    if (on) set.delete(kind)
+    else set.add(kind)
+    next = { ...(prefs.off ? { off: true } : {}), ...(set.size ? { offKinds: [...set] } : {}) }
+  }
+  const profile = cleanProfile({ ...current, proactive: next })
+  const { error } = await supabaseAdmin
+    .from('pen_profiles')
+    .upsert({ user_email: email.toLowerCase(), profile, updated_at: new Date().toISOString() }, { onConflict: 'user_email' })
+  if (error) throw new Error(error.message)
+  return (profile.proactive ?? {}) as ProactivePrefs
+}
+
+/* -------------------------------------------------------------- time zone */
+
+/**
+ * The user's zone (timezone.ts: said on WhatsApp, the browser's, then the phone's country code).
+ * +1 with nothing else known gives no zone; Pacific then, where most users are.
+ */
+export async function zoneFor(email: string, phone: string | null | undefined): Promise<string> {
+  const z = await userZone(email, phone ?? undefined).catch(() => null)
+  return z?.tz || 'America/Los_Angeles'
+}
+
+/** Local calendar date and minutes past midnight of `at` in `tz`. */
+export function localParts(at: Date, tz: string): { date: string; minutes: number } {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(at)
+      .map((x) => [x.type, x.value]),
+  )
+  return { date: `${p.year}-${p.month}-${p.day}`, minutes: Number(p.hour) * 60 + Number(p.minute) }
+}
+
+/** The instant that is `date` at `minutes` past midnight in `tz` (DST-safe to the minute). */
+export function zonedTime(date: string, minutes: number, tz: string): Date {
+  const [y, m, d] = date.split('-').map(Number)
+  const guess = Date.UTC(y, m - 1, d, 0, minutes)
+  let t = guess
+  for (let i = 0; i < 2; i++) {
+    const lp = localParts(new Date(t), tz)
+    const [ly, lm, ld] = lp.date.split('-').map(Number)
+    const asUtc = Date.UTC(ly, lm - 1, ld, 0, lp.minutes)
+    t += guess - asUtc
+  }
+  return new Date(t)
+}
+
+function addDays(date: string, n: number): string {
+  const [y, m, d] = date.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10)
+}
+
+export function quiet(now: Date, tz: string): boolean {
+  const { minutes } = localParts(now, tz)
+  return minutes < QUIET.start || minutes >= QUIET.end
+}
+
+function clock(at: Date, tz: string, lang: Lang): string {
+  return at.toLocaleTimeString(lang === 'en' ? 'en-US' : lang === 'es' ? 'es-CL' : 'pt-BR', {
+    timeZone: tz,
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: lang === 'en',
+  })
+}
+
+/* ---------------------------------------------------- channel and window */
+
+export type Channel = { to: string; imessage: boolean; lastInbound: number | null; window: boolean }
+
+/**
+ * Where to write and whether the WhatsApp window is open. The channel is the one the user last
+ * wrote from (an `im:` sender = iMessage, when Sendblue is set up). The window is the last
+ * WhatsApp message's time; with no message rows (older links), the chat history's user turns.
+ */
+export async function channelFor(email: string, now = new Date()): Promise<Channel | null> {
+  const link = await getLinkByEmail(email)
+  if (!link?.phone || !link.linked_at) return null
+  const { data } = await supabaseAdmin.from('pen_whatsapp_messages').select('phone,created_at').eq('email', email.toLowerCase()).order('created_at', { ascending: false }).limit(20)
+  const rows = (data ?? []) as { phone: string; created_at: string }[]
+  const viaIm = !!rows[0] && imessage.isImessage(rows[0].phone) && imessage.configured()
+  const wa = rows.find((r) => !imessage.isImessage(r.phone))
+  let last = wa ? Date.parse(wa.created_at) : null
+  if (!rows.length) {
+    const ts = (link.chat ?? []).filter((t) => t.role === 'user' && typeof t.ts === 'number').map((t) => t.ts as number)
+    last = ts.length ? Math.max(...ts) : null
+  }
+  return {
+    to: viaIm ? rows[0].phone : link.phone,
+    imessage: viaIm,
+    lastInbound: last,
+    window: viaIm || (last != null && now.getTime() - last < WINDOW_MS),
+  }
+}
+
+/** Templates Meta has approved (PEN_WA_TEMPLATES, comma list). Unlisted = treated as pending. */
+export function templateApproved(name: string): boolean {
+  return (process.env.PEN_WA_TEMPLATES ?? '').split(',').map((s) => s.trim()).filter(Boolean).includes(name)
+}
+
+/* ------------------------------------------------------------------- log */
+
+type LogStatus = 'sending' | 'sent' | 'dry' | 'no_template' | 'failed' | 'empty'
+/** Statuses that mean "done with this item": never sent again. 'no_template' waits for a window. */
+const FINAL: LogStatus[] = ['sending', 'sent', 'dry', 'failed', 'empty']
+
+async function logged(email: string): Promise<{ kind: string; ref: string | null; status: LogStatus; sent_at: string }[]> {
+  const { data, error } = await supabaseAdmin
+    .from('pen_proactive_log')
+    .select('kind,ref,status,sent_at')
+    .eq('user_email', email.toLowerCase())
+    .gt('sent_at', new Date(Date.now() - 45 * 24 * HOUR).toISOString())
+    .order('sent_at', { ascending: false })
+    .limit(500)
+  if (error) throw new Error(error.message)
+  return (data ?? []) as { kind: string; ref: string | null; status: LogStatus; sent_at: string }[]
+}
+
+/** Messages (not items) sent since local midnight, and the last one's time. */
+function sentToday(rows: Awaited<ReturnType<typeof logged>>, now: Date, tz: string): { count: number; last: number | null } {
+  const since = zonedTime(localParts(now, tz).date, 0, tz).getTime()
+  const times = rows.filter((r) => r.status === 'sent' || r.status === 'dry').map((r) => Date.parse(r.sent_at))
+  return { count: new Set(times.filter((t) => t >= since)).size, last: times.length ? Math.max(...times) : null }
+}
+
+type Item = { kind: ProactiveKind; ref: string }
+
+/**
+ * Claims items for one send: inserts 'sending' rows, or takes over a 'no_template' row. Returns
+ * the items this run owns; an item another run (or an earlier send) holds is left out.
+ */
+async function claim(email: string, items: Item[], at: string): Promise<Item[]> {
+  const mine: Item[] = []
+  for (const it of items) {
+    const row = { user_email: email.toLowerCase(), kind: it.kind, ref: it.ref, status: 'sending', sent_at: at, error: null }
+    const { error } = await supabaseAdmin.from('pen_proactive_log').insert(row)
+    if (!error) {
+      mine.push(it)
+      continue
+    }
+    if (error.code !== '23505') throw new Error(error.message)
+    const { data } = await supabaseAdmin
+      .from('pen_proactive_log')
+      .update(row)
+      .eq('user_email', row.user_email)
+      .eq('kind', it.kind)
+      .eq('ref', it.ref)
+      .eq('status', 'no_template')
+      .select('id')
+    if (data?.length) mine.push(it)
+  }
+  return mine
+}
+
+async function mark(email: string, items: Item[], patch: { status: LogStatus; channel?: string | null; template?: string | null; error?: string | null; sent_at?: string }): Promise<void> {
+  for (const it of items) {
+    await supabaseAdmin.from('pen_proactive_log').update(patch).eq('user_email', email.toLowerCase()).eq('kind', it.kind).eq('ref', it.ref)
+  }
+}
+
+/** Records items that can't go now (no approved template), without blocking them for later. */
+async function noteSkipped(email: string, items: Item[], why: LogStatus): Promise<void> {
+  for (const it of items) {
+    await supabaseAdmin
+      .from('pen_proactive_log')
+      .upsert({ user_email: email.toLowerCase(), kind: it.kind, ref: it.ref, status: why, sent_at: new Date().toISOString() }, { onConflict: 'user_email,kind,ref', ignoreDuplicates: false })
+      .then(() => {})
+  }
+}
+
+/* ------------------------------------------------------------------ send */
+
+export type Template = { name: string; vars: string[]; buttons?: string[] }
+
+export type ProactiveMessage = {
+  kind: ProactiveKind
+  ref: string
+  /** Free-form text (iMessage, or WhatsApp inside the window). */
+  text: string
+  /** For WhatsApp outside the window. Without one (or not approved yet) the item waits. */
+  template?: Template
+  /** Other items this message carries (a bundle): logged with it, so none is sent twice. */
+  also?: Item[]
+}
+
+export type SendResult = { status: 'sent' | 'dry' | 'off' | 'quiet' | 'max' | 'gap' | 'dupe' | 'no_template' | 'not_linked' | 'failed'; channel?: string; template?: string; text?: string; error?: string }
+
+/**
+ * Sends one proactive message, checking every rule first. `now` is injectable for tests;
+ * `dry` (or PEN_PROACTIVE_DRY=1) logs instead of sending.
+ */
+export async function sendProactive(email: string, msg: ProactiveMessage, opts: { now?: Date; dry?: boolean; tz?: string } = {}): Promise<SendResult> {
+  const now = opts.now ?? new Date()
+  const dry = opts.dry || dryRun()
+  const items: Item[] = [{ kind: msg.kind, ref: msg.ref }, ...(msg.also ?? [])]
+  const prefs = await getPrefs(email)
+  if (!kindOn(prefs, msg.kind)) return { status: 'off' }
+  const ch = await channelFor(email, now)
+  if (!ch) return { status: 'not_linked' }
+  const tz = opts.tz ?? (await zoneFor(email, ch.to))
+  if (quiet(now, tz)) return { status: 'quiet' }
+  const log = await logged(email)
+  const today = sentToday(log, now, tz)
+  if (today.count >= DAILY_MAX) return { status: 'max' }
+  if (today.last && now.getTime() - today.last < MIN_GAP_MS) return { status: 'gap' }
+  const done = new Set(log.filter((r) => FINAL.includes(r.status)).map((r) => `${r.kind}|${r.ref}`))
+  if (done.has(`${msg.kind}|${msg.ref}`)) return { status: 'dupe' }
+
+  const lang = await userLang(email)
+  const useTemplate = !ch.window
+  if (useTemplate && (!msg.template || !templateApproved(msg.template.name))) {
+    await noteSkipped(email, items, 'no_template')
+    return { status: 'no_template', template: msg.template?.name }
+  }
+  const at = now.toISOString()
+  const owned = await claim(email, items, at)
+  if (!owned.some((i) => i.kind === msg.kind && i.ref === msg.ref)) return { status: 'dupe' }
+  const channel = ch.imessage ? 'imessage' : 'whatsapp'
+  const template = useTemplate ? msg.template!.name : null
+  try {
+    if (dry) {
+      console.log(
+        `[pen proactive dry] ${email} via ${channel}${template ? ` template ${template}` : ''} at ${localParts(now, tz).date} ${clockOf(now, tz)} ${tz}:\n` +
+          (template ? `vars ${JSON.stringify(msg.template!.vars)}` : msg.text) +
+          '\n',
+      )
+    } else if (useTemplate) {
+      await sendTemplate(ch.to, msg.template!.name, lang, msg.template!.vars, msg.template!.buttons ?? [])
+    } else {
+      await sendText(ch.to, msg.text)
+    }
+    await mark(email, owned, { status: dry ? 'dry' : 'sent', channel, template, sent_at: at })
+    // In the chat history, so a reply ("yes", a button tap, "the second one") has its context.
+    if (!dry) {
+      const content = msg.text || `(${template}: ${msg.template?.vars.join(' · ') ?? ''})`
+      const link = await getLinkByEmail(email)
+      const { setChat } = await import('./whatsapp/store')
+      if (link) await setChat(email, [...(link.chat ?? []), { role: 'assistant', content, ts: now.getTime() }]).catch(() => {})
+    }
+    return { status: dry ? 'dry' : 'sent', channel, ...(template ? { template } : {}), text: template ? JSON.stringify(msg.template!.vars) : msg.text }
+  } catch (e) {
+    const error = (e as Error).message.slice(0, 500)
+    await mark(email, owned, { status: 'failed', channel, template, error })
+    return { status: 'failed', error }
+  }
+}
+
+function clockOf(at: Date, tz: string): string {
+  const m = localParts(at, tz).minutes
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
+}
+
+/* ------------------------------------------------------------- the copy */
+
+const COPY = {
+  en: {
+    morning: (name: string) => `Good morning${name ? `, ${name}` : ''}.`,
+    meetingsToday: 'Your meetings today:',
+    dueToday: 'Due today:',
+    wantBrief: 'Want a short brief before the first one?',
+    tomorrow: (who: string, at: string) => `Tomorrow you meet ${who} at ${at}.`,
+    today: (who: string, at: string) => `Today you meet ${who} at ${at}.`,
+    lastTime: (date: string, title: string, summary: string) => `Last time (${date}${title ? `, "${title}"` : ''}): ${summary}`,
+    youOwe: 'You owe:',
+    theyOwe: 'They owe:',
+    moreBrief: 'Want the full brief?',
+    nudge: (list: string) => `Due today: ${list}. Want help with any of it?`,
+    and: 'and',
+    more: (n: number) => `and ${n} more`,
+  },
+  es: {
+    morning: (name: string) => `Buenos días${name ? `, ${name}` : ''}.`,
+    meetingsToday: 'Tus reuniones de hoy:',
+    dueToday: 'Para hoy:',
+    wantBrief: '¿Quieres un resumen breve antes de la primera?',
+    tomorrow: (who: string, at: string) => `Mañana te reúnes con ${who} a las ${at}.`,
+    today: (who: string, at: string) => `Hoy te reúnes con ${who} a las ${at}.`,
+    lastTime: (date: string, title: string, summary: string) => `La última vez (${date}${title ? `, "${title}"` : ''}): ${summary}`,
+    youOwe: 'Tú debes:',
+    theyOwe: 'Te deben:',
+    moreBrief: '¿Quieres el resumen completo?',
+    nudge: (list: string) => `Para hoy: ${list}. ¿Te ayudo con algo de eso?`,
+    and: 'y',
+    more: (n: number) => `y ${n} más`,
+  },
+  pt: {
+    morning: (name: string) => `Bom dia${name ? `, ${name}` : ''}.`,
+    meetingsToday: 'Suas reuniões de hoje:',
+    dueToday: 'Para hoje:',
+    wantBrief: 'Quer um resumo rápido antes da primeira?',
+    tomorrow: (who: string, at: string) => `Amanhã você se reúne com ${who} às ${at}.`,
+    today: (who: string, at: string) => `Hoje você se reúne com ${who} às ${at}.`,
+    lastTime: (date: string, title: string, summary: string) => `Da última vez (${date}${title ? `, "${title}"` : ''}): ${summary}`,
+    youOwe: 'Você deve:',
+    theyOwe: 'Te devem:',
+    moreBrief: 'Quer o resumo completo?',
+    nudge: (list: string) => `Para hoje: ${list}. Quer ajuda com alguma coisa?`,
+    and: 'e',
+    more: (n: number) => `e mais ${n}`,
+  },
+}
+
+/** "a, b and c", at most `max`, then "and 2 more". Never newlines (templates refuse them). */
+function joinList(items: string[], lang: Lang, max = 3): string {
+  const C = COPY[lang]
+  const shown = items.slice(0, max)
+  const rest = items.length - shown.length
+  if (rest > 0) return `${shown.join(', ')} ${C.more(rest)}`
+  return shown.length > 1 ? `${shown.slice(0, -1).join(', ')} ${C.and} ${shown[shown.length - 1]}` : shown[0] ?? ''
+}
+
+const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1)
+const noDot = (s: string) => s.trim().replace(/[.。]+$/, '')
+
+/* ----------------------------------------------------------- what's due */
+
+type Meeting = { id: string; who: string; starts: Date; decided: number | null }
+type Todo = { action: string; waiting: string | null; recording: string }
+type Session = {
+  id: string
+  title: string | null
+  source_name: string | null
+  status: string
+  notes: { actions?: { action: string }[] } | null
+  action_meta: ActionMeta[] | null
+  action_done: number[] | null
+  created_at: string
+  updated_at: string
+}
+
+async function acceptedMeetings(email: string, from: Date, to: Date): Promise<Meeting[]> {
+  const { data, error } = await supabaseAdmin
+    .from('pen_suggestions')
+    .select('id,person,title,detail,starts_at,decided_at')
+    .eq('user_email', email.toLowerCase())
+    .eq('kind', 'meeting')
+    .eq('state', 'accepted')
+    .gte('starts_at', from.toISOString())
+    .lt('starts_at', to.toISOString())
+    .order('starts_at')
+  if (error) throw new Error(error.message)
+  return ((data ?? []) as { id: string; person: string | null; title: string; detail: Record<string, unknown> | null; starts_at: string; decided_at: string | null }[]).map((r) => ({
+    id: r.id,
+    who: (r.person || (typeof r.detail?.with === 'string' ? (r.detail.with as string) : '') || r.title).trim(),
+    starts: new Date(r.starts_at),
+    decided: r.decided_at ? Date.parse(r.decided_at) : null,
+  }))
+}
+
+async function recentSessions(email: string, since: Date): Promise<Session[]> {
+  const { data, error } = await supabaseAdmin
+    .from('pen_sessions')
+    .select('id,title,source_name,status,notes,action_meta,action_done,created_at,updated_at')
+    .eq('user_email', email)
+    .or('merge_index.is.null,merge_index.eq.0')
+    .gte('created_at', since.toISOString())
+    .order('created_at', { ascending: false })
+    .limit(400)
+  if (error) throw new Error(error.message)
+  return (data ?? []) as unknown as Session[]
+}
+
+/** The user's own open to-dos due on `date` (YYYY-MM-DD, their local day). */
+function dueOn(sessions: Session[], date: string): Todo[] {
+  const out: Todo[] = []
+  for (const s of sessions) {
+    const acts = s.notes?.actions ?? []
+    const meta = Array.isArray(s.action_meta) && s.action_meta.length === acts.length ? s.action_meta : null
+    if (!meta) continue
+    const done = new Set(Array.isArray(s.action_done) ? s.action_done : [])
+    acts.forEach((a, i) => {
+      if (done.has(i) || !isMine(meta[i]) || meta[i]?.due_date !== date) return
+      out.push({ action: noDot(a.action), waiting: meta[i]?.waiting ?? null, recording: s.title ?? s.source_name ?? '' })
+    })
+  }
+  return out
+}
+
+/** The short brief for a meeting: last time with them, open promises both ways. */
+async function meetingBrief(email: string, m: Meeting, lang: Lang): Promise<string> {
+  const C = COPY[lang]
+  try {
+    const { personBriefFor } = await import('./whatsapp/agent')
+    const b = await personBriefFor(email, m.who)
+    const lines: string[] = []
+    const last = b.last_calls?.[0]
+    if (last?.summary) {
+      const summary = last.summary.split(/(?<=[.!?])\s/)[0].slice(0, 220)
+      lines.push(C.lastTime(last.date, last.title ?? '', summary))
+    }
+    const todos = (b.open_todos ?? []) as { action?: string; whose?: string }[]
+    const mine = todos.filter((t) => t.whose !== 'other').map((t) => noDot(String(t.action ?? ''))).filter(Boolean)
+    const theirs = todos.filter((t) => t.whose === 'other').map((t) => noDot(String(t.action ?? ''))).filter(Boolean)
+    if (mine.length) lines.push(`${C.youOwe} ${joinList(mine.map(lower), lang)}.`)
+    if (theirs.length) lines.push(`${C.theyOwe} ${joinList(theirs.map(lower), lang)}.`)
+    return lines.join('\n')
+  } catch (e) {
+    console.warn(`pen proactive: brief for ${m.who} failed: ${(e as Error).message}`)
+    return ''
+  }
+}
+
+/** One part of a bundle, with when it stops being worth sending. */
+type Part = ProactiveMessage & { order: number; staleAt: number; notedAt?: number }
+
+/**
+ * Everything due for one user at `now`. Each part carries its free-form text and its template;
+ * runForUser bundles them. Kinds the user switched off are left out here already.
+ */
+export async function dueFor(email: string, now: Date, tz: string, lang: Lang, prefs: ProactivePrefs, window: boolean): Promise<Part[]> {
+  const C = COPY[lang]
+  const today = localParts(now, tz).date
+  const tomorrow = addDays(today, 1)
+  const mins = localParts(now, tz).minutes
+  const parts: Part[] = []
+  const t = now.getTime()
+
+  const todayStart = zonedTime(today, 0, tz)
+  const dayAfter = zonedTime(addDays(today, 2), 0, tz)
+  const meetings = kindOn(prefs, 'morning_brief') || kindOn(prefs, 'meeting_brief') ? await acceptedMeetings(email, todayStart, dayAfter).catch(() => []) : []
+  const sessions = await recentSessions(email, new Date(t - 120 * 24 * HOUR))
+  const dueToday = dueOn(sessions, today)
+  const meetingsToday = meetings.filter((m) => localParts(m.starts, tz).date === today && m.starts.getTime() > t)
+
+  // (d) Morning brief, 7:30–11:00: today's meetings and to-dos, only when there is something.
+  // The template (Meta utility rules) only on days with a meeting.
+  let morningCovers: Item[] = []
+  if (kindOn(prefs, 'morning_brief') && mins >= QUIET.start && mins < 11 * 60 && (meetingsToday.length || dueToday.length)) {
+    const name = ((await getProfileRaw(email).catch(() => null))?.name ?? '').trim().split(/\s+/)[0] ?? ''
+    const list = meetingsToday.map((m) => (lang === 'en' ? `${m.who} at ${clock(m.starts, tz, lang)}` : lang === 'es' ? `${m.who} a las ${clock(m.starts, tz, lang)}` : `${m.who} às ${clock(m.starts, tz, lang)}`))
+    const lines = [C.morning(name)]
+    if (list.length) lines.push(`${C.meetingsToday} ${joinList(list, lang)}.`)
+    if (dueToday.length) lines.push(`${C.dueToday} ${joinList(dueToday.map((d) => lower(d.action)), lang)}.`)
+    // Covered here, so they don't come again at 9:00 or as a separate brief.
+    morningCovers = [...(dueToday.length ? [{ kind: 'nudges' as const, ref: today }] : []), ...meetingsToday.map((m) => ({ kind: 'meeting_brief' as const, ref: m.id }))]
+    parts.push({
+      kind: 'morning_brief',
+      ref: today,
+      text: lines.join(' ') + (list.length ? `\n${C.wantBrief}` : ''),
+      // {{1}} is their first name; with none, only English has a natural stand-in ("there").
+      ...(list.length && (name || lang === 'en') ? { template: { name: 'morning_brief', vars: [name || 'there', joinList(list, lang)], buttons: [`proactive:brief:${today}`, `proactive:no:${today}`] } } : {}),
+      also: morningCovers,
+      order: 0,
+      staleAt: zonedTime(today, 11 * 60, tz).getTime(),
+    })
+  }
+
+  // (b) Meeting brief: from 18:00 the evening before; accepted later than that, from 8:00 on the day.
+  if (kindOn(prefs, 'meeting_brief')) {
+    for (const m of meetings) {
+      if (morningCovers.some((c) => c.kind === 'meeting_brief' && c.ref === m.id)) continue
+      const day = localParts(m.starts, tz).date
+      const eve = zonedTime(addDays(day, -1), 18 * 60, tz).getTime()
+      const from = m.decided && m.decided > eve ? Math.max(m.decided, zonedTime(day, 8 * 60, tz).getTime()) : eve
+      const staleAt = m.starts.getTime() - 30 * MIN
+      if (t < from || t >= staleAt) continue
+      const isTomorrow = day === tomorrow
+      const at = clock(m.starts, tz, lang)
+      const brief = window ? await meetingBrief(email, m, lang) : ''
+      parts.push({
+        kind: 'meeting_brief',
+        ref: m.id,
+        text: [isTomorrow ? C.tomorrow(m.who, at) : C.today(m.who, at), brief, C.moreBrief].filter(Boolean).join('\n'),
+        // The template says "Tomorrow": the morning-of case has none (the morning brief covers it).
+        ...(isTomorrow ? { template: { name: 'meeting_tomorrow', vars: [m.who, at], buttons: [`proactive:brief:${m.id}`, `proactive:no:${m.id}`] } } : {}),
+        order: 1,
+        staleAt,
+      })
+    }
+  }
+
+  // (c) Nudges: to-dos due today, from 9:00, one line.
+  if (kindOn(prefs, 'nudges') && dueToday.length && mins >= 9 * 60 && !morningCovers.some((c) => c.kind === 'nudges')) {
+    const first = dueToday[0]
+    const todo = lower(first.action) + (dueToday.length > 1 ? ` (${C.more(dueToday.length - 1)})` : '')
+    parts.push({
+      kind: 'nudges',
+      ref: today,
+      text: C.nudge(joinList(dueToday.map((d) => lower(d.action)), lang)),
+      template: { name: 'follow_up_nudge', vars: [first.waiting || first.recording || 'Juno', todo], buttons: [`proactive:help:${today}`, `proactive:done:${today}`, `proactive:snooze:${today}`] },
+      order: 2,
+      staleAt: zonedTime(today, QUIET.end, tz).getTime(),
+    })
+  }
+
+  // (a) After-upload offers: recordings written up in the last 36 h, composed by suggestions.ts.
+  if (kindOn(prefs, 'offers')) {
+    for (const s of sessions.filter((x) => x.status === 'noted' && t - Date.parse(x.created_at) < 36 * HOUR).slice(0, 3)) {
+      const title = s.title ?? s.source_name ?? ''
+      const acts = s.notes?.actions ?? []
+      const meta = Array.isArray(s.action_meta) && s.action_meta.length === acts.length ? s.action_meta : null
+      const done = new Set(Array.isArray(s.action_done) ? s.action_done : [])
+      const mineCount = acts.filter((_, i) => !done.has(i) && isMine(meta?.[i])).length
+      parts.push({
+        kind: 'offers',
+        ref: s.id,
+        text: '', // composed only when it is actually going out free-form (a model call)
+        template: { name: 'notes_ready', vars: [title, String(mineCount)], buttons: [`proactive:summary:${s.id}`, `proactive:later:${s.id}`] },
+        order: 3,
+        staleAt: Date.parse(s.created_at) + 36 * HOUR,
+        notedAt: Date.parse(s.updated_at),
+      })
+    }
+  }
+  return parts.filter((p) => t < p.staleAt).sort((a, b) => a.order - b.order)
+}
+
+type ComposeOffers = (email: string, sessionId: string, lang: Lang) => Promise<string | null>
+
+/**
+ * composeOffers lives in lib/pen/suggestions.ts, written by the commitments workstream.
+ * TODO-integrate: once that file is in, make this a plain import. Until then a missing module
+ * means no offers (next build fails loudly on the missing file, which is the reminder).
+ */
+async function loadComposeOffers(): Promise<ComposeOffers | null> {
+  // @ts-ignore -- lib/pen/suggestions.ts lands with the commitments workstream (composeOffers)
+  const mod = (await import('./suggestions').catch(() => null)) as { composeOffers?: ComposeOffers } | null
+  return mod?.composeOffers ?? null
+}
+
+/* ------------------------------------------------------------------- tick */
+
+export type UserRun = { email: string; tz: string; local: string; window: boolean; due: string[]; result: SendResult | null }
+
+/** One user's tick: what's due, bundled into one message, through sendProactive's rules. */
+export async function runForUser(email: string, opts: { now?: Date; dry?: boolean } = {}): Promise<UserRun> {
+  const now = opts.now ?? new Date()
+  const ch = await channelFor(email, now)
+  const tz = await zoneFor(email, ch?.to)
+  const lp = localParts(now, tz)
+  const run: UserRun = { email, tz, local: `${lp.date} ${clockOf(now, tz)}`, window: !!ch?.window, due: [], result: null }
+  if (!ch) return { ...run, result: { status: 'not_linked' } }
+  const prefs = await getPrefs(email)
+  if (prefs.off) return { ...run, result: { status: 'off' } }
+  // Cheap checks first: nothing below runs a query on the user's recordings at night.
+  if (quiet(now, tz)) return { ...run, result: { status: 'quiet' } }
+  const lang = await userLang(email)
+  let parts = await dueFor(email, now, tz, lang, prefs, ch.window)
+  // Done before (sent, or covered by an earlier bundle) is not due.
+  const done = new Set((await logged(email)).filter((r) => FINAL.includes(r.status)).map((r) => `${r.kind}|${r.ref}`))
+  parts = parts.filter((p) => !done.has(`${p.kind}|${p.ref}`))
+  run.due = parts.map((p) => `${p.kind}:${p.ref}`)
+  if (!parts.length) return run
+
+  if (!ch.window) {
+    // Outside the window one template carries one item: the first with an approved template.
+    // The rest wait (until the user writes back and the window opens, or they go stale).
+    const lead = parts.find((p) => p.template && templateApproved(p.template.name))
+    if (!lead) {
+      await noteSkipped(email, parts, 'no_template')
+      return { ...run, result: { status: 'no_template' } }
+    }
+    run.result = await sendProactive(email, { kind: lead.kind, ref: lead.ref, text: lead.text, template: lead.template, also: lead.also }, { now, dry: opts.dry, tz })
+    return run
+  }
+
+  // Inside the window (or iMessage): every due part in one free-form message.
+  const compose = parts.some((p) => p.kind === 'offers') ? await loadComposeOffers() : null
+  const texts: string[] = []
+  const carried: Item[] = []
+  const empty: Item[] = []
+  for (const p of parts) {
+    let text = p.text
+    if (p.kind === 'offers') {
+      text = compose ? ((await compose(email, p.ref, lang).catch(() => null)) ?? '') : ''
+      // Nothing to offer: done with it, but only once the suggestions have had time to land.
+      if (!text) {
+        if (compose && p.notedAt && now.getTime() - p.notedAt > 30 * MIN) empty.push({ kind: p.kind, ref: p.ref })
+        continue
+      }
+    }
+    if (!text) continue
+    texts.push(text)
+    carried.push({ kind: p.kind, ref: p.ref }, ...(p.also ?? []))
+  }
+  if (empty.length) await noteSkipped(email, empty, 'empty')
+  if (!texts.length) return run
+  const [lead, ...rest] = carried
+  run.result = await sendProactive(email, { kind: lead.kind, ref: lead.ref, text: texts.join('\n\n'), also: rest }, { now, dry: opts.dry, tz })
+  return run
+}
+
+/**
+ * The cron's entry point: every linked, active account. `only` limits it to those emails (tests
+ * must always pass it; the whole table is for the cron alone).
+ */
+export async function runProactive(opts: { now?: Date; dry?: boolean; only?: string[] } = {}): Promise<{ users: number; sent: number; runs: UserRun[] }> {
+  let q = supabaseAdmin.from('pen_whatsapp_links').select('email').not('linked_at', 'is', null).not('phone', 'is', null)
+  if (opts.only) q = q.in('email', opts.only.map((e) => e.toLowerCase()))
+  const { data, error } = await q
+  if (error) throw new Error(error.message)
+  const runs: UserRun[] = []
+  for (const { email } of (data ?? []) as { email: string }[]) {
+    try {
+      if (!ALLOWED_EMAILS.includes(email) && !(await isActive(email).catch(() => false))) continue
+      runs.push(await runForUser(email, opts))
+    } catch (e) {
+      console.warn(`pen proactive: ${email} failed: ${(e as Error).message}`)
+    }
+  }
+  return { users: runs.length, sent: runs.filter((r) => r.result?.status === 'sent' || r.result?.status === 'dry').length, runs }
+}

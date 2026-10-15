@@ -81,8 +81,19 @@ export function cleanProfile(raw: unknown): AgentProfile {
     timeZoneSaidAt: instant(r.timeZoneSaidAt),
     timeZoneUntil: instant(r.timeZoneUntil),
     timeZoneBefore: zone(r.timeZoneBefore),
+    proactive: (() => {
+      const o = (r.proactive && typeof r.proactive === 'object' ? r.proactive : {}) as Record<string, unknown>
+      const kinds = Array.isArray(o.offKinds) ? o.offKinds.filter((k): k is string => typeof k === 'string' && PROACTIVE_KINDS.includes(k)) : []
+      const out: { off?: boolean; offKinds?: string[] } = {}
+      if (o.off === true) out.off = true
+      if (kinds.length) out.offKinds = [...new Set(kinds)]
+      return Object.keys(out).length ? out : undefined
+    })(),
   }
 }
+
+/** ProactiveKind (suggestions-types.ts), as data for cleaning. */
+const PROACTIVE_KINDS: string[] = ['offers', 'meeting_brief', 'nudges', 'morning_brief', 'notion']
 
 /** App-set fields the Profile form never sends; a form save keeps the stored ones. */
 const APP_ZONE_KEYS = ['timeZone', 'timeZoneSeenAt', 'timeZoneSaid', 'timeZoneSaidAt', 'timeZoneUntil', 'timeZoneBefore'] as const
@@ -101,10 +112,10 @@ export async function getProfile(email: string): Promise<AgentProfile> {
 }
 
 export async function saveProfile(email: string, raw: unknown): Promise<AgentProfile> {
-  // First-run state and time zone are the app's, never the form's: keep what is stored, whatever the form sent.
+  // First-run state, time zone and STOP/START are the app's, never the form's: keep what is stored, whatever the form sent.
   const stored = await getProfileRaw(email).catch(() => null)
   const kept = Object.fromEntries(APP_ZONE_KEYS.map((k) => [k, stored?.[k]]))
-  const profile = cleanProfile({ ...(raw && typeof raw === 'object' ? raw : {}), onboarding: stored?.onboarding, ...kept })
+  const profile = cleanProfile({ ...(raw && typeof raw === 'object' ? raw : {}), onboarding: stored?.onboarding, proactive: stored?.proactive, ...kept })
   const { error } = await supabaseAdmin
     .from('pen_profiles')
     .upsert({ user_email: email.toLowerCase(), profile, updated_at: new Date().toISOString() }, { onConflict: 'user_email' })

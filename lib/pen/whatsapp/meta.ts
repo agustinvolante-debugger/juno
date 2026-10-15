@@ -60,6 +60,35 @@ export async function sendButtons(to: string, body: string, buttons: Button[]): 
   })
 }
 
+/** Meta's code for each app language: the code a template was approved under (en, es, pt_BR). */
+export const TEMPLATE_LANG = { en: 'en', es: 'es', pt: 'pt_BR' } as const
+
+/**
+ * A template variable as Meta accepts it: no newlines or tabs, no runs of 4+ spaces (Meta
+ * rejects both), about 120 characters, no trailing period (the template text adds its own).
+ */
+export function templateVar(v: string): string {
+  let t = String(v ?? '').replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim()
+  if (t.length > 120) t = `${t.slice(0, 119).trimEnd()}…`
+  return t.replace(/[.。]+$/, '').trim() || '-'
+}
+
+/**
+ * An approved message template: the only kind of message Meta delivers outside the 24-hour
+ * window. `vars` fill {{1}}, {{2}}… in the body, in order. `buttons` are the payloads of the
+ * template's quick-reply buttons, by position (the button texts live in the template itself, in
+ * the same order in every language), so a tap comes back as that payload (parseInboundAll:
+ * kind 'reply', replyId = payload).
+ */
+export async function sendTemplate(to: string, name: string, lang: string, vars: string[], buttons: string[] = []): Promise<void> {
+  const components: Record<string, unknown>[] = []
+  if (vars.length) components.push({ type: 'body', parameters: vars.map((v) => ({ type: 'text', text: templateVar(v) })) })
+  buttons.forEach((payload, i) => {
+    components.push({ type: 'button', sub_type: 'quick_reply', index: String(i), parameters: [{ type: 'payload', payload: payload.slice(0, 256) }] })
+  })
+  await post({ recipient_type: 'individual', to, type: 'template', template: { name, language: { code: lang }, components } })
+}
+
 /** Blue ticks, plus "typing…" when a reply is on its way. Never throws. */
 export async function markRead(messageId: string, typing = false): Promise<boolean> {
   try {

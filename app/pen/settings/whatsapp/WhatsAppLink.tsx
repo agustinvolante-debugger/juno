@@ -17,6 +17,7 @@ const WA_EN = {
   scan: 'Scan with your phone’s camera. WhatsApp opens with the message ready: just tap Send.',
   message: (code: string, n: string) => `The message is LINK ${code}, to ${n}. The code lasts 30 minutes.`,
   updates: 'This page updates by itself once you’re linked.',
+  proactive: 'I’ll also text you reminders and briefs from your meetings. Reply STOP anytime.',
   openWith: 'Open WhatsApp with the message',
   link: 'Link WhatsApp',
   howTitle: 'How to send a recording',
@@ -51,6 +52,7 @@ const WA: Copy<typeof WA_EN> = {
     scan: 'Escanéalo con la cámara del celular. WhatsApp se abre con el mensaje listo: solo toca Enviar.',
     message: (code, n) => `El mensaje es LINK ${code}, al ${n}. El código dura 30 minutos.`,
     updates: 'Esta página se actualiza sola cuando quedes vinculado.',
+    proactive: 'También te escribiré recordatorios y resúmenes de tus reuniones. Responde STOP cuando quieras.',
     openWith: 'Abrir WhatsApp con el mensaje',
     link: 'Vincular WhatsApp',
     howTitle: 'Cómo enviar una grabación',
@@ -82,6 +84,7 @@ const WA: Copy<typeof WA_EN> = {
     scan: 'Escaneie com a câmera do celular. O WhatsApp abre com a mensagem pronta: é só tocar em Enviar.',
     message: (code, n) => `A mensagem é LINK ${code}, para ${n}. O código vale por 30 minutos.`,
     updates: 'Esta página se atualiza sozinha quando você estiver vinculado.',
+    proactive: 'Também vou te mandar lembretes e resumos das suas reuniões. Responda STOP quando quiser.',
     openWith: 'Abrir o WhatsApp com a mensagem',
     link: 'Vincular WhatsApp',
     howTitle: 'Como enviar uma gravação',
@@ -197,6 +200,7 @@ export default function WhatsAppLink({
           <>
             <div className="pen-set-ok" role="status">{T.linked(pretty(phone))}</div>
             <p className="pen-set-fine">{T.number(pretty(number))}</p>
+            <p className="pen-set-fine">{T.proactive}</p>
             <div className="pen-set-actions">
               <a className="pen-btn pen-btn-accent" href={`https://wa.me/${number}`} target="_blank" rel="noreferrer">{T.openChat}</a>
               <button type="button" className="pen-btn" onClick={unlink} disabled={busy}>{T.unlink}</button>
@@ -209,6 +213,7 @@ export default function WhatsAppLink({
               <p className="pen-set-fine pen-wa-desk">{T.scan}</p>
               <p className="pen-set-fine">{T.message(link.code, pretty(number))}</p>
               <p className="pen-set-fine">{T.updates}</p>
+              <p className="pen-set-fine">{T.proactive}</p>
               <div className="pen-set-actions">
                 <a className="pen-btn pen-wa-open" href={link.waLink} target="_blank" rel="noreferrer">{T.openWith}</a>
               </div>
@@ -238,6 +243,7 @@ export default function WhatsAppLink({
             <>
               <p className="pen-set-fine">{T.imMessage(link.code, pretty(imessage))}</p>
               <p className="pen-set-fine">{T.updates}</p>
+              <p className="pen-set-fine">{T.proactive}</p>
               <div className="pen-set-actions">
                 <a className="pen-btn pen-btn-accent" href={smsLink(imessage, `LINK ${link.code}`)}>{T.imOpenWith}</a>
               </div>

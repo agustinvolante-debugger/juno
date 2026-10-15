@@ -48,7 +48,7 @@ import { foldName, speakerName, resolve as resolveLabel, type SpeakerMap } from 
 import { COMMON_TYPES } from '../categories'
 import { sendFollowUp } from '../follow-up'
 import { getProfile } from '../profile'
-import { addReminder, cancelReminder, pendingReminders, MAX_AHEAD_MS } from '../reminders'
+import { addReminder, cancelReminder, pendingReminders, MAX_AHEAD_MS, maxAheadMs } from '../reminders'
 import type { Lang } from '../currency'
 import { isMine, type ActionMeta, type Mine } from '../todo-labels'
 import { getDraft, setDraft, type Draft } from './store'
@@ -179,7 +179,7 @@ const TOOLS: Anthropic.Tool[] = [
     name: 'set_reminder',
     description:
       'Set a WhatsApp reminder for the user. Give either in_minutes (for "in 15 min", "in 2 hours") or at (an ISO 8601 ' +
-      'time WITH offset, for clock times). Only up to 23 hours ahead. Write the reminder text as the user will want to ' +
+      `time WITH offset, for clock times). Only up to ${maxAheadMs() > MAX_AHEAD_MS ? '30 days' : '23 hours'} ahead. Write the reminder text as the user will want to ` +
       'read it, in their language.',
     input_schema: {
       type: 'object',
@@ -488,9 +488,12 @@ function system(ctx: Ctx, pending: Draft | null, asked: Pending | null): string 
       ? `"This call", "the recording", "it" with no other recording named means the one they sent here last: session_id ${ctx.recent}${ctx.recentTitle ? `, "${ctx.recentTitle}"` : ''}.\n\n`
       : '') +
     `Now: ${zonePromptLine(ctx.zone)}\n` +
-    '- Reminders can be at most 23 hours ahead (WhatsApp only lets Juno message within a day of their last message). ' +
-    'For later ones, add it as a to-do with that due date instead (add_todo, on the recording it relates to) and say ' +
-    'so in one line; don\'t ask first. For a clock time with no timezone given, ' +
+    (maxAheadMs() > MAX_AHEAD_MS
+      ? '- Reminders can be up to 30 days ahead. For later ones, add it as a to-do with that due date instead (add_todo, on ' +
+        'the recording it relates to) and say so in one line; don\'t ask first. For a clock time with no timezone given, '
+      : '- Reminders can be at most 23 hours ahead (WhatsApp only lets Juno message within a day of their last message). ' +
+        'For later ones, add it as a to-do with that due date instead (add_todo, on the recording it relates to) and say ' +
+        'so in one line; don\'t ask first. For a clock time with no timezone given, ') +
     'use the one above; if it says unknown, ask.\n\n' +
     'Rules:\n' +
     '- Earlier assistant turns in this chat were made with these same tools; their tool calls just are not shown. ' +
@@ -730,7 +733,9 @@ async function setReminder(ctx: Ctx, i: { text: string; in_minutes: number; at: 
   }
   if (Number.isNaN(due.getTime())) return { error: 'could not read that time' }
   if (due.getTime() < Date.now() + 30 * 1000) return { error: 'that time has already passed' }
-  if (due.getTime() - Date.now() > MAX_AHEAD_MS) return { error: 'more than 23 hours ahead; WhatsApp only allows reminders within a day' }
+  if (due.getTime() - Date.now() > maxAheadMs()) {
+    return { error: maxAheadMs() > MAX_AHEAD_MS ? 'more than 30 days ahead; reminders go up to 30 days' : 'more than 23 hours ahead; WhatsApp only allows reminders within a day' }
+  }
   const r = await addReminder({ email: ctx.email, phone: ctx.phone, text, dueAt: due, lang: ctx.lang })
   const zone = ctx.zone?.tz
   return {
@@ -1072,6 +1077,23 @@ async function personBrief(ctx: Ctx, name: string): Promise<unknown> {
     open_todos: todos.todos,
     ...(!person && !calls.length ? { note: 'no contact and no calls with that name' } : {}),
   }
+}
+
+export type PersonBrief = {
+  contact: { name: unknown; email: unknown; role: unknown; company: unknown } | null
+  calls: number
+  last_calls: { session_id: string; date: string; title: string | null; summary: string | null }[]
+  open_todos: Record<string, unknown>[]
+  error?: string
+}
+
+/** person_brief outside a chat turn: the proactive meeting brief (lib/pen/proactive.ts). */
+export async function personBriefFor(email: string, name: string): Promise<PersonBrief> {
+  const ctx: Ctx = {
+    email, msgId: 'proactive', question: '', history: [], recent: null, userName: null, phone: '', lang: 'en',
+    citations: [], drafted: null, sent: false, enrich: new Set(), later: [],
+  }
+  return (await personBrief(ctx, name)) as PersonBrief
 }
 
 /** Owner as the user said it → the action's owner text and the to-do's whose-is-it label. */

@@ -184,6 +184,9 @@ export type AgentProfile = {
   timeZoneBefore?: string
   /** Answers to the role's own questions, keyed by Question.key. */
   answers?: Record<string, string | string[]>
+  /** Messages Juno sends first on WhatsApp/iMessage (lib/pen/proactive.ts). Set by STOP/START in
+   *  the chat, never by the form. Unset = all on. */
+  proactive?: { off?: boolean; offKinds?: string[] }
 }
 
 export function roleOf(value: string | undefined): Role | undefined {
