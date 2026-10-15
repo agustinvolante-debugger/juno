@@ -102,16 +102,25 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
       {
         h: 'Google Calendar',
         body: [
-          'If you connect Google Calendar, Juno Pen asks Google for permission to see, add and change events on the calendars you own. We use it for two things only:',
+          'If you connect Google Calendar, Juno Pen asks Google for permission to see, add and change events on the calendars you own. We use it for three things only:',
           {
             list: [
               'To add events you approve. When a recording mentions a meeting, Juno Pen asks you first, on WhatsApp, iMessage or the website. It adds the event only after you say yes, and it never changes or deletes an event you didn’t ask it to.',
               'To prepare you for meetings. We read your events for the next 7 days (title, time, place, attendees and description) so we can send you a short brief before a meeting, using your notes from past conversations with the same people.',
+              'To change or delete an event when you ask. If you ask Juno Pen to move or delete an event, or add a video link to it, it looks that event up by name (from yesterday to 60 days ahead).',
             ],
           },
           'To write a brief or a reminder, the details of that event are sent to Anthropic, which writes the text for us and does not train its models on data sent through its API. We don’t sell calendar data, use it for advertising, or use it to train AI models, ours or anyone else’s. Nobody at Juno Pen reads it unless you ask us to, it’s needed for security, or the law requires it.',
           'You can disconnect Google Calendar in Settings, or at myaccount.google.com/permissions. We then revoke our access and delete the calendar data and tokens we hold. When you ask us to delete your account, we do the same.',
           'Juno Pen’s use and transfer to any other app of information received from Google APIs will adhere to the Google API Services User Data Policy (https://developers.google.com/terms/api-services-user-data-policy), including the Limited Use requirements.',
+        ],
+      },
+      {
+        h: 'Google Docs and Sheets',
+        body: [
+          'If you connect Google Docs and Sheets, Juno Pen asks Google for one permission (drive.file): to create files in your Google Drive and open only the files Juno Pen created. Juno Pen cannot see any other file in your Drive.',
+          'Juno Pen creates a Doc or a Sheet only when you ask (a recording’s notes, a plan you approved, your to-dos or contacts), inside a “Juno Pen” folder. We store only a sealed access token, shared with Google Calendar if both are connected.',
+          'You can disconnect in Settings → Google. Files Juno Pen made stay in your Drive and remain yours.',
         ],
       },
       {
@@ -302,16 +311,25 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
       {
         h: 'Google Calendar',
         body: [
-          'Si conectas Google Calendar, Juno Pen le pide permiso a Google para ver, agregar y cambiar eventos en los calendarios que son tuyos. Lo usamos solo para dos cosas:',
+          'Si conectas Google Calendar, Juno Pen le pide permiso a Google para ver, agregar y cambiar eventos en los calendarios que son tuyos. Lo usamos solo para tres cosas:',
           {
             list: [
               'Agregar los eventos que apruebas. Cuando una grabación menciona una reunión, Juno Pen te pregunta primero, por WhatsApp, iMessage o en el sitio. Agrega el evento solo después de que digas que sí, y nunca cambia ni borra un evento que no le pediste.',
               'Prepararte para tus reuniones. Leemos tus eventos de los próximos 7 días (título, hora, lugar, invitados y descripción) para enviarte un resumen breve antes de una reunión, con tus notas de conversaciones anteriores con las mismas personas.',
+              'Cambiar o borrar un evento cuando lo pides. Si le pides a Juno Pen mover o borrar un evento, o agregarle un enlace de videollamada, lo busca por su nombre (desde ayer hasta 60 días adelante).',
             ],
           },
           'Para escribir un resumen o un recordatorio, los datos de ese evento se envían a Anthropic, que escribe el texto por nosotros y no entrena sus modelos con datos enviados por su API. No vendemos los datos de tu calendario, no los usamos para publicidad ni para entrenar modelos de IA, propios ni de terceros. Nadie en Juno Pen los lee salvo que tú nos lo pidas, sea necesario por seguridad o lo exija la ley.',
           'Puedes desconectar Google Calendar en Ajustes o en myaccount.google.com/permissions. En ese momento revocamos nuestro acceso y borramos los datos de calendario y los tokens que tengamos. Cuando nos pides borrar tu cuenta, hacemos lo mismo.',
           'El uso que Juno Pen hace de la información recibida de las API de Google, y su transferencia a cualquier otra app, se ajustará a la Política de datos de usuario de los servicios de API de Google (https://developers.google.com/terms/api-services-user-data-policy), incluidos los requisitos de Uso limitado.',
+        ],
+      },
+      {
+        h: 'Google Docs y Sheets',
+        body: [
+          'Si conectas Google Docs y Sheets, Juno Pen le pide a Google un solo permiso (drive.file): crear archivos en tu Google Drive y abrir solo los que Juno Pen creó. Juno Pen no puede ver ningún otro archivo de tu Drive.',
+          'Juno Pen crea un Doc o una hoja solo cuando lo pides (las notas de una grabación, un plan que aprobaste, tus pendientes o contactos), dentro de una carpeta “Juno Pen”. Solo guardamos un token de acceso cifrado, compartido con Google Calendar si conectas ambos.',
+          'Puedes desconectarlo en Ajustes → Google. Los archivos que hizo Juno Pen se quedan en tu Drive y son tuyos.',
         ],
       },
       {
@@ -502,16 +520,25 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
       {
         h: 'Google Agenda',
         body: [
-          'Se você conectar o Google Agenda, o Juno Pen pede permissão ao Google para ver, adicionar e alterar eventos nas agendas que são suas. Usamos isso só para duas coisas:',
+          'Se você conectar o Google Agenda, o Juno Pen pede permissão ao Google para ver, adicionar e alterar eventos nas agendas que são suas. Usamos isso só para três coisas:',
           {
             list: [
               'Adicionar os eventos que você aprova. Quando uma gravação menciona uma reunião, o Juno Pen pergunta primeiro, pelo WhatsApp, iMessage ou pelo site. Ele só adiciona o evento depois que você disser sim, e nunca altera nem apaga um evento que você não pediu.',
               'Te preparar para reuniões. Lemos seus eventos dos próximos 7 dias (título, horário, local, convidados e descrição) para te mandar um resumo curto antes de uma reunião, com suas notas de conversas anteriores com as mesmas pessoas.',
+              'Alterar ou apagar um evento quando você pede. Se você pedir ao Juno Pen para mover ou apagar um evento, ou adicionar um link de videochamada, ele procura esse evento pelo nome (de ontem até 60 dias à frente).',
             ],
           },
           'Para escrever um resumo ou um lembrete, os dados desse evento são enviados à Anthropic, que escreve o texto para nós e não treina seus modelos com dados enviados pela sua API. Não vendemos os dados da sua agenda, não os usamos para publicidade nem para treinar modelos de IA, nossos ou de terceiros. Ninguém no Juno Pen os lê, a não ser que você peça, que seja necessário por segurança ou que a lei exija.',
           'Você pode desconectar o Google Agenda em Configurações ou em myaccount.google.com/permissions. Nesse momento revogamos nosso acesso e apagamos os dados de agenda e os tokens que tivermos. Quando você nos pede para apagar sua conta, fazemos o mesmo.',
           'O uso e a transferência, para qualquer outro app, de informações recebidas das APIs do Google pelo Juno Pen seguirão a Política de Dados do Usuário dos Serviços de API do Google (https://developers.google.com/terms/api-services-user-data-policy), incluindo os requisitos de Uso Limitado.',
+        ],
+      },
+      {
+        h: 'Google Docs e Planilhas',
+        body: [
+          'Se você conectar o Google Docs e Planilhas, o Juno Pen pede ao Google uma única permissão (drive.file): criar arquivos no seu Google Drive e abrir só os que o Juno Pen criou. O Juno Pen não vê nenhum outro arquivo do seu Drive.',
+          'O Juno Pen cria um Doc ou uma planilha só quando você pede (as notas de uma gravação, um plano que você aprovou, suas tarefas ou contatos), numa pasta “Juno Pen”. Guardamos só um token de acesso criptografado, compartilhado com o Google Agenda se os dois estiverem conectados.',
+          'Você pode desconectar em Configurações → Google. Os arquivos que o Juno Pen criou continuam no seu Drive e são seus.',
         ],
       },
       {
