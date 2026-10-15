@@ -9,6 +9,7 @@ import { LangProvider } from '../LangContext'
 import { appLangFor } from '../app-lang'
 import { getAccount } from '@/lib/pen/accounts'
 import { notionConfigured } from '@/lib/pen/notion'
+import { gcalConfigured } from '@/lib/pen/google-calendar'
 
 const COPY = {
   en: { back: 'Back to recordings', title: 'Settings' },
@@ -40,7 +41,7 @@ export default async function SettingsLayout({ children }: { children: React.Rea
         <aside className="pen-set-side">
           <h1 className="pen-display pen-set-title">{T.title}</h1>
           <div className="pen-set-email">{email}</div>
-          <SettingsNav whatsapp={whatsappReady() || imessageFor(email)} imessage={imessageFor(email)} billing={Boolean(account?.stripe_customer_id)} notion={notionConfigured()} />
+          <SettingsNav whatsapp={whatsappReady() || imessageFor(email)} imessage={imessageFor(email)} billing={Boolean(account?.stripe_customer_id)} notion={notionConfigured()} calendar={gcalConfigured()} />
         </aside>
         <section className="pen-set-main">{children}</section>
       </div>

@@ -3,7 +3,9 @@
 //   offers         after a recording is written up: the 1–3 best things Juno can help with
 //                  (composeOffers, lib/pen/suggestions.ts)
 //   meeting_brief  the evening before an accepted meeting (18:00 local), or the morning of it:
-//                  last time with that person, open promises both ways
+//                  last time with that person, open promises both ways. With Google Calendar
+//                  connected, also its timed events with at least one other guest (not all-day,
+//                  not declined), deduped against accepted offers (lib/pen/google-calendar.ts)
 //   nudges         to-dos due today, at 9:00 local, one bundled line
 //   morning_brief  7:30–8:00 local: today's meetings and to-dos, only when there is something
 //   notion         Notion doc offers (composed with the offers for now)
@@ -24,7 +26,8 @@
 // Dry run: PEN_PROACTIVE_DRY=1 (or { dry: true }) logs what would be sent and sends nothing;
 // provider.ts refuses to send anything at all while the env is set.
 
-import { composeOffers } from './suggestions'
+import { composeOffers, validZone as validSuggestionZone, zonedToUtc } from './suggestions'
+import { gcalConnected, upcomingEvents, type UpcomingEvent } from './google-calendar'
 import { userZone } from './timezone'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ALLOWED_EMAILS } from '@/lib/auth'
@@ -392,7 +395,8 @@ const noDot = (s: string) => s.trim().replace(/[.。]+$/, '')
 
 /* ----------------------------------------------------------- what's due */
 
-type Meeting = { id: string; who: string; starts: Date; decided: number | null }
+/** who = what the message says; lookup = the one name the brief searches the user's people for. */
+type Meeting = { id: string; who: string; starts: Date; decided: number | null; lookup?: string }
 type Todo = { action: string; waiting: string | null; recording: string }
 type Session = {
   id: string
@@ -412,7 +416,8 @@ async function acceptedMeetings(email: string, from: Date, to: Date): Promise<Me
     .select('id,person,title,detail,starts_at,decided_at')
     .eq('user_email', email.toLowerCase())
     .eq('kind', 'meeting')
-    .eq('state', 'accepted')
+    // 'done' too: accepting an offer marks it done once the calendar link or event is made.
+    .in('state', ['accepted', 'done'])
     .gte('starts_at', from.toISOString())
     .lt('starts_at', to.toISOString())
     .order('starts_at')
@@ -420,9 +425,53 @@ async function acceptedMeetings(email: string, from: Date, to: Date): Promise<Me
   return ((data ?? []) as { id: string; person: string | null; title: string; detail: Record<string, unknown> | null; starts_at: string; decided_at: string | null }[]).map((r) => ({
     id: r.id,
     who: (r.person || (typeof r.detail?.with === 'string' ? (r.detail.with as string) : '') || r.title).trim(),
-    starts: new Date(r.starts_at),
+    // The time the user confirmed (they may have corrected it) over the one heard on the call.
+    starts: typeof r.detail?.local === 'string' && validSuggestionZone(r.detail?.tz) ? confirmedStart(r.detail.local as string, r.detail.tz as string, r.starts_at) : new Date(r.starts_at),
     decided: r.decided_at ? Date.parse(r.decided_at) : null,
   }))
+}
+
+function confirmedStart(local: string, tz: string, fallback: string): Date {
+  const d = zonedToUtc(local, tz)
+  return Number.isNaN(d.getTime()) ? new Date(fallback) : d
+}
+
+/** "chris.park@acme.com" → "Chris Park", for guests Google gives no name for. */
+function nameFromEmail(email: string): string {
+  return email.split('@')[0].split(/[._+-]+/).filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+}
+
+/**
+ * Google Calendar meetings in [from, to): timed, not declined, with at least one other guest
+ * (a meeting with someone, which is what a brief is for). Skips Juno's own events for offers
+ * already in `accepted` and anything within 15 minutes of one of them, so a meeting is briefed once.
+ */
+export function calendarMeetings(events: UpcomingEvent[], from: Date, to: Date, accepted: Meeting[]): Meeting[] {
+  const out: Meeting[] = []
+  for (const e of events) {
+    if (e.allDay || e.declined || !e.others.length) continue
+    const starts = new Date(e.start)
+    if (Number.isNaN(starts.getTime()) || starts < from || starts >= to) continue
+    if (e.junoRef && accepted.some((m) => m.id === e.junoRef)) continue
+    if (accepted.some((m) => Math.abs(m.starts.getTime() - starts.getTime()) < 15 * MIN)) continue
+    const names = e.others.map((o) => o.name || nameFromEmail(o.email)).filter(Boolean)
+    const who = names.length > 2 ? `${names.slice(0, 2).join(', ')} +${names.length - 2}` : names.join(' & ')
+    out.push({ id: `gcal:${e.id}`, who: who || e.title, starts, decided: null, lookup: names[0] })
+  }
+  return out
+}
+
+/** Accepted offers plus Google Calendar meetings (when connected), soonest first. */
+async function meetingsBetween(email: string, now: Date, from: Date, to: Date): Promise<Meeting[]> {
+  const accepted = await acceptedMeetings(email, from, to).catch(() => [] as Meeting[])
+  if (!(await gcalConnected(email))) return accepted
+  // The calendar window starts now; the read is capped at 7 days in google-calendar.ts.
+  const days = Math.ceil((to.getTime() - now.getTime()) / (24 * HOUR))
+  const events = await upcomingEvents(email, days, now).catch((e) => {
+    console.warn(`pen proactive: google calendar for ${email}: ${(e as Error).message}`)
+    return [] as UpcomingEvent[]
+  })
+  return [...accepted, ...calendarMeetings(events, from, to, accepted)].sort((a, b) => a.starts.getTime() - b.starts.getTime())
 }
 
 async function recentSessions(email: string, since: Date): Promise<Session[]> {
@@ -459,7 +508,7 @@ async function meetingBrief(email: string, m: Meeting, lang: Lang): Promise<stri
   const C = COPY[lang]
   try {
     const { personBriefFor } = await import('./whatsapp/agent')
-    const b = await personBriefFor(email, m.who)
+    const b = await personBriefFor(email, m.lookup ?? m.who)
     const lines: string[] = []
     const last = b.last_calls?.[0]
     if (last?.summary) {
@@ -495,7 +544,7 @@ export async function dueFor(email: string, now: Date, tz: string, lang: Lang, p
 
   const todayStart = zonedTime(today, 0, tz)
   const dayAfter = zonedTime(addDays(today, 2), 0, tz)
-  const meetings = kindOn(prefs, 'morning_brief') || kindOn(prefs, 'meeting_brief') ? await acceptedMeetings(email, todayStart, dayAfter).catch(() => []) : []
+  const meetings = kindOn(prefs, 'morning_brief') || kindOn(prefs, 'meeting_brief') ? await meetingsBetween(email, now, todayStart, dayAfter).catch(() => []) : []
   const sessions = await recentSessions(email, new Date(t - 120 * 24 * HOUR))
   const dueToday = dueOn(sessions, today)
   const meetingsToday = meetings.filter((m) => localParts(m.starts, tz).date === today && m.starts.getTime() > t)

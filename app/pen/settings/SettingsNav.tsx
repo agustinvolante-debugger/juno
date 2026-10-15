@@ -7,10 +7,10 @@ import { useCopy } from '../LangContext'
 import type { Copy } from '@/lib/pen/i18n'
 import { SUPPORT_EMAIL } from '@/lib/support'
 
-const SN: Copy<{ profile: string; aria: string; billing: string; invite: string; help: string }> = {
-  en: { profile: 'Profile', aria: 'Settings', billing: 'Billing', invite: 'Invite friends', help: 'Help' },
-  es: { profile: 'Perfil', aria: 'Ajustes', billing: 'Facturación', invite: 'Invitar amigos', help: 'Ayuda' },
-  pt: { profile: 'Perfil', aria: 'Configurações', billing: 'Cobrança', invite: 'Convidar amigos', help: 'Ajuda' },
+const SN: Copy<{ profile: string; aria: string; billing: string; invite: string; help: string; calendar: string }> = {
+  en: { profile: 'Profile', aria: 'Settings', billing: 'Billing', invite: 'Invite friends', help: 'Help', calendar: 'Calendar' },
+  es: { profile: 'Perfil', aria: 'Ajustes', billing: 'Facturación', invite: 'Invitar amigos', help: 'Ayuda', calendar: 'Calendario' },
+  pt: { profile: 'Perfil', aria: 'Configurações', billing: 'Cobrança', invite: 'Convidar amigos', help: 'Ajuda', calendar: 'Agenda' },
 }
 
 const ITEMS: { href: string; label: 'profile' | 'WhatsApp'; icon: IconName }[] = [
@@ -22,7 +22,7 @@ const ITEMS: { href: string; label: 'profile' | 'WhatsApp'; icon: IconName }[] =
  * `whatsapp` is false until the Vonage env vars exist, so nobody finds a page that can't work.
  * `billing` is true for anyone Stripe knows: pause, and the way into Stripe's portal.
  */
-export default function SettingsNav({ whatsapp = false, billing = false, notion = false, imessage = false }: { whatsapp?: boolean; billing?: boolean; notion?: boolean; imessage?: boolean }) {
+export default function SettingsNav({ whatsapp = false, billing = false, notion = false, calendar = false, imessage = false }: { whatsapp?: boolean; billing?: boolean; notion?: boolean; calendar?: boolean; imessage?: boolean }) {
   const T = useCopy(SN)
   const path = usePathname()
   return (
@@ -37,6 +37,12 @@ export default function SettingsNav({ whatsapp = false, billing = false, notion 
         <Link href="/pen/settings/notion" className="pen-cat" data-active={path === '/pen/settings/notion'} aria-current={path === '/pen/settings/notion' ? 'page' : undefined}>
           <Icon name="link" size={19} />
           <span className="pen-cat-label">Notion</span>
+        </Link>
+      )}
+      {calendar && (
+        <Link href="/pen/settings/calendar" className="pen-cat" data-active={path === '/pen/settings/calendar'} aria-current={path === '/pen/settings/calendar' ? 'page' : undefined}>
+          <Icon name="calendar" size={19} />
+          <span className="pen-cat-label">{T.calendar}</span>
         </Link>
       )}
       <Link href="/pen/settings/invite" className="pen-cat" data-active={path === '/pen/settings/invite'} aria-current={path === '/pen/settings/invite' ? 'page' : undefined}>

@@ -4,8 +4,10 @@
 // once, no askConfirm. The one exception is anything that would email someone else (an invite):
 // that goes through save_draft, which shows the draft and waits for "send it".
 //
-//   meeting   → calendar links (.ics for Apple Calendar, Google template), alarm inside; offer
-//               an invite. Without a known time zone it asks for one first.
+//   meeting   → Google Calendar connected: the event is added there at once (the offer asked
+//               "Add it to your calendar?"), then a Meet link and an invite are offered. Not
+//               connected (or Google refuses): calendar links (.ics for Apple Calendar, Google
+//               template), alarm inside; offer an invite. Without a known time zone it asks first.
 //   followup  → a WhatsApp reminder when it falls within the 24-hour window, else it stays an
 //               accepted suggestion with detail.remind_at for the scheduler (and a dated to-do).
 //   notion    → the page in Notion (+ dated to-dos), or, not connected, the Settings link and a
@@ -13,7 +15,8 @@
 //   other     → accepted; the model helps with the other tools.
 
 import type Anthropic from '@anthropic-ai/sdk'
-import { calendarLinks } from '../../calendar'
+import { calendarLinks, type CalEvent } from '../../calendar'
+import { createEvent, gcalConnected } from '../../google-calendar'
 import { addReminder, maxAheadMs } from '../../reminders'
 import { createDocPage, notionConnected } from '../../notion'
 import { draftDoc } from '../../suggestion-docs'
@@ -132,15 +135,37 @@ async function acceptMeeting(ctx: Ctx, s: Suggestion, tzIn: string, startLocal: 
   const detail = { ...s.detail, local, tz }
   const when = whenText({ starts_at: start.toISOString(), detail }, ctx.lang)
   const title = s.person && !s.title.toLowerCase().includes(s.person.toLowerCase()) ? `${s.title} (${s.person})` : s.title
+  const ev: CalEvent = {
+    title,
+    start: start.toISOString(),
+    durationMin: Number(s.detail.duration_min) || 30,
+    tz,
+    description: s.quote ? `“${s.quote}”` : undefined,
+    alarmMin: 30,
+  }
+  if (await gcalConnected(ctx.email)) {
+    try {
+      const e = await createEvent(ctx.email, ev, { ref: s.id })
+      await decideSuggestion(ctx.email, s.id, 'done', { local, tz, gcal_event_id: e.id, gcal_link: e.link })
+      return {
+        ok: true,
+        added_to: 'Google Calendar',
+        title,
+        when,
+        time_zone: `${tz} (${ZONE_NOTE})`,
+        event_id: e.id,
+        note:
+          'Say "Added to your Google Calendar:" with the title and when, in one line (it has a 30-minute alert). Then offer in one ' +
+          `line a Google Meet link (on yes: add_meet_link with event_id) and to invite ${s.person ?? 'the other person'} (needs their ` +
+          'email; on yes: invite_to_meeting with event_id, which asks before Google emails them).',
+      }
+    } catch (err) {
+      // Revoked or down: fall through to the links, which still work.
+      console.warn(`pen offers: google calendar for ${s.id}: ${(err as Error).message}`)
+    }
+  }
   try {
-    const links = calendarLinks({
-      title,
-      start: start.toISOString(),
-      durationMin: Number(s.detail.duration_min) || 30,
-      tz,
-      description: s.quote ? `“${s.quote}”` : undefined,
-      alarmMin: 30,
-    })
+    const links = calendarLinks(ev)
     await decideSuggestion(ctx.email, s.id, 'done', { local, tz, calendar: links })
     return {
       ok: true,

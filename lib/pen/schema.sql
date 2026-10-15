@@ -465,3 +465,7 @@ alter table public.pen_segments enable row level security;  -- service role only
 -- bundled message share sent_at; status sending|sent|dry|no_template|failed|empty). pg_cron job
 -- 'pen-proactive' every 15 minutes with PEN_HEALTH_SECRET (add to .pentest/health-cron.sql):
 -- select cron.schedule('pen-proactive', '*/15 * * * *', $$ select net.http_get(url := 'https://www.tryjunoapp.com/api/pen/proactive', headers := jsonb_build_object('Authorization', 'Bearer <PEN_HEALTH_SECRET>'), timeout_milliseconds := 120000); $$);
+-- Google Calendar (plan F2, 15 Oct 2026, lib/pen/google-calendar.ts). One row per connected account;
+-- refresh_token is AES-GCM sealed (never plain). Disconnect revokes at Google and deletes the row.
+-- create table if not exists public.pen_gcal (email text primary key, refresh_token text not null, scope text, calendar_email text, last_error text, connected_at timestamptz not null default now());
+-- alter table public.pen_gcal enable row level security;  -- service role only
