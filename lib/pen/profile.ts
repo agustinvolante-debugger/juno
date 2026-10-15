@@ -11,6 +11,17 @@ import { roleOf, LANGUAGES, type AgentProfile } from './profile-fields'
 export { ROLES, NOTE_STYLES, LANGUAGES, type AgentProfile } from './profile-fields'
 
 const TEXT_MAX = 400
+
+const zone = (v: unknown): string | undefined => {
+  if (typeof v !== 'string' || !v || v.length > 64) return undefined
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: v })
+    return v
+  } catch {
+    return undefined
+  }
+}
+const instant = (v: unknown): string | undefined => (typeof v === 'string' && !Number.isNaN(Date.parse(v)) ? v.slice(0, 40) : undefined)
 const VOCAB_MAX = 2000
 
 /**
@@ -64,8 +75,17 @@ export function cleanProfile(raw: unknown): AgentProfile {
       return Object.keys(out).length ? out : undefined
     })(),
     answers: Object.keys(answers).length ? answers : undefined,
+    timeZone: zone(r.timeZone),
+    timeZoneSeenAt: instant(r.timeZoneSeenAt),
+    timeZoneSaid: zone(r.timeZoneSaid),
+    timeZoneSaidAt: instant(r.timeZoneSaidAt),
+    timeZoneUntil: instant(r.timeZoneUntil),
+    timeZoneBefore: zone(r.timeZoneBefore),
   }
 }
+
+/** App-set fields the Profile form never sends; a form save keeps the stored ones. */
+const APP_ZONE_KEYS = ['timeZone', 'timeZoneSeenAt', 'timeZoneSaid', 'timeZoneSaidAt', 'timeZoneUntil', 'timeZoneBefore'] as const
 
 export async function getProfile(email: string): Promise<AgentProfile> {
   const { data, error } = await supabaseAdmin
@@ -81,9 +101,10 @@ export async function getProfile(email: string): Promise<AgentProfile> {
 }
 
 export async function saveProfile(email: string, raw: unknown): Promise<AgentProfile> {
-  // First-run state is the app's, never the form's: keep what is stored, whatever the form sent.
+  // First-run state and time zone are the app's, never the form's: keep what is stored, whatever the form sent.
   const stored = await getProfileRaw(email).catch(() => null)
-  const profile = cleanProfile({ ...(raw && typeof raw === 'object' ? raw : {}), onboarding: stored?.onboarding })
+  const kept = Object.fromEntries(APP_ZONE_KEYS.map((k) => [k, stored?.[k]]))
+  const profile = cleanProfile({ ...(raw && typeof raw === 'object' ? raw : {}), onboarding: stored?.onboarding, ...kept })
   const { error } = await supabaseAdmin
     .from('pen_profiles')
     .upsert({ user_email: email.toLowerCase(), profile, updated_at: new Date().toISOString() }, { onConflict: 'user_email' })
