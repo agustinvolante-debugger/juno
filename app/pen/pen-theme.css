@@ -2570,6 +2570,9 @@ body:has(.pen-root) {
 .pen-bigpanel-filters { display: flex; flex-wrap: wrap; gap: 6px; }
 .pen-bigpanel-filters .pen-set-chip { padding: 6px 12px; font-size: var(--t-label); }
 .pen-bigpanel-n { margin-left: auto; font-family: var(--mono); font-size: var(--t-micro); color: var(--dim); }
+/* "Export to Google Sheets": a quiet chip after the count; a link to the sheet once it exists. */
+.pen-bigpanel-export { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: var(--t-label); }
+.pen-bigpanel-export:disabled { opacity: .6; cursor: progress; }
 .pen-bigpanel-list { flex: 1; overflow-y: auto; padding: 8px 12px 16px; overscroll-behavior: contain; }
 .pen-bigpanel-list .pen-row2 + .pen-row2 { border-top: 1px solid var(--hair); }
 .pen-bigpanel-orphans { padding: 12px 22px 20px; border-top: 1px solid var(--line); max-height: 36%; overflow-y: auto; }

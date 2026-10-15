@@ -21,7 +21,8 @@ import crypto from 'node:crypto'
 import { supabaseAdmin } from '@/lib/supabase'
 import type { Lang } from './i18n'
 
-export type ConnectApp = 'gcal' | 'notion'
+/** gdrive = Google Docs & Sheets: the same Google connection as gcal, the drive.file ability. */
+export type ConnectApp = 'gcal' | 'gdrive' | 'notion'
 export type Via = 'wa' | 'im'
 
 export const LINK_TTL_MS = 15 * 60 * 1000
@@ -56,7 +57,7 @@ function openPayload(domain: string, token: string): Record<string, unknown> | n
   }
 }
 
-const isApp = (a: unknown): a is ConnectApp => a === 'gcal' || a === 'notion'
+const isApp = (a: unknown): a is ConnectApp => a === 'gcal' || a === 'gdrive' || a === 'notion'
 export const viaOf = (phone: string | null | undefined): Via => (phone?.startsWith('im:') ? 'im' : 'wa')
 
 /* ------------------------------------------------------------ the link */
@@ -127,15 +128,15 @@ export async function connectedPage(app: ConnectApp, email: string, via: Via, er
 /* --------------------------------------------------------------- copy */
 
 export const APP_NAME: Record<Lang, Record<ConnectApp, string>> = {
-  en: { gcal: 'Google Calendar', notion: 'Notion' },
-  es: { gcal: 'Google Calendar', notion: 'Notion' },
-  pt: { gcal: 'Google Agenda', notion: 'Notion' },
+  en: { gcal: 'Google Calendar', gdrive: 'Google Docs & Sheets', notion: 'Notion' },
+  es: { gcal: 'Google Calendar', gdrive: 'Google Docs y Sheets', notion: 'Notion' },
+  pt: { gcal: 'Google Agenda', gdrive: 'Google Docs e Planilhas', notion: 'Notion' },
 }
 
 export const COPY = {
   en: {
     tap: (app: string, url: string) => `Tap to connect ${app} (the link works once, for 15 minutes):\n${url}`,
-    connected: { gcal: (who: string | null) => `Connected ✓ Google Calendar${who ? ` (${who})` : ''}. Events you say yes to here go straight onto it.`, notion: (who: string | null) => `Connected ✓ Notion${who ? ` (${who})` : ''}. Your notes land in the “Juno Pen notes” table, and plans and memos you say yes to go there too.` },
+    connected: { gcal: (who: string | null) => `Connected ✓ Google Calendar${who ? ` (${who})` : ''}. Events you say yes to here go straight onto it.`, gdrive: (who: string | null) => `Connected ✓ Google Docs & Sheets${who ? ` (${who})` : ''}. Docs and sheets Juno makes go into a “Juno Pen” folder in your Drive; Juno can only open the files it made.`, notion: (who: string | null) => `Connected ✓ Notion${who ? ` (${who})` : ''}. Your notes land in the “Juno Pen notes” table, and plans and memos you say yes to go there too.` },
     pageTitle: 'Connected',
     pageLine: (app: string) => `${app} is connected. You can go back to the chat.`,
     backWa: 'Go back to WhatsApp',
@@ -155,7 +156,7 @@ export const COPY = {
   },
   es: {
     tap: (app: string, url: string) => `Toca para conectar ${app} (el link sirve una vez, por 15 minutos):\n${url}`,
-    connected: { gcal: (who: string | null) => `Conectado ✓ Google Calendar${who ? ` (${who})` : ''}. Los eventos a los que digas que sí aquí van directo a tu calendario.`, notion: (who: string | null) => `Conectado ✓ Notion${who ? ` (${who})` : ''}. Tus notas llegan a la tabla “Juno Pen notes”, y los planes y memos que apruebes también.` },
+    connected: { gcal: (who: string | null) => `Conectado ✓ Google Calendar${who ? ` (${who})` : ''}. Los eventos a los que digas que sí aquí van directo a tu calendario.`, gdrive: (who: string | null) => `Conectado ✓ Google Docs y Sheets${who ? ` (${who})` : ''}. Los documentos y hojas que haga Juno van a una carpeta “Juno Pen” en tu Drive; Juno solo puede abrir los archivos que creó.`, notion: (who: string | null) => `Conectado ✓ Notion${who ? ` (${who})` : ''}. Tus notas llegan a la tabla “Juno Pen notes”, y los planes y memos que apruebes también.` },
     pageTitle: 'Conectado',
     pageLine: (app: string) => `${app} quedó conectado. Ya puedes volver al chat.`,
     backWa: 'Volver a WhatsApp',
@@ -175,7 +176,7 @@ export const COPY = {
   },
   pt: {
     tap: (app: string, url: string) => `Toque para conectar o ${app} (o link funciona uma vez, por 15 minutos):\n${url}`,
-    connected: { gcal: (who: string | null) => `Conectado ✓ Google Agenda${who ? ` (${who})` : ''}. Os eventos que você aprovar aqui vão direto para a sua agenda.`, notion: (who: string | null) => `Conectado ✓ Notion${who ? ` (${who})` : ''}. Suas notas vão para a tabela “Juno Pen notes”, e os planos e memos que você aprovar também.` },
+    connected: { gcal: (who: string | null) => `Conectado ✓ Google Agenda${who ? ` (${who})` : ''}. Os eventos que você aprovar aqui vão direto para a sua agenda.`, gdrive: (who: string | null) => `Conectado ✓ Google Docs e Planilhas${who ? ` (${who})` : ''}. Os documentos e planilhas que o Juno criar vão para uma pasta “Juno Pen” no seu Drive; o Juno só consegue abrir os arquivos que ele criou.`, notion: (who: string | null) => `Conectado ✓ Notion${who ? ` (${who})` : ''}. Suas notas vão para a tabela “Juno Pen notes”, e os planos e memos que você aprovar também.` },
     pageTitle: 'Conectado',
     pageLine: (app: string) => `O ${app} está conectado. Já pode voltar para o chat.`,
     backWa: 'Voltar para o WhatsApp',
@@ -219,7 +220,7 @@ export async function announceConnected(email: string, app: ConnectApp, via: Via
     const { userLang } = await import('./user-lang')
     const lang = await userLang(email)
     let who: string | null = null
-    if (app === 'gcal') {
+    if (app === 'gcal' || app === 'gdrive') {
       const { getGcalConnection } = await import('./google-calendar')
       who = (await getGcalConnection(email).catch(() => null))?.calendar_email ?? null
     } else {

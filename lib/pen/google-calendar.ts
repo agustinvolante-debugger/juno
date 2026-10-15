@@ -1,7 +1,7 @@
 // Google Calendar (plan F2): Juno adds the events the user says yes to, and reads their next 7 days
 // to brief them before meetings (Notes/wa-templates-and-google-verification-oct15.md, section D).
 //
-//   · ONE scope, asked for only when they tap Settings → Calendar → Connect (never at sign-in):
+//   · ONE scope, asked for only when they tap Settings → Google → Calendar → Connect (never at sign-in):
 //     calendar.events.owned (events on calendars they own). GCAL_SCOPE switches to the fallback
 //     calendar.events if Google's console doesn't offer the granular one.
 //   · access_type=offline + prompt=consent, so Google always hands back a refresh token; that is
@@ -14,6 +14,14 @@
 //
 // The state parameter is signed and carries the signed-in email, so a callback only connects the
 // account that started it; a nonce cookie also ties it to the browser.
+//
+// ONE Google connection, two abilities (15 Oct): Calendar (above) and Docs & Sheets
+// (lib/pen/google-drive.ts, scope drive.file: create files, and touch only files Juno created).
+// Each is asked for on its own, incrementally (include_granted_scopes), and both live in the one
+// pen_gcal row: one sealed refresh token, and `scope` = the abilities in use, space-separated
+// (what Google granted AND the user turned on in Juno). Turning one off while the other stays on
+// only drops it from `scope` (Google has no per-scope revoke: revoking the token takes the whole
+// grant); turning off the last one revokes at Google and deletes the row, as before.
 
 import crypto from 'node:crypto'
 import { supabaseAdmin } from '@/lib/supabase'
@@ -21,6 +29,17 @@ import type { CalEvent } from './calendar'
 
 export const GCAL_SCOPE = process.env.GCAL_SCOPE || 'https://www.googleapis.com/auth/calendar.events.owned'
 export const GCAL_FALLBACK_SCOPE = 'https://www.googleapis.com/auth/calendar.events'
+/** Docs & Sheets: create files, and read or edit only the files Juno created (non-sensitive). */
+export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file'
+/** Which ability a connect asks for. 'both' = Settings' one-tap for the two together. */
+export type GoogleWant = 'gcal' | 'drive' | 'both'
+export const asWant = (v: unknown): GoogleWant => (v === 'drive' || v === 'both' ? v : 'gcal')
+const CAL_SCOPES = [GCAL_SCOPE, GCAL_FALLBACK_SCOPE]
+const scopesFor = (want: GoogleWant): string[] => (want === 'gcal' ? [GCAL_SCOPE] : want === 'drive' ? [DRIVE_SCOPE] : [GCAL_SCOPE, DRIVE_SCOPE])
+const split = (scope: string | null | undefined) => (scope ?? '').split(/\s+/).filter(Boolean)
+/** Calendar is on for this row. A legacy row with no scope recorded was a calendar connect. */
+export const hasCalendar = (scope: string | null | undefined) => scope == null || split(scope).some((x) => CAL_SCOPES.includes(x))
+export const hasDrive = (scope: string | null | undefined) => split(scope).includes(DRIVE_SCOPE)
 /** How far ahead Juno reads, in days (the number promised to Google and in Settings). */
 export const READ_DAYS = 7
 
@@ -69,8 +88,8 @@ export function open(sealed: string): string {
 const sign = (body: string) => crypto.createHmac('sha256', secret()).update(`gcal-state.${body}`).digest('base64url')
 
 /** A state for one connect attempt: the email it belongs to, a nonce (also in a cookie), an expiry. */
-export function makeState(email: string, nonce: string, now = Date.now()): string {
-  const body = Buffer.from(JSON.stringify({ e: email.toLowerCase(), n: nonce, x: now + STATE_TTL_MS })).toString('base64url')
+export function makeState(email: string, nonce: string, now = Date.now(), want: GoogleWant = 'gcal'): string {
+  const body = Buffer.from(JSON.stringify({ e: email.toLowerCase(), n: nonce, x: now + STATE_TTL_MS, ...(want !== 'gcal' ? { w: want } : {}) })).toString('base64url')
   return `${body}.${sign(body)}`
 }
 
@@ -89,12 +108,21 @@ export function verifyState(state: string | null | undefined, email: string, non
   }
 }
 
-export function authorizeUrl(email: string, state: string, origin: string): string {
+/** The ability a website state asked for (read only after verifyState passed). */
+export function stateWant(state: string | null | undefined): GoogleWant {
+  try {
+    return asWant((JSON.parse(Buffer.from((state ?? '').split('.')[0] ?? '', 'base64url').toString('utf8')) as { w?: string }).w)
+  } catch {
+    return 'gcal'
+  }
+}
+
+export function authorizeUrl(email: string, state: string, origin: string, want: GoogleWant = 'gcal'): string {
   const q = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID!,
     redirect_uri: redirectUri(origin),
     response_type: 'code',
-    scope: GCAL_SCOPE,
+    scope: scopesFor(want).join(' '),
     access_type: 'offline',
     prompt: 'consent',
     include_granted_scopes: 'true',
@@ -123,10 +151,22 @@ export async function getGcalConnection(email: string): Promise<GcalConnection |
   return rest
 }
 
-/** Connected and usable (a refresh Google refused means reconnect; until then, the links). */
+/** Calendar connected and usable (a refresh Google refused means reconnect; until then, the links). */
 export async function gcalConnected(email: string): Promise<boolean> {
   const r = await row(email).catch(() => null)
-  return Boolean(r && !r.last_error)
+  return Boolean(r && !r.last_error && hasCalendar(r.scope))
+}
+
+/** Docs & Sheets connected and usable (drive.file granted and turned on). */
+export async function driveConnected(email: string): Promise<boolean> {
+  if (!gcalConfigured()) return false
+  const r = await row(email).catch(() => null)
+  return Boolean(r && !r.last_error && hasDrive(r.scope))
+}
+
+/** Which abilities a connection has on (for Settings and connection_status). */
+export function abilities(c: Pick<GcalConnection, 'scope'> | null | undefined): { calendar: boolean; drive: boolean } {
+  return c ? { calendar: hasCalendar(c.scope), drive: hasDrive(c.scope) } : { calendar: false, drive: false }
 }
 
 /* ------------------------------------------------------------ tokens */
@@ -156,25 +196,42 @@ function idTokenEmail(idToken: string | undefined): string | null {
   }
 }
 
-/** The OAuth callback: swap the code for tokens, keep the refresh token sealed. */
-export async function connectGcal(email: string, code: string, origin: string): Promise<GcalConnection> {
+const NOT_GRANTED: Record<GoogleWant, string> = {
+  gcal: 'Calendar access wasn’t allowed on Google’s screen, so nothing was connected. Try again and leave the calendar box ticked.',
+  drive: 'Docs & Sheets access wasn’t allowed on Google’s screen, so nothing was connected. Try again and leave the Google Drive box ticked.',
+  both: 'Neither Calendar nor Docs & Sheets was allowed on Google’s screen, so nothing was connected. Try again and leave the boxes ticked.',
+}
+
+/**
+ * The OAuth callback: swap the code for tokens, keep the refresh token sealed, and turn on what
+ * was asked for and granted. What was already on stays on (if Google still grants it).
+ */
+export async function connectGcal(email: string, code: string, origin: string, want: GoogleWant = 'gcal'): Promise<GcalConnection> {
   const t = await tokenCall({ code, grant_type: 'authorization_code', redirect_uri: redirectUri(origin) })
   if (t.status >= 400 || !t.access_token) throw new Error(t.error_description ?? t.error ?? 'Google didn’t accept the connection.')
-  if (!t.refresh_token) throw new Error('Google didn’t give Juno lasting access. Try connecting again.')
-  const granted = (t.scope ?? '').split(/\s+/)
-  if (!granted.includes(GCAL_SCOPE) && !granted.includes(GCAL_FALLBACK_SCOPE)) {
-    // They unticked the calendar box on Google's screen: don't keep a token that can't do the job.
-    await revokeToken(t.refresh_token)
-    throw new Error('Calendar access wasn’t allowed on Google’s screen, so nothing was connected. Try again and leave the calendar box ticked.')
-  }
   const lower = email.toLowerCase()
+  const prior = await row(lower)
+  const granted = split(t.scope)
+  const asked = want === 'drive' ? [DRIVE_SCOPE] : want === 'gcal' ? CAL_SCOPES : [...CAL_SCOPES, DRIVE_SCOPE]
+  const newly = granted.filter((x) => asked.includes(x))
+  if (!newly.length) {
+    // They unticked the box on Google's screen: don't keep a token that can't do the job. With a
+    // connection already on, the token is just dropped (revoking it would revoke that one too).
+    if (!prior && t.refresh_token) await revokeToken(t.refresh_token)
+    throw new Error(NOT_GRANTED[want])
+  }
+  const refresh = t.refresh_token ?? (prior ? open(prior.refresh_token) : null)
+  if (!refresh) throw new Error('Google didn’t give Juno lasting access. Try connecting again.')
+  // Kept on: what was on before and Google still grants (incremental grants come back together).
+  const kept = prior ? split(prior.scope ?? GCAL_SCOPE).filter((x) => granted.includes(x)) : []
+  const scope = [...new Set([...kept, ...newly])].filter((x) => [...CAL_SCOPES, DRIVE_SCOPE].includes(x)).join(' ')
   cache.set(lower, { token: t.access_token, until: Date.now() + ((t.expires_in ?? 3600) - 120) * 1000 })
-  const calendarEmail = idTokenEmail(t.id_token) ?? (await primarySummary(t.access_token))
+  const calendarEmail = idTokenEmail(t.id_token) ?? (hasCalendar(scope) ? await primarySummary(t.access_token) : null) ?? prior?.calendar_email ?? null
   const { error } = await supabaseAdmin.from('pen_gcal').upsert(
     {
       email: lower,
-      refresh_token: seal(t.refresh_token),
-      scope: t.scope ?? GCAL_SCOPE,
+      refresh_token: seal(refresh),
+      scope,
       calendar_email: calendarEmail,
       connected_at: new Date().toISOString(),
       last_error: null,
@@ -196,7 +253,7 @@ async function primarySummary(token: string): Promise<string | null> {
   }
 }
 
-const RECONNECT = 'Google Calendar stopped accepting Juno’s access. Connect it again to keep adding events.'
+const RECONNECT = 'Google stopped accepting Juno’s access. Connect it again in Settings → Google.'
 
 /** A live access token, refreshed when it's within two minutes of expiring. Throws when not connected. */
 export async function accessToken(email: string): Promise<string> {
@@ -204,7 +261,7 @@ export async function accessToken(email: string): Promise<string> {
   const hit = cache.get(lower)
   if (hit && hit.until > Date.now()) return hit.token
   const r = await row(lower)
-  if (!r) throw new Error('Google Calendar isn’t connected.')
+  if (!r) throw new Error('Google isn’t connected.')
   if (r.last_error) throw new Error(r.last_error)
   const t = await tokenCall({ grant_type: 'refresh_token', refresh_token: open(r.refresh_token) })
   if (!t.access_token) {
@@ -404,15 +461,35 @@ async function revokeToken(token: string): Promise<boolean> {
   }
 }
 
+/** What Juno kept about calendar events: the gcal ids on accepted offers and brief dedupe rows. */
+async function forgetCalendar(lower: string): Promise<void> {
+  await supabaseAdmin.from('pen_proactive_log').delete().eq('user_email', lower).like('ref', 'gcal:%')
+  const { data } = await supabaseAdmin.from('pen_suggestions').select('id,detail').eq('user_email', lower).not('detail->gcal_event_id', 'is', null)
+  for (const s of (data ?? []) as { id: string; detail: Record<string, unknown> }[]) {
+    const { gcal_event_id: _i, gcal_link: _l, gcal_meet: _m, ...detail } = s.detail
+    void _i; void _l; void _m
+    await supabaseAdmin.from('pen_suggestions').update({ detail }).eq('id', s.id)
+  }
+}
+
 /**
- * Revoke at Google, delete the token, and forget what Juno kept about calendar events: the gcal
- * ids on accepted offers and the brief dedupe rows for calendar events. Revocation failing (a
- * token Google already dropped) never stops the delete.
+ * Turn off one ability ('gcal' | 'drive') or everything ('all'). The last one off (or 'all'):
+ * revoke at Google and delete the token, as before; revocation failing (a token Google already
+ * dropped) never stops the delete. One off while the other stays on: Juno stops using it and
+ * forgets what it kept for it; the grant stays at Google until the last one goes (`partial`).
+ * Files Juno made in Drive stay the user's.
  */
-export async function disconnectGcal(email: string): Promise<{ revoked: boolean }> {
+export async function disconnectGoogle(email: string, what: 'gcal' | 'drive' | 'all' = 'all'): Promise<{ revoked: boolean; partial: boolean }> {
   const lower = email.toLowerCase()
   const r = await row(lower)
   cache.delete(lower)
+  const left = r && what !== 'all' ? split(r.scope ?? GCAL_SCOPE).filter((x) => (what === 'gcal' ? !CAL_SCOPES.includes(x) : x !== DRIVE_SCOPE)) : []
+  if (r && left.length) {
+    const { error } = await supabaseAdmin.from('pen_gcal').update({ scope: left.join(' ') }).eq('email', lower)
+    if (error) throw new Error(error.message)
+    if (what === 'gcal') await forgetCalendar(lower)
+    return { revoked: false, partial: true }
+  }
   let revoked = false
   if (r) {
     try {
@@ -423,12 +500,11 @@ export async function disconnectGcal(email: string): Promise<{ revoked: boolean 
   }
   const { error } = await supabaseAdmin.from('pen_gcal').delete().eq('email', lower)
   if (error) throw new Error(error.message)
-  await supabaseAdmin.from('pen_proactive_log').delete().eq('user_email', lower).like('ref', 'gcal:%')
-  const { data } = await supabaseAdmin.from('pen_suggestions').select('id,detail').eq('user_email', lower).not('detail->gcal_event_id', 'is', null)
-  for (const s of (data ?? []) as { id: string; detail: Record<string, unknown> }[]) {
-    const { gcal_event_id: _i, gcal_link: _l, gcal_meet: _m, ...detail } = s.detail
-    void _i; void _l; void _m
-    await supabaseAdmin.from('pen_suggestions').update({ detail }).eq('id', s.id)
-  }
-  return { revoked }
+  if (what !== 'drive') await forgetCalendar(lower)
+  return { revoked, partial: false }
+}
+
+/** Settings → Google → Calendar → Disconnect (and the chat's disconnect_app). */
+export async function disconnectGcal(email: string): Promise<{ revoked: boolean; partial: boolean }> {
+  return disconnectGoogle(email, 'gcal')
 }

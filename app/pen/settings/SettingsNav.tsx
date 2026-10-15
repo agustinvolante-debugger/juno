@@ -8,9 +8,9 @@ import type { Copy } from '@/lib/pen/i18n'
 import { SUPPORT_EMAIL } from '@/lib/support'
 
 const SN: Copy<{ profile: string; aria: string; billing: string; invite: string; help: string; calendar: string }> = {
-  en: { profile: 'Profile', aria: 'Settings', billing: 'Billing', invite: 'Invite friends', help: 'Help', calendar: 'Calendar' },
-  es: { profile: 'Perfil', aria: 'Ajustes', billing: 'Facturación', invite: 'Invitar amigos', help: 'Ayuda', calendar: 'Calendario' },
-  pt: { profile: 'Perfil', aria: 'Configurações', billing: 'Cobrança', invite: 'Convidar amigos', help: 'Ajuda', calendar: 'Agenda' },
+  en: { profile: 'Profile', aria: 'Settings', billing: 'Billing', invite: 'Invite friends', help: 'Help', calendar: 'Google' },
+  es: { profile: 'Perfil', aria: 'Ajustes', billing: 'Facturación', invite: 'Invitar amigos', help: 'Ayuda', calendar: 'Google' },
+  pt: { profile: 'Perfil', aria: 'Configurações', billing: 'Cobrança', invite: 'Convidar amigos', help: 'Ajuda', calendar: 'Google' },
 }
 
 const ITEMS: { href: string; label: 'profile' | 'WhatsApp'; icon: IconName }[] = [
@@ -40,7 +40,7 @@ export default function SettingsNav({ whatsapp = false, billing = false, notion 
         </Link>
       )}
       {calendar && (
-        <Link href="/pen/settings/calendar" className="pen-cat" data-active={path === '/pen/settings/calendar'} aria-current={path === '/pen/settings/calendar' ? 'page' : undefined}>
+        <Link href="/pen/settings/google" className="pen-cat" data-active={path === '/pen/settings/google'} aria-current={path === '/pen/settings/google' ? 'page' : undefined}>
           <Icon name="calendar" size={19} />
           <span className="pen-cat-label">{T.calendar}</span>
         </Link>

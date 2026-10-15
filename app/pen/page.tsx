@@ -20,6 +20,7 @@ import { appLangFor } from './app-lang'
 import { parseLang } from '@/lib/pen/currency'
 import { REF_COOKIE, cleanCode, referrerFor } from '@/lib/pen/referrals'
 import { getConnection, notionConfigured, sentPages } from '@/lib/pen/notion'
+import { driveConnected, gcalConfigured } from '@/lib/pen/google-calendar'
 
 export const dynamic = 'force-dynamic'
 
@@ -66,6 +67,7 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
   let showReferral = false
   let showFeedback = false
   let notion: { connected: boolean; sent: Record<string, string> } | null = null
+  let google: { drive: boolean } | null = null
   let suggestions: Awaited<ReturnType<typeof homeSuggestions>> | null = null
   try {
     // Sequential on purpose: if the tables are missing, the first call already tells us
@@ -89,6 +91,7 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
       const connected = Boolean(await getConnection(email).catch(() => null))
       notion = { connected, sent: connected ? await sentPages(email).catch(() => ({})) : {} }
     }
+    if (gcalConfigured()) google = { drive: await driveConnected(email).catch(() => false) }
     // The feedback pop-up: once, after the 3rd finished recording of their own (the sample
     // doesn't count), and never on the same visit as the tour or the referral pop-up.
     showFeedback =
@@ -125,6 +128,7 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
       showReferral={showReferral}
       showFeedback={showFeedback}
       notion={notion}
+      google={google}
       loadError={loadError}
       email={email}
       name={session?.user?.name ?? null}

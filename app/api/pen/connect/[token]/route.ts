@@ -46,15 +46,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   }
 
   const L = await lang(v.email)
-  const configured: Record<ConnectApp, boolean> = { gcal: gcalConfigured(), notion: notionConfigured() }
+  const configured: Record<ConnectApp, boolean> = { gcal: gcalConfigured(), gdrive: gcalConfigured(), notion: notionConfigured() }
   if (!configured[v.app]) return refuse(503, L, 'setup')
   if (await readOnlyRefusal(v.email)) return refuse(403, L, 'readonly')
   if (!(await claimNonce(v.email, v.nonce, v.app))) return refuse(410, L, 'used')
 
   const nonce = crypto.randomBytes(16).toString('hex')
   const state = chatState(v.email, v.app, nonce, v.via)
-  const res = NextResponse.redirect(v.app === 'gcal' ? gcalAuthorizeUrl(v.email, state, origin) : notionAuthorizeUrl(origin, state))
-  res.cookies.set(v.app === 'gcal' ? STATE_COOKIE : 'juno_notion_state', nonce, { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 600, secure: origin.startsWith('https') })
+  const google = v.app === 'gcal' || v.app === 'gdrive'
+  const res = NextResponse.redirect(google ? gcalAuthorizeUrl(v.email, state, origin, v.app === 'gdrive' ? 'drive' : 'gcal') : notionAuthorizeUrl(origin, state))
+  res.cookies.set(google ? STATE_COOKIE : 'juno_notion_state', nonce, { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 600, secure: origin.startsWith('https') })
   res.headers.set('Cache-Control', 'no-store')
   res.headers.set('Referrer-Policy', 'no-referrer')
   return res
