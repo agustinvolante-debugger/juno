@@ -26,7 +26,9 @@ export type WebSuggestion = {
     gcalLink?: string | null
     ics?: string | null
     google?: string | null
+    /** The page's address (Notion or Google Docs; docDest says which). */
     notionUrl?: string | null
+    docDest?: 'notion' | 'google_docs' | null
     remindAt?: string | null
     toDoOnly?: boolean
     plain?: boolean
@@ -35,8 +37,11 @@ export type WebSuggestion = {
 
 /** The result of a web accept, read from offer-accept.ts's fields. */
 export type AcceptOutcome =
-  | { status: 'done'; suggestion: WebSuggestion; addedTo?: 'google' | 'links'; reminderAt?: string | null; dueDate?: string | null; notionUrl?: string | null; plan?: string[] }
+  | { status: 'done'; suggestion: WebSuggestion; addedTo?: 'google' | 'links'; reminderAt?: string | null; dueDate?: string | null; notionUrl?: string | null; docDest?: 'notion' | 'google_docs'; plan?: string[] }
   | { status: 'needs_time' }
   | { status: 'needs_zone' }
-  | { status: 'connect_notion'; settings: string }
+  /** Both Notion and Google Docs are connected and neither was used yet: ask which, once. */
+  | { status: 'choose_dest' }
+  /** Nowhere to write the page: connect Notion (settings) or, when available, Google Docs (google). */
+  | { status: 'connect_notion'; settings: string; google?: string | null }
   | { status: 'error'; error: string }

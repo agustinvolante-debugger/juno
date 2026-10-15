@@ -11,14 +11,15 @@
 //   followup  → a WhatsApp reminder (pen_reminders) when it is within maxAheadMs (a day, or 30
 //               days with the user_reminder template); later than that, only the dated to-do,
 //               and the model says so.
-//   notion    → the page in Notion (+ dated to-dos), or, not connected, a one-tap connect link and a
-//               plain to-do plan on the next yes.
+//   notion    → the page (+ dated to-dos) in Notion or Google Docs (whichever is connected; both:
+//               the one used last, or it asks once), or, neither connected, one-tap connect links
+//               and a plain to-do plan on the next yes.
 //   other     → accepted; the model helps with the other tools.
 //
 // The accept logic itself is lib/pen/offer-accept.ts, shared with the web ("Juno noticed").
 
 import type Anthropic from '@anthropic-ai/sdk'
-import { acceptFollowup, acceptMeeting, acceptNotion } from '../../offer-accept'
+import { acceptFollowup, acceptMeeting, acceptNotion, asDest } from '../../offer-accept'
 import { decideSuggestion, listSuggestions, resolveSuggestion, whenText } from '../../suggestions'
 import type { Suggestion } from '../../suggestions-types'
 import type { Ctx } from '../agent'
@@ -28,7 +29,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: 'list_suggestions',
     description:
-      'What Juno offered (or could offer) to help with from the user\'s recordings: meetings heard, reminders, Notion pages. ' +
+      'What Juno offered (or could offer) to help with from the user\'s recordings: meetings heard, reminders, pages (Notion or Google Docs). ' +
       'Each with its number in the latest offer message, id, state and the words heard.',
     input_schema: {
       type: 'object',
@@ -43,7 +44,8 @@ const TOOLS: Anthropic.Tool[] = [
       'The user said yes to an offer: "yes to 1", "sure", "add it". ref = the number in the latest offer message ("1") or an id. ' +
       'Runs it at once (the offer was the question). time_zone: an IANA zone only if the user just gave one, else "". ' +
       'start_local: "YYYY-MM-DDTHH:MM" only if the user corrected the time, else "". plain: true when the user wants the plan ' +
-      'as Juno to-dos instead of Notion.',
+      'as Juno to-dos instead of a page. destination: for a page, "notion" or "google_docs" only if the user said where (or ' +
+      'answered the tool\'s question), else "".',
     input_schema: {
       type: 'object',
       properties: {
@@ -51,8 +53,9 @@ const TOOLS: Anthropic.Tool[] = [
         time_zone: { type: 'string' },
         start_local: { type: 'string' },
         plain: { type: 'boolean' },
+        destination: { type: 'string', enum: ['', 'notion', 'google_docs'] },
       },
-      required: ['ref', 'time_zone', 'start_local', 'plain'],
+      required: ['ref', 'time_zone', 'start_local', 'plain', 'destination'],
       additionalProperties: false,
     },
   },
@@ -105,7 +108,7 @@ async function dismiss(ctx: Ctx, ref: string): Promise<unknown> {
   return { ok: true, dismissed: s.detail.offer ?? s.title, note: 'Confirm in a few words; no need to explain.' }
 }
 
-async function accept(ctx: Ctx, i: { ref: string; time_zone: string; start_local: string; plain: boolean }): Promise<unknown> {
+async function accept(ctx: Ctx, i: { ref: string; time_zone: string; start_local: string; plain: boolean; destination: string }): Promise<unknown> {
   const s = await find(ctx, i.ref)
   if ('error' in s) return s
   switch (s.kind) {
@@ -114,7 +117,7 @@ async function accept(ctx: Ctx, i: { ref: string; time_zone: string; start_local
     case 'followup':
       return acceptFollowup(ctx, s, i.time_zone)
     case 'notion':
-      return acceptNotion(ctx, s, i.plain)
+      return acceptNotion(ctx, s, i.plain, asDest(i.destination))
     default:
       await decideSuggestion(ctx.email, s.id, 'accepted')
       return { ok: true, title: s.title, heard: s.quote, person: s.person, recording: s.session_id, note: 'Help with it now with the other tools (save_draft, add_todo…); ask one short question if it is unclear what they want.' }
@@ -128,7 +131,7 @@ export const offersModule: ToolModule = {
       case 'list_suggestions':
         return list(ctx, str(input, 'session_id'))
       case 'accept_suggestion':
-        return accept(ctx, { ref: str(input, 'ref'), time_zone: str(input, 'time_zone'), start_local: str(input, 'start_local'), plain: input.plain === true })
+        return accept(ctx, { ref: str(input, 'ref'), time_zone: str(input, 'time_zone'), start_local: str(input, 'start_local'), plain: input.plain === true, destination: str(input, 'destination') })
       case 'dismiss_suggestion':
         return dismiss(ctx, str(input, 'ref'))
       default:

@@ -82,6 +82,9 @@ const OV_EN = {
   missedFilter: 'Filter by words or recording',
   last7: 'Last 7 days',
   peopleFilter: 'Filter by name, email or role',
+  sheetExport: 'Export to Google Sheets',
+  sheetExporting: 'Making the sheet…',
+  sheetOpen: (n: number) => `Open the sheet (${n}) ↗`,
   heardIn: 'Heard in your recordings',
   heardTimes: (n: number) => `said ${n}×`,
   recent: 'Recent',
@@ -172,6 +175,9 @@ const OV: Copy<typeof OV_EN> = {
     missedFilter: 'Filtra por palabras o grabación',
     last7: 'Últimos 7 días',
     peopleFilter: 'Filtra por nombre, correo o cargo',
+    sheetExport: 'Exportar a Google Sheets',
+    sheetExporting: 'Creando la hoja…',
+    sheetOpen: (n: number) => `Abrir la hoja (${n}) ↗`,
     heardIn: 'Escuchados en tus grabaciones',
     heardTimes: (n) => `dicho ${n}×`,
     recent: 'Recientes',
@@ -258,6 +264,9 @@ const OV: Copy<typeof OV_EN> = {
     missedFilter: 'Filtre por palavras ou gravação',
     last7: 'Últimos 7 dias',
     peopleFilter: 'Filtre por nome, e-mail ou cargo',
+    sheetExport: 'Exportar para o Planilhas Google',
+    sheetExporting: 'Criando a planilha…',
+    sheetOpen: (n: number) => `Abrir a planilha (${n}) ↗`,
     heardIn: 'Ouvidos nas suas gravações',
     heardTimes: (n) => `dito ${n}×`,
     recent: 'Recentes',
@@ -308,7 +317,10 @@ export default function Overview({
   onPeopleChanged = () => {},
   firstName = null,
   suggestions = null,
+  sheets = false,
 }: {
+  /** Google is set up and the account can act: "Export to Google Sheets" on To-do and People. */
+  sheets?: boolean
   /** Juno's open offers and recent yeses, from the server render (JunoNoticed.tsx). */
   suggestions?: Lists | null
   /** A person was renamed or deleted here: reload the People list. */
@@ -577,13 +589,13 @@ export default function Overview({
 
         <Panel open={open} onClose={() => setOpen(null)}>
           {open === 'todo' && (
-            <TodoPanel actions={mineList} others={othersList} count={openCount} onTick={tick} onOpen={(id) => { setOpen(null); onOpen(id) }} />
+            <TodoPanel actions={mineList} others={othersList} count={openCount} onTick={tick} onOpen={(id) => { setOpen(null); onOpen(id) }} sheets={sheets} />
           )}
           {open === 'missed' && (
             <MissedPanel missed={missed} count={missedCount} onHandle={handle} onPromote={promote} onOpen={(id) => { setOpen(null); onOpen(id) }} />
           )}
           {open === 'people' && (
-            <PeoplePanel people={people} clients={stats.clients} clientsByName={clientsByName} onAsk={(p) => { setOpen(null); onAskPerson(p) }} actions={personActions} onOpenRecording={(id) => { setOpen(null); onOpen(id) }} />
+            <PeoplePanel people={people} clients={stats.clients} clientsByName={clientsByName} onAsk={(p) => { setOpen(null); onAskPerson(p) }} actions={personActions} onOpenRecording={(id) => { setOpen(null); onOpen(id) }} sheets={sheets} />
           )}
         </Panel>
       </LayoutGroup>
@@ -1176,7 +1188,9 @@ function Panel({ open, onClose, children }: { open: Kind | null; onClose: () => 
   )
 }
 
-function Toolbar({ q, setQ, placeholder, filters, filter, setFilter, count }: {
+function Toolbar({ q, setQ, placeholder, filters, filter, setFilter, count, action }: {
+  /** One small action at the end of the row (Export to Google Sheets). */
+  action?: React.ReactNode
   q: string
   setQ: (v: string) => void
   placeholder: string
@@ -1200,7 +1214,42 @@ function Toolbar({ q, setQ, placeholder, filters, filter, setFilter, count }: {
         ))}
       </div>
       <span className="pen-bigpanel-n">{T.shown(count)}</span>
+      {action}
     </div>
+  )
+}
+
+/**
+ * "Export to Google Sheets" (lib/pen/google-exports.ts): a new Sheet in the user's "Juno Pen"
+ * Drive folder, then a link to it. Not connected: Settings → Google, at Docs & Sheets.
+ */
+function ExportSheet({ what }: { what: 'todos' | 'contacts' }) {
+  const T = useCopy(OV)
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState<{ url: string; rows: number } | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  if (done) return <a className="pen-notion-sent pen-bigpanel-export" href={done.url} target="_blank" rel="noreferrer">{T.sheetOpen(done.rows)}</a>
+  async function run() {
+    setBusy(true); setErr(null)
+    try {
+      const r = await fetch('/api/pen/google-sheets/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ what }) })
+      const j = (await r.json().catch(() => ({}))) as { url?: string; rows?: number; connect?: boolean; error?: string }
+      if (r.status === 409 && j.connect) { window.location.href = '/pen/settings/google'; return }
+      if (!r.ok || !j.url) throw new Error(j.error || T.saveFailed)
+      setDone({ url: j.url, rows: j.rows ?? 0 })
+    } catch (e) {
+      setErr(errMessage(e, T.saveFailed))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <>
+      <button type="button" className="pen-set-chip pen-bigpanel-export" onClick={run} disabled={busy} aria-busy={busy}>
+        <Icon name="doc" size={14} />{busy ? T.sheetExporting : T.sheetExport}
+      </button>
+      {err && <span className="pen-ref-err" role="alert">{err}</span>}
+    </>
   )
 }
 
@@ -1209,7 +1258,7 @@ const match = (q: string, ...xs: (string | null | undefined)[]) => {
   return !n || xs.some((x) => x?.toLowerCase().includes(n))
 }
 
-function TodoPanel({ actions, others, count, onTick, onOpen }: { actions: OpenAction[]; others: OpenAction[]; count: number; onTick: (a: OpenAction) => void; onOpen: (id: string) => void }) {
+function TodoPanel({ actions, others, count, onTick, onOpen, sheets = false }: { actions: OpenAction[]; others: OpenAction[]; count: number; onTick: (a: OpenAction) => void; onOpen: (id: string) => void; sheets?: boolean }) {
   const T = useCopy(OV)
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState('all')
@@ -1225,6 +1274,7 @@ function TodoPanel({ actions, others, count, onTick, onOpen }: { actions: OpenAc
         q={q}
         setQ={setQ}
         placeholder={T.todoFilter}
+        action={sheets ? <ExportSheet what="todos" /> : undefined}
         filters={[
           { key: 'all', label: T.all(count) },
           { key: 'priority', label: T.priority },
@@ -1278,7 +1328,8 @@ function MissedPanel({ missed, count, onHandle, onPromote, onOpen }: {
   )
 }
 
-function PeoplePanel({ people, clients, clientsByName, onAsk, actions, onOpenRecording }: {
+function PeoplePanel({ people, clients, clientsByName, onAsk, actions, onOpenRecording, sheets = false }: {
+  sheets?: boolean
   /** Opens a recording, for a name heard in it. */
   onOpenRecording?: (sessionId: string) => void
   people: PersonCard[]
@@ -1316,6 +1367,7 @@ function PeoplePanel({ people, clients, clientsByName, onAsk, actions, onOpenRec
         q={q}
         setQ={setQ}
         placeholder={T.peopleFilter}
+        action={sheets ? <ExportSheet what="contacts" /> : undefined}
         filters={[{ key: 'recent', label: T.recent }, { key: 'calls', label: T.mostCalls }, { key: 'az', label: T.az }]}
         filter={filter}
         setFilter={setFilter}

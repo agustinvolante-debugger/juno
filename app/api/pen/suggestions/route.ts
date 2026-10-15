@@ -6,7 +6,7 @@ import { userLang } from '@/lib/pen/user-lang'
 import { getLinkByEmail } from '@/lib/pen/whatsapp/store'
 import { decideSuggestion, resolveSuggestion, validZone } from '@/lib/pen/suggestions'
 import { homeSuggestions, recordingSuggestions, titlesFor, view } from '@/lib/pen/suggestions-web'
-import { acceptFollowup, acceptMeeting, acceptNotion, acceptOther } from '@/lib/pen/offer-accept'
+import { acceptFollowup, acceptMeeting, acceptNotion, acceptOther, asDest } from '@/lib/pen/offer-accept'
 import type { AcceptOutcome } from '@/lib/pen/suggestion-view'
 import type { Lang } from '@/lib/pen/currency'
 
@@ -18,7 +18,7 @@ export const maxDuration = 60
 //
 //   GET  ?session=<id>  the ≤3 open offers for that recording ("Juno noticed")
 //   GET                 Home: every open offer (best first) + what Juno did in the last 14 days
-//   POST {id, action: 'accept' | 'dismiss', time_zone?, start_local?, plain?}
+//   POST {id, action: 'accept' | 'dismiss', time_zone?, start_local?, plain?, destination?: 'notion' | 'google_docs'}
 //
 // Nothing runs without the click: POST is the only thing that acts, and only on the user's own
 // open suggestion. A read-only account can look but not act.
@@ -43,7 +43,7 @@ export async function POST(req: Request) {
   if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   const refusal = await readOnlyRefusal(email)
   if (refusal) return NextResponse.json({ error: refusal }, { status: 403 })
-  const b = (await req.json().catch(() => ({}))) as { id?: string; action?: string; time_zone?: string; start_local?: string; plain?: boolean }
+  const b = (await req.json().catch(() => ({}))) as { id?: string; action?: string; time_zone?: string; start_local?: string; plain?: boolean; destination?: string }
   if (!b.id || !/^[0-9a-f-]{36}$/i.test(b.id) || (b.action !== 'accept' && b.action !== 'dismiss')) {
     return NextResponse.json({ error: 'id and action (accept | dismiss) required' }, { status: 400 })
   }
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
     switch (s.kind) {
       case 'meeting': r = (await acceptMeeting(ctx, s, tz, local)) as Record<string, unknown>; break
       case 'followup': r = (await acceptFollowup(ctx, s, tz)) as Record<string, unknown>; break
-      case 'notion': r = (await acceptNotion(ctx, s, b.plain === true)) as Record<string, unknown>; break
+      case 'notion': r = (await acceptNotion(ctx, s, b.plain === true, asDest(b.destination))) as Record<string, unknown>; break
       default: r = await acceptOther(ctx, s)
     }
     const out = await outcome(email, lang, s.id, r)
@@ -81,7 +81,8 @@ async function outcome(email: string, lang: Lang, id: string, r: Record<string, 
   if (typeof r.error === 'string') return { status: 'error', error: r.error }
   if (r.needs === 'time') return { status: 'needs_time' }
   if (r.needs === 'time_zone') return { status: 'needs_zone' }
-  if (r.notion_connected === false) return { status: 'connect_notion', settings: '/pen/settings/notion' }
+  if (r.needs === 'destination') return { status: 'choose_dest' }
+  if (r.notion_connected === false) return { status: 'connect_notion', settings: '/pen/settings/notion', google: typeof r.google_settings_link === 'string' ? '/pen/settings/google' : null }
   const row = await resolveSuggestion(email, id)
   if (!row) return { status: 'error', error: 'not found' }
   const titles = await titlesFor(email, [row])
@@ -91,7 +92,8 @@ async function outcome(email: string, lang: Lang, id: string, r: Record<string, 
     addedTo: r.added_to === 'Google Calendar' ? 'google' : typeof r.calendar_ics === 'string' ? 'links' : undefined,
     reminderAt: typeof r.reminder_set === 'string' ? r.reminder_set : null,
     dueDate: typeof r.due_date === 'string' ? r.due_date : null,
-    notionUrl: typeof r.notion_url === 'string' ? r.notion_url : null,
+    notionUrl: typeof r.notion_url === 'string' ? r.notion_url : typeof r.google_doc_url === 'string' ? r.google_doc_url : null,
+    docDest: typeof r.google_doc_url === 'string' ? 'google_docs' : typeof r.notion_url === 'string' ? 'notion' : undefined,
     plan: Array.isArray(r.plan) ? (r.plan as string[]) : undefined,
   }
 }

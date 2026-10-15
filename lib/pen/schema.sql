@@ -470,3 +470,4 @@ alter table public.pen_segments enable row level security;  -- service role only
 -- refresh_token is AES-GCM sealed (never plain). Disconnect revokes at Google and deletes the row.
 -- create table if not exists public.pen_gcal (email text primary key, refresh_token text not null, scope text, calendar_email text, last_error text, connected_at timestamptz not null default now());
 -- alter table public.pen_gcal enable row level security;  -- service role only
+-- 15 Oct, Google Docs & Sheets (drive.file): NO DDL. pen_gcal.scope now holds the abilities in use, space-separated (calendar scope and/or drive.file); one row, one sealed token for both. The "Juno Pen" Drive folder and the doc per recording are found by Drive appProperties, the doc-destination preference by pen_suggestions.detail.dest.

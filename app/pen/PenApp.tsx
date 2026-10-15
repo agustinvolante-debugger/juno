@@ -114,7 +114,10 @@ export default function PenApp({
   showReferral = false,
   showFeedback = false,
   notion = null,
+  google = null,
 }: {
+  /** Null when Google isn't set up on the server; drive = Docs & Sheets connected (lib/pen/google-drive.ts). */
+  google?: { drive: boolean } | null
   /** The app's language (Profile "App language"). */
   appLang?: Lang
   /** First sign-in: play the tour once. */
@@ -865,6 +868,7 @@ export default function PenApp({
             askArchive(T.askPerson(label), [{ id: p.id, title: p.name, label, kind: 'person' }])
           }}
           onOpen={(id) => { openSession(id); setTab('note') }}
+          sheets={Boolean(google) && !readOnly}
         />
         </>
       ) : (
@@ -1544,6 +1548,7 @@ export default function PenApp({
                   setTab('note')
                   window.scrollTo({ top: 0, behavior: 'smooth' })
                 }}
+                sheets={Boolean(google) && !readOnly}
               />
               </>
             ) : (
@@ -1556,6 +1561,7 @@ export default function PenApp({
               <Detail
                 selfEmail={email}
                 notion={notion}
+                google={readOnly ? null : google}
                 onPeopleChanged={() => void refreshPeople()}
                 onBack={() => setView({ k: 'archive' })}
                 session={active} tab={tab} setTab={setTab}
@@ -2307,7 +2313,7 @@ function PartTranscript({ part, onUpdateNotes }: { part: PenSession; onUpdateNot
 /* =================================================================== detail */
 
 function Detail({
-  session, tab, setTab, chatOpen, onToggleChat, onNotes, onDelete, onPatch, askCategory, selfEmail, onBack, notion,
+  session, tab, setTab, chatOpen, onToggleChat, onNotes, onDelete, onPatch, askCategory, selfEmail, onBack, notion, google,
   parts, onSplit, splitting, onPeopleChanged, onCombine, onEventDay,
 }: {
   /** "Combine this day into one event" made a new recording: refresh and open it. */
@@ -2333,6 +2339,8 @@ function Detail({
   selfEmail: string
   /** Notion is available (and whether this account connected it): the "Send to Notion" button. */
   notion?: { connected: boolean; sent?: Record<string, string> } | null
+  /** Google is available (and whether Docs & Sheets is connected): the "Send to Google Docs" item. */
+  google?: { drive: boolean } | null
   onBack: () => void
   onDelete: () => void
   onPatch: (p: Partial<Pick<PenSession, 'user_notes' | 'title' | 'client_name' | 'action_done' | 'note_blocks' | 'transcript_edits' | 'briefing_sent_at' | 'meeting_type'>>) => Promise<void>
@@ -2603,6 +2611,7 @@ function Detail({
             </button>
           )}
           {notion && (n.summary || n.actions?.length) ? <NotionButton key={session.id} sessionId={session.id} connected={notion.connected} sentUrl={notion.sent?.[session.id] ?? null} /> : null}
+          {google && (n.summary || n.actions?.length) ? <GoogleDocsButton key={`g${session.id}`} sessionId={session.id} connected={google.drive} /> : null}
           {/* Two-step, inline. Deletion takes the audio with it and cannot be undone, so it
               asks — but a modal for one row would be heavier than the action deserves. */}
           {confirmDelete ? (
@@ -3413,6 +3422,41 @@ function NotionButton({ sessionId, connected, sentUrl }: { sessionId: string; co
 /* ------------------------------------------------------------ sidebar menus */
 
 /** Esc and an outside click close a small menu; Esc hands focus back to its button. */
+/**
+ * "Send to Google Docs" on a note (lib/pen/google-exports.ts). The Doc is made once; sending
+ * again opens the same one. Not connected yet: Settings → Google, at Docs & Sheets.
+ */
+function GoogleDocsButton({ sessionId, connected }: { sessionId: string; connected: boolean }) {
+  const T = useCopy(APP_COPY)
+  const [busy, setBusy] = useState(false)
+  const [url, setUrl] = useState<string | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  if (!connected) return <a className="pen-btn" role="menuitem" href="/pen/settings/google"><Icon name="doc" size={15} />{T.gdocSend}</a>
+  if (url) return <a className="pen-notion-sent" href={url} target="_blank" rel="noreferrer">{T.gdocOpen} ↗</a>
+  async function send() {
+    setBusy(true); setErr(null)
+    // Opened now, inside the click, so the browser doesn't block it; pointed at the Doc when it exists.
+    const win = window.open('', '_blank')
+    try {
+      const j = await postJson<{ url: string }>('/api/pen/google-docs/send', { id: sessionId })
+      setUrl(j.url)
+      if (win) { win.opener = null; win.location.href = j.url }
+      else window.open(j.url, '_blank', 'noopener')
+    } catch (e) {
+      win?.close()
+      setErr(errMessage(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <>
+      <button type="button" className="pen-btn" role="menuitem" onClick={send} disabled={busy}><Icon name="doc" size={15} />{busy ? T.notionSending : T.gdocSend}</button>
+      {err && <span className="pen-ref-err">{err}</span>}
+    </>
+  )
+}
+
 function useMenu() {
   const [open, setOpen] = useState(false)
   const wrap = useRef<HTMLDivElement>(null)

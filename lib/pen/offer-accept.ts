@@ -12,14 +12,18 @@
 //               inside. Without a known time (or zone) it says what it needs instead.
 //   followup  → a WhatsApp reminder (pen_reminders) when it is within maxAheadMs and there is a
 //               linked phone; otherwise only the dated to-do.
-//   notion    → the page in Notion (+ dated to-dos), or, not connected, a one-tap connect link (chat) or Settings (web); with
-//               plain, a to-do plan instead.
+//   notion    → the page (+ dated to-dos) in Notion or Google Docs: whichever is connected; both
+//               connected, the one they used last for a page, or (never used) it asks once and
+//               the answer becomes "last used". Neither: one-tap connect links (chat) or Settings
+//               (web); with plain, a to-do plan instead.
 //   other     → accepted.
 
 import { calendarLinks, type CalEvent } from './calendar'
-import { createEvent, gcalConnected } from './google-calendar'
+import { createEvent, driveConnected, gcalConfigured, gcalConnected } from './google-calendar'
 import { addReminder, maxAheadMs } from './reminders'
-import { createDocPage, notionConnected } from './notion'
+import { createDocPage, notionConfigured, notionConnected } from './notion'
+import { planToDoc } from './google-exports'
+import { supabaseAdmin } from '@/lib/supabase'
 import { connectLink, viaOf } from './connect-link'
 import { draftDoc } from './suggestion-docs'
 import { addDatedTodos, decideSuggestion, todayIn, userZone, validZone, whenText, zonedToUtc } from './suggestions'
@@ -145,24 +149,73 @@ export async function acceptFollowup(ctx: AcceptCtx, s: Suggestion, tzIn: string
   }
 }
 
-export async function acceptNotion(ctx: AcceptCtx, s: Suggestion, plain: boolean): Promise<unknown> {
-  const connected = await notionConnected(ctx.email)
-  if (!connected && !plain) {
-    // From the chat: a one-tap connect link (no website sign-in). From the website: Settings.
-    return ctx.phone
-      ? {
-          notion_connected: false,
-          connect_link: connectLink(ctx.email, 'notion', undefined, viaOf(ctx.phone)),
-          note:
-            'Notion is not connected. Say so in one line with this one-tap link to connect it (works once, 15 minutes; Juno confirms ' +
-            'here when it is connected, then they can say yes again), and offer instead a plain to-do plan here ' +
-            '(on their yes: accept_suggestion again with plain true). Nothing was created yet.',
+/** Where a page Juno offered can go. */
+export type DocDest = 'notion' | 'google_docs'
+export const asDest = (v: unknown): DocDest | null => (v === 'notion' || v === 'google_docs' ? v : null)
+
+/**
+ * The destination they used for their last page (the `dest` kept on a done offer; older ones
+ * without it were Notion). No new storage: the history is the preference.
+ */
+export async function lastDocDest(email: string): Promise<DocDest | null> {
+  const { data } = await supabaseAdmin
+    .from('pen_suggestions')
+    .select('detail')
+    .eq('user_email', email.toLowerCase())
+    .eq('kind', 'notion')
+    .eq('state', 'done')
+    .not('detail->url', 'is', null)
+    .order('decided_at', { ascending: false })
+    .limit(1)
+  const d = (data?.[0]?.detail ?? null) as Record<string, unknown> | null
+  if (!d) return null
+  return asDest(d.dest) ?? (typeof d.url === 'string' && d.url.includes('docs.google.com') ? 'google_docs' : 'notion')
+}
+
+const DEST_NAME: Record<DocDest, string> = { notion: 'Notion', google_docs: 'Google Docs' }
+
+export async function acceptNotion(ctx: AcceptCtx, s: Suggestion, plain: boolean, destIn?: DocDest | null): Promise<unknown> {
+  const [notionOn, driveOn] = plain ? [false, false] : await Promise.all([notionConnected(ctx.email), driveConnected(ctx.email)])
+  let dest: DocDest | null = null
+  if (!plain) {
+    const on: Record<DocDest, boolean> = { notion: notionOn, google_docs: driveOn }
+    if (destIn) dest = on[destIn] ? destIn : null
+    else if (notionOn && driveOn) {
+      dest = await lastDocDest(ctx.email).catch(() => null)
+      if (!dest) {
+        // Both connected and never used: ask once; the answer becomes "last used".
+        return {
+          needs: 'destination',
+          options: ['notion', 'google_docs'],
+          note: 'Both Notion and Google Docs are connected. Ask in one short line which they want this page in; on the answer, accept_suggestion again with destination. Nothing was created yet.',
         }
-      : {
-          notion_connected: false,
-          settings_link: `${base()}/settings/notion`,
-          note: 'Notion is not connected; connect it in Settings, or make a plain to-do plan instead. Nothing was created yet.',
-        }
+      }
+    } else if (driveOn) dest = 'google_docs'
+    else if (notionOn) dest = 'notion'
+    // They asked for one that isn't connected (or neither is): the way to connect it.
+    if (!dest) {
+      const wanted = destIn ?? null
+      const offerNotion = (!wanted || wanted === 'notion') && notionConfigured()
+      const offerGoogle = (!wanted || wanted === 'google_docs') && gcalConfigured()
+      return ctx.phone
+        ? {
+            notion_connected: notionOn,
+            google_docs_connected: driveOn,
+            ...(offerNotion ? { notion_connect_link: connectLink(ctx.email, 'notion', undefined, viaOf(ctx.phone)) } : {}),
+            ...(offerGoogle ? { google_docs_connect_link: connectLink(ctx.email, 'gdrive', undefined, viaOf(ctx.phone)) } : {}),
+            note:
+              `${wanted ? DEST_NAME[wanted] : 'Neither Notion nor Google Docs'} is not connected. Say so in one line and give the one-tap ` +
+              'link(s) above, each on its own line, to connect where they want the page (each works once, 15 minutes; Juno confirms here ' +
+              'when it is connected, then they can say yes again). Offer instead a plain to-do plan here (on their yes: ' +
+              'accept_suggestion again with plain true). Nothing was created yet.',
+          }
+        : {
+            notion_connected: false,
+            settings_link: `${base()}/settings/notion`,
+            ...(offerGoogle ? { google_settings_link: `${base()}/settings/google` } : {}),
+            note: 'Nothing to write the page to is connected; connect Notion or Google Docs in Settings, or make a plain to-do plan instead. Nothing was created yet.',
+          }
+    }
   }
   const tz = await userZone(ctx.email)
   const draft = await draftDoc(ctx.email, s, ctx.lang, todayIn(tz))
@@ -172,8 +225,13 @@ export async function acceptNotion(ctx: AcceptCtx, s: Suggestion, plain: boolean
     await decideSuggestion(ctx.email, s.id, 'done', { plain: true, todos })
     return { ok: true, plan: draft.todos.map((t) => `${t.due_date ?? ''} ${t.action}`.trim()), todos_added: todos, note: 'List the plan in short "• " lines.' }
   }
+  if (dest === 'google_docs') {
+    const doc = await planToDoc(ctx.email, ctx.lang, { title: draft.title, blocks: draft.blocks, sessionId: s.session_id, ref: s.id })
+    await decideSuggestion(ctx.email, s.id, 'done', { url: doc.url, dest: 'google_docs', todos })
+    return { ok: true, google_doc_url: doc.url, title: draft.title, dated_todos_added: todos, note: 'Give the Google Docs link and say the dated steps are on their to-dos as reminders.' }
+  }
   const page = await createDocPage(ctx.email, { title: draft.title, kind: draft.kind, sessionId: s.session_id, date: draft.date, blocks: draft.blocks })
-  await decideSuggestion(ctx.email, s.id, 'done', { url: page.url, todos })
+  await decideSuggestion(ctx.email, s.id, 'done', { url: page.url, dest: 'notion', todos })
   return { ok: true, notion_url: page.url, title: draft.title, dated_todos_added: todos, note: 'Give the Notion link and say the dated steps are on their to-dos as reminders.' }
 }
 

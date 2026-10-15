@@ -34,7 +34,7 @@ const JN_EN = {
   didEmpty: 'Nothing yet. When you say yes to something, it shows up here.',
   addCalendar: 'Add to calendar',
   remindMe: 'Remind me',
-  createNotion: 'Create in Notion',
+  createNotion: 'Create the page',
   markHandled: 'Mark handled',
   dismiss: 'Dismiss',
   dismissed: 'Dismissed',
@@ -46,6 +46,11 @@ const JN_EN = {
   cancel: 'Cancel',
   notionOff: 'Notion isn’t connected yet.',
   connectNotion: 'Connect Notion',
+  pageOff: 'Connect Notion or Google Docs, and Juno makes the page there.',
+  connectGdocs: 'Connect Google Docs',
+  chooseDest: 'Where should Juno make the page? It remembers for next time.',
+  gdocCreated: 'Doc created in Google Docs',
+  didGdoc: 'Google Doc created',
   plainInstead: 'Make it to-dos instead',
   addedGoogle: 'Added to Google Calendar',
   addedFile: 'Calendar file opened',
@@ -81,7 +86,7 @@ const JN: Copy<typeof JN_EN> = {
     didEmpty: 'Nada todavía. Cuando digas que sí a algo, aparece aquí.',
     addCalendar: 'Agregar al calendario',
     remindMe: 'Recuérdamelo',
-    createNotion: 'Crear en Notion',
+    createNotion: 'Crear la página',
     markHandled: 'Marcar como resuelto',
     dismiss: 'Descartar',
     dismissed: 'Descartado',
@@ -93,6 +98,11 @@ const JN: Copy<typeof JN_EN> = {
     cancel: 'Cancelar',
     notionOff: 'Notion todavía no está conectado.',
     connectNotion: 'Conectar Notion',
+    pageOff: 'Conecta Notion o Google Docs y Juno hace la página ahí.',
+    connectGdocs: 'Conectar Google Docs',
+    chooseDest: '¿Dónde hace Juno la página? Lo recuerda para la próxima.',
+    gdocCreated: 'Documento creado en Google Docs',
+    didGdoc: 'Google Doc creado',
     plainInstead: 'Mejor como tareas',
     addedGoogle: 'Agregado a Google Calendar',
     addedFile: 'Se abrió el archivo del calendario',
@@ -125,7 +135,7 @@ const JN: Copy<typeof JN_EN> = {
     didEmpty: 'Nada ainda. Quando você disser sim a algo, aparece aqui.',
     addCalendar: 'Adicionar à agenda',
     remindMe: 'Me lembre',
-    createNotion: 'Criar no Notion',
+    createNotion: 'Criar a página',
     markHandled: 'Marcar como resolvido',
     dismiss: 'Dispensar',
     dismissed: 'Dispensado',
@@ -137,6 +147,11 @@ const JN: Copy<typeof JN_EN> = {
     cancel: 'Cancelar',
     notionOff: 'O Notion ainda não está conectado.',
     connectNotion: 'Conectar o Notion',
+    pageOff: 'Conecte o Notion ou o Google Docs, e o Juno cria a página lá.',
+    connectGdocs: 'Conectar o Google Docs',
+    chooseDest: 'Onde o Juno cria a página? Ele lembra da próxima vez.',
+    gdocCreated: 'Documento criado no Google Docs',
+    didGdoc: 'Google Doc criado',
     plainInstead: 'Prefiro como tarefas',
     addedGoogle: 'Adicionado ao Google Agenda',
     addedFile: 'Arquivo da agenda aberto',
@@ -228,13 +243,14 @@ function NoticedRow({
 }) {
   const T = useCopy(JN)
   const [busy, setBusy] = useState(false)
-  const [step, setStep] = useState<'idle' | 'time' | 'notion'>('idle')
+  const [step, setStep] = useState<'idle' | 'time' | 'notion' | 'dest'>('idle')
+  const [googleToo, setGoogleToo] = useState(false)
   const [time, setTime] = useState('09:00')
   const [day, setDay] = useState(s.day ?? '')
   const [err, setErr] = useState<string | null>(null)
   const [result, setResult] = useState<Settled | null>(null)
 
-  async function accept(extra: { time_zone?: string; start_local?: string; plain?: boolean } = {}): Promise<void> {
+  async function accept(extra: { time_zone?: string; start_local?: string; plain?: boolean; destination?: 'notion' | 'google_docs' } = {}): Promise<void> {
     setBusy(true)
     setErr(null)
     try {
@@ -246,7 +262,8 @@ function NoticedRow({
         return
       }
       if (r.status === 'needs_time') { setStep('time'); return }
-      if (r.status === 'connect_notion') { setStep('notion'); return }
+      if (r.status === 'connect_notion') { setGoogleToo(Boolean(r.google)); setStep('notion'); return }
+      if (r.status === 'choose_dest') { setStep('dest'); return }
       if (r.status === 'error') { setErr(r.error); return }
       const how: Settled = { kind: 'done', out: r }
       setResult(how)
@@ -313,10 +330,22 @@ function NoticedRow({
 
         {step === 'notion' && (
           <div className="pen-jn-ask" role="status">
-            <span className="pen-jn-ask-label">{T.notionOff}</span>
+            <span className="pen-jn-ask-label">{googleToo ? T.pageOff : T.notionOff}</span>
             <span className="pen-jn-ask-row">
               <a className="pen-btn pen-btn-accent pen-jn-btn" href="/pen/settings/notion">{T.connectNotion}</a>
+              {googleToo && <a className="pen-btn pen-jn-btn" href="/pen/settings/google">{T.connectGdocs}</a>}
               <button type="button" className="pen-btn pen-jn-btn" disabled={busy} onClick={() => void accept({ plain: true })}>{T.plainInstead}</button>
+            </span>
+          </div>
+        )}
+
+        {step === 'dest' && (
+          <div className="pen-jn-ask" role="group" aria-label={T.chooseDest}>
+            <span className="pen-jn-ask-label">{T.chooseDest}</span>
+            <span className="pen-jn-ask-row">
+              <button type="button" className="pen-btn pen-jn-btn" disabled={busy} onClick={() => void accept({ destination: 'notion' })}>Notion</button>
+              <button type="button" className="pen-btn pen-jn-btn" disabled={busy} onClick={() => void accept({ destination: 'google_docs' })}>Google Docs</button>
+              <button type="button" className="pen-jn-quiet" onClick={() => setStep('idle')}>{T.cancel}</button>
             </span>
           </div>
         )}
@@ -353,7 +382,7 @@ function SettledLine({ s, how }: { s: WebSuggestion; how: Settled }) {
   } else if (s.kind === 'followup') {
     text = o.reminderAt ? T.reminderAt(o.reminderAt) : T.onTodos(o.dueDate ? shortDate(`${o.dueDate}T12:00:00Z`, lang, 'UTC') : null)
   } else if (s.kind === 'notion') {
-    if (o.notionUrl) { text = T.pageCreated; links = [{ href: o.notionUrl, label: T.openPage }] }
+    if (o.notionUrl) { text = o.docDest === 'google_docs' ? T.gdocCreated : T.pageCreated; links = [{ href: o.notionUrl, label: T.openPage }] }
     else text = T.planAdded(o.plan?.length ?? 0)
   }
   return (
@@ -393,7 +422,7 @@ function didLine(s: WebSuggestion, T: typeof JN_EN): string {
   const d = s.done ?? {}
   if (s.kind === 'meeting') return T.didMeeting
   if (s.kind === 'followup') return d.remindAt ? T.didReminder : T.didTodo
-  if (s.kind === 'notion') return d.notionUrl ? T.didNotion : T.didPlan
+  if (s.kind === 'notion') return d.notionUrl ? (d.docDest === 'google_docs' ? T.didGdoc : T.didNotion) : T.didPlan
   return T.didOther
 }
 
