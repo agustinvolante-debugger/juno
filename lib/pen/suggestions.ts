@@ -433,16 +433,26 @@ const FOOT: Record<Lang, string> = {
  * numbered when more than one. Marks them offered (detail.offer_no = their number), so
  * "yes to 1" finds them. Null when there is nothing to offer. Sending is the caller's job.
  */
-export async function composeOffers(email: string, sessionId: string, lang: Lang): Promise<{ text: string; ids: string[] } | null> {
+export async function composeOffers(
+  email: string,
+  sessionId: string,
+  lang: Lang,
+  /** Several recordings in one message: numbers run on across them (`from`), all share `at`
+   *  so "yes to 3" finds the right one, and the bundle carries one footer. */
+  bundle?: { from: number; at: string; footer: boolean },
+): Promise<{ text: string; ids: string[] } | null> {
   const pick = (await listSuggestions(email, { sessionId, states: ['suggested'] })).sort(rank).slice(0, MAX_OFFERS)
   if (!pick.length) return null
   const s = await getSession(email, sessionId).catch(() => null)
   const title = s?.title || s?.source_name || ''
-  const lines = pick.map((x, i) => (pick.length > 1 ? `${i + 1}. ${offerLine(x, lang)}` : offerLine(x, lang)))
-  const text = [title ? HEAD[lang](title) : '', ...lines, pick.length > 1 ? FOOT[lang] : ''].filter(Boolean).join('\n')
-  const now = new Date().toISOString()
+  const from = bundle?.from ?? 1
+  const numbered = !!bundle || pick.length > 1
+  const lines = pick.map((x, i) => (numbered ? `${from + i}. ${offerLine(x, lang)}` : offerLine(x, lang)))
+  const footer = bundle ? bundle.footer : pick.length > 1
+  const text = [title ? HEAD[lang](title) : '', ...lines, footer ? FOOT[lang] : ''].filter(Boolean).join('\n')
+  const now = bundle?.at ?? new Date().toISOString()
   await Promise.all(pick.map((x, i) =>
-    supabaseAdmin.from('pen_suggestions').update({ state: 'offered', offered_at: now, detail: { ...x.detail, offer_no: i + 1 } }).eq('id', x.id).eq('user_email', email),
+    supabaseAdmin.from('pen_suggestions').update({ state: 'offered', offered_at: now, detail: { ...x.detail, offer_no: from + i } }).eq('id', x.id).eq('user_email', email),
   ))
   return { text, ids: pick.map((x) => x.id) }
 }

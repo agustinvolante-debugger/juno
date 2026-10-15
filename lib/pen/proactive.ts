@@ -583,8 +583,8 @@ export async function dueFor(email: string, now: Date, tz: string, lang: Lang, p
   return parts.filter((p) => t < p.staleAt).sort((a, b) => a.order - b.order)
 }
 
-async function compose(email: string, sessionId: string, lang: Lang): Promise<string | null> {
-  return (await composeOffers(email, sessionId, lang))?.text ?? null
+async function compose(email: string, sessionId: string, lang: Lang, bundle?: { from: number; at: string; footer: boolean }): Promise<{ text: string; ids: string[] } | null> {
+  return composeOffers(email, sessionId, lang, bundle)
 }
 
 /* ------------------------------------------------------------------- tick */
@@ -627,10 +627,17 @@ export async function runForUser(email: string, opts: { now?: Date; dry?: boolea
   const texts: string[] = []
   const carried: Item[] = []
   const empty: Item[] = []
+  // Offers from several recordings share one numbering ("yes to 3") and one footer.
+  const offerParts = parts.filter((p) => p.kind === 'offers')
+  const at = now.toISOString()
+  let nextNo = 1
   for (const p of parts) {
     let text = p.text
     if (p.kind === 'offers') {
-      text = (await compose(email, p.ref, lang).catch(() => null)) ?? ''
+      const last = p === offerParts[offerParts.length - 1]
+      const c = await compose(email, p.ref, lang, offerParts.length > 1 ? { from: nextNo, at, footer: last } : undefined).catch(() => null)
+      nextNo += c?.ids.length ?? 0
+      text = c?.text ?? ''
       // Nothing to offer: done with it, but only once the suggestions have had time to land.
       if (!text) {
         if (p.notedAt && now.getTime() - p.notedAt > 30 * MIN) empty.push({ kind: p.kind, ref: p.ref })
