@@ -54,7 +54,7 @@ import { isMine, type ActionMeta, type Mine } from '../todo-labels'
 import { getDraft, setDraft, type Draft } from './store'
 import { MODULES } from './tools'
 import { userZone, zonePromptLine, type Zone } from '../timezone'
-import { getPending, dropIfUnanswered, type Pending } from './confirm'
+import { getPending, dropIfUnanswered, confirmPending, BARE_YES, BARE_NO, type Pending } from './confirm'
 
 const anthropic = penAnthropic('whatsapp-agent')
 // Haiku 5.5 (14 Oct, was Sonnet 5.5): a twentieth of the price, and the search stage now reads
@@ -1345,6 +1345,21 @@ export async function runAgent(opts: {
   const pending = await getDraft(opts.email).catch(() => null)
   const asked = await getPending(opts.email).catch(() => null)
 
+  // A bare yes / no to the question Juno asked last: run it here, then let the model say what
+  // happened. The question is then answered, so it leaves the system prompt.
+  let answered: string | null = null
+  let stillAsked = asked
+  if (asked && asked.msgId !== opts.msgId && !(pending?.toEmail && SEND_IT.test(opts.question))) {
+    const decision = BARE_YES.test(opts.question) ? 'yes' : BARE_NO.test(opts.question) ? 'no' : null
+    if (decision) {
+      const result = await confirmPending(ctx, decision).catch((e) => ({ error: (e as Error).message }))
+      answered =
+        `(My reply "${opts.question.slice(0, 40)}" answers your question "${asked.summary}" and it has been handled: ` +
+        `${JSON.stringify(result).slice(0, 1500)}. Tell me in one or two lines what happened, following any note in it; don't ask it again.)`
+      stillAsked = null
+    }
+  }
+
   if (pending?.toEmail && SEND_IT.test(opts.question)) {
     const r = (await sendDraft(ctx)) as { ok?: boolean; error?: string }
     if (r.ok) {
@@ -1359,7 +1374,7 @@ export async function runAgent(opts: {
   // history that opens with Juno's message gets a stand-in for the recording the user sent, so
   // "Carlos and Titi" in reply to "Who was on this call?" keeps the question it answers.
   const messages: Anthropic.MessageParam[] = []
-  for (const t of [...opts.history.slice(-12), { role: 'user' as const, content: opts.question }]) {
+  for (const t of [...opts.history.slice(-12), { role: 'user' as const, content: answered ? `${opts.question}\n\n${answered}` : opts.question }]) {
     const last = messages[messages.length - 1]
     if (last && last.role === t.role) last.content = `${last.content as string}\n\n${t.content}`
     else messages.push({ role: t.role, content: t.content })
@@ -1380,7 +1395,7 @@ export async function runAgent(opts: {
       max_tokens: 16000,
       // Medium: a WhatsApp reply should arrive while "typing…" is still showing.
       output_config: { effort: 'medium' },
-      system: system(ctx, pending, asked),
+      system: system(ctx, pending, stillAsked),
       tools: [...TOOLS, ...MODULES.flatMap((m) => m.tools)],
       messages,
     })

@@ -22,6 +22,11 @@ export type Pending = { kind: string; args: Record<string, unknown>; summary: st
 
 export const PENDING_TTL_MS = 30 * 60 * 1000
 
+/** A bare yes or no to a waiting question, in any of the app's languages. Handled in code (like
+ *  "send it"): left to the model, a short "yes" was sometimes answered by asking again. */
+export const BARE_YES = /^\s*(yes|yeah|yea|yep|yup|ya|ok|okay|okey|k|sure|of course|go ahead|do it|please do|add it|delete it|confirm(ed)?|correct|s[ií]+|sip|dale|claro|bueno|vale|va|de una|hazlo|h[aá]galo|sim|pode|isso|beleza|manda|👍|✅|👌)(,?\s*(please|pls|por favor|thanks|thank you|gracias|obrigad[oa]|dale))?[\s.!👍]*$/i
+export const BARE_NO = /^\s*(no|nope|nah|not now|cancel|cancel it|don'?t|no thanks|no gracias|mejor no|cancela|n[aã]o|deixa|👎)[\s.!]*$/i
+
 export async function getPending(email: string): Promise<Pending | null> {
   const { data, error } = await supabaseAdmin.from('pen_whatsapp_links').select('pending,chat').eq('email', email.toLowerCase()).maybeSingle()
   if (error) throw new Error(error.message)
@@ -71,7 +76,7 @@ export async function dropIfUnanswered(ctx: Ctx, asked: Pending | null): Promise
   await supabaseAdmin.from('pen_whatsapp_links').update({ pending: null }).eq('email', ctx.email.toLowerCase()).eq('pending->>createdAt', asked.createdAt)
 }
 
-async function confirmPending(ctx: Ctx, decision: string): Promise<unknown> {
+export async function confirmPending(ctx: Ctx, decision: string): Promise<unknown> {
   ctx.pendingTouched = true
   const p = await getPending(ctx.email)
   if (!p) return { error: 'nothing is waiting for a yes (it may have expired after 30 minutes); ask again' }

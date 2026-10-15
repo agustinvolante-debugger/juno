@@ -358,6 +358,41 @@ export async function upcomingEvents(email: string, days = READ_DAYS, now = new 
   return (j.items ?? []).filter((e) => e.status !== 'cancelled').map(toUpcoming)
 }
 
+/** Events matching what the user named ("the sample meeting test"), from yesterday to 60 days
+ *  ahead, soonest first. Only on the user's request, to change or delete one; never stored. */
+export async function findEvents(email: string, query: string, now = new Date()): Promise<UpcomingEvent[]> {
+  const q = new URLSearchParams({
+    q: query.slice(0, 100),
+    timeMin: new Date(now.getTime() - 86_400_000).toISOString(),
+    timeMax: new Date(now.getTime() + 60 * 86_400_000).toISOString(),
+    singleEvents: 'true',
+    orderBy: 'startTime',
+    maxResults: '10',
+    fields: 'items(id,status,summary,location,htmlLink,hangoutLink,start,end,attendees(email,displayName,self,resource,responseStatus),conferenceData(entryPoints(entryPointType,uri)),extendedProperties)',
+  })
+  const j = await gcal<{ items?: GEvent[] }>(email, `calendars/primary/events?${q}`)
+  return (j.items ?? []).filter((e) => e.status !== 'cancelled').map(toUpcoming)
+}
+
+/** Deletes an event the user asked to delete; guests, if any, get Google's cancellation. */
+export async function deleteEvent(email: string, eventId: string): Promise<void> {
+  await gcal(email, `calendars/primary/events/${encodeURIComponent(eventId)}?sendUpdates=all`, { method: 'DELETE' })
+}
+
+/** Moves an event to a new start (same length unless given); guests get Google's update. */
+export async function moveEvent(email: string, eventId: string, startIso: string, tz: string, durationMin?: number): Promise<CreatedEvent> {
+  const path = `calendars/primary/events/${encodeURIComponent(eventId)}`
+  const cur = await gcal<GEvent>(email, `${path}?fields=start,end`)
+  const oldLen = cur.start?.dateTime && cur.end?.dateTime ? Date.parse(cur.end.dateTime) - Date.parse(cur.start.dateTime) : 30 * 60000
+  const len = durationMin ? durationMin * 60000 : oldLen
+  const start = Date.parse(startIso)
+  const e = await gcal<GEvent>(email, `${path}?sendUpdates=all`, {
+    method: 'PATCH',
+    body: { start: { dateTime: new Date(start).toISOString(), timeZone: tz }, end: { dateTime: new Date(start + len).toISOString(), timeZone: tz } },
+  })
+  return { id: e.id, link: e.htmlLink ?? null, meet: meetOf(e) }
+}
+
 /* ---------------------------------------------------------- disconnect */
 
 async function revokeToken(token: string): Promise<boolean> {

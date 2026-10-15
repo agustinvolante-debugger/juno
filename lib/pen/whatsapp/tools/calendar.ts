@@ -3,9 +3,10 @@
 // builds the links and invites.
 //
 // With Google Calendar connected (plan F2, lib/pen/google-calendar.ts) the same tools write to it
-// instead, always after a yes: add_to_calendar asks "Add … to your Google Calendar?", and the
-// invite becomes a guest on the event (Google emails them). add_meet_link puts a Meet link on an
-// event Juno added, after the user's yes to that offer.
+// instead. "Add X to my calendar" is the user's own request, so it is added at once; what touches
+// other people or removes something asks first: an invite (Google emails the guest), deleting an
+// event, moving one that has guests. Events are found by name (find_events), since the id from an
+// earlier turn is not in the chat history.
 
 import type Anthropic from '@anthropic-ai/sdk'
 import type { Ctx } from '../agent'
@@ -13,7 +14,7 @@ import { askConfirm } from '../confirm'
 import { str, type ToolModule } from './types'
 import { zoneOf } from './timezone'
 import { calendarLinks, sendInvite, type CalEvent } from '../../calendar'
-import { addAttendee, addMeet, createEvent, gcalConnected } from '../../google-calendar'
+import { addAttendee, addMeet, createEvent, deleteEvent, findEvents, gcalConnected, moveEvent, type UpcomingEvent } from '../../google-calendar'
 import { localToUtc, validZone, whenLabel } from '../../timezone'
 
 const EVENT_PROPS = {
@@ -30,7 +31,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: 'add_to_calendar',
     description:
-      'Add an event to the user\'s own calendar. With Google Calendar connected it asks the user first, then adds it there on their yes; ' +
+      'Add an event the user asked for to their own calendar. With Google Calendar connected it is added there at once; ' +
       'otherwise it makes a tap-to-add link (Apple Calendar on iPhone, Google Calendar on Android, plus a Google Calendar web link).',
     input_schema: {
       type: 'object',
@@ -58,8 +59,34 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'add_meet_link',
-    description: 'Put a Google Meet link on a Google Calendar event Juno added, after the user said yes to that offer. event_id from the earlier tool result.',
-    input_schema: { type: 'object', properties: { event_id: { type: 'string' } }, required: ['event_id'], additionalProperties: false },
+    description: 'Put a Google Meet link on a Google Calendar event. Pass event_id if a tool gave it in this turn, else the event\'s title (it is looked up).',
+    input_schema: { type: 'object', properties: { event_id: { type: 'string' }, title: { type: 'string' } }, additionalProperties: false },
+  },
+  {
+    name: 'find_events',
+    description: 'Look up Google Calendar events by name (yesterday to 60 days ahead), to change, delete or add a Meet link to one. Returns ids, titles, times.',
+    input_schema: { type: 'object', properties: { query: { type: 'string', description: 'Words from the title, e.g. "sample meeting test".' } }, required: ['query'], additionalProperties: false },
+  },
+  {
+    name: 'delete_event',
+    description: 'Delete a Google Calendar event the user asked to delete. Asks the user first (guests, if any, get Google\'s cancellation).',
+    input_schema: { type: 'object', properties: { event_id: { type: 'string' }, title: { type: 'string', description: 'If no event_id: the title, looked up.' } }, additionalProperties: false },
+  },
+  {
+    name: 'move_event',
+    description: 'Move a Google Calendar event to a new time ("move it to 3pm"). Asks first only if it has guests (Google emails them the change).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        event_id: { type: 'string' },
+        title: { type: 'string', description: 'If no event_id: the title, looked up.' },
+        start_local: EVENT_PROPS.start_local,
+        zone: EVENT_PROPS.zone,
+        duration_min: EVENT_PROPS.duration_min,
+      },
+      required: ['start_local'],
+      additionalProperties: false,
+    },
   },
 ]
 
@@ -99,14 +126,9 @@ export async function addToGoogle(ctx: Ctx, ev: CalEvent, o: { meet?: boolean; r
 async function addToCalendar(ctx: Ctx, input: Record<string, unknown>): Promise<unknown> {
   const r = await eventFrom(ctx, input)
   if ('error' in r) return r
-  if (await gcalConnected(ctx.email)) {
-    const meet = input.meet === true
-    return askConfirm(ctx, {
-      kind: 'gcal_add',
-      args: { ev: r.ev, meet },
-      summary: `Add "${r.ev.title}", ${r.when}, to your Google Calendar${meet ? ' with a Meet link' : ''}? Reply yes.`,
-    })
-  }
+  // The user asked for it: no "are you sure?" (that is for what Juno suggests, or what touches
+  // other people).
+  if (await gcalConnected(ctx.email)) return confirmGcalAdd(ctx, { ev: r.ev, meet: input.meet === true })
   const links = calendarLinks(r.ev)
   return {
     ok: true,
@@ -134,13 +156,93 @@ async function confirmGcalAdd(ctx: Ctx, args: Record<string, unknown>): Promise<
   }
 }
 
-async function addMeetLink(ctx: Ctx, input: Record<string, unknown>): Promise<unknown> {
+/** The event the user means: by id, else the single title match (several → the model asks). */
+async function pickEvent(ctx: Ctx, input: Record<string, unknown>): Promise<{ event: UpcomingEvent } | { id: string } | { error: string; matches?: unknown }> {
   const id = str(input, 'event_id')
-  if (!id) return { error: 'need the event_id from when the event was added' }
+  if (id) return { id }
+  const title = str(input, 'title')
+  if (!title) return { error: 'say which event: its title' }
+  const hits = await findEvents(ctx.email, title)
+  if (!hits.length) return { error: `no event called "${title}" from yesterday to 60 days ahead` }
+  if (hits.length > 1) return { error: 'several events match; ask the user which one', matches: hits.map(eventLine(ctx)) }
+  return { event: hits[0] }
+}
+
+const eventLine = (ctx: Ctx) => (e: UpcomingEvent) => ({
+  event_id: e.id,
+  title: e.title,
+  when: e.allDay ? e.start.slice(0, 10) : whenLabel(Date.parse(e.start), ctx.zone?.tz ?? 'UTC'),
+  guests: e.others.map((o) => o.name ?? o.email),
+  meet: Boolean(e.meet),
+})
+
+async function findEventsTool(ctx: Ctx, input: Record<string, unknown>): Promise<unknown> {
+  if (!(await gcalConnected(ctx.email))) return { error: 'Google Calendar is not connected; connect_app google_calendar gives a one-tap link' }
+  const hits = await findEvents(ctx.email, str(input, 'query'))
+  return { events: hits.map(eventLine(ctx)) }
+}
+
+async function addMeetLink(ctx: Ctx, input: Record<string, unknown>): Promise<unknown> {
   if (!(await gcalConnected(ctx.email))) return { error: 'Google Calendar is not connected' }
+  const p = await pickEvent(ctx, input)
+  if ('error' in p) return p
   try {
-    const e = await addMeet(ctx.email, id)
+    const e = await addMeet(ctx.email, 'id' in p ? p.id : p.event.id)
     return e.meet ? { ok: true, meet_link: e.meet, note: 'Give the Meet link in one line; it is on the calendar event too.' } : { error: 'Google did not create a Meet link for that event' }
+  } catch (e) {
+    return { error: (e as Error).message.slice(0, 200) }
+  }
+}
+
+async function deleteEventTool(ctx: Ctx, input: Record<string, unknown>): Promise<unknown> {
+  if (!(await gcalConnected(ctx.email))) return { error: 'Google Calendar is not connected' }
+  const p = await pickEvent(ctx, input)
+  if ('error' in p) return p
+  const line = 'event' in p ? eventLine(ctx)(p.event) : null
+  const guests = line?.guests.length ? ` ${line.guests.join(', ')} will get Google's cancellation.` : ''
+  return askConfirm(ctx, {
+    kind: 'gcal_delete',
+    args: { eventId: 'id' in p ? p.id : p.event.id },
+    summary: `Delete "${line?.title ?? 'that event'}"${line ? `, ${line.when}` : ''}, from your Google Calendar?${guests} Reply yes.`,
+  })
+}
+
+async function confirmDelete(ctx: Ctx, args: Record<string, unknown>): Promise<unknown> {
+  try {
+    await deleteEvent(ctx.email, String(args.eventId))
+    return { ok: true, deleted: true, note: 'Say in one line it is deleted from their Google Calendar.' }
+  } catch (e) {
+    return { error: (e as Error).message.slice(0, 200) }
+  }
+}
+
+async function moveEventTool(ctx: Ctx, input: Record<string, unknown>): Promise<unknown> {
+  if (!(await gcalConnected(ctx.email))) return { error: 'Google Calendar is not connected' }
+  const p = await pickEvent(ctx, input)
+  if ('error' in p) return p
+  const local = str(input, 'start_local')
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(local)) return { error: 'start_local must be YYYY-MM-DDTHH:MM' }
+  const zone = str(input, 'zone')
+  const tz = validZone(zone) ? zone : ctx.zone?.tz
+  if (!tz) return { error: 'time zone unknown; ask the user where they are (set_timezone)' }
+  const start = localToUtc(local, tz)
+  if (!start) return { error: 'that time does not exist in that zone' }
+  const args = { eventId: 'id' in p ? p.id : p.event.id, start: start.toISOString(), tz, duration: num(input, 'duration_min') ?? null }
+  const line = 'event' in p ? eventLine(ctx)(p.event) : null
+  if (line?.guests.length) {
+    return askConfirm(ctx, {
+      kind: 'gcal_move',
+      args,
+      summary: `Move "${line.title}" to ${whenLabel(start.getTime(), tz)}? ${line.guests.join(', ')} will get Google's update. Reply yes.`,
+    })
+  }
+  return confirmMove(ctx, args)
+}
+
+async function confirmMove(ctx: Ctx, args: Record<string, unknown>): Promise<unknown> {
+  try {
+    const e = await moveEvent(ctx.email, String(args.eventId), String(args.start), String(args.tz), typeof args.duration === 'number' ? args.duration : undefined)
+    return { ok: true, moved_to: whenLabel(Date.parse(String(args.start)), String(args.tz)), event_id: e.id, note: 'Say in one line where it moved to.' }
   } catch (e) {
     return { error: (e as Error).message.slice(0, 200) }
   }
@@ -209,17 +311,19 @@ async function confirmGcalInvite(ctx: Ctx, args: Record<string, unknown>): Promi
 export const calendarModule: ToolModule = {
   tools: TOOLS,
   run: (ctx, name, input) =>
-    name === 'add_to_calendar'
-      ? addToCalendar(ctx, input)
-      : name === 'invite_to_meeting'
-        ? inviteToMeeting(ctx, input)
-        : name === 'add_meet_link'
-          ? addMeetLink(ctx, input)
-          : undefined,
-  confirm: { calendar_invite: confirmInvite, gcal_add: confirmGcalAdd, gcal_invite: confirmGcalInvite },
+    name === 'add_to_calendar' ? addToCalendar(ctx, input)
+      : name === 'invite_to_meeting' ? inviteToMeeting(ctx, input)
+        : name === 'add_meet_link' ? addMeetLink(ctx, input)
+          : name === 'find_events' ? findEventsTool(ctx, input)
+            : name === 'delete_event' ? deleteEventTool(ctx, input)
+              : name === 'move_event' ? moveEventTool(ctx, input)
+                : undefined,
+  confirm: { calendar_invite: confirmInvite, gcal_add: confirmGcalAdd, gcal_invite: confirmGcalInvite, gcal_delete: confirmDelete, gcal_move: confirmMove },
   prompt:
-    '- Calendar: "add X to my calendar" -> add_to_calendar. If it returns ask_user (Google Calendar is connected), ask exactly ' +
-    'that; otherwise send its message with the links as they are. Inviting someone else -> invite_to_meeting with their email ' +
-    '(ask for it if you do not have it; pass event_id when it is for an event Juno just added). Offer a Meet link only after an ' +
-    'event was added to Google Calendar; on yes, add_meet_link. Times are wall-clock where the user is; never compute UTC offsets yourself.',
+    '- Calendar: "add X to my calendar" -> add_to_calendar (with Google Calendar connected it is added at once; otherwise send ' +
+    'its message with the links as they are). "Delete / move / add a Meet link to <event>" -> delete_event / move_event / ' +
+    'add_meet_link with the event\'s title (or event_id from a tool result in this same turn); if several match, list them and ' +
+    'ask which. "Delete it and make a new one at 3" is move_event. Inviting someone else -> invite_to_meeting with their email ' +
+    '(ask for it if you do not have it). Never say you cannot delete or change events: you can, with Google Calendar connected. ' +
+    'Times are wall-clock where the user is; never compute UTC offsets yourself.',
 }
