@@ -168,6 +168,9 @@ const en = {
 
   // rail
   recent: 'Recent recordings',
+  orderLabel: 'Order recordings',
+  orderAdded: 'Recently added',
+  orderDate: 'By date',
   new: 'New',
   emptyCat: 'Nothing in this category.',
   showEverything: 'Show everything',
@@ -458,6 +461,9 @@ const es: AppCopy = {
   askPerson: (label) => `Muéstrame todas las conversaciones con @${label}`,
 
   recent: 'Grabaciones recientes',
+  orderLabel: 'Ordenar grabaciones',
+  orderAdded: 'Recién agregadas',
+  orderDate: 'Por fecha',
   new: 'Nueva',
   emptyCat: 'No hay nada en esta categoría.',
   showEverything: 'Ver todo',
@@ -739,6 +745,9 @@ const pt: AppCopy = {
   askPerson: (label) => `Mostre todas as conversas com @${label}`,
 
   recent: 'Gravações recentes',
+  orderLabel: 'Ordenar gravações',
+  orderAdded: 'Recém-adicionadas',
+  orderDate: 'Por data',
   new: 'Nova',
   emptyCat: 'Nada nesta categoria.',
   showEverything: 'Ver tudo',

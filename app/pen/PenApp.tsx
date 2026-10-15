@@ -200,6 +200,15 @@ export default function PenApp({
   const [chats, setChats] = useState<ChatSummary[]>([])
   const [docs, setDocs] = useState<DocSummary[]>([])
   const [catFilter, setCatFilter] = useState<string | null>(null)
+  // Recent recordings: by recording date (default) or by when they were added. Per browser.
+  const [recOrder, setRecOrderState] = useState<RecOrder>('date')
+  useEffect(() => {
+    try { if (localStorage.getItem('juno-rec-order') === 'added') setRecOrderState('added') } catch {}
+  }, [])
+  const setRecOrder = (o: RecOrder) => {
+    setRecOrderState(o)
+    try { localStorage.setItem('juno-rec-order', o) } catch {}
+  }
   const [query, setQuery] = useState('')
   const [navOpen, setNavOpen] = useState(false)
   const isPhone = useIsPhone()
@@ -990,23 +999,36 @@ export default function PenApp({
                 ))}
               </div>
             )}
+            {visible.length > 1 && (
+              <div className="pen-order-wrap">
+                <div className="pen-order" role="group" aria-label={T.orderLabel}>
+                  {(['added', 'date'] as const).map((o) => (
+                    <button key={o} type="button" className="pen-order-btn" aria-pressed={recOrder === o} onClick={() => setRecOrder(o)}>
+                      {o === 'added' ? T.orderAdded : T.orderDate}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {visible.length === 0 ? (
               <p className="pen-m-empty">
                 {catFilter ? T.emptyCat : <>{T.emptyAll[0]}<strong>{T.connectPen}</strong>{T.emptyAll[1]}</>}
               </p>
             ) : (
-              groupByDay(visible, appLang).map(([day, rows]) => (
+              groupByDay(visible, appLang, recOrder).map(([day, rows]) => (
                 <section key={day} className="pen-m-day">
                   <div className="pen-label">{day}</div>
                   {rows.map((x) => (
                     <button type="button" key={x.id} className="pen-m-rec" onClick={() => { openSession(x.id); setTab('note'); setChatOpen(false) }}>
                       <span className="pen-m-rec-top">
                         <span className="pen-m-rec-title">{sessionTitle(x)}</span>
-                        <RecPills s={x} T={T} lang={appLang} />
                       </span>
-                      <span className="pen-mono pen-m-rec-meta">
-                        {fmtDur(partsOf(x).reduce((n, y) => n + (y.duration_sec ?? 0), 0))}
-                        {partsOf(x).length > 1 ? ` · ${T.parts(partsOf(x).length)}` : ''}
+                      <span className="pen-m-rec-meta">
+                        <span className="pen-mono">
+                          {fmtDur(partsOf(x).reduce((n, y) => n + (y.duration_sec ?? 0), 0))}
+                          {partsOf(x).length > 1 ? ` · ${T.parts(partsOf(x).length)}` : ''}
+                        </span>
+                        <RecPills s={x} T={T} lang={appLang} />
                       </span>
                     </button>
                   ))}
@@ -1606,6 +1628,18 @@ export default function PenApp({
             )}
           </div>
 
+          {visible.length > 1 && (
+            <div className="pen-order-wrap">
+              <div className="pen-order" role="group" aria-label={T.orderLabel}>
+                {(['added', 'date'] as const).map((o) => (
+                  <button key={o} type="button" className="pen-order-btn" aria-pressed={recOrder === o} onClick={() => setRecOrder(o)}>
+                    {o === 'added' ? T.orderAdded : T.orderDate}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {visible.length === 0 ? (
             <p className="mt-6 text-[14.5px] leading-relaxed" style={{ color: 'var(--dim)' }}>
               {catFilter ? (
@@ -1616,7 +1650,7 @@ export default function PenApp({
             </p>
           ) : (
             <div className="mt-6">
-              {groupByDay(visible, appLang).map(([day, rows]) => (
+              {groupByDay(visible, appLang, recOrder).map(([day, rows]) => (
                 <div key={day} className="mb-5">
                   <div className="pen-label mb-1.5">{day}</div>
                   {rows.map((s) => (
@@ -1627,11 +1661,13 @@ export default function PenApp({
                           {s.title || s.client_name || s.source_name || T.untitled}
                         </span>
                         <span className="pen-recrow-dur">
-                          {fmtDur(partsOf(s).reduce((n, x) => n + (x.duration_sec ?? 0), 0))}
-                          {partsOf(s).length > 1 ? ` · ${T.parts(partsOf(s).length)}` : ''}
+                          <span>
+                            {fmtDur(partsOf(s).reduce((n, x) => n + (x.duration_sec ?? 0), 0))}
+                            {partsOf(s).length > 1 ? ` · ${T.parts(partsOf(s).length)}` : ''}
+                          </span>
+                          <RecPills s={s} T={T} lang={appLang} />
                         </span>
                       </div>
-                      <RecPills s={s} T={T} lang={appLang} />
                     </div>
                   ))}
                 </div>
@@ -3113,7 +3149,19 @@ function sentimentColor(s: string) {
 const JUST_ADDED: Record<Lang, string> = { en: 'Just added', es: 'Recién agregadas', pt: 'Recém-adicionadas' }
 const HOUR_MS = 3_600_000
 
-function groupByDay(sessions: PenSession[], lang: Lang): [string, PenSession[]][] {
+export type RecOrder = 'date' | 'added'
+
+function groupByDay(sessions: PenSession[], lang: Lang, order: RecOrder = 'date'): [string, PenSession[]][] {
+  // "Recently added": by upload time, headed by the upload day.
+  if (order === 'added') {
+    const map = new Map<string, PenSession[]>()
+    for (const s of [...sessions].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())) {
+      const key = fmtDate(s.created_at, lang, { weekday: 'short', month: 'short', day: 'numeric' })
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(s)
+    }
+    return Array.from(map.entries())
+  }
   const at = (s: PenSession) => new Date(s.recorded_at ?? s.created_at).getTime()
   const now = Date.now()
   const justAdded = (s: PenSession) => {
