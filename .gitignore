@@ -60,3 +60,4 @@ app/JunoLogo.jpg
 video/node_modules/
 video/out/
 .apps-copy-state.json
+.impeccable/

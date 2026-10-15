@@ -11,7 +11,7 @@
 //   followup  → a WhatsApp reminder (pen_reminders) when it is within maxAheadMs (a day, or 30
 //               days with the user_reminder template); later than that, only the dated to-do,
 //               and the model says so.
-//   notion    → the page in Notion (+ dated to-dos), or, not connected, the Settings link and a
+//   notion    → the page in Notion (+ dated to-dos), or, not connected, a one-tap connect link and a
 //               plain to-do plan on the next yes.
 //   other     → accepted; the model helps with the other tools.
 
@@ -20,6 +20,7 @@ import { calendarLinks, type CalEvent } from '../../calendar'
 import { createEvent, gcalConnected } from '../../google-calendar'
 import { addReminder, maxAheadMs } from '../../reminders'
 import { createDocPage, notionConnected } from '../../notion'
+import { connectLink, viaOf } from '../../connect-link'
 import { draftDoc } from '../../suggestion-docs'
 import {
   addDatedTodos, decideSuggestion, listSuggestions, resolveSuggestion, todayIn, userZone, validZone, whenText, zonedToUtc,
@@ -72,7 +73,6 @@ const TOOLS: Anthropic.Tool[] = [
   },
 ]
 
-const base = () => (process.env.PEN_PUBLIC_URL || 'https://www.tryjunoapp.com').replace(/\/$/, '')
 
 function view(s: Suggestion, ctx: Ctx) {
   return {
@@ -230,9 +230,10 @@ async function acceptNotion(ctx: Ctx, s: Suggestion, plain: boolean): Promise<un
   if (!connected && !plain) {
     return {
       notion_connected: false,
-      settings_link: `${base()}/settings/notion`,
+      connect_link: connectLink(ctx.email, 'notion', undefined, viaOf(ctx.phone)),
       note:
-        'Notion is not connected. Say so in one line with this link to connect it, and offer instead a plain to-do plan here ' +
+        'Notion is not connected. Say so in one line with this one-tap link to connect it (works once, 15 minutes; Juno confirms ' +
+        'here when it is connected, then they can say yes again), and offer instead a plain to-do plan here ' +
         '(on their yes: accept_suggestion again with plain true). Nothing was created yet.',
     }
   }

@@ -6,5 +6,6 @@ import { offersModule } from './offers'
 import { parityModule } from './parity'
 import { timezoneModule } from './timezone'
 import { calendarModule } from './calendar'
+import { connectionsModule } from './connections'
 
-export const MODULES: ToolModule[] = [confirmModule, offersModule, parityModule, timezoneModule, calendarModule]
+export const MODULES: ToolModule[] = [confirmModule, offersModule, parityModule, timezoneModule, calendarModule, connectionsModule]
