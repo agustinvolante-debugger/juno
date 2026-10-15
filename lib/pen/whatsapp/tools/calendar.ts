@@ -16,6 +16,8 @@ import { zoneOf } from './timezone'
 import { calendarLinks, sendInvite, type CalEvent } from '../../calendar'
 import { addAttendee, addMeet, createEvent, deleteEvent, findEvents, gcalConnected, moveEvent, type UpcomingEvent } from '../../google-calendar'
 import { localToUtc, validZone, whenLabel } from '../../timezone'
+import { supabaseAdmin } from '@/lib/supabase'
+import { foldName } from '../../speakers'
 
 const EVENT_PROPS = {
   title: { type: 'string', description: 'Short event title, e.g. "Lunch with Chris".' },
@@ -43,17 +45,19 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: 'invite_to_meeting',
     description:
-      'Email someone else a calendar invite from the user (they are the organizer; replies go to them). Needs the other person\'s email: ' +
-      'ask for it if you do not have it. Asks the user to confirm first.',
+      'Invite someone to a meeting from the user (they are the organizer; replies go to them). Give to_name: their saved email is ' +
+      'looked up in the user\'s contacts; only if none is saved, ask for it (to_email). With Google Calendar connected the event ' +
+      'is created with them as a guest (and a Meet link if meet is true) and Google emails the invite. Asks the user to confirm first.',
     input_schema: {
       type: 'object',
       properties: {
         ...EVENT_PROPS,
-        to_name: { type: 'string' },
-        to_email: { type: 'string' },
+        to_name: { type: 'string', description: 'As the user said it, e.g. "Carlos V".' },
+        to_email: { type: 'string', description: 'Only if the user gave it or no contact has one.' },
+        meet: { type: 'boolean', description: 'true if they asked for a Google Meet / video link.' },
         event_id: { type: 'string', description: 'The Google Calendar event id when inviting them to an event Juno just added (from an earlier tool result). Omit otherwise.' },
       },
-      required: ['title', 'start_local', 'to_email'],
+      required: ['title', 'start_local'],
       additionalProperties: false,
     },
   },
@@ -248,18 +252,37 @@ async function confirmMove(ctx: Ctx, args: Record<string, unknown>): Promise<unk
   }
 }
 
+/** "Carlos V" → the saved contact with an email: exact name first, else the one name that
+ *  starts with or contains what was said. Several or none → null (the model asks). */
+async function contactEmail(ctx: Ctx, name: string): Promise<{ name: string; email: string } | { several: string[] } | null> {
+  const want = foldName(name)
+  if (!want) return null
+  const { data } = await supabaseAdmin.from('pen_people').select('name,email').eq('user_email', ctx.email).not('email', 'is', null)
+  const rows = ((data ?? []) as { name: string; email: string }[]).filter((p) => p.email)
+  const exact = rows.filter((p) => foldName(p.name) === want)
+  const near = exact.length ? exact : rows.filter((p) => foldName(p.name).startsWith(want) || foldName(p.name).includes(want))
+  if (near.length === 1) return near[0]
+  return near.length ? { several: near.map((p) => `${p.name} <${p.email}>`) } : null
+}
+
 async function inviteToMeeting(ctx: Ctx, input: Record<string, unknown>): Promise<unknown> {
-  const toEmail = str(input, 'to_email').toLowerCase()
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toEmail)) return { error: 'need the other person\'s email address; ask the user for it' }
+  let toEmail = str(input, 'to_email').toLowerCase()
+  let toName = str(input, 'to_name') || null
+  if (!toEmail && toName) {
+    const c = await contactEmail(ctx, toName)
+    if (c && 'several' in c) return { error: 'several contacts match; ask the user which one', matches: c.several }
+    if (c) { toEmail = c.email.toLowerCase(); toName = c.name }
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toEmail)) return { error: `no email saved for ${toName ?? 'them'}; ask the user for it (it is saved to the contact once given)` }
   const r = await eventFrom(ctx, input)
   if ('error' in r) return r
-  const toName = str(input, 'to_name') || null
+  const meet = input.meet === true
   if (await gcalConnected(ctx.email)) {
     const eventId = str(input, 'event_id') || null
     return askConfirm(ctx, {
       kind: 'gcal_invite',
-      args: { ev: r.ev, toName, toEmail, eventId },
-      summary: `Invite ${toName ? `${toName} <${toEmail}>` : toEmail} to "${r.ev.title}", ${r.when}? Google Calendar will email them the invite from you. Reply yes.`,
+      args: { ev: r.ev, toName, toEmail, eventId, meet },
+      summary: `Create "${r.ev.title}", ${r.when}${meet ? ', with a Meet link,' : ''} and invite ${toName ? `${toName} <${toEmail}>` : toEmail}? Google Calendar will email them the invite from you. Reply yes.`,
     })
   }
   return askConfirm(ctx, {
@@ -293,7 +316,8 @@ async function confirmGcalInvite(ctx: Ctx, args: Record<string, unknown>): Promi
   const eventId = typeof args.eventId === 'string' && args.eventId ? args.eventId : null
   const invited = toName ? `${toName} <${toEmail}>` : toEmail
   try {
-    const e = eventId ? await addAttendee(ctx.email, eventId, { email: toEmail, name: toName }) : await createEvent(ctx.email, ev, { attendees: [{ email: toEmail, name: toName }] })
+    let e = eventId ? await addAttendee(ctx.email, eventId, { email: toEmail, name: toName }) : await createEvent(ctx.email, ev, { attendees: [{ email: toEmail, name: toName }], meet: args.meet === true })
+    if (eventId && args.meet === true && !e.meet) e = await addMeet(ctx.email, eventId)
     return {
       ok: true,
       invited,
@@ -324,6 +348,6 @@ export const calendarModule: ToolModule = {
     'its message with the links as they are). "Delete / move / add a Meet link to <event>" -> delete_event / move_event / ' +
     'add_meet_link with the event\'s title (or event_id from a tool result in this same turn); if several match, list them and ' +
     'ask which. "Delete it and make a new one at 3" is move_event. Inviting someone else -> invite_to_meeting with their email ' +
-    '(ask for it if you do not have it). Never say you cannot delete or change events: you can, with Google Calendar connected. ' +
+    '(give to_name: the saved email is looked up; ask only if none; meet true for a video link — one step creates the event, the Meet link and the invite). Never say you cannot delete or change events: you can, with Google Calendar connected. ' +
     'Times are wall-clock where the user is; never compute UTC offsets yourself.',
 }
