@@ -17,6 +17,7 @@ import type { ArchiveStats, OpenAction, OpenMissed, ClientCard } from '@/lib/pen
 import type { PersonCard } from '@/lib/pen/people'
 import { getJson, postJson, patchJson, del, errMessage } from '@/lib/pen/http'
 import { RowMenu, RenameInput } from './RowMenu'
+import { WaitingOnYou, DateChip, type Lists } from './JunoNoticed'
 import Icon, { type IconName } from './Icon'
 import DeliverableSheet, { type SheetRequest } from './DeliverableSheet'
 import { isMine } from '@/lib/pen/todo-labels'
@@ -306,7 +307,10 @@ export default function Overview({
   onChanged,
   onPeopleChanged = () => {},
   firstName = null,
+  suggestions = null,
 }: {
+  /** Juno's open offers and recent yeses, from the server render (JunoNoticed.tsx). */
+  suggestions?: Lists | null
   /** A person was renamed or deleted here: reload the People list. */
   onPeopleChanged?: () => void
   /** For the greeting. The session's name, first word; none means a greeting without a name. */
@@ -510,7 +514,13 @@ export default function Overview({
         </p>
       </header>
 
-      {/* The four numbers, read first. Each opens the full list it counts. */}
+      {/* First: what Juno heard and is waiting on you for, and what it did after a yes. */}
+      <WaitingOnYou onOpenRecording={onOpen} initial={suggestions} />
+
+      <Today actions={mineList} onTick={tick} onOpen={onOpen} onDraft={(a) => setSheet({ sessionId: a.sessionId, req: { kind: 'email', item: a.action } })} />
+
+      {/* The four totals, now a quiet ledger under Today (critique 15 Oct): what is due and what
+          Juno is waiting on lead; the archive-wide counts are reference. Each opens its list. */}
       <div className="pen-stats">
         <StatTile label={T.overdue} value={overdueCount} tone={overdueCount ? 'bad' : undefined} onClick={() => setOpen('todo')}>
           <span className="pen-stat-line">{T.needsAttention}</span>
@@ -526,7 +536,6 @@ export default function Overview({
         </StatTile>
       </div>
 
-      <Today actions={mineList} onTick={tick} onOpen={onOpen} onDraft={(a) => setSheet({ sessionId: a.sessionId, req: { kind: 'email', item: a.action } })} />
 
       <LayoutGroup>
         <div className="pen-home-cards pen-home-pair">
@@ -809,12 +818,15 @@ function ActionRow({ a, onTick, onOpen, onDraft, full = false }: { a: OpenAction
             />
           </svg>
         </button>
-        <button type="button" className="pen-row2-main" onClick={() => onOpen(a.sessionId)}>
-          <span className="pen-row2-text" data-done={ticking}>{a.action}</span>
+        <div className="pen-row2-main">
+          <button type="button" className="pen-row2-open" onClick={() => onOpen(a.sessionId)}>
+            <span className="pen-row2-text" data-done={ticking}>{a.action}</span>
+          </button>
           <span className="pen-row2-meta">
             {a.priority === 'high' && <span className="pen-row2-flag">{T.priority}</span>}
+            {/* A dated to-do's date is its "add to calendar" (Google when connected, else .ics). */}
             {a.dueDate ? (
-              <span className="pen-row2-due" data-late={a.dueDate < todayIso()}>{dueLabel(a.dueDate, T, lang)}</span>
+              <DateChip sessionId={a.sessionId} index={a.index} label={dueLabel(a.dueDate, T, lang)} late={a.dueDate < todayIso()} />
             ) : (
               a.due && <span className="pen-row2-due">{a.due}</span>
             )}
@@ -823,7 +835,7 @@ function ActionRow({ a, onTick, onOpen, onDraft, full = false }: { a: OpenAction
               {[!isMine(a) ? a.owner : a.waiting, a.sessionTitle].filter(Boolean).join(' · ')}
             </span>
           </span>
-        </button>
+        </div>
         {onDraft && (
           <button type="button" className="pen-row2-act" aria-label={T.draftFollowUp} title={T.draftFollowUp} onClick={() => onDraft(a)}>
             <Icon name="mail" size={16} />

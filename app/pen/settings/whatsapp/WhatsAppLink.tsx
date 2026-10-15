@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useCopy } from '../../LangContext'
 import type { Copy } from '@/lib/pen/i18n'
+import JunoMessages, { type Prefs } from './JunoMessages'
 
 const WA_EN = {
   startFailed: 'Could not start linking',
@@ -26,7 +27,7 @@ const WA_EN = {
     'In the Juno Pen chat, tap + (Android: the paperclip), then Document, and pick the recording from the pen.',
     'Tap “Everyone agreed” to confirm everyone on the call agreed to be recorded. The briefing comes back in the chat.',
   ],
-  fine: 'Any audio file works. A pen WAV fits up to about 50 minutes; MP3 or M4A, much longer. For longer recordings, upload on the website. Recordings sent this way pass through Vonage and WhatsApp on their way to us.',
+  fine: 'Any audio file works. A pen WAV fits up to about 50 minutes; MP3 or M4A, much longer. For longer recordings, upload on the website. Recordings sent this way pass through WhatsApp (Meta’s Cloud API) on their way to us; on iMessage, through Sendblue.',
   imTitle: 'Juno Pen on iMessage',
   imBeta: 'In testing',
   imLede: 'Prefer iMessage? Text Juno from your iPhone: the same assistant, in blue bubbles. Voice notes, questions and recordings all work. To confirm a recording, reply YES.',
@@ -61,7 +62,7 @@ const WA: Copy<typeof WA_EN> = {
       'En el chat de Juno Pen, toca + (en Android, el clip), luego Documento, y elige la grabación del lápiz.',
       'Toca “Todos aceptaron” para confirmar que todos en la reunión aceptaron ser grabados. El resumen te llega en el chat.',
     ],
-    fine: 'Sirve cualquier archivo de audio. Un WAV del lápiz aguanta hasta unos 50 minutos; un MP3 o M4A, mucho más. Para grabaciones más largas, súbelas en la web. Las grabaciones enviadas así pasan por Vonage y WhatsApp antes de llegar a nosotros.',
+    fine: 'Sirve cualquier archivo de audio. Un WAV del lápiz aguanta hasta unos 50 minutos; un MP3 o M4A, mucho más. Para grabaciones más largas, súbelas en la web. Las grabaciones enviadas así pasan por WhatsApp (la Cloud API de Meta) antes de llegar a nosotros; por iMessage, por Sendblue.',
     imTitle: 'Juno Pen en iMessage',
     imBeta: 'En prueba',
     imLede: '¿Prefieres iMessage? Escríbele a Juno desde tu iPhone: el mismo asistente, en burbujas azules. Notas de voz, preguntas y grabaciones funcionan igual. Para confirmar una grabación, responde SÍ.',
@@ -93,7 +94,7 @@ const WA: Copy<typeof WA_EN> = {
       'Na conversa do Juno Pen, toque em + (no Android, o clipe), depois em Documento, e escolha a gravação da caneta.',
       'Toque em “Todos concordaram” para confirmar que todos na reunião concordaram em ser gravados. O resumo volta na conversa.',
     ],
-    fine: 'Qualquer arquivo de áudio serve. Um WAV da caneta vai até uns 50 minutos; MP3 ou M4A, bem mais. Para gravações mais longas, envie pelo site. As gravações enviadas assim passam pela Vonage e pelo WhatsApp antes de chegar até nós.',
+    fine: 'Qualquer arquivo de áudio serve. Um WAV da caneta vai até uns 50 minutos; MP3 ou M4A, bem mais. Para gravações mais longas, envie pelo site. As gravações enviadas assim passam pelo WhatsApp (a Cloud API da Meta) antes de chegar até nós; pelo iMessage, pela Sendblue.',
     imTitle: 'Juno Pen no iMessage',
     imBeta: 'Em teste',
     imLede: 'Prefere o iMessage? Mande mensagem para o Juno do seu iPhone: o mesmo assistente, em balões azuis. Áudios, perguntas e gravações funcionam igual. Para confirmar uma gravação, responda SIM.',
@@ -125,12 +126,15 @@ export default function WhatsAppLink({
   number,
   ready,
   loadError,
+  prefs,
   imessage = null,
 }: {
   initialPhone: string | null
   number: string
   ready: boolean
   loadError: string | null
+  /** Messages from Juno (profile.proactive), shown once a phone is linked. */
+  prefs: Prefs
   /** Juno's iMessage number (Sendblue), when that channel is switched on. */
   imessage?: string | null
 }) {
@@ -200,7 +204,6 @@ export default function WhatsAppLink({
           <>
             <div className="pen-set-ok" role="status">{T.linked(pretty(phone))}</div>
             <p className="pen-set-fine">{T.number(pretty(number))}</p>
-            <p className="pen-set-fine">{T.proactive}</p>
             <div className="pen-set-actions">
               <a className="pen-btn pen-btn-accent" href={`https://wa.me/${number}`} target="_blank" rel="noreferrer">{T.openChat}</a>
               <button type="button" className="pen-btn" onClick={unlink} disabled={busy}>{T.unlink}</button>
@@ -255,6 +258,9 @@ export default function WhatsAppLink({
           )}
         </div>
       )}
+
+      {/* Applies to both channels, so it sits after both cards. */}
+      {phone && <JunoMessages initial={prefs} />}
 
       <div className="pen-set-card">
         <div className="pen-set-card-head">

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { postJson, errMessage } from '@/lib/pen/http'
 import { AnimatePresence, motion } from 'motion/react'
 import type { Deliverable } from '@/lib/pen/store'
@@ -15,8 +15,11 @@ import type { Copy } from '@/lib/pen/i18n'
 const SPRING = { type: 'spring' as const, stiffness: 340, damping: 32, mass: 0.9 }
 
 const DS_EN = {
-  kinds: { email: 'Draft email', memo: 'Memo', tracker: 'Tracker entry', linkedin: 'LinkedIn note' } as Record<Deliverable['kind'], string>,
-  buttons: { email: 'Draft email', memo: 'Memo', tracker: 'Tracker', linkedin: 'LinkedIn note' } as Record<Deliverable['kind'], string>,
+  kinds: { email: 'Draft email', memo: 'Memo', tracker: 'Task card', linkedin: 'LinkedIn note' } as Record<Deliverable['kind'], string>,
+  buttons: { email: 'Email', memo: 'Memo', tracker: 'Task card', linkedin: 'LinkedIn note' } as Record<Deliverable['kind'], string>,
+  hints: { email: 'A follow-up you can send', memo: 'A short note for your team', tracker: 'Task, owner, due date, to paste in a tracker', linkedin: 'A connection request' } as Record<Deliverable['kind'], string>,
+  draft: 'Draft',
+  draftFor: (item: string) => `Draft from: ${item}`,
   findOnLinkedIn: (n: string) => `Find ${n} on LinkedIn`,
   chars: (n: number) => `${n} / 300 characters`,
   draftFailed: 'Could not draft that.',
@@ -33,8 +36,11 @@ const DS_EN = {
 const DS: Copy<typeof DS_EN> = {
   en: DS_EN,
   es: {
-    kinds: { email: 'Borrador de correo', memo: 'Memo', tracker: 'Registro de seguimiento', linkedin: 'Nota de LinkedIn' },
-    buttons: { email: 'Borrador de correo', memo: 'Memo', tracker: 'Seguimiento', linkedin: 'Nota de LinkedIn' },
+    kinds: { email: 'Borrador de correo', memo: 'Memo', tracker: 'Ficha de tarea', linkedin: 'Nota de LinkedIn' },
+    buttons: { email: 'Correo', memo: 'Memo', tracker: 'Ficha de tarea', linkedin: 'Nota de LinkedIn' },
+    hints: { email: 'Un seguimiento listo para enviar', memo: 'Una nota breve para tu equipo', tracker: 'Tarea, responsable y fecha, para pegar en tu planilla', linkedin: 'Una solicitud de conexión' },
+    draft: 'Redactar',
+    draftFor: (item) => `Redactar a partir de: ${item}`,
     findOnLinkedIn: (n) => `Buscar a ${n} en LinkedIn`,
     chars: (n) => `${n} / 300 caracteres`,
     draftFailed: 'No se pudo redactar.',
@@ -48,8 +54,11 @@ const DS: Copy<typeof DS_EN> = {
     copy: 'Copiar',
   },
   pt: {
-    kinds: { email: 'Rascunho de e-mail', memo: 'Memorando', tracker: 'Registro de acompanhamento', linkedin: 'Nota do LinkedIn' },
-    buttons: { email: 'Rascunho de e-mail', memo: 'Memorando', tracker: 'Acompanhamento', linkedin: 'Nota do LinkedIn' },
+    kinds: { email: 'Rascunho de e-mail', memo: 'Memorando', tracker: 'Ficha de tarefa', linkedin: 'Nota do LinkedIn' },
+    buttons: { email: 'E-mail', memo: 'Memorando', tracker: 'Ficha de tarefa', linkedin: 'Nota do LinkedIn' },
+    hints: { email: 'Um follow-up pronto para enviar', memo: 'Uma nota curta para a equipe', tracker: 'Tarefa, responsável e prazo, para colar na planilha', linkedin: 'Um pedido de conexão' },
+    draft: 'Redigir',
+    draftFor: (item) => `Redigir a partir de: ${item}`,
     findOnLinkedIn: (n) => `Buscar ${n} no LinkedIn`,
     chars: (n) => `${n} / 300 caracteres`,
     draftFailed: 'Não foi possível redigir.',
@@ -331,20 +340,64 @@ async function writeClipboard(text: string): Promise<boolean> {
 }
 
 /** The hover row that appears beside an action or takeaway. */
-export function DeliverableActions({ onPick }: { onPick: (kind: Deliverable['kind']) => void }) {
+/**
+ * One "Draft" menu per item (critique P2): it used to be three chips on every action, open
+ * question and missed item, ninety of them on a long phone page. `linkedin` adds the
+ * connection note where a person is the subject.
+ */
+export function DeliverableActions({ onPick, linkedin = false, item }: { onPick: (kind: Deliverable['kind']) => void; linkedin?: boolean; item?: string }) {
   const T = useCopy(DS)
-  const opts: { kind: Deliverable['kind']; label: string }[] = [
-    { kind: 'email', label: T.buttons.email },
-    { kind: 'memo', label: T.buttons.memo },
-    { kind: 'tracker', label: T.buttons.tracker },
-  ]
+  const [open, setOpen] = useState(false)
+  const wrap = useRef<HTMLDivElement>(null)
+  const btn = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent | TouchEvent) => { if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false) }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setOpen(false); btn.current?.focus() }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        const items = Array.from(wrap.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])
+        if (!items.length) return
+        e.preventDefault()
+        const at = items.indexOf(document.activeElement as HTMLElement)
+        items[e.key === 'ArrowDown' ? (at + 1) % items.length : (at - 1 + items.length) % items.length].focus()
+      }
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('touchstart', onDown)
+    document.addEventListener('keydown', onKey)
+    requestAnimationFrame(() => wrap.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus())
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('touchstart', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+  const kinds: Deliverable['kind'][] = linkedin ? ['email', 'memo', 'tracker', 'linkedin'] : ['email', 'memo', 'tracker']
   return (
-    <div className="pen-do">
-      {opts.map((o) => (
-        <button key={o.kind} className="pen-do-btn" onClick={() => onPick(o.kind)}>
-          {o.label}
-        </button>
-      ))}
+    <div className="pen-do" ref={wrap}>
+      <button
+        ref={btn}
+        type="button"
+        className="pen-do-btn"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={item ? T.draftFor(item) : undefined}
+        onClick={() => setOpen((v) => !v)}
+      >
+        {T.draft}
+        <svg viewBox="0 0 20 20" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m6 8 4 4 4-4" /></svg>
+      </button>
+      {open && (
+        <div className="pen-do-menu" role="menu">
+          {kinds.map((k) => (
+            <button key={k} type="button" role="menuitem" className="pen-do-item" onClick={() => { setOpen(false); onPick(k) }}>
+              <span className="pen-do-item-l">{T.buttons[k]}</span>
+              <span className="pen-do-item-h">{T.hints[k]}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

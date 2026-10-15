@@ -393,7 +393,7 @@ const CONF: Record<string, number> = { high: 3, medium: 2, low: 1 }
 const KIND_RANK: Record<SuggestionKind, number> = { meeting: 4, notion: 3, followup: 2, other: 1 }
 
 /** Best first: surer, meetings before reminders, sooner before later. */
-function rank(a: Suggestion, b: Suggestion): number {
+export function rank(a: Suggestion, b: Suggestion): number {
   const score = (s: Suggestion) => (CONF[String(s.detail.confidence)] ?? 1) * 10 + KIND_RANK[s.kind]
   const d = score(b) - score(a)
   if (d) return d

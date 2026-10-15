@@ -13,7 +13,7 @@ export type IconName =
   | 'archive' | 'search' | 'plus' | 'link' | 'play' | 'check' | 'checklist' | 'question'
   | 'quote' | 'people' | 'clock' | 'calendar' | 'tag' | 'sparkle' | 'alert' | 'chevron'
   | 'back' | 'mail' | 'trash' | 'settings' | 'person' | 'hourglass'
-  | 'lock' | 'battery' | 'mic' | 'usb' | 'pen' | 'save' | 'folder' | 'wave' | 'chat'
+  | 'lock' | 'battery' | 'mic' | 'usb' | 'pen' | 'save' | 'folder' | 'wave' | 'chat' | 'more' | 'bell' | 'doc'
 
 const P: Record<IconName, React.ReactNode> = {
   home:       <path d="M3.5 8.6 10 3.4l6.5 5.2V16a.9.9 0 0 1-.9.9h-3.4v-4.6H7.8v4.6H4.4a.9.9 0 0 1-.9-.9Z" />,
@@ -27,6 +27,9 @@ const P: Record<IconName, React.ReactNode> = {
   search:     <><circle cx="8.8" cy="8.8" r="5.3" /><path d="M12.7 12.7 17 17" /></>,
   plus:       <path d="M10 4.4v11.2M4.4 10h11.2" />,
   link:       <><path d="M8.3 11.7 11.7 8.3" /><path d="M7.2 8.9 5.6 10.5a2.6 2.6 0 0 0 3.7 3.7l1.6-1.6" /><path d="M12.8 11.1l1.6-1.6a2.6 2.6 0 0 0-3.7-3.7L9.1 7.4" /></>,
+  more:       <><circle cx="4.6" cy="10" r="1.35" fill="currentColor" stroke="none" /><circle cx="10" cy="10" r="1.35" fill="currentColor" stroke="none" /><circle cx="15.4" cy="10" r="1.35" fill="currentColor" stroke="none" /></>,
+  bell:       <><path d="M5.2 13.6V9.2a4.8 4.8 0 0 1 9.6 0v4.4l1.3 1.6H3.9Z" /><path d="M8.4 16.9a1.7 1.7 0 0 0 3.2 0" /></>,
+  doc:        <><path d="M5.4 2.9h6.1l3.1 3.1v10.2a.9.9 0 0 1-.9.9H5.4a.9.9 0 0 1-.9-.9V3.8a.9.9 0 0 1 .9-.9Z" /><path d="M11.3 3v3.2h3.2M7.4 10.2h5.2M7.4 13.2h3.6" /></>,
   play:       <path d="M7.3 5.2l7 4.8-7 4.8Z" />,
   check:      <path d="M4.6 10.4 8 13.8l7-7.6" />,
   checklist:  <><path d="M3.4 6.3l1.6 1.6 2.6-2.8" /><path d="M3.4 13.1l1.6 1.6 2.6-2.8" /><path d="M10.4 6.4h6.2M10.4 13.2h6.2" /></>,

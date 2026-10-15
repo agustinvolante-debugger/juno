@@ -19,6 +19,7 @@ import { speakersIn, type SpeakerMap } from '@/lib/pen/speakers'
 import ChatView from './ChatView'
 import DocView from './DocView'
 import Overview from './Overview'
+import { JunoNoticed, DateChip } from './JunoNoticed'
 import SignOut from './SignOut'
 import PeoplePanel from './PeoplePanel'
 import type { Part as NamePart } from './NamesHeard'
@@ -99,6 +100,7 @@ type UploadItem = { key: string; name: string; phase: string; pct: number; state
 
 export default function PenApp({
   initial,
+  suggestions = null,
   stats,
   loadError,
   email,
@@ -124,7 +126,9 @@ export default function PenApp({
   /** Null when Notion isn't set up on the server (lib/pen/notion.ts). */
   notion?: { connected: boolean; sent?: Record<string, string> } | null
   /** Juno Pen's WhatsApp number and whether this account has linked a phone. Null when off. */
-  whatsapp?: { number: string; linked: boolean } | null
+  whatsapp?: { number: string; linked: boolean; imessage?: string | null } | null
+  /** Home's "Juno is waiting on you", rendered on the server so it doesn't pop in. */
+  suggestions?: import('./JunoNoticed').Lists | null
   initial: PenSession[]
   stats: ArchiveStats | null
   allowance: Allowance | null
@@ -212,6 +216,23 @@ export default function PenApp({
     if (t === 'search' && phoneTab === 'search') { setChatSeed(null); setView({ k: 'chat', id: null }) }
     setPhoneTab(t)
   }
+  // Settings' phone tab bar links back here with ?tab=, since Settings is its own page.
+  useEffect(() => {
+    if (!isPhone) return
+    const t = new URLSearchParams(window.location.search).get('tab')
+    if (t === 'home' || t === 'upload' || t === 'recordings' || t === 'search') {
+      goTab(t)
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPhone])
+  // Linked to WhatsApp (or iMessage): the phone's Chat tab opens that chat, where the assistant
+  // lives on a phone. Not linked: the web chat, as before.
+  const chatLink = whatsapp?.linked
+    ? whatsapp.imessage
+      ? { href: `sms:+${whatsapp.imessage.replace(/\D/g, '')}`, label: 'iMessage' }
+      : { href: `https://wa.me/${whatsapp.number}`, label: 'WhatsApp' }
+    : null
   // The phone sheet ends on a promise ("we'll email you") rather than vanishing, so it needs a
   // state of its own — `pending` and `progress` are both empty by then.
   const [importDone, setImportDone] = useState(false)
@@ -833,6 +854,7 @@ export default function PenApp({
         <AskWhatsApp whatsapp={whatsapp ?? null} T={T} />
         <Overview
           stats={stats}
+          suggestions={suggestions}
           firstName={firstName}
           onPeopleChanged={() => void refreshPeople()}
           people={people}
@@ -1037,6 +1059,7 @@ export default function PenApp({
         <PhoneShell
           tab={phoneTab}
           onTab={goTab}
+          chatLink={chatLink}
           title={title}
           onBack={onBack}
           left={left}
@@ -1506,6 +1529,7 @@ export default function PenApp({
               <AskWhatsApp whatsapp={whatsapp ?? null} T={T} />
               <Overview
                 stats={stats}
+                suggestions={suggestions}
                 firstName={firstName}
                 onPeopleChanged={() => void refreshPeople()}
                 people={people}
@@ -2389,6 +2413,11 @@ function Detail({
     [parts, speakerMap],
   )
   const done = new Set(Array.isArray(session.action_done) ? session.action_done : [])
+  // action_meta runs parallel to notes.actions; only a resolved YYYY-MM-DD counts as dated.
+  const dueDates: (string | null)[] = (n.actions ?? []).map((_, i) => {
+    const d = Array.isArray(session.action_meta) && session.action_meta.length === (n.actions?.length ?? 0) ? session.action_meta[i]?.due_date : null
+    return d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null
+  })
 
   // Names heard and conversations read every part of a joined meeting, each at its own start.
   const nameParts = useMemo<NamePart[]>(() => {
@@ -2468,7 +2497,8 @@ function Detail({
           <div className="pen-meta">
             <span className="pen-meta-bit">
               <Icon name="calendar" size={15} />
-              {session.recorded_at ? fmtDate(session.recorded_at, lang, { dateStyle: 'medium' }) : '—'}
+              {/* No recording date from the pen: say when it was uploaded rather than a bare dash. */}
+              {session.recorded_at ? fmtDate(session.recorded_at, lang, { dateStyle: 'medium' }) : T.uploadedOn(fmtDate(session.created_at, lang, { dateStyle: 'medium' }))}
             </span>
             <span className="pen-meta-bit">
               <Icon name="clock" size={15} />
@@ -2544,33 +2574,34 @@ function Detail({
             disabled={!n.summary && !n.actions?.length && !n.missed?.length && !n.open_questions?.length}
             onSent={(iso) => void onPatch({ briefing_sent_at: iso })}
           />
-          {/* Desktop: everything inline. Phone: the send button stays, the rest goes in "⋯", because
-              a sideways-scrolling strip hid Send and Delete off-screen. */}
-          <span className="pen-d-sec">
+          {spoken && (
+            <button className={`pen-btn ${chatOpen ? 'pen-btn-accent' : ''}`} onClick={onToggleChat}>
+              <Icon name="chat" size={15} /><span className="pen-d-ask-l">{chatOpen ? T.hideChat : T.askMeeting}</span><span className="pen-d-ask-s">{chatOpen ? T.hideChat : T.askShort}</span>
+            </button>
+          )}
+          {/* Two visible actions; everything else under More, on every screen size (the phone had
+              this already, the desktop showed eight equal pills). */}
+          <details className="pen-d-more" onToggle={(e) => { if (!(e.currentTarget as HTMLDetailsElement).open) setConfirmDelete(false) }}>
+            <summary className="pen-btn" aria-label={T.moreActions}><Icon name="more" size={16} /><span className="pen-d-more-l">{T.more}</span></summary>
+            <div className="pen-d-menu" role="menu">
           {/* Keyed off the transcript, not the status. A session can land in `error` with a
               perfectly good transcript (a failed save, a transient API error), and gating the
               retry on status left it with no way out of the UI. */}
           {spoken && (
-            <button className="pen-btn" onClick={() => regenerate()} disabled={busy}>
-              {busy ? T.working : session.status === 'noted' ? T.redoNotes : T.writeNotes}
-            </button>
-          )}
-          {spoken && (
-            <button className={`pen-btn ${chatOpen ? 'pen-btn-accent' : ''}`} onClick={onToggleChat}>
-              {chatOpen ? T.hideChat : T.askMeeting}
+            <button className="pen-btn" role="menuitem" onClick={() => regenerate()} disabled={busy}>
+              <Icon name="sparkle" size={15} />{busy ? T.working : session.status === 'noted' ? T.redoNotes : T.writeNotes}
             </button>
           )}
           {onCombine && !joined && utts.length > 0 && (
-            <button className="pen-btn" onClick={onCombine}>
+            <button className="pen-btn" role="menuitem" onClick={onCombine}>
               <Icon name="link" size={15} />{T.combineWith}
             </button>
           )}
           {onCombine && canSplit && (
-            <button className="pen-btn" disabled={splittingConvos} onClick={() => { setTab('note'); void startSplit(nameIds) }}>
-              <Icon name="chat" size={15} />{hasConvos ? T.resplitConvos : T.splitConvos}
+            <button className="pen-btn" role="menuitem" disabled={splittingConvos} onClick={() => { setTab('note'); void startSplit(nameIds) }}>
+              <Icon name="people" size={15} />{hasConvos ? T.resplitConvos : T.splitConvos}
             </button>
           )}
-
           {notion && (n.summary || n.actions?.length) ? <NotionButton key={session.id} sessionId={session.id} connected={notion.connected} sentUrl={notion.sent?.[session.id] ?? null} /> : null}
           {/* Two-step, inline. Deletion takes the audio with it and cannot be undone, so it
               asks — but a modal for one row would be heavier than the action deserves. */}
@@ -2581,50 +2612,8 @@ function Detail({
               <button className="pen-confirm-yes" onClick={onDelete}>{T.delete}</button>
             </span>
           ) : (
-            <button className="pen-btn pen-btn-quiet" onClick={() => setConfirmDelete(true)} title={T.deleteTitle}>
-              {T.delete}
-            </button>
-          )}
-          </span>
-          <details className="pen-d-more">
-            <summary className="pen-btn" aria-label={T.moreActions}>⋯ {T.more}</summary>
-            <div className="pen-d-menu">
-          {/* Keyed off the transcript, not the status. A session can land in `error` with a
-              perfectly good transcript (a failed save, a transient API error), and gating the
-              retry on status left it with no way out of the UI. */}
-          {spoken && (
-            <button className="pen-btn" onClick={() => regenerate()} disabled={busy}>
-              {busy ? T.working : session.status === 'noted' ? T.redoNotes : T.writeNotes}
-            </button>
-          )}
-          {spoken && (
-            <button className={`pen-btn ${chatOpen ? 'pen-btn-accent' : ''}`} onClick={onToggleChat}>
-              {chatOpen ? T.hideChat : T.askMeeting}
-            </button>
-          )}
-          {onCombine && !joined && utts.length > 0 && (
-            <button className="pen-btn" onClick={onCombine}>
-              <Icon name="link" size={15} />{T.combineWith}
-            </button>
-          )}
-          {onCombine && canSplit && (
-            <button className="pen-btn" disabled={splittingConvos} onClick={() => { setTab('note'); void startSplit(nameIds) }}>
-              <Icon name="chat" size={15} />{hasConvos ? T.resplitConvos : T.splitConvos}
-            </button>
-          )}
-
-          {notion && (n.summary || n.actions?.length) ? <NotionButton key={session.id} sessionId={session.id} connected={notion.connected} sentUrl={notion.sent?.[session.id] ?? null} /> : null}
-          {/* Two-step, inline. Deletion takes the audio with it and cannot be undone, so it
-              asks — but a modal for one row would be heavier than the action deserves. */}
-          {confirmDelete ? (
-            <span className="pen-confirm">
-              <span>{T.deleteForGood}</span>
-              <button className="pen-confirm-no" onClick={() => setConfirmDelete(false)}>{T.keep}</button>
-              <button className="pen-confirm-yes" onClick={onDelete}>{T.delete}</button>
-            </span>
-          ) : (
-            <button className="pen-btn pen-btn-quiet" onClick={() => setConfirmDelete(true)} title={T.deleteTitle}>
-              {T.delete}
+            <button className="pen-btn pen-btn-quiet" role="menuitem" onClick={() => setConfirmDelete(true)} title={T.deleteTitle}>
+              <Icon name="trash" size={15} />{T.delete}
             </button>
           )}
             </div>
@@ -2784,6 +2773,9 @@ function Detail({
             </div>
           )}
 
+          {/* What Juno heard that it can help with: the same offers WhatsApp makes. */}
+          {session.status === 'noted' && <JunoNoticed key={session.id} sessionId={session.id} />}
+
           {spoken && (
             <Conversations parts={nameParts} suggest={suggestEvent} onJump={jumpTo} onPeopleChanged={onPeopleChanged} onDraft={setSheet} onCombined={onEventDay} />
           )}
@@ -2812,18 +2804,26 @@ function Detail({
                 <div className="mt-1.5">
                   {n.actions.map((a, i) => (
                     <div key={i} className="pen-act pen-doable" data-done={done.has(i)}>
-                      <input type="checkbox" className="pen-act-box" checked={done.has(i)} onChange={() => toggleAction(i)} aria-label={a.action} />
+                      {/* The label is the 44px target; the box inside stays its drawn size. */}
+                      <label className="pen-act-hit">
+                        <input type="checkbox" className="pen-act-box" checked={done.has(i)} onChange={() => toggleAction(i)} aria-label={a.action} />
+                      </label>
                       <div className="min-w-0 flex-1">
                         <div className="pen-act-text text-[16.5px] leading-snug">{a.action}</div>
                         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                          {(a.owner || a.due || a.priority === 'high') && (
+                          {(a.owner || a.due || a.priority === 'high' || dueDates[i]) && (
                             <div className="pen-mono flex flex-wrap items-center gap-x-2 text-[13px]" style={{ color: 'var(--dim)' }}>
                               {a.priority === 'high' && <span style={{ color: 'var(--bad)' }}>{T.priority}</span>}
                               {a.owner && <span>{a.owner}</span>}
-                              {a.due && <span style={{ color: 'var(--accent-ink)' }}>{a.due}</span>}
+                              {/* A real date is also the way into the calendar; words alone ("next week") stay text. */}
+                              {dueDates[i] ? (
+                                <DateChip sessionId={session.id} index={i} label={a.due || fmtDate(`${dueDates[i]}T12:00:00Z`, lang, { month: 'short', day: 'numeric', timeZone: 'UTC' })} />
+                              ) : (
+                                a.due && <span style={{ color: 'var(--accent-ink)' }}>{a.due}</span>
+                              )}
                             </div>
                           )}
-                          <DeliverableActions onPick={(kind) => setSheet({ kind, item: a.action })} />
+                          <DeliverableActions item={a.action} onPick={(kind) => setSheet({ kind, item: a.action })} />
                         </div>
                       </div>
                     </div>
@@ -2854,7 +2854,7 @@ function Detail({
                     <li key={i} className="pen-doable">
                       {q}
                       <div className="mt-1.5">
-                        <DeliverableActions onPick={(kind) => setSheet({ kind, item: q })} />
+                        <DeliverableActions item={q} onPick={(kind) => setSheet({ kind, item: q })} />
                       </div>
                     </li>
                   ))}
@@ -2878,7 +2878,7 @@ function Detail({
                       {m.item}
                       {m.why && <div className="mt-0.5 text-[14.5px]" style={{ color: 'var(--warn)' }}>{m.why}</div>}
                       <div className="mt-1.5">
-                        <DeliverableActions onPick={(kind) => setSheet({ kind, item: m.item })} />
+                        <DeliverableActions item={m.item} onPick={(kind) => setSheet({ kind, item: m.item })} />
                       </div>
                     </li>
                   ))}

@@ -8,6 +8,8 @@ import { adoptLegacyChat } from '@/lib/pen/chats'
 import { getAllowance, type Allowance } from '@/lib/pen/allowance'
 import PenApp from './PenApp'
 import { getLinkByEmail } from '@/lib/pen/whatsapp/store'
+import { channelFor } from '@/lib/pen/proactive'
+import { homeSuggestions } from '@/lib/pen/suggestions-web'
 import { botNumber, configured as whatsappReady } from '@/lib/pen/whatsapp/provider'
 import LandingApple from './LandingApple'
 import { headers, cookies } from 'next/headers'
@@ -56,7 +58,7 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
   let stats: Awaited<ReturnType<typeof archiveStats>> | null = null
   let allowance: Allowance | null = null
   let loadError: string | null = null
-  let whatsapp: { number: string; linked: boolean } | null = null
+  let whatsapp: { number: string; linked: boolean; imessage?: string | null } | null = null
   let appLang: 'en' | 'es' | 'pt' = 'en'
   let showTour = false
   // The name the user gave in Profile, for Home's greeting; the Google name is the fallback.
@@ -64,6 +66,7 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
   let showReferral = false
   let showFeedback = false
   let notion: { connected: boolean; sent: Record<string, string> } | null = null
+  let suggestions: Awaited<ReturnType<typeof homeSuggestions>> | null = null
   try {
     // Sequential on purpose: if the tables are missing, the first call already tells us
     // and there is no point paying for the second.
@@ -92,6 +95,8 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
       !showTour && !showReferral && !profile?.onboarding?.feedback &&
       sessions.filter((s) => s.status === 'noted' && s.source_channel !== 'sample').length >= 3
     stats = await archiveStats(email)
+    // Juno's open offers for Home's first row; extra, so a failure (or no table yet) shows nothing.
+    suggestions = await homeSuggestions(email).catch(() => null)
     // The bar in the sidebar. A failure here must not take the recordings down with it.
     allowance = await getAllowance(email).catch(() => null)
     // Moves any pre-threads conversation into pen_chats once, so the overhaul doesn't
@@ -99,7 +104,9 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
     await adoptLegacyChat(email).catch(() => {})
     if (whatsappReady()) {
       const link = await getLinkByEmail(email).catch(() => null)
-      whatsapp = { number: botNumber(), linked: Boolean(link?.linked_at) }
+      // The phone's chat tab opens the channel the user last wrote from (iMessage or WhatsApp).
+      const channel = link?.linked_at ? await channelFor(email).catch(() => null) : null
+      whatsapp = { number: botNumber(), linked: Boolean(link?.linked_at), imessage: channel?.imessage ? process.env.SENDBLUE_NUMBER ?? null : null }
     }
   } catch (e) {
     // Almost always "table does not exist" before lib/pen/schema.sql has been run.
@@ -109,6 +116,7 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
   return (
     <PenApp
       initial={sessions}
+      suggestions={suggestions}
       stats={stats}
       allowance={allowance}
       whatsapp={whatsapp}
