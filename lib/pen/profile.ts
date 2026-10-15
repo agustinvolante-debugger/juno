@@ -64,8 +64,19 @@ export function cleanProfile(raw: unknown): AgentProfile {
       return Object.keys(out).length ? out : undefined
     })(),
     answers: Object.keys(answers).length ? answers : undefined,
+    proactive: (() => {
+      const o = (r.proactive && typeof r.proactive === 'object' ? r.proactive : {}) as Record<string, unknown>
+      const kinds = Array.isArray(o.offKinds) ? o.offKinds.filter((k): k is string => typeof k === 'string' && PROACTIVE_KINDS.includes(k)) : []
+      const out: { off?: boolean; offKinds?: string[] } = {}
+      if (o.off === true) out.off = true
+      if (kinds.length) out.offKinds = [...new Set(kinds)]
+      return Object.keys(out).length ? out : undefined
+    })(),
   }
 }
+
+/** ProactiveKind (suggestions-types.ts), as data for cleaning. */
+const PROACTIVE_KINDS: string[] = ['offers', 'meeting_brief', 'nudges', 'morning_brief', 'notion']
 
 export async function getProfile(email: string): Promise<AgentProfile> {
   const { data, error } = await supabaseAdmin
@@ -81,9 +92,9 @@ export async function getProfile(email: string): Promise<AgentProfile> {
 }
 
 export async function saveProfile(email: string, raw: unknown): Promise<AgentProfile> {
-  // First-run state is the app's, never the form's: keep what is stored, whatever the form sent.
+  // First-run state and STOP/START are the app's, never the form's: keep what is stored.
   const stored = await getProfileRaw(email).catch(() => null)
-  const profile = cleanProfile({ ...(raw && typeof raw === 'object' ? raw : {}), onboarding: stored?.onboarding })
+  const profile = cleanProfile({ ...(raw && typeof raw === 'object' ? raw : {}), onboarding: stored?.onboarding, proactive: stored?.proactive })
   const { error } = await supabaseAdmin
     .from('pen_profiles')
     .upsert({ user_email: email.toLowerCase(), profile, updated_at: new Date().toISOString() }, { onConflict: 'user_email' })

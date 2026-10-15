@@ -26,6 +26,7 @@ import type { Lang } from '../currency'
 import { userLang } from '../user-lang'
 import { sendText, sendButtons, openMedia, markRead, type Inbound } from './provider'
 import { isImessage } from '../imessage/sendblue'
+import type { ProactiveKind } from '../suggestions-types'
 import {
   claimCode,
   getLinkByEmail,
@@ -65,6 +66,12 @@ const EN = {
   photoFailed: 'I couldn\'t open that photo. Could you send it again?',
   badCode: (settings: string) => `That code didn't work. Codes last 30 minutes. Get a fresh one at ${settings}.`,
   linked: (email: string) => `Linked to ${email}. ✅`,
+  optIn: 'I\'ll also text you reminders and briefs from your meetings. Reply STOP anytime.',
+  stopAll: 'Done, I won\'t message you first anymore. Reply START to turn it back on. You can still ask me anything.',
+  stopKind: (what: string) => `Done, no more ${what}. Reply START to turn everything back on. You can still ask me anything.`,
+  startAll: 'Done, I\'ll text you reminders and briefs from your meetings again. Reply STOP anytime.',
+  startKind: (what: string) => `Done, ${what} are back on. Reply STOP anytime.`,
+  kinds: { offers: 'suggestions after your recordings', meeting_brief: 'meeting briefs', nudges: 'to-do reminders', morning_brief: 'morning briefs', notion: 'Notion offers' } as Record<ProactiveKind, string>,
   empty: 'That file arrived without its contents. Could you send it again?',
   notAudio: (name: string) => `${name} doesn't look like a recording. Send me the WAV file from your pen.`,
   yourRecording: 'your recording',
@@ -119,6 +126,12 @@ const BOT: Record<Lang, typeof EN> = {
     photoFailed: 'No pude abrir esa foto. ¿Me la mandas de nuevo?',
     badCode: (settings) => `Ese código no funcionó. Los códigos duran 30 minutos. Pide uno nuevo en ${settings}.`,
     linked: (email) => `Vinculado a ${email}. ✅`,
+    optIn: 'También te escribiré recordatorios y resúmenes de tus reuniones. Responde STOP cuando quieras.',
+    stopAll: 'Listo, ya no te escribiré primero. Responde START para volver a activarlo. Puedes seguir preguntándome lo que quieras.',
+    stopKind: (what) => `Listo, no más ${what}. Responde START para volver a activar todo. Puedes seguir preguntándome lo que quieras.`,
+    startAll: 'Listo, te volveré a escribir recordatorios y resúmenes de tus reuniones. Responde STOP cuando quieras.',
+    startKind: (what) => `Listo, volví a activar ${what}. Responde STOP cuando quieras.`,
+    kinds: { offers: 'sugerencias después de tus grabaciones', meeting_brief: 'resúmenes antes de reuniones', nudges: 'recordatorios de tareas', morning_brief: 'resúmenes de la mañana', notion: 'ofertas de Notion' },
     empty: 'Ese archivo llegó vacío. ¿Me lo mandas otra vez?',
     notAudio: (name) => `${name} no parece una grabación. Mándame el archivo WAV de tu lápiz.`,
     yourRecording: 'tu grabación',
@@ -170,6 +183,12 @@ const BOT: Record<Lang, typeof EN> = {
     photoFailed: 'Não consegui abrir essa foto. Pode mandar de novo?',
     badCode: (settings) => `Esse código não funcionou. Os códigos valem por 30 minutos. Pegue um novo em ${settings}.`,
     linked: (email) => `Vinculado a ${email}. ✅`,
+    optIn: 'Também vou te mandar lembretes e resumos das suas reuniões. Responda STOP quando quiser.',
+    stopAll: 'Pronto, não vou mais te escrever primeiro. Responda START para ativar de novo. Você ainda pode me perguntar qualquer coisa.',
+    stopKind: (what) => `Pronto, sem mais ${what}. Responda START para ativar tudo de novo. Você ainda pode me perguntar qualquer coisa.`,
+    startAll: 'Pronto, vou voltar a te mandar lembretes e resumos das suas reuniões. Responda STOP quando quiser.',
+    startKind: (what) => `Pronto, ${what} ativados de novo. Responda STOP quando quiser.`,
+    kinds: { offers: 'sugestões depois das suas gravações', meeting_brief: 'resumos antes das reuniões', nudges: 'lembretes de tarefas', morning_brief: 'resumos da manhã', notion: 'ofertas do Notion' },
     empty: 'Esse arquivo chegou vazio. Pode mandar de novo?',
     notAudio: (name) => `${name} não parece uma gravação. Me mande o arquivo WAV da sua caneta.`,
     yourRecording: 'sua gravação',
@@ -284,6 +303,12 @@ export async function handleInbound(msg: Inbound): Promise<void> {
     await sendText(msg.from, L.notLinked(appUrl('/settings/whatsapp'), appUrl()))
     return
   }
+  // STOP / START work on any account, active or not: being able to turn messages off can't
+  // depend on a plan. Whole-message commands only.
+  if (msg.kind === 'text') {
+    const cmd = proactiveCommand(msg.text)
+    if (cmd) return onProactiveCommand(msg, link, L, cmd)
+  }
   if (!(await allowed(link.email))) {
     // Ended plans are read-only on the website; say that, rather than "pick a plan".
     const ended = (await getAccount(link.email).catch(() => null))?.status === 'cancelled'
@@ -294,6 +319,10 @@ export async function handleInbound(msg: Inbound): Promise<void> {
   if (msg.kind === 'media' && msg.voice) return onVoice(msg, link, L)
   if (msg.kind === 'media') return askConsent(msg, L)
   if (msg.kind === 'image') return onImage(msg, link, L)
+  // A tap on a proactive template's quick reply ("Yes, brief me", "Remind me later") carries a
+  // proactive:/reminder: payload, not a file id: it is the user answering, so the agent reads
+  // the button text with the chat history (where the proactive message was written).
+  if (msg.kind === 'reply' && /^(proactive|reminder):/.test(msg.replyId ?? '') && msg.text.trim()) return onText({ ...msg, kind: 'text' }, link, L)
   if (msg.kind === 'reply') return onReply(msg, link, L)
   // iMessage has no buttons: a "yes" right after a recording is the consent tap.
   if (msg.kind === 'text' && isImessage(msg.from) && YES.test(msg.text)) {
@@ -316,7 +345,43 @@ async function linkPhone(msg: Inbound, code: string): Promise<void> {
     return
   }
   const L = BOT[await langFor(msg.from, link.email)]
-  await sendText(msg.from, `${L.linked(link.email)}\n\n${L.help}`)
+  // The opt-in Meta asks for before Juno writes first (plan section I).
+  await sendText(msg.from, `${L.linked(link.email)}\n\n${L.help}\n\n${L.optIn}`)
+}
+
+/* -------------------------------------------------------------- STOP/START */
+
+type ProactiveCommand = { on: boolean; kind?: ProactiveKind }
+
+const STOP_WORDS = 'stop|para|parar|basta|pare|sair|detener|unsubscribe'
+const START_WORDS = 'start|empezar|activar|iniciar|reanudar|come[cç]ar|voltar|ativar'
+// What each kind is called in a command, in the three languages ("stop morning brief").
+const KIND_WORDS: [ProactiveKind, string][] = [
+  ['morning_brief', 'morning briefs?|morning|resumen(es)? (de la )?ma[ñn]ana|resumen(es)? matutinos?|resumos? da manh[ãa]'],
+  ['meeting_brief', 'meeting briefs?|briefs?|resumen(es)? (de|antes de) (las )?reuniones|resumos? (das|antes das) reuni[õo]es'],
+  ['nudges', 'reminders?|nudges?|follow[- ]?ups?|recordatorios?|lembretes?'],
+  ['offers', 'offers?|suggestions?|sugerencias?|sugest[õo]es'],
+  ['notion', 'notion( offers?)?'],
+]
+
+/** STOP / START, all or one kind, only when that is the whole message. */
+export function proactiveCommand(text: string): ProactiveCommand | null {
+  const t = text.trim().toLowerCase().replace(/[.!¡]+$/g, '').replace(/\s+/g, ' ')
+  const m = new RegExp(`^(${STOP_WORDS}|${START_WORDS})(?: (?:the |los |las |de |os |as |com |con )?(.+))?$`).exec(t)
+  if (!m) return null
+  const on = new RegExp(`^(${START_WORDS})$`).test(m[1])
+  if (!m[2]) return { on }
+  if (/^(it|that|all|everything|eso|esto|todo|todos|isso|tudo|messages?|mensajes?|mensagens?)$/.test(m[2])) return { on }
+  const kind = KIND_WORDS.find(([, re]) => new RegExp(`^(${re})$`).test(m[2]))?.[0]
+  return kind ? { on, kind } : null
+}
+
+async function onProactiveCommand(msg: Inbound, link: Link, L: typeof EN, cmd: ProactiveCommand): Promise<void> {
+  const { setPrefs } = await import('../proactive')
+  await setPrefs(link.email, cmd.on, cmd.kind)
+  const reply = cmd.on ? (cmd.kind ? L.startKind(L.kinds[cmd.kind]) : L.startAll) : cmd.kind ? L.stopKind(L.kinds[cmd.kind]) : L.stopAll
+  await sendText(msg.from, reply)
+  await moveMessage(msg.id, 'received', 'done').catch(() => false)
 }
 
 /* ------------------------------------------------------------------ files */

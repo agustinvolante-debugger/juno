@@ -3,17 +3,29 @@
 // Meta lets a business send free-form messages for 24 hours after the user's last message
 // (the customer service window). A reminder set by a message is therefore always deliverable
 // if it is due within 24 hours of it, and needs no template or business verification. Later
-// than that would need a Meta-approved utility template, so it is refused for now.
+// than that needs the Meta-approved utility template `user_reminder` ("Here is the reminder you
+// asked me for: {{1}}…"): once it is in PEN_WA_TEMPLATES, reminders go up to 30 days ahead and
+// one due outside the window is sent as that template. iMessage has no window at all.
 //
 // Firing: Supabase pg_cron runs every minute and calls /api/pen/reminders only when a row is
 // due (the check is in SQL, so an idle minute costs no function call). See schema.sql.
 
 import { supabaseAdmin } from '@/lib/supabase'
 import type { Lang } from './currency'
-import { sendText } from './whatsapp/provider'
+import { sendText, sendTemplate } from './whatsapp/provider'
+import { channelFor, templateApproved } from './proactive'
+import { isImessage } from './imessage/sendblue'
 
 /** Inside Meta's 24-hour window, with a margin for the minute-granular cron. */
 export const MAX_AHEAD_MS = 23.5 * 60 * 60 * 1000
+/** With the user_reminder template approved, a reminder can wait this long. */
+export const MAX_AHEAD_TEMPLATE_MS = 30 * 24 * 60 * 60 * 1000
+export const REMINDER_TEMPLATE = 'user_reminder'
+
+/** How far ahead set_reminder accepts: a day, or 30 days once the template is approved. */
+export function maxAheadMs(): number {
+  return templateApproved(REMINDER_TEMPLATE) ? MAX_AHEAD_TEMPLATE_MS : MAX_AHEAD_MS
+}
 
 export type Reminder = { id: string; text: string; due_at: string }
 
@@ -56,13 +68,21 @@ export async function fireDue(): Promise<{ sent: number; failed: number }> {
     .update({ sent_at: now })
     .is('sent_at', null)
     .lte('due_at', now)
-    .select('id,phone,text,lang')
+    .select('id,user_email,phone,text,lang')
   if (error) throw new Error(error.message)
   let sent = 0
   let failed = 0
-  for (const r of (data ?? []) as { id: string; phone: string; text: string; lang: Lang }[]) {
+  for (const r of (data ?? []) as { id: string; user_email: string; phone: string; text: string; lang: Lang }[]) {
     try {
-      await sendText(r.phone, `${PREFIX[r.lang] ?? PREFIX.en}: ${r.text}`)
+      // Outside WhatsApp's 24-hour window only the template gets through. User-asked reminders
+      // don't count toward the proactive daily max or quiet hours: the user picked the time.
+      const ch = isImessage(r.phone) ? null : await channelFor(r.user_email).catch(() => null)
+      if (ch && !ch.imessage && !ch.window) {
+        if (!templateApproved(REMINDER_TEMPLATE)) throw new Error('outside the 24-hour window and user_reminder is not approved')
+        await sendTemplate(ch.to, REMINDER_TEMPLATE, r.lang ?? 'en', [r.text], [`reminder:done:${r.id}`, `reminder:snooze:${r.id}`])
+      } else {
+        await sendText(r.phone, `${PREFIX[r.lang] ?? PREFIX.en}: ${r.text}`)
+      }
       sent++
     } catch (e) {
       failed++
