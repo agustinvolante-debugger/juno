@@ -3272,7 +3272,9 @@ function AskWhatsApp({ whatsapp, T }: { whatsapp: { number: string; linked: bool
     try { h = localStorage.getItem('juno-wa-callout-hidden') === '1' } catch {}
     setHidden(h)
   }, [])
-  if (!whatsapp || hidden) return null
+  // Linked users already have WhatsApp one tap away (the phone's tab) and "Juno is waiting on
+  // you" on Home; the callout would only push that down.
+  if (!whatsapp || whatsapp.linked || hidden) return null
   const hide = () => {
     setHidden(true)
     try { localStorage.setItem('juno-wa-callout-hidden', '1') } catch {}

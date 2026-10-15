@@ -2608,6 +2608,11 @@ body:has(.pen-root) {
   position: absolute; right: 8px; top: 7px; padding: 2px; border-radius: 10px;
   background: var(--paper); box-shadow: -10px 0 10px -4px var(--paper);
 }
+/* Touch screens show the tools all the time (no hover), so floating them would cover the text:
+   there they keep their own column. */
+@media (hover: none) {
+  .pen-card .pen-row2-tools { position: static; padding: 0; background: none; box-shadow: none; align-self: center; }
+}
 /* The source is one line, cut with an ellipsis: it is a pointer, not content. */
 .pen-row2-meta { flex-wrap: nowrap; min-width: 0; overflow: hidden; }
 .pen-row2-meta > span { white-space: nowrap; }
