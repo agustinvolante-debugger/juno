@@ -4211,12 +4211,12 @@ html.pen-m-lock, html.pen-m-lock body { height: 100%; overflow: hidden; overscro
 .pen-m-body .pen-tick::before { content: ''; position: absolute; inset: -10px; }
 .pen-m-body .pen-row2-act { width: 44px; height: 44px; margin: -6px -6px -6px 0; }
 
-/* Recent recordings: tags sit on the duration line, so the title gets the full width. */
-.pen-recrow-dur { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
-.pen-recrow-dur .pen-recpills { min-width: 0; flex-shrink: 1; }
-.pen-recrow-dur .pen-catpill { max-width: 150px; }
-.pen-m-rec-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; min-width: 0; }
-.pen-m-rec-meta .pen-catpill { max-width: 150px; }
+/* Recent recordings: tags sit on the duration line, right after it, shown whole; the title gets
+   the full width. A long tag on a narrow screen wraps rather than being cut. */
+.pen-recrow-dur, .pen-m-rec-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 6px 10px; min-width: 0; }
+.pen-m-rec-meta { margin-top: 4px; }
+.pen-recrow-dur .pen-recpills, .pen-m-rec-meta .pen-recpills { flex-wrap: wrap; max-width: none; }
+.pen-recrow-dur .pen-catpill, .pen-m-rec-meta .pen-catpill { max-width: none; overflow: visible; text-overflow: clip; white-space: nowrap; }
 
 /* Order toggle: "Recently added" / "By date". */
 .pen-order-wrap { margin-top: 14px; }

@@ -388,11 +388,10 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
   }
   .pen-m-rec-top .pen-recpills { max-width: 55%; }
   .pen-m-rec-top .pen-catpill { max-width: 128px; }
-  /* In the narrow right-hand column the title needs the room more than the category does. */
-  @media (min-width: 1281px) {
-    .pen-rail .pen-recpills { max-width: 46%; }
-    .pen-rail .pen-catpill { max-width: 108px; }
-  }
+  /* Recent recordings: the tags sit right after the duration, on their own line under the title,
+     so the title gets the full width and the category shows whole (it wraps if it must). */
+  .pen-recrow-dur .pen-recpills, .pen-m-rec-meta .pen-recpills { max-width: none; flex-wrap: wrap; }
+  .pen-recrow-dur .pen-catpill, .pen-m-rec-meta .pen-catpill { max-width: none; overflow: visible; text-overflow: clip; }
 
   /* ---- narrow ---- */
   @media (max-width: 900px) {
