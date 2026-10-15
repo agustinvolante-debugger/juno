@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { postJson, errMessage } from '@/lib/pen/http'
 import { AnimatePresence, motion } from 'motion/react'
 import type { Deliverable } from '@/lib/pen/store'
@@ -348,15 +349,34 @@ async function writeClipboard(text: string): Promise<boolean> {
 export function DeliverableActions({ onPick, linkedin = false, item }: { onPick: (kind: Deliverable['kind']) => void; linkedin?: boolean; item?: string }) {
   const T = useCopy(DS)
   const [open, setOpen] = useState(false)
+  const [at, setAt] = useState<{ top: number; left: number } | null>(null)
   const wrap = useRef<HTMLDivElement>(null)
   const btn = useRef<HTMLButtonElement>(null)
+  const menu = useRef<HTMLDivElement>(null)
+  // The menu sits in .pen-root, above the page, so no card or column can clip it. Under the
+  // button, kept inside the screen: a button near the right edge opens the menu leftward.
+  const place = () => {
+    if (!btn.current) return
+    const r = btn.current.getBoundingClientRect()
+    const w = menu.current?.offsetWidth ?? 268
+    const h = menu.current?.offsetHeight ?? 200
+    const left = Math.max(12, Math.min(r.left, window.innerWidth - w - 12))
+    const below = r.bottom + 6
+    setAt({ top: below + h > window.innerHeight - 12 ? Math.max(12, r.top - h - 6) : below, left })
+  }
+  useLayoutEffect(() => {
+    if (open) place()
+  }, [open])
   useEffect(() => {
     if (!open) return
-    const onDown = (e: MouseEvent | TouchEvent) => { if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false) }
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      const t = e.target as Node
+      if (!wrap.current?.contains(t) && !menu.current?.contains(t)) setOpen(false)
+    }
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { setOpen(false); btn.current?.focus() }
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        const items = Array.from(wrap.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])
+        const items = Array.from(menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])
         if (!items.length) return
         e.preventDefault()
         const at = items.indexOf(document.activeElement as HTMLElement)
@@ -366,11 +386,16 @@ export function DeliverableActions({ onPick, linkedin = false, item }: { onPick:
     document.addEventListener('mousedown', onDown)
     document.addEventListener('touchstart', onDown)
     document.addEventListener('keydown', onKey)
-    requestAnimationFrame(() => wrap.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus())
+    // It follows its button when the page scrolls (a tap's leftover scroll must not close it).
+    window.addEventListener('scroll', place, true)
+    window.addEventListener('resize', place)
+    requestAnimationFrame(() => menu.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus())
     return () => {
       document.removeEventListener('mousedown', onDown)
       document.removeEventListener('touchstart', onDown)
       document.removeEventListener('keydown', onKey)
+      window.removeEventListener('scroll', place, true)
+      window.removeEventListener('resize', place)
     }
   }, [open])
   const kinds: Deliverable['kind'][] = linkedin ? ['email', 'memo', 'tracker', 'linkedin'] : ['email', 'memo', 'tracker']
@@ -388,15 +413,21 @@ export function DeliverableActions({ onPick, linkedin = false, item }: { onPick:
         {T.draft}
         <svg viewBox="0 0 20 20" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m6 8 4 4 4-4" /></svg>
       </button>
-      {open && (
-        <div className="pen-do-menu" role="menu">
+      {open && createPortal(
+        <div
+          ref={menu}
+          className="pen-do-menu"
+          role="menu"
+          style={{ position: 'fixed', top: at?.top ?? -9999, left: at?.left ?? -9999 }}
+        >
           {kinds.map((k) => (
             <button key={k} type="button" role="menuitem" className="pen-do-item" onClick={() => { setOpen(false); onPick(k) }}>
               <span className="pen-do-item-l">{T.buttons[k]}</span>
               <span className="pen-do-item-h">{T.hints[k]}</span>
             </button>
           ))}
-        </div>
+        </div>,
+        btn.current?.closest('.pen-root') ?? document.body,
       )}
     </div>
   )
