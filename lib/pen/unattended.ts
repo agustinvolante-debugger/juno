@@ -12,6 +12,7 @@ import { sendBriefing, sendFailureNotice, sendReadyNotice, hasSomethingToSay } f
 import { autoJoin } from './merge'
 import { checkJoinSuggestions } from './join-suggest'
 import { scanNames } from './names'
+import { scanSuggestions } from './suggestions'
 import { splitConversations, isEventLike } from './conference'
 import { groupSessions } from './merge'
 import { joinEventImport, pool, hasEventMates } from './event-day'
@@ -25,7 +26,15 @@ export async function runUnattended(sessionId: string, email: string) {
   // Then, with the briefing already out: does this recording look like part of another one the
   // filename rule couldn't place? Only ever a suggestion, and never allowed to throw.
   await checkJoinSuggestions(email, sessionId).catch(() => 0)
-  await namesAndConversations(email, sessionId).catch(() => {})
+  // What Juno could offer to help with (lib/pen/suggestions.ts): stored only, never sent from
+  // here; the scheduler decides when. Alongside names, and it never throws.
+  await Promise.all([
+    scanSuggestions(email, sessionId),
+    namesAndConversations(email, sessionId).catch(() => {}),
+  ])
+  // The offers go out now rather than at the next 15-minute tick; the scheduler's rules
+  // (STOP, quiet hours, daily max, the 24-hour window) still decide.
+  await import('./proactive').then((m) => m.runForUser(email)).catch((e) => console.warn(`pen proactive after notes: ${(e as Error).message}`))
 }
 
 /**

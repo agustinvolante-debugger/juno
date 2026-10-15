@@ -24,6 +24,7 @@
 // Dry run: PEN_PROACTIVE_DRY=1 (or { dry: true }) logs what would be sent and sends nothing;
 // provider.ts refuses to send anything at all while the env is set.
 
+import { composeOffers } from './suggestions'
 import { userZone } from './timezone'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ALLOWED_EMAILS } from '@/lib/auth'
@@ -582,17 +583,8 @@ export async function dueFor(email: string, now: Date, tz: string, lang: Lang, p
   return parts.filter((p) => t < p.staleAt).sort((a, b) => a.order - b.order)
 }
 
-type ComposeOffers = (email: string, sessionId: string, lang: Lang) => Promise<string | null>
-
-/**
- * composeOffers lives in lib/pen/suggestions.ts, written by the commitments workstream.
- * TODO-integrate: once that file is in, make this a plain import. Until then a missing module
- * means no offers (next build fails loudly on the missing file, which is the reminder).
- */
-async function loadComposeOffers(): Promise<ComposeOffers | null> {
-  // @ts-ignore -- lib/pen/suggestions.ts lands with the commitments workstream (composeOffers)
-  const mod = (await import('./suggestions').catch(() => null)) as { composeOffers?: ComposeOffers } | null
-  return mod?.composeOffers ?? null
+async function compose(email: string, sessionId: string, lang: Lang): Promise<string | null> {
+  return (await composeOffers(email, sessionId, lang))?.text ?? null
 }
 
 /* ------------------------------------------------------------------- tick */
@@ -632,17 +624,16 @@ export async function runForUser(email: string, opts: { now?: Date; dry?: boolea
   }
 
   // Inside the window (or iMessage): every due part in one free-form message.
-  const compose = parts.some((p) => p.kind === 'offers') ? await loadComposeOffers() : null
   const texts: string[] = []
   const carried: Item[] = []
   const empty: Item[] = []
   for (const p of parts) {
     let text = p.text
     if (p.kind === 'offers') {
-      text = compose ? ((await compose(email, p.ref, lang).catch(() => null)) ?? '') : ''
+      text = (await compose(email, p.ref, lang).catch(() => null)) ?? ''
       // Nothing to offer: done with it, but only once the suggestions have had time to land.
       if (!text) {
-        if (compose && p.notedAt && now.getTime() - p.notedAt > 30 * MIN) empty.push({ kind: p.kind, ref: p.ref })
+        if (p.notedAt && now.getTime() - p.notedAt > 30 * MIN) empty.push({ kind: p.kind, ref: p.ref })
         continue
       }
     }

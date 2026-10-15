@@ -279,3 +279,63 @@ export async function autoToNotion(email: string, s: PenSession | null | undefin
   if (!c?.auto) return
   await sendToNotion(email, s).catch((e) => console.warn(`pen notion: ${s.id} not sent: ${(e as Error).message}`))
 }
+
+/* -------------------------------------------------------------- docs (plan G) */
+
+export type DocKind = 'study_plan' | 'memo' | 'prep'
+/** A block of a page Juno writes: headings, paragraphs, bullets and to-dos (with a date in the text). */
+export type DocBlock = { type: 'heading' | 'paragraph' | 'bullet' | 'todo'; text: string; checked?: boolean }
+
+const DOC_TYPE: Record<'en' | 'es' | 'pt', Record<DocKind, string>> = {
+  en: { study_plan: 'Study plan', memo: 'Memo', prep: 'Prep' },
+  es: { study_plan: 'Plan de estudio', memo: 'Memo', prep: 'Preparación' },
+  pt: { study_plan: 'Plano de estudo', memo: 'Memo', prep: 'Preparação' },
+}
+const FROM: Record<'en' | 'es' | 'pt', string> = { en: 'From your recording in Juno', es: 'De tu grabación en Juno', pt: 'Da sua gravação no Juno' }
+
+/** Connected and usable: the integration is configured and this account linked its Notion. */
+export async function notionConnected(email: string): Promise<boolean> {
+  return notionConfigured() && Boolean(await row(email))
+}
+
+/**
+ * A page Juno wrote on the user's yes (a study plan, a memo, meeting prep), as a row of the same
+ * "Juno Pen notes" table the recordings go to, typed so it is easy to tell apart. Not tied to
+ * pen_notion_pages (that is one page per recording); the suggestion row keeps the address.
+ */
+export async function createDocPage(
+  email: string,
+  doc: { title: string; kind: DocKind; sessionId?: string | null; date?: string | null; blocks: DocBlock[] },
+): Promise<{ url: string }> {
+  try {
+    const { token, databaseId } = await ensureDatabase(email)
+    const { userLang } = await import('./user-lang')
+    const lang = await userLang(email)
+    const base = (process.env.PEN_PUBLIC_URL || 'https://www.tryjunoapp.com').replace(/\/$/, '')
+    const link = doc.sessionId ? `${base}/?open=${doc.sessionId}` : null
+    const children: unknown[] = doc.blocks.map((b) =>
+      b.type === 'heading' ? block('heading_2', b.text)
+        : b.type === 'bullet' ? block('bulleted_list_item', b.text)
+          : b.type === 'todo' ? block('to_do', b.text, { checked: Boolean(b.checked) })
+            : block('paragraph', b.text),
+    )
+    if (link) children.push({ object: 'block', type: 'paragraph', paragraph: { rich_text: [{ type: 'text', text: { content: `${FROM[lang]} →`, link: { url: link } } }] } })
+    const page = await notion<{ id: string; url: string }>(token, 'pages', {
+      parent: { database_id: databaseId },
+      properties: {
+        Name: { title: text(doc.title.slice(0, 200) || DOC_TYPE[lang][doc.kind]) },
+        Date: { date: { start: doc.date || new Date().toISOString().slice(0, 10) } },
+        Type: { select: { name: DOC_TYPE[lang][doc.kind] } },
+        ...(link ? { 'In Juno': { url: link } } : {}),
+      },
+      children: children.slice(0, 100),
+    })
+    await supabaseAdmin.from('pen_notion').update({ last_error: null }).eq('email', email.toLowerCase())
+    return { url: page.url }
+  } catch (e) {
+    if ((e as { status?: number }).status === 401) {
+      await supabaseAdmin.from('pen_notion').update({ last_error: 'Notion no longer lets Juno in. Connect again in Settings → Notion.' }).eq('email', email.toLowerCase())
+    }
+    throw e
+  }
+}
