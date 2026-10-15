@@ -55,13 +55,20 @@ const LANGS: { code: Lang; label: string }[] = [
 
 const TOKEN = /(\[(?:ENTITY|ADDRESS|GOVERNING LAW|CONTACT EMAIL)\])/
 
+const URL_RE = /(https:\/\/[^\s)]+)/
+
+/** Web addresses in the text become links (Google's reviewer opens the Limited Use policy). */
+function Links({ s }: { s: string }) {
+  return <>{s.split(URL_RE).map((p, i) => (URL_RE.test(p) ? <a key={i} href={p} target="_blank" rel="noopener noreferrer">{p}</a> : p))}</>
+}
+
 /** Swaps [ENTITY] and friends for their values; an unfilled one stays visible and marked. */
 function Text({ s }: { s: string }) {
   return (
     <>
       {s.split(TOKEN).map((part, i) => {
         const m = part.match(/^\[(.+)\]$/)
-        if (!m || !(m[1] in LEGAL_FACTS)) return part
+        if (!m || !(m[1] in LEGAL_FACTS)) return <Links key={i} s={part} />
         const value: string = LEGAL_FACTS[m[1] as LegalFact]
         if (value === part) return <mark key={i} className="pen-legal-todo">{part}</mark>
         if (m[1] === 'CONTACT EMAIL') return <a key={i} href={`mailto:${value}`}>{value}</a>

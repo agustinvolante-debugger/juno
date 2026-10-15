@@ -45,7 +45,8 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
               'What we make from them: transcripts, speaker names, notes, summaries, to-dos, translations, chat answers and documents, plus any edits you make.',
               'People: the names, email addresses, roles and short descriptions of people you add, or that you accept from our suggestions.',
               'Names heard: personal names said in your recordings, when they were said, who said them and a few words of context, and, for recordings of events, the separate conversations in them. They are found automatically so you can search them and pick who was who. Nobody becomes a contact unless you choose them.',
-              'WhatsApp: your phone number once you link it, the messages and files you send to Juno Pen, and our replies.',
+              'WhatsApp and iMessage: your phone number once you link it, the messages and files you send to Juno Pen, and our replies, including the reminders and briefs we send you.',
+              'Google Calendar (only if you connect it): the events on calendars you own (title, time, place, attendees and description) and the events Juno Pen adds for you.',
               'Payments: your plan, trial and renewal dates, and purchase records. Your card is collected and held by Stripe. We never see or store your full card number.',
               'Usage: the pages you visit on our site, the page that sent you, your browser type and an approximate location (country and city) supplied by our hosting provider. We don’t store your IP address in our own database; our providers keep standard server logs.',
             ],
@@ -58,6 +59,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
           {
             list: [
               'To run Juno Pen: transcribe recordings, write notes, answer your questions, send you briefings by email or WhatsApp, and keep your archive searchable.',
+              'To message you first on WhatsApp or iMessage with reminders, briefs and suggestions from your meetings, such as a follow-up you promised or a meeting someone proposed. Juno Pen asks before acting on any of them. Reply STOP to turn these messages off and START to turn them back on.',
               'To run your account and billing, post your pen, and send service emails (welcome, trial ending, payment problems).',
               'To keep the service secure and working, fix problems and prevent abuse.',
               'To understand, in aggregate, how the site is used, so we can improve it.',
@@ -84,7 +86,9 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
               'Supabase (database and file storage): your account data, recordings, transcripts and notes.',
               'AssemblyAI (transcription and translation): the audio of your recordings, plus names and words from your profile and people list that help it spell them correctly.',
               'Anthropic (the AI models that write notes, correct transcripts, answer questions and draft emails): transcripts, notes, your profile and your questions.',
-              'Vonage and Meta (WhatsApp, if you use it): your phone number, messages and files.',
+              'Meta (WhatsApp, if you use it): your phone number, messages and files.',
+              'Sendblue (iMessage, if you use it): your phone number, messages and files.',
+              'Google Calendar (only if you connect it): we read and add events on your own calendar, as described under “Google Calendar” below.',
               'Stripe (payments): your email, plan and payment details.',
               'Notion (only if you connect it): the notes of your recordings, sent to your own Notion workspace. Notion’s own terms and privacy policy apply there.',
               'Resend (email delivery): your email address and the emails we send you, including meeting briefings, which contain your notes.',
@@ -93,6 +97,21 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
             ],
           },
           'We may also disclose data when the law requires it, to protect someone’s safety or our rights, or as part of a merger or sale of the business, in which case this policy keeps applying to your data.',
+        ],
+      },
+      {
+        h: 'Google Calendar',
+        body: [
+          'If you connect Google Calendar, Juno Pen asks Google for permission to see, add and change events on the calendars you own. We use it for two things only:',
+          {
+            list: [
+              'To add events you approve. When a recording mentions a meeting, Juno Pen asks you first, on WhatsApp, iMessage or the website. It adds the event only after you say yes, and it never changes or deletes an event you didn’t ask it to.',
+              'To prepare you for meetings. We read your events for the next 7 days (title, time, place, attendees and description) so we can send you a short brief before a meeting, using your notes from past conversations with the same people.',
+            ],
+          },
+          'To write a brief or a reminder, the details of that event are sent to Anthropic, which writes the text for us and does not train its models on data sent through its API. We don’t sell calendar data, use it for advertising, or use it to train AI models, ours or anyone else’s. Nobody at Juno Pen reads it unless you ask us to, it’s needed for security, or the law requires it.',
+          'You can disconnect Google Calendar in Settings, or at myaccount.google.com/permissions. We then revoke our access and delete the calendar data and tokens we hold. When you ask us to delete your account, we do the same.',
+          'Juno Pen’s use and transfer to any other app of information received from Google APIs will adhere to the Google API Services User Data Policy (https://developers.google.com/terms/api-services-user-data-policy), including the Limited Use requirements.',
         ],
       },
       {
@@ -117,6 +136,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
               'When you delete a recording, we remove it and its notes from our database, its audio from our storage, and the transcript AssemblyAI made of it. Copies can remain in our providers’ backups for a limited time.',
               'Otherwise, AssemblyAI’s standard policy is to delete audio within about 48 hours and the transcripts it keeps within about 30 days. Recordings sent on WhatsApp are not kept in our own file storage; we keep their transcript and notes.',
               'WhatsApp messages you send us: kept with your account until you ask us to delete them.',
+              'Google Calendar: we read upcoming events when a brief or suggestion needs them. We keep only the events Juno Pen added for you and the briefs it wrote. When you disconnect Google Calendar or ask us to delete your account, we revoke our access and delete your Google tokens and the calendar data we hold.',
               'Payment and billing records: as long as tax and accounting law requires.',
               'If your plan ends, your account stays read-only for 12 months so you can come back, and then we delete it with its recordings, transcripts and notes. Ask us and we delete them sooner.',
             ],
@@ -225,7 +245,8 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
               'Lo que generamos a partir de ellas: transcripciones, nombres de quién habla, notas, resúmenes, tareas, traducciones, respuestas del chat y documentos, además de lo que edites.',
               'Personas: nombres, correos, roles y descripciones breves de las personas que agregas o que aceptas de nuestras sugerencias.',
               'Nombres escuchados: los nombres de personas dichos en tus grabaciones, cuándo se dijeron, quién los dijo y unas palabras de contexto y, en grabaciones de eventos, las distintas conversaciones que contienen. Se detectan automáticamente para que puedas buscarlos y elegir quién era quién. Nadie pasa a tus contactos a menos que tú lo elijas.',
-              'WhatsApp: tu número cuando lo vinculas, los mensajes y archivos que envías a Juno Pen, y nuestras respuestas.',
+              'WhatsApp e iMessage: tu número cuando lo vinculas, los mensajes y archivos que envías a Juno Pen, y nuestras respuestas, incluidos los recordatorios y resúmenes que te enviamos.',
+              'Google Calendar (solo si lo conectas): los eventos de los calendarios que son tuyos (título, hora, lugar, invitados y descripción) y los eventos que Juno Pen agrega por ti.',
               'Pagos: tu plan, las fechas de prueba y renovación, y los registros de compra. Tu tarjeta la recibe y guarda Stripe. Nunca vemos ni guardamos el número completo.',
               'Uso: las páginas que visitas en nuestro sitio, la página desde la que llegaste, tu tipo de navegador y una ubicación aproximada (país y ciudad) que entrega nuestro proveedor de hosting. No guardamos tu dirección IP en nuestra base de datos; nuestros proveedores mantienen registros estándar de servidor.',
             ],
@@ -238,6 +259,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
           {
             list: [
               'Para operar Juno Pen: transcribir grabaciones, escribir notas, responder tus preguntas, enviarte resúmenes por correo o WhatsApp y mantener tu archivo buscable.',
+              'Para escribirte primero por WhatsApp o iMessage con recordatorios, resúmenes y sugerencias de tus reuniones, como un seguimiento que prometiste o una reunión que alguien propuso. Juno Pen te pregunta antes de actuar sobre cualquiera de ellas. Responde STOP para desactivar estos mensajes y START para volver a activarlos.',
               'Para gestionar tu cuenta y tus pagos, enviarte el lápiz y mandarte correos del servicio (bienvenida, fin de la prueba, problemas de pago).',
               'Para mantener el servicio seguro y funcionando, corregir problemas y evitar abusos.',
               'Para entender, en conjunto, cómo se usa el sitio y mejorarlo.',
@@ -264,7 +286,9 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
               'Supabase (base de datos y almacenamiento de archivos): los datos de tu cuenta, grabaciones, transcripciones y notas.',
               'AssemblyAI (transcripción y traducción): el audio de tus grabaciones, y nombres y palabras de tu perfil y tu lista de personas que le ayudan a escribirlos bien.',
               'Anthropic (los modelos de IA que escriben notas, corrigen transcripciones, responden preguntas y redactan correos): transcripciones, notas, tu perfil y tus preguntas.',
-              'Vonage y Meta (WhatsApp, si lo usas): tu número, mensajes y archivos.',
+              'Meta (WhatsApp, si lo usas): tu número, mensajes y archivos.',
+              'Sendblue (iMessage, si lo usas): tu número, mensajes y archivos.',
+              'Google Calendar (solo si lo conectas): leemos y agregamos eventos en tu propio calendario, como se explica más abajo en “Google Calendar”.',
               'Stripe (pagos): tu correo, plan y datos de pago.',
               'Notion (solo si lo conectas): las notas de tus grabaciones, enviadas a tu propio espacio de Notion. Ahí aplican los términos y la política de privacidad de Notion.',
               'Resend (envío de correos): tu correo y los correos que te enviamos, incluidos los resúmenes de reuniones, que contienen tus notas.',
@@ -273,6 +297,21 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
             ],
           },
           'También podemos revelar datos cuando la ley lo exija, para proteger la seguridad de alguien o nuestros derechos, o como parte de una fusión o venta del negocio; en ese caso, esta política sigue aplicándose a tus datos.',
+        ],
+      },
+      {
+        h: 'Google Calendar',
+        body: [
+          'Si conectas Google Calendar, Juno Pen le pide permiso a Google para ver, agregar y cambiar eventos en los calendarios que son tuyos. Lo usamos solo para dos cosas:',
+          {
+            list: [
+              'Agregar los eventos que apruebas. Cuando una grabación menciona una reunión, Juno Pen te pregunta primero, por WhatsApp, iMessage o en el sitio. Agrega el evento solo después de que digas que sí, y nunca cambia ni borra un evento que no le pediste.',
+              'Prepararte para tus reuniones. Leemos tus eventos de los próximos 7 días (título, hora, lugar, invitados y descripción) para enviarte un resumen breve antes de una reunión, con tus notas de conversaciones anteriores con las mismas personas.',
+            ],
+          },
+          'Para escribir un resumen o un recordatorio, los datos de ese evento se envían a Anthropic, que escribe el texto por nosotros y no entrena sus modelos con datos enviados por su API. No vendemos los datos de tu calendario, no los usamos para publicidad ni para entrenar modelos de IA, propios ni de terceros. Nadie en Juno Pen los lee salvo que tú nos lo pidas, sea necesario por seguridad o lo exija la ley.',
+          'Puedes desconectar Google Calendar en Ajustes o en myaccount.google.com/permissions. En ese momento revocamos nuestro acceso y borramos los datos de calendario y los tokens que tengamos. Cuando nos pides borrar tu cuenta, hacemos lo mismo.',
+          'El uso que Juno Pen hace de la información recibida de las API de Google, y su transferencia a cualquier otra app, se ajustará a la Política de datos de usuario de los servicios de API de Google (https://developers.google.com/terms/api-services-user-data-policy), incluidos los requisitos de Uso limitado.',
         ],
       },
       {
@@ -297,6 +336,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
               'Cuando borras una grabación, la eliminamos junto con sus notas de nuestra base de datos, su audio de nuestro almacenamiento y la transcripción que hizo AssemblyAI. Pueden quedar copias en los respaldos de nuestros proveedores por un tiempo limitado.',
               'Si no la borras, la política estándar de AssemblyAI es borrar el audio en unas 48 horas y las transcripciones que guarda en unos 30 días. Las grabaciones enviadas por WhatsApp no se guardan en nuestro almacenamiento de archivos; guardamos su transcripción y sus notas.',
               'Mensajes de WhatsApp que nos envías: se guardan con tu cuenta hasta que nos pidas borrarlos.',
+              'Google Calendar: leemos los próximos eventos cuando un resumen o una sugerencia los necesita. Solo guardamos los eventos que Juno Pen agregó por ti y los resúmenes que escribió. Cuando desconectas Google Calendar o nos pides borrar tu cuenta, revocamos nuestro acceso y borramos tus tokens de Google y los datos de calendario que tengamos.',
               'Registros de pagos y facturación: el tiempo que exija la ley tributaria y contable.',
               'Si tu plan termina, tu cuenta queda solo de lectura durante 12 meses para que puedas volver, y luego la eliminamos con sus grabaciones, transcripciones y notas. Si nos lo pides, las borramos antes.',
             ],
@@ -405,7 +445,8 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
               'O que geramos a partir delas: transcrições, nomes de quem fala, notas, resumos, tarefas, traduções, respostas do chat e documentos, além das suas edições.',
               'Pessoas: nomes, e-mails, funções e descrições curtas das pessoas que você adiciona ou aceita das nossas sugestões.',
               'Nomes ouvidos: os nomes de pessoas ditos nas suas gravações, quando foram ditos, quem os disse e algumas palavras de contexto e, em gravações de eventos, as diferentes conversas que elas contêm. São detectados automaticamente para você poder buscá-los e escolher quem era quem. Ninguém vira contato a menos que você escolha.',
-              'WhatsApp: seu número quando você o vincula, as mensagens e arquivos que você envia ao Juno Pen e as nossas respostas.',
+              'WhatsApp e iMessage: seu número quando você o vincula, as mensagens e arquivos que você envia ao Juno Pen e as nossas respostas, incluindo os lembretes e resumos que enviamos.',
+              'Google Agenda (só se você conectar): os eventos das agendas que são suas (título, horário, local, convidados e descrição) e os eventos que o Juno Pen adiciona para você.',
               'Pagamentos: seu plano, as datas de teste e renovação e os registros de compra. Seu cartão é coletado e guardado pela Stripe. Nunca vemos nem guardamos o número completo.',
               'Uso: as páginas que você visita no site, a página de onde você veio, o tipo de navegador e uma localização aproximada (país e cidade) informada pelo nosso provedor de hospedagem. Não guardamos seu endereço IP no nosso banco de dados; nossos fornecedores mantêm registros padrão de servidor.',
             ],
@@ -418,6 +459,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
           {
             list: [
               'Para operar o Juno Pen: transcrever gravações, escrever notas, responder às suas perguntas, enviar resumos por e-mail ou WhatsApp e manter seu arquivo pesquisável.',
+              'Para te mandar mensagens primeiro pelo WhatsApp ou iMessage com lembretes, resumos e sugestões das suas reuniões, como um retorno que você prometeu ou uma reunião que alguém propôs. O Juno Pen pergunta antes de agir sobre qualquer uma delas. Responda STOP para desativar essas mensagens e START para ativá-las de novo.',
               'Para gerenciar sua conta e seus pagamentos, enviar sua caneta e mandar e-mails do serviço (boas-vindas, fim do teste, problemas de pagamento).',
               'Para manter o serviço seguro e funcionando, corrigir problemas e evitar abusos.',
               'Para entender, de forma agregada, como o site é usado e melhorá-lo.',
@@ -444,7 +486,9 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
               'Supabase (banco de dados e armazenamento de arquivos): os dados da sua conta, gravações, transcrições e notas.',
               'AssemblyAI (transcrição e tradução): o áudio das suas gravações, e nomes e palavras do seu perfil e da sua lista de pessoas que a ajudam a escrevê-los corretamente.',
               'Anthropic (os modelos de IA que escrevem notas, corrigem transcrições, respondem perguntas e redigem e-mails): transcrições, notas, seu perfil e suas perguntas.',
-              'Vonage e Meta (WhatsApp, se você usar): seu número, mensagens e arquivos.',
+              'Meta (WhatsApp, se você usar): seu número, mensagens e arquivos.',
+              'Sendblue (iMessage, se você usar): seu número, mensagens e arquivos.',
+              'Google Agenda (só se você conectar): lemos e adicionamos eventos na sua própria agenda, como explicado abaixo em “Google Agenda”.',
               'Stripe (pagamentos): seu e-mail, plano e dados de pagamento.',
               'Notion (só se você conectar): as notas das suas gravações, enviadas para o seu próprio espaço no Notion. Lá valem os termos e a política de privacidade do Notion.',
               'Resend (envio de e-mails): seu e-mail e os e-mails que enviamos a você, incluindo os resumos de reuniões, que contêm suas notas.',
@@ -453,6 +497,21 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
             ],
           },
           'Também podemos divulgar dados quando a lei exigir, para proteger a segurança de alguém ou os nossos direitos, ou como parte de uma fusão ou venda do negócio; nesse caso, esta política continua valendo para os seus dados.',
+        ],
+      },
+      {
+        h: 'Google Agenda',
+        body: [
+          'Se você conectar o Google Agenda, o Juno Pen pede permissão ao Google para ver, adicionar e alterar eventos nas agendas que são suas. Usamos isso só para duas coisas:',
+          {
+            list: [
+              'Adicionar os eventos que você aprova. Quando uma gravação menciona uma reunião, o Juno Pen pergunta primeiro, pelo WhatsApp, iMessage ou pelo site. Ele só adiciona o evento depois que você disser sim, e nunca altera nem apaga um evento que você não pediu.',
+              'Te preparar para reuniões. Lemos seus eventos dos próximos 7 dias (título, horário, local, convidados e descrição) para te mandar um resumo curto antes de uma reunião, com suas notas de conversas anteriores com as mesmas pessoas.',
+            ],
+          },
+          'Para escrever um resumo ou um lembrete, os dados desse evento são enviados à Anthropic, que escreve o texto para nós e não treina seus modelos com dados enviados pela sua API. Não vendemos os dados da sua agenda, não os usamos para publicidade nem para treinar modelos de IA, nossos ou de terceiros. Ninguém no Juno Pen os lê, a não ser que você peça, que seja necessário por segurança ou que a lei exija.',
+          'Você pode desconectar o Google Agenda em Configurações ou em myaccount.google.com/permissions. Nesse momento revogamos nosso acesso e apagamos os dados de agenda e os tokens que tivermos. Quando você nos pede para apagar sua conta, fazemos o mesmo.',
+          'O uso e a transferência, para qualquer outro app, de informações recebidas das APIs do Google pelo Juno Pen seguirão a Política de Dados do Usuário dos Serviços de API do Google (https://developers.google.com/terms/api-services-user-data-policy), incluindo os requisitos de Uso Limitado.',
         ],
       },
       {
@@ -477,6 +536,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
               'Quando você apaga uma gravação, removemos a gravação e as notas do nosso banco de dados, o áudio do nosso armazenamento e a transcrição feita pela AssemblyAI. Podem restar cópias nos backups dos nossos fornecedores por um tempo limitado.',
               'Se você não apagar, a política padrão da AssemblyAI é apagar o áudio em cerca de 48 horas e as transcrições que ela guarda em cerca de 30 dias. As gravações enviadas pelo WhatsApp não ficam no nosso armazenamento de arquivos; guardamos a transcrição e as notas.',
               'Mensagens de WhatsApp que você nos envia: ficam com a sua conta até você pedir para apagá-las.',
+              'Google Agenda: lemos os próximos eventos quando um resumo ou uma sugestão precisa deles. Guardamos só os eventos que o Juno Pen adicionou para você e os resumos que escreveu. Quando você desconecta o Google Agenda ou nos pede para apagar sua conta, revogamos nosso acesso e apagamos seus tokens do Google e os dados de agenda que tivermos.',
               'Registros de pagamento e faturamento: pelo tempo que a legislação fiscal e contábil exigir.',
               'Se o seu plano terminar, sua conta fica somente leitura por 12 meses para você poder voltar, e depois a excluímos com as gravações, transcrições e notas. Se pedir, apagamos antes.',
             ],

@@ -92,9 +92,10 @@ export const TERMS: Record<Lang, LegalDoc> = {
         ],
       },
       {
-        h: 'WhatsApp',
+        h: 'WhatsApp and iMessage',
         body: [
-          'The WhatsApp service runs on Meta’s WhatsApp through our messaging provider, and you must follow WhatsApp’s own terms. It may be unavailable when they are. A recording sent on WhatsApp is processed only after you confirm that everyone agreed to be recorded.',
+          'The WhatsApp and iMessage services run on Meta’s WhatsApp and Apple’s iMessage through our messaging providers, and you must follow their terms. It may be unavailable when they are. A recording sent on WhatsApp is processed only after you confirm that everyone agreed to be recorded.',
+          'Juno Pen may also message you first, with reminders, briefs and suggestions that come from your own recordings and calendar, at most 3 a day and not at night. Reply STOP to turn these messages off and START to turn them back on, or change it in Settings. Juno Pen acts on a suggestion, such as adding a calendar event or emailing someone, only after you say yes. Your mobile carrier’s usual data or messaging charges may apply.',
         ],
       },
       {
@@ -228,9 +229,10 @@ export const TERMS: Record<Lang, LegalDoc> = {
         ],
       },
       {
-        h: 'WhatsApp',
+        h: 'WhatsApp e iMessage',
         body: [
-          'El servicio por WhatsApp funciona sobre WhatsApp de Meta a través de nuestro proveedor de mensajería, y debes cumplir los términos de WhatsApp. Puede no estar disponible cuando ellos no lo estén. Una grabación enviada por WhatsApp se procesa solo después de que confirmes que todos aceptaron ser grabados.',
+          'Los servicios por WhatsApp e iMessage funcionan sobre WhatsApp de Meta e iMessage de Apple a través de nuestros proveedores de mensajería, y debes cumplir sus términos. Puede no estar disponible cuando ellos no lo estén. Una grabación enviada por WhatsApp se procesa solo después de que confirmes que todos aceptaron ser grabados.',
+          'Juno Pen también puede escribirte primero, con recordatorios, resúmenes y sugerencias que salen de tus propias grabaciones y de tu calendario, como máximo 3 al día y nunca de noche. Responde STOP para desactivar estos mensajes y START para volver a activarlos, o cámbialo en Ajustes. Juno Pen solo actúa sobre una sugerencia, como agregar un evento al calendario o escribirle a alguien, después de que digas que sí. Pueden aplicarse los cargos habituales de datos o mensajes de tu operador.',
         ],
       },
       {
@@ -364,9 +366,10 @@ export const TERMS: Record<Lang, LegalDoc> = {
         ],
       },
       {
-        h: 'WhatsApp',
+        h: 'WhatsApp e iMessage',
         body: [
-          'O serviço pelo WhatsApp funciona no WhatsApp da Meta por meio do nosso provedor de mensagens, e você deve seguir os termos do WhatsApp. Ele pode ficar indisponível quando eles estiverem. Uma gravação enviada pelo WhatsApp só é processada depois que você confirma que todos concordaram em ser gravados.',
+          'Os serviços pelo WhatsApp e pelo iMessage funcionam no WhatsApp da Meta e no iMessage da Apple por meio dos nossos provedores de mensagens, e você deve seguir os termos deles. Ele pode ficar indisponível quando eles estiverem. Uma gravação enviada pelo WhatsApp só é processada depois que você confirma que todos concordaram em ser gravados.',
+          'O Juno Pen também pode te mandar mensagens primeiro, com lembretes, resumos e sugestões que vêm das suas próprias gravações e do seu calendário, no máximo 3 por dia e nunca à noite. Responda STOP para desativar essas mensagens e START para ativá-las de novo, ou mude isso em Configurações. O Juno Pen só age sobre uma sugestão, como adicionar um evento ao calendário ou escrever para alguém, depois que você disser sim. Podem ser cobradas as tarifas normais de dados ou mensagens da sua operadora.',
         ],
       },
       {
