@@ -2,5 +2,6 @@
 
 import type { ToolModule } from './types'
 import { confirmModule } from '../confirm'
+import { offersModule } from './offers'
 
-export const MODULES: ToolModule[] = [confirmModule]
+export const MODULES: ToolModule[] = [confirmModule, offersModule]
