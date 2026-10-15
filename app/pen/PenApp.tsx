@@ -3099,10 +3099,22 @@ function sentimentColor(s: string) {
 // Newest recording first by when it was RECORDED (the file's own date), falling back to the
 // upload time for files without one. Sorting by upload time while heading by recording date put
 // an old recording uploaded today at the top under an old day, and could repeat a day heading.
+// But an old recording uploaded today (a lecture from two weeks ago) then sank out of sight under
+// its own day, so for a day it heads the list as "Just added" instead.
+const JUST_ADDED: Record<Lang, string> = { en: 'Just added', es: 'Recién agregadas', pt: 'Recém-adicionadas' }
+const HOUR_MS = 3_600_000
+
 function groupByDay(sessions: PenSession[], lang: Lang): [string, PenSession[]][] {
   const at = (s: PenSession) => new Date(s.recorded_at ?? s.created_at).getTime()
+  const now = Date.now()
+  const justAdded = (s: PenSession) => {
+    const up = new Date(s.created_at).getTime()
+    return !!s.recorded_at && now - up < 24 * HOUR_MS && up - at(s) > 36 * HOUR_MS
+  }
   const map = new Map<string, PenSession[]>()
-  for (const s of [...sessions].sort((a, b) => at(b) - at(a))) {
+  const fresh = sessions.filter(justAdded).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  if (fresh.length) map.set(JUST_ADDED[lang] ?? JUST_ADDED.en, fresh)
+  for (const s of [...sessions].filter((s) => !justAdded(s)).sort((a, b) => at(b) - at(a))) {
     const key = fmtDate(s.recorded_at ?? s.created_at, lang, { weekday: 'short', month: 'short', day: 'numeric' })
     if (!map.has(key)) map.set(key, [])
     map.get(key)!.push(s)
