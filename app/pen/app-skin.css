@@ -1016,6 +1016,13 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
   .pen-heard-where li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; font-size: 14px; }
   .pen-heard-where .pen-heard-time { font-variant-numeric: normal; text-align: left; }
 
+  /* "Combine this day into one event". */
+  .pen-convo-day { margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: var(--sunk); border: 1px solid var(--hair); }
+  .pen-convo-day > p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--soft); max-width: 70ch; }
+  .pen-convo-day .pen-convo-offer-acts { margin-top: 10px; }
+  .pen-convo-offer .pen-convo-day { background: var(--panel); }
+  .pen-convo-day .pen-btn, .pen-convo-offer-acts .pen-btn { display: inline-flex; align-items: center; gap: 6px; }
+
   /* A line jumped to from Names heard or Conversations. */
   .pen-utt { transition: background-color .6s ease; border-radius: 10px; }
   .pen-utt[data-flash] { background-color: var(--accent-wash); }

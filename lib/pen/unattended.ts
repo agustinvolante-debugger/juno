@@ -14,6 +14,7 @@ import { checkJoinSuggestions } from './join-suggest'
 import { scanNames } from './names'
 import { splitConversations, isEventLike } from './conference'
 import { groupSessions } from './merge'
+import { joinEventImport, pool, hasEventMates } from './event-day'
 import type { PenSession } from './store'
 import { enrichPerson, peopleOnSession } from './people'
 import { sendWhatsAppBriefing, sendWhatsAppFailure } from './whatsapp/bot'
@@ -38,6 +39,10 @@ export async function namesAndConversations(email: string, sessionId: string) {
   // Once per recording on this path: an event is split before its briefing (prepareEvent), and
   // the buttons on the recording page re-run on purpose through /api/pen/names.
   if (!s.names_at) await scanNames(email, s)
+  // A file of an event import that isn't joined yet waits: split on its own, it can't see the
+  // file before it, and a conversation the pen cut there would come out in two. The join
+  // (lib/pen/event-day.ts) splits every file in order.
+  if (s.event_mode && !s.merge_group && (await hasEventMates(email, s))) return
   if (!s.segments_at && (await isEventLike(email, s))) await splitConversations(email, s)
 }
 
@@ -50,7 +55,7 @@ async function prepareEvent(email: string, s: PenSession) {
   try {
     if (!(await isEventLike(email, s))) return
     const parts = s.merge_group ? await groupSessions(email, s.merge_group) : [s]
-    await Promise.all(parts.map((p) => namesAndConversations(email, p.id).catch(() => {})))
+    await pool(parts, 6, (p) => namesAndConversations(email, p.id).catch(() => {}))
   } catch (e) {
     console.warn(`pen: event prep for ${s.id}: ${(e as Error).message}`)
   }
@@ -84,7 +89,12 @@ async function notesAndBriefing(sessionId: string, email: string) {
 
     // Did this recording just complete a meeting the pen split at its file limit? Checked
     // after the write above, so every part has its own notes to contribute.
-    const joined = await autoJoin(email, sessionId).catch(() => null)
+    // Uploaded with "This was an event" ticked: once the whole import is in, every file becomes
+    // one event recording (lib/pen/event-day.ts). Otherwise the filename rule joins a meeting
+    // the pen cut at its file limit.
+    const joined = fresh.event_mode
+      ? await joinEventImport(email, sessionId).catch((e) => { console.warn(`pen: event join ${sessionId}: ${(e as Error).message}`); return null })
+      : await autoJoin(email, sessionId).catch(() => null)
     let noted = own.session
     let parts = 1
 

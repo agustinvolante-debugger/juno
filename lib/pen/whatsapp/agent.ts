@@ -14,6 +14,7 @@
 //   add_person / remove_person   the web's People section: link a contact to a recording
 //   name_speaker        the web's "Who's who": Speaker B is Carlos (or me)
 //   recording_conversations / name_conversation   an event split into conversations; who each was with
+//   read_conversation   what was said in one conversation, word for word, with times
 //   update_recording    rename it, change its category
 //   redo_notes          rewrite the notes (after naming speakers); runs after the reply is sent
 //   person_brief        "I'm meeting the Garcías": their card, last calls, open promises both ways
@@ -41,7 +42,7 @@ import { getSession, updateSession, type ArchiveTurn, type Citation, type PenNot
 import { cleanEmail, cleanName, upsertByName, linkPerson, unlinkPerson, peopleOnSession, enrichPerson, suggestionsFrom } from '../people'
 import { mentionsFor } from '../names'
 import { segmentsFor, confirmName } from '../conference'
-import { clock, namesHeard, reasonEn, speakerSuggestions, stitch, type Segment } from '../name-hints'
+import { clock, namesHeard, reasonEn, speakerSuggestions, stitch, eventName, type Segment } from '../name-hints'
 import { groupSessions } from '../merge'
 import { foldName, speakerName, resolve as resolveLabel, type SpeakerMap } from '../speakers'
 import { COMMON_TYPES } from '../categories'
@@ -291,6 +292,22 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'read_conversation',
+    description:
+      'What was actually said in one conversation of an event recording, word for word, each line with its time from ' +
+      'the start of the recording. Use the number recording_conversations gave it. For follow-ups like "what exactly ' +
+      'did he say about pricing?" or before drafting something to that person.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        session_id: { type: 'string' },
+        conversation: { type: 'integer', description: 'The number from recording_conversations.' },
+      },
+      required: ['session_id', 'conversation'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'split_conversations',
     description:
       'The user says a recording was from an event (a conference, a fair, a party) with many people: split it into ' +
@@ -491,6 +508,12 @@ function system(ctx: Ctx, pending: Draft | null): string {
     'spoke, what you owe them, what they owe you, anything open. Dates as "Oct 3", not ISO.\n' +
     '- Sharing notes: by email with save_draft (as usual); on WhatsApp with whatsapp_link, which the user sends ' +
     'themselves. Never say Juno sent a WhatsApp to someone else.\n' +
+    '- When you mention a conversation or a moment, say the event or recording name and the time from the start of ' +
+    'the recording ("at Payments conference networking, 6:28–6:41"). Never mention parts or files (to the user a long ' +
+    'event is one recording), and never say "conversation 41" in a sentence; when ' +
+    'you list many conversations, put the number at the END of each line ("· 41") so the user can reply "41 is Pedro". ' +
+    'A reply in their own words ("the chargebacks guy was Pedro") works too: match it to the conversation you just discussed. ' +
+    'Use each conversation\'s topic as the tools give it; don\'t rename it.\n' +
     '- Not sure who a speaker or a person was? recording_people lists the names said on the call and likely ' +
     'names per voice; for an event, recording_conversations lists each conversation with name options. Offer the ' +
     'options with why ("Pedro: called Pedro twice") and let the user pick or type one; never choose for them.\n' +
@@ -852,6 +875,8 @@ async function recordingConversations(ctx: Ctx, id: string): Promise<unknown> {
   if (!list.length) return { recording: s.title ?? s.source_name, conversations: [], note: 'This recording has not been split into conversations. The user can do it on the website: open the recording, "Split into conversations".' }
   return {
     recording: s.title ?? s.source_name,
+    event: eventName(s.title ?? s.source_name),
+    how_to_refer: 'Say the event name and the time range (e.g. "at Payments conference networking, 6:28–6:41"), not the number. The number is only for tools, and for the end of each line when you list them all.',
     conversations: list.map((c, i) => ({
       number: i + 1,
       time: `${clock(c.start_sec)}–${clock(c.end_sec)}`,
@@ -860,6 +885,34 @@ async function recordingConversations(ctx: Ctx, id: string): Promise<unknown> {
       gist: c.gist,
       ...(c.confirmed_name ? { with: c.confirmed_name } : { name_options: c.likely.map((x) => `${x.name}: ${reasonEn(x)}`), also_mentioned: c.mentioned.map((x) => x.name) }),
     })),
+  }
+}
+
+async function readConversation(ctx: Ctx, id: string, n: number): Promise<unknown> {
+  const s = await ownSession(ctx, id)
+  if (!s) return { error: 'no such recording' }
+  const { parts, list } = await eventConversations(ctx, s)
+  const c = list[n - 1]
+  if (!c) return { error: `no conversation ${n}; there are ${list.length}` }
+  let offset = 0
+  const offsets = new Map(parts.map((p) => { const o = offset; offset += p.duration_sec ?? 0; return [p.id, o] as const }))
+  const lines: string[] = []
+  for (const piece of c.pieces) {
+    const part = parts.find((p) => p.id === piece.partId)
+    const u = part?.transcript?.utterances ?? []
+    const map = (part?.speaker_map ?? null) as SpeakerMap | null
+    for (let i = piece.seg.first_utt; i <= piece.seg.last_utt && i < u.length; i++) {
+      const text = (part?.transcript_edits?.[String(i)] ?? u[i].text).trim()
+      lines.push(`[${clock((offsets.get(piece.partId) ?? 0) + u[i].start / 1000)}] ${speakerName(map, u[i].speaker)}: ${text}`)
+    }
+  }
+  return {
+    event: eventName(s.title ?? s.source_name),
+    time: `${clock(c.start_sec)}–${clock(c.end_sec)}`,
+    topic: c.topic,
+    ...(c.confirmed_name ? { with: c.confirmed_name } : { name_options: c.likely.map((x) => `${x.name}: ${reasonEn(x)}`) }),
+    transcript: lines.join('\n').slice(0, 24000),
+    note: 'Speaker labels are voices, not names; in a crowd one label can be several people.',
   }
 }
 
@@ -1192,6 +1245,8 @@ async function runTool(ctx: Ctx, name: string, input: Record<string, unknown>): 
       return nameSpeaker(ctx, { session_id: str('session_id'), label: str('label'), name: str('name'), is_me: input.is_me === true })
     case 'recording_conversations':
       return recordingConversations(ctx, str('session_id'))
+    case 'read_conversation':
+      return readConversation(ctx, str('session_id'), Number(input.conversation) || 0)
     case 'split_conversations':
       return queueSplit(ctx, str('session_id'))
     case 'name_conversation':

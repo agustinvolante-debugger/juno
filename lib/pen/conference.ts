@@ -323,10 +323,12 @@ export async function conversationsOf(email: string, s: PenSession): Promise<Con
 export async function splitEvent(email: string, s: PenSession): Promise<boolean> {
   const { scanNames } = await import('./names')
   const parts = s.merge_group ? await groupSessions(email, s.merge_group) : [s]
-  const results = await Promise.all(parts.map(async (p) => {
+  const { pool } = await import('./event-day')
+  // Files with no speech have nothing to split; they don't count as a failure.
+  const results = await pool(parts.filter((p) => p.transcript?.utterances?.length), 6, async (p) => {
     await supabaseAdmin.from('pen_sessions').update({ event_mode: true }).eq('id', p.id)
     if (!p.names_at) await scanNames(email, p)
     return splitConversations(email, p)
-  }))
+  })
   return results.every((n) => n !== null)
 }

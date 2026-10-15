@@ -13,8 +13,10 @@ import { useCopy } from './LangContext'
 import type { Copy } from '@/lib/pen/i18n'
 import { clock, stitch, type NameOption, type Conversation } from '@/lib/pen/name-hints'
 import { foldName } from '@/lib/pen/speakers'
-import { errMessage, getJson } from '@/lib/pen/http'
-import { useNames, namesAction, startSplit, useSplitting } from './names-store'
+import { errMessage, getJson, postJson } from '@/lib/pen/http'
+import { useNames, namesAction, startSplit, useSplitting, markCombining, useCombining } from './names-store'
+import { LOCALE } from '@/lib/pen/i18n'
+import { useLang } from './LangContext'
 import type { Part } from './NamesHeard'
 import type { SheetRequest } from './DeliverableSheet'
 
@@ -43,6 +45,13 @@ const CV_EN = {
   splitFailed: 'Could not split this recording. Try again in a minute.',
   confirmFailed: 'Could not save that name.',
   pickAria: (n: string, topic: string) => `${n} was the conversation about ${topic}`,
+  dayOffer: (n: number, dur: string) => `This day has ${n} more recording${n === 1 ? '' : 's'} (${dur} in all). Combine them into one event so every conversation of the day is in one list.`,
+  dayButton: 'Combine this day into one event',
+  dayConfirm: (n: number, dur: string, from: string, to: string) => `Combine ${n} recordings (${dur}, ${from}–${to}) into one event? Each keeps its audio, and you can separate them again.`,
+  dayGo: 'Combine',
+  cancel: 'Cancel',
+  combining: 'Combining the day and finding the conversations… about a minute or two.',
+  dayFailed: 'Could not combine this day.',
   followUp: 'Follow up',
   email: 'Draft email',
   linkedin: 'LinkedIn note',
@@ -77,6 +86,13 @@ const CV: Copy<typeof CV_EN> = {
     splitFailed: 'No se pudo separar esta grabación. Inténtalo en un minuto.',
     confirmFailed: 'No se pudo guardar ese nombre.',
     pickAria: (n, topic) => `${n} fue la conversación sobre ${topic}`,
+    dayOffer: (n, dur) => `Este día tiene ${n} grabación${n === 1 ? '' : 'es'} más (${dur} en total). Júntalas en un solo evento para ver todas las conversaciones del día en una lista.`,
+    dayButton: 'Juntar este día en un solo evento',
+    dayConfirm: (n, dur, from, to) => `¿Juntar ${n} grabaciones (${dur}, ${from}–${to}) en un solo evento? Cada una conserva su audio y puedes separarlas de nuevo.`,
+    dayGo: 'Juntar',
+    cancel: 'Cancelar',
+    combining: 'Juntando el día y buscando las conversaciones… uno o dos minutos.',
+    dayFailed: 'No se pudo juntar este día.',
     followUp: 'Seguimiento',
     email: 'Borrador de correo',
     linkedin: 'Nota de LinkedIn',
@@ -108,6 +124,13 @@ const CV: Copy<typeof CV_EN> = {
     splitFailed: 'Não foi possível separar esta gravação. Tente de novo em um minuto.',
     confirmFailed: 'Não foi possível salvar esse nome.',
     pickAria: (n, topic) => `${n} foi a conversa sobre ${topic}`,
+    dayOffer: (n, dur) => `Este dia tem mais ${n} gravaç${n === 1 ? 'ão' : 'ões'} (${dur} no total). Junte num só evento para ver todas as conversas do dia numa lista.`,
+    dayButton: 'Juntar este dia num só evento',
+    dayConfirm: (n, dur, from, to) => `Juntar ${n} gravações (${dur}, ${from}–${to}) num só evento? Cada uma mantém seu áudio, e você pode separá-las de novo.`,
+    dayGo: 'Juntar',
+    cancel: 'Cancelar',
+    combining: 'Juntando o dia e procurando as conversas… um ou dois minutos.',
+    dayFailed: 'Não foi possível juntar este dia.',
     followUp: 'Acompanhamento',
     email: 'Rascunho de e-mail',
     linkedin: 'Nota do LinkedIn',
@@ -126,7 +149,10 @@ export default function Conversations({
   onJump,
   onPeopleChanged,
   onDraft,
+  onCombined,
 }: {
+  /** "Combine this day" made a new event recording: refresh the list and open it. */
+  onCombined?: (primaryId: string) => void
   parts: Part[]
   /** Opens the draft sheet for a follow-up on one conversation. */
   onDraft?: (r: SheetRequest) => void
@@ -146,6 +172,62 @@ export default function Conversations({
   const [typed, setTyped] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  const lang = useLang()
+  const combiningNow = useCombining(ids[0])
+  // The rest of this recording's day, for "Combine this day into one event".
+  const [day, setDay] = useState<{ ids: string[]; recordings: number; totalSec: number; from: string | null; to: string | null; ready: boolean } | null>(null)
+  const [askDay, setAskDay] = useState(false)
+  const [dayBusy, setDayBusy] = useState(false)
+  useEffect(() => {
+    setDay(null)
+    setAskDay(false)
+    getJson<{ day: NonNullable<typeof day> }>(`/api/pen/names?day=${ids[0]}`).then((j) => setDay(j.day)).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ids[0]])
+  const moreToday = day ? Math.max(0, day.recordings - 1) : 0
+  const hm = (sec: number) => { const m = Math.round(sec / 60); return m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min` }
+  const at = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString(LOCALE[lang], { hour: 'numeric', minute: '2-digit' }) : '')
+
+  async function combineDay() {
+    setDayBusy(true)
+    setErr(null)
+    try {
+      const j = await postJson<{ primaryId: string }>('/api/pen/names', { action: 'event-day', id: ids[0] })
+      markCombining(j.primaryId)
+      setAskDay(false)
+      onCombined?.(j.primaryId)
+    } catch (e) {
+      setErr(errMessage(e, T.dayFailed))
+    } finally {
+      setDayBusy(false)
+    }
+  }
+
+  // Just combined: the conversations arrive in a minute or two; look again until they do.
+  useEffect(() => {
+    if (!combiningNow) return
+    const t = setInterval(() => reload(), 10000)
+    return () => clearInterval(t)
+  }, [combiningNow, reload])
+
+  const dayBlock = moreToday > 0 && day?.ready && !combiningNow ? (
+    askDay ? (
+      <div className="pen-convo-day" role="group">
+        <p>{T.dayConfirm(day.recordings, hm(day.totalSec), at(day.from), at(day.to))}</p>
+        <div className="pen-convo-offer-acts">
+          <button type="button" className="pen-btn pen-btn-accent" disabled={dayBusy} onClick={() => void combineDay()}>{T.dayGo}</button>
+          <button type="button" className="pen-btn" disabled={dayBusy} onClick={() => setAskDay(false)}>{T.cancel}</button>
+        </div>
+      </div>
+    ) : (
+      <div className="pen-convo-day">
+        <p>{T.dayOffer(moreToday, hm(day.totalSec))}</p>
+        <div className="pen-convo-offer-acts">
+          <button type="button" className="pen-btn pen-btn-accent" onClick={() => setAskDay(true)}><Icon name="link" size={15} />{T.dayButton}</button>
+        </div>
+      </div>
+    )
+  ) : null
 
   useEffect(() => {
     try { setDismissed(localStorage.getItem(dismissKey(ids[0])) === '1') } catch { setDismissed(false) }
@@ -196,23 +278,25 @@ export default function Conversations({
   if (!data) return null
 
   if (!rows.length) {
-    if (running || pendingSplit) {
+    if (running || pendingSplit || combiningNow) {
       return (
         <div className="pen-sec pen-convo-offer" role="status">
           <span className="pen-spin" aria-hidden />
-          <p>{T.splitting}</p>
+          <p>{combiningNow ? T.combining : T.splitting}</p>
         </div>
       )
     }
-    if ((suggest && !dismissed) || (eventMode && !rows.length) || error) {
+    if ((suggest && !dismissed) || (eventMode && !rows.length) || error || (moreToday >= 2 && day?.ready && !dismissed)) {
       return (
         <div className="pen-sec pen-convo-offer">
           <span className="pen-badge" data-tone="accent"><Icon name="people" size={13} /></span>
           <div className="pen-convo-offer-body">
             <p><strong>{T.suggestTitle}</strong> {T.suggestBody}</p>
             {error && <p className="pen-people-err">{T.splitFailed}</p>}
+            {dayBlock}
             <div className="pen-convo-offer-acts">
-              <button type="button" className="pen-btn pen-btn-accent" onClick={() => void startSplit(ids)}>{T.split}</button>
+              {/* With more of the day around it, combining is the main step; splitting this one alone is the fallback. */}
+              <button type="button" className={`pen-btn ${dayBlock ? '' : 'pen-btn-accent'}`} onClick={() => void startSplit(ids)}>{T.split}</button>
               {!eventMode && (
                 <button
                   type="button"
@@ -250,11 +334,15 @@ export default function Conversations({
         )}
       </div>
       <p className="pen-convo-lede">{T.lede}</p>
+      {combiningNow && <p className="pen-convo-lede" role="status">{T.combining}</p>}
+      {dayBlock}
 
       <ol className="pen-convo-list">
         {shown.map((r, i) => {
           const prev = shown[i - 1]
-          const seam = parts.length > 1 && (!prev || prev.partIndex !== r.partIndex)
+          // File labels help on a meeting the pen cut once or twice; on a voice-activated event
+          // day of dozens of files they would sit above nearly every conversation.
+          const seam = parts.length > 1 && parts.length <= 3 && (!prev || prev.partIndex !== r.partIndex)
           const mins = Math.max(1, Math.round((r.end_sec - r.start_sec) / 60))
           const saved = !!r.confirmed_name && editing !== r.key
           return (

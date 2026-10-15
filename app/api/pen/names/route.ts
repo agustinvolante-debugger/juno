@@ -6,6 +6,7 @@ import { mentionsFor, scanNames, searchMentions } from '@/lib/pen/names'
 import { supabaseAdmin } from '@/lib/supabase'
 import { displayName } from '@/lib/pen/name-hints'
 import { segmentsFor, splitEvent, confirmName } from '@/lib/pen/conference'
+import { dayCandidates, joinAsEvent, finishEvent } from '@/lib/pen/event-day'
 import { cleanName, enrichPerson, linkPerson, upsertByName } from '@/lib/pen/people'
 import { readOnlyRefusal } from '@/lib/pen/access'
 import { foldName, isSelfName, type SpeakerMap } from '@/lib/pen/speakers'
@@ -36,12 +37,13 @@ async function payload(email: string, sessions: PenSession[]) {
 }
 
 async function owned(email: string, ids: string[]): Promise<PenSession[]> {
-  const out: PenSession[] = []
-  for (const id of Array.from(new Set(ids.filter((x) => UUID.test(x)))).slice(0, 12)) {
-    const s = await getSession(email, id)
-    if (s) out.push(s)
-  }
-  return out
+  // A whole event day is dozens of files (Carlos's 30 Sep: 34); one query, kept in the order asked.
+  const want = Array.from(new Set(ids.filter((x) => UUID.test(x)))).slice(0, 80)
+  if (!want.length) return []
+  const { data, error } = await supabaseAdmin.from('pen_sessions').select('*').eq('user_email', email).in('id', want)
+  if (error) throw new Error(error.message)
+  const byId = new Map(((data ?? []) as PenSession[]).map((s) => [s.id, s]))
+  return want.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : []))
 }
 
 // GET ?ids=<id>,<id>   names heard + conversations per recording
@@ -52,6 +54,9 @@ export async function GET(req: Request) {
   const url = new URL(req.url)
   const q = (url.searchParams.get('q') ?? '').trim()
   if (q) return NextResponse.json({ heard: await heardAcross(email, q) })
+  // ?day=<id>: what "Combine this day into one event" would join, shown before it does anything.
+  const day = url.searchParams.get('day')
+  if (day && UUID.test(day)) return NextResponse.json({ day: await dayCandidates(email, day) })
   const ids = (url.searchParams.get('ids') ?? '').split(',')
   const sessions = await owned(email, ids)
   if (!sessions.length) return NextResponse.json({ error: 'not found' }, { status: 404 })
@@ -86,6 +91,15 @@ export async function POST(req: Request) {
       const meetings = sessions.filter((s, i) => !s.merge_group || sessions.findIndex((x) => x.merge_group === s.merge_group) === i)
       const ok = await Promise.all(meetings.map((s) => splitEvent(email, s)))
       if (ok.some((x) => !x)) return NextResponse.json({ error: 'Could not split this recording. Try again in a minute.' }, { status: 502 })
+    } else if (b.action === 'event-day') {
+      // Every recording of that day becomes one event recording; the conversations and the
+      // combined notes follow in the background (they take a minute or two).
+      const c = await dayCandidates(email, sessions[0].id)
+      if (c.recordings < 2) return NextResponse.json({ error: 'There is nothing else from this day to combine.' }, { status: 400 })
+      if (!c.ready) return NextResponse.json({ error: 'Some recordings from this day are still being transcribed. Try again when they are done.' }, { status: 409 })
+      const segments = await joinAsEvent(email, c.ids)
+      after(() => finishEvent(email, segments[0].id).catch((e) => console.warn(`pen: finish event: ${(e as Error).message}`)))
+      return NextResponse.json({ primaryId: segments[0].id, files: segments.length })
     } else if (b.action === 'confirm') {
       const s = sessions[0]
       if (!b.segment || !UUID.test(b.segment)) return NextResponse.json({ error: 'bad segment' }, { status: 400 })

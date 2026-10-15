@@ -93,7 +93,7 @@ const EN = {
   convosProbably: (n: string) => `probably ${n}`,
   convosWith: (n: string) => `with ${n}`,
   convosNoName: 'name not said',
-  convosTail: 'Reply with a number and a name to save someone, e.g. "4 is Pedro".',
+  convosTail: 'To save someone, reply with the number at the end of the line and a name ("4 is Pedro"), or just tell me in your words.',
   splitFailed: (title: string) => `I couldn't split "${title}" into conversations. Try again in a minute, or on the website.`,
   writeFailed: (name: string, home: string) => `I couldn't write up ${name}. Nothing is lost: open it at ${home} and press "Write the notes" to try again.`,
   agentFailed: 'Sorry, something went wrong on my side and I couldn\'t answer that. Try again in a minute.',
@@ -147,7 +147,7 @@ const BOT: Record<Lang, typeof EN> = {
     convosProbably: (n) => `probablemente ${n}`,
     convosWith: (n) => `con ${n}`,
     convosNoName: 'no se dijo el nombre',
-    convosTail: 'Responde con un número y un nombre para guardar a alguien, p. ej. "4 es Pedro".',
+    convosTail: 'Para guardar a alguien, responde con el número al final de la línea y un nombre ("4 es Pedro"), o dímelo con tus palabras.',
     splitFailed: (title) => `No pude separar "${title}" en conversaciones. Inténtalo en un minuto, o en el sitio web.`,
     writeFailed: (name, home) => `No pude escribir las notas de ${name}. No se perdió nada: ábrela en ${home} y presiona "Escribir las notas" para intentarlo otra vez.`,
     agentFailed: 'Perdón, algo falló de mi lado y no pude responder eso. Inténtalo de nuevo en un minuto.',
@@ -198,7 +198,7 @@ const BOT: Record<Lang, typeof EN> = {
     convosProbably: (n) => `provavelmente ${n}`,
     convosWith: (n) => `com ${n}`,
     convosNoName: 'nome não dito',
-    convosTail: 'Responda com um número e um nome para salvar alguém, ex.: "4 é Pedro".',
+    convosTail: 'Para salvar alguém, responda com o número no fim da linha e um nome ("4 é Pedro"), ou me diga com suas palavras.',
     splitFailed: (title) => `Não consegui separar "${title}" em conversas. Tente de novo em um minuto, ou no site.`,
     writeFailed: (name, home) => `Não consegui escrever as notas de ${name}. Nada se perdeu: abra em ${home} e aperte "Escrever as notas" para tentar de novo.`,
     agentFailed: 'Desculpe, algo deu errado do meu lado e não consegui responder. Tente de novo em um minuto.',
@@ -652,8 +652,10 @@ async function splitAndList(email: string, sessionId: string, to: string, L: typ
     if (!(await splitEvent(email, session))) throw new Error('split failed')
     const list = await emailConversations(session)
     if (!list.length) throw new Error('no conversations')
-    const lines = list.map((c, i) => `${i + 1}. ${c.when} · ${c.topic} · ${c.confirmed ? L.convosWith(c.confirmed) : c.likely ? L.convosProbably(c.likely) : L.convosNoName}`)
-    await sendText(to, `${L.convosHead(list.length, title)}\n\n${lines.join('\n')}\n\n${L.convosTail}`)
+    // The number at the END of each line, as a handle for "41 is Pedro"; the time and topic lead.
+    const lines = list.map((c, i) => `• ${c.when} · ${c.topic} · ${c.confirmed ? L.convosWith(c.confirmed) : c.likely ? L.convosProbably(c.likely) : L.convosNoName} · ${i + 1}`)
+    const { eventName } = await import('../name-hints')
+    await sendText(to, `${L.convosHead(list.length, eventName(title) || title)}\n\n${lines.join('\n')}\n\n${L.convosTail}`)
   } catch (e) {
     console.warn(`pen whatsapp: split ${sessionId} failed: ${(e as Error).message}`)
     await sendText(to, L.splitFailed(title)).catch(() => {})

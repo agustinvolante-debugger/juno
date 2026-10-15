@@ -23,7 +23,7 @@ import { REPLY_LANGUAGE, inQuestionLanguage } from './reply-language'
 import { isMissingSchema } from './allowance'
 import { mentionsFor } from './names'
 import { segmentsFor } from './conference'
-import { clock, namesHeard, segmentOptions, reasonEn } from './name-hints'
+import { clock, namesHeard, segmentOptions, reasonEn, eventName, type Segment } from './name-hints'
 
 const anthropic = penAnthropic('archive-chat')
 // Both stages are retrieval, not synthesis — pick the recordings, then answer from what is in
@@ -40,6 +40,31 @@ type IndexRow = {
   recorded_at: string | null
   created_at: string
   notes: PenNotes
+  merge_group?: string | null
+  merge_index?: number | null
+  duration_sec?: number | null
+}
+
+/** Where a file sits in a joined meeting: its start from the meeting's start, and the meeting's title. */
+type PartInfo = { offset: number; part: number; of: number; title: string | null }
+
+/**
+ * Offsets for every part of every joined meeting in `rows`. A 7-hour event is 7 files; the
+ * answer has to say "6:33", not "minute 33 of some file". Pure.
+ */
+export function partInfo(rows: { id: string; title: string | null; merge_group?: string | null; merge_index?: number | null; duration_sec?: number | null }[]): Map<string, PartInfo> {
+  const out = new Map<string, PartInfo>()
+  const groups = new Map<string, typeof rows>()
+  for (const r of rows) if (r.merge_group) groups.set(r.merge_group, [...(groups.get(r.merge_group) ?? []), r])
+  for (const g of groups.values()) {
+    const sorted = [...g].sort((a, b) => (a.merge_index ?? 0) - (b.merge_index ?? 0))
+    let offset = 0
+    sorted.forEach((r, i) => {
+      out.set(r.id, { offset, part: i + 1, of: sorted.length, title: sorted[0].title })
+      offset += r.duration_sec ?? 0
+    })
+  }
+  return out
 }
 
 const SELECT_SCHEMA = {
@@ -110,7 +135,8 @@ const MAX_ANSWER_ROWS = 12
 // out among the recordings actually read: two recordings get ~144k characters each, not 24k.
 // A 60-minute part is ~45k characters, so one long event reads in full instead of its first
 // half hour.
-const ANSWER_TRANSCRIPT_BUDGET = MAX_ANSWER_ROWS * MAX_TRANSCRIPT_CHARS
+// PEN_ARCHIVE_BUDGET: tests only, to make a small test archive read like a full one.
+const ANSWER_TRANSCRIPT_BUDGET = Number(process.env.PEN_ARCHIVE_BUDGET) || MAX_ANSWER_ROWS * MAX_TRANSCRIPT_CHARS
 
 const STOPWORDS = new Set(
   ('a about all also am an and any are as at be been but by can did do does for from get got had has have ' +
@@ -212,7 +238,7 @@ async function transcriptMatches(userEmail: string, terms: string[]): Promise<st
   return (data ?? []).map((r) => r.id as string)
 }
 
-type NameIndex = Map<string, { names: string[]; convos: string[] }>
+type NameIndex = Map<string, { names: string[]; convos: { start_sec: number; topic: string; confirmed_name: string | null }[] }>
 
 /**
  * Names heard and conversation topics per recording, for the selection index: "who did I talk
@@ -233,26 +259,28 @@ async function nameIndex(userEmail: string): Promise<NameIndex> {
   }
   for (const r of (sg.data ?? []) as { session_id: string; start_sec: number; topic: string; confirmed_name: string | null }[]) {
     const x = out.get(r.session_id) ?? { names: [], convos: [] }
-    x.convos.push(`${clock(r.start_sec)} ${r.topic}${r.confirmed_name ? ` (with ${r.confirmed_name})` : ''}`)
+    x.convos.push({ start_sec: r.start_sec, topic: r.topic, confirmed_name: r.confirmed_name })
     out.set(r.session_id, x)
   }
   return out
 }
 
 /** Compact enough that hundreds of recordings still fit in the selection prompt. */
-function indexLine(r: IndexRow, extra?: { names: string[]; convos: string[] }) {
+function indexLine(r: IndexRow, extra?: { names: string[]; convos: { start_sec: number; topic: string; confirmed_name: string | null }[] }, part?: PartInfo) {
   const when = (r.recorded_at ?? r.created_at).slice(0, 10)
+  const at = part?.offset ?? 0
   const who = r.notes?.people?.map((p) => p.name || p.role).filter(Boolean).slice(0, 5).join(', ')
   return [
     `id: ${r.id}`,
     `date: ${when}`,
     `type: ${r.meeting_type ?? 'unknown'}`,
-    `title: ${r.title ?? 'untitled'}`,
+    `title: ${(part?.part ?? 1) > 1 ? part!.title ?? r.title ?? 'untitled' : r.title ?? 'untitled'}`,
+    part && part.of > 1 ? `part ${part.part} of ${part.of} of "${part.title ?? 'a joined meeting'}" (from ${clock(part.offset)})` : '',
     r.client_name ? `with: ${r.client_name}` : '',
     who ? `people: ${who}` : '',
     r.notes?.summary ? `summary: ${r.notes.summary.slice(0, 320)}` : '',
     extra?.names.length ? `names heard: ${extra.names.slice(0, 15).join(', ')}` : '',
-    extra?.convos.length ? `conversations: ${extra.convos.slice(0, 12).join('; ')}` : '',
+    extra?.convos.length ? `conversations: ${extra.convos.slice(0, 15).map((c) => `${clock(c.start_sec + at)} ${c.topic}${c.confirmed_name ? ` (with ${c.confirmed_name})` : ''}`).join('; ')}` : '',
   ]
     .filter(Boolean)
     .join(' | ')
@@ -263,20 +291,24 @@ function indexLine(r: IndexRow, extra?: { names: string[]; convos: string[] }) {
  * applied on top. Searching the uncorrected original would find the garbled version of a name
  * the user has already fixed.
  */
+/** "6:33" (hours:minutes) from seconds. */
+function hm(sec: number): string {
+  const m = Math.floor(sec / 60)
+  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`
+}
+
 function dialogueOf(
   t: Transcript | null | undefined,
   edits: Record<string, string> | null | undefined,
   map?: SpeakerMap | null,
   fit: { cap: number; terms: string[] } = { cap: MAX_TRANSCRIPT_CHARS, terms: [] },
+  offsetSec = 0,
 ): string {
   if (!t) return '(not transcribed)'
   // Names instead of "Speaker A" where known, so "what did Chris say" can find Chris. Each
   // line carries its minute, so an answer can point to the moment.
   const lines = t.utterances?.length
-    ? t.utterances.map((u, i) => {
-        const m = Math.floor(u.start / 60000)
-        return `[${Math.floor(m / 60) ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}` : `${m}`}m] ${namedDialogue([u], map, edits?.[String(i)] !== undefined ? { '0': edits[String(i)] } : null)}`
-      })
+    ? t.utterances.map((u, i) => `[${hm(offsetSec + u.start / 1000)}] ${namedDialogue([u], map, edits?.[String(i)] !== undefined ? { '0': edits[String(i)] } : null)}`)
     : (t.text ?? '').split(/(?<=[.!?])\s+/)
   if (!lines.join('').trim()) return '(not transcribed)'
   return fitTranscript(lines, fit.cap, fit.terms)
@@ -301,7 +333,7 @@ export async function askArchive(opts: {
 }): Promise<{ answer: string; citations: { marker: number; session_id: string; title: string; quote: string }[]; mentioned: Mention[] }> {
   const { data, error } = await supabaseAdmin
     .from('pen_sessions')
-    .select('id,title,client_name,meeting_type,recorded_at,created_at,notes')
+    .select('id,title,client_name,meeting_type,recorded_at,created_at,notes,merge_group,merge_index,duration_sec')
     .eq('user_email', opts.userEmail)
     .order('created_at', { ascending: false })
     .limit(400)
@@ -360,6 +392,7 @@ export async function askArchive(opts: {
   }
 
   const names = await nameIndex(opts.userEmail).catch(() => new Map() as NameIndex)
+  const parts = partInfo(rows)
   const sel = await anthropic.messages.parse({
     model: opts.model ?? MODEL,
     // max_tokens is a budget for thinking AND output, not just output. Opus 5 reasons by
@@ -383,7 +416,7 @@ export async function askArchive(opts: {
       {
         role: 'user',
         content:
-          `Today is ${today}.\n\nIndex of recordings:\n${rows.map((r) => indexLine(r, names.get(r.id))).join('\n')}\n\n` +
+          `Today is ${today}.\n\nIndex of recordings:\n${rows.map((r) => indexLine(r, names.get(r.id), parts.get(r.id))).join('\n')}\n\n` +
           (opts.history.length
             ? `Earlier in this conversation:\n${opts.history.slice(-4).map((t) => `${t.role}: ${t.content.slice(0, 300)}`).join('\n')}\n\n`
             : '') +
@@ -441,16 +474,28 @@ async function answerFrom(
   wanted = wanted.slice(0, MAX_ANSWER_ROWS)
   const { data: full, error: e2 } = await supabaseAdmin
     .from('pen_sessions')
-    .select('id,title,client_name,meeting_type,recorded_at,created_at,notes,user_notes,transcript,transcript_edits,speaker_map')
+    .select('id,title,client_name,meeting_type,recorded_at,created_at,notes,user_notes,transcript,transcript_edits,speaker_map,merge_group,merge_index,duration_sec')
     .in('id', wanted)
   if (e2) throw new Error(e2.message)
 
   const byId = new Map((full ?? []).map((r) => [r.id as string, r]))
   const marked = wanted.map((id, i) => ({ marker: i + 1, id, row: byId.get(id) }))
+
+  // Every file of each joined meeting that was picked, so times count from the meeting's start
+  // and the conversation picker below sees the whole event, not just the files that were chosen.
+  const groups = Array.from(new Set((full ?? []).flatMap((r) => (r.merge_group ? [r.merge_group as string] : []))))
+  const { data: sibs } = groups.length
+    ? await supabaseAdmin.from('pen_sessions').select('id,title,merge_group,merge_index,duration_sec').eq('user_email', opts.userEmail).in('merge_group', groups)
+    : { data: [] as { id: string; title: string | null; merge_group: string | null; merge_index: number | null; duration_sec: number | null }[] }
+  const parts = partInfo((sibs ?? []) as { id: string; title: string | null; merge_group: string | null; merge_index: number | null; duration_sec: number | null }[])
+  const offsetOf = (id: string) => parts.get(id)?.offset ?? 0
+  const eventIds = Array.from(new Set([...wanted, ...(sibs ?? []).map((x) => x.id as string)]))
+
   const [heard, convos] = await Promise.all([
-    mentionsFor(opts.userEmail, wanted).catch(() => ({}) as Awaited<ReturnType<typeof mentionsFor>>),
-    segmentsFor(opts.userEmail, wanted).catch(() => ({}) as Awaited<ReturnType<typeof segmentsFor>>),
+    mentionsFor(opts.userEmail, eventIds).catch(() => ({}) as Awaited<ReturnType<typeof mentionsFor>>),
+    segmentsFor(opts.userEmail, eventIds).catch(() => ({}) as Awaited<ReturnType<typeof segmentsFor>>),
   ])
+  const picked = await pickConversations(opts.question, eventIds, convos, parts, byId as Map<string, { title?: string | null }>, opts.userEmail).catch(() => [])
   /** Every name said, and for an event each conversation with its name options. The transcript above is cut at 24k characters; these cover the whole recording. */
   const namesBlock = (id: string, labels: string[]) => {
     const ms = heard[id] ?? []
@@ -459,7 +504,7 @@ async function answerFrom(
     if (ms.length) {
       lines.push('names heard (time, how used, context):')
       for (const n of namesHeard(ms, null, labels).slice(0, 40)) {
-        lines.push(`  ${n.name} ×${n.count}: ` + n.moments.slice(0, 3).map((m) => `${clock(m.at_sec)} ${m.kind}${m.context ? ` "${m.context}"` : ''}`).join('; '))
+        lines.push(`  ${n.name} ×${n.count}: ` + n.moments.slice(0, 3).map((m) => `${clock(m.at_sec + offsetOf(id))} ${m.kind}${m.context ? ` "${m.context}"` : ''}`).join('; '))
       }
     }
     if (segs.length) {
@@ -469,7 +514,7 @@ async function answerFrom(
         const who = g.confirmed_name
           ? `confirmed by the user: ${g.confirmed_name}`
           : o.likely.length ? `name not confirmed; options: ${o.likely.map((x) => `${x.name} (${reasonEn(x)})`).join(', ')}` : 'name not said'
-        lines.push(`  ${clock(g.start_sec)}–${clock(g.end_sec)} ${g.kind === 'continues' ? 'conversation (carries on the last one of the previous file of this event)' : g.kind} · ${g.topic} · ${g.gist ?? ''} · ${who}` + (o.mentioned.length ? ` · also mentioned: ${o.mentioned.map((x) => x.name).join(', ')}` : ''))
+        lines.push(`  ${clock(g.start_sec + offsetOf(id))}–${clock(g.end_sec + offsetOf(id))} ${g.kind === 'continues' ? 'conversation (carries on the last one of the previous file of this event)' : g.kind} · ${g.topic} · ${g.gist ?? ''} · ${who}` + (o.mentioned.length ? ` · also mentioned: ${o.mentioned.map((x) => x.name).join(', ')}` : ''))
       }
     }
     return lines.length ? `${lines.join('\n')}\n` : ''
@@ -505,6 +550,16 @@ async function answerFrom(
         'their real title or name, never by the @ label.\n\n'
       : '')
 
+  // Picked conversations go under the recording of the same meeting that is being read (a file
+  // of it that was chosen), in full, so a paraphrased question still reads the right minutes.
+  const meetingOf = (id: string) => (sibs ?? []).find((x) => x.id === id)?.merge_group ?? id
+  const homeOf = (sessionId: string) => marked.find((x) => x.row && (x.id === sessionId || meetingOf(x.id) === meetingOf(sessionId)))?.id
+  const pickedFor = (id: string) => {
+    const mine = picked.filter((c) => homeOf(c.sessionId) === id)
+    if (!mine.length) return ''
+    return `conversations picked as likely relevant to the question, in full:\n` +
+      mine.map((c) => `  >> ${c.header}\n${c.text}`).join('\n') + '\n'
+  }
   const reading = marked.filter((m) => m.row).length || 1
   const fit = { cap: Math.max(MAX_TRANSCRIPT_CHARS, Math.floor(ANSWER_TRANSCRIPT_BUDGET / reading)), terms: keyTerms(opts.question, 10) }
   const corpus = marked
@@ -518,14 +573,21 @@ async function answerFrom(
       }
       return (
         `--- [${m.marker}] recording ${r.id}\n` +
-        `title: ${r.title ?? 'untitled'}\n` +
+        // A later file of a joined meeting goes by the meeting's title: its own was written from
+        // that hour alone, and two titles for one recording confused every answer.
+        `title: ${(parts.get(r.id)?.part ?? 1) > 1 ? parts.get(r.id)!.title ?? r.title ?? 'untitled' : r.title ?? 'untitled'}\n` +
+        (parts.get(r.id) && parts.get(r.id)!.of > 1
+          ? `part ${parts.get(r.id)!.part} of ${parts.get(r.id)!.of} of "${parts.get(r.id)!.title ?? 'a joined meeting'}"; it starts at ${clock(offsetOf(r.id))}, and every time below already counts from the start of the whole meeting. ` +
+            `Call it "${eventName(parts.get(r.id)!.title) || parts.get(r.id)!.title}" in your answer; the notes below were written for this file alone and may give it another name.\n`
+          : '') +
         `date: ${(r.recorded_at ?? r.created_at).slice(0, 10)}\n` +
         `type: ${r.meeting_type ?? 'unknown'}\n` +
         (r.client_name ? `with: ${r.client_name}\n` : '') +
         (r.user_notes ? `their own notes: ${r.user_notes.slice(0, 1500)}\n` : '') +
         `extracted notes: ${JSON.stringify(r.notes ?? {})}\n` +
         namesBlock(r.id, (r.transcript?.utterances ?? []).map((u) => u.speaker)) +
-        `transcript:\n${dialogueOf(r.transcript, r.transcript_edits, r.speaker_map, fit)}\n`
+        pickedFor(r.id) +
+        `transcript:\n${dialogueOf(r.transcript, r.transcript_edits, r.speaker_map, fit, offsetOf(r.id))}\n`
       )
     })
     .join('\n')
@@ -553,11 +615,15 @@ async function answerFrom(
       'without saying which is them. Do not decide who the user was. Say "the interviewer" and ' +
       '"the candidate", or name people the transcript names; never write "you said" or "you ' +
       'interviewed" unless the transcript makes it explicit.\n' +
+      '- When you mention a moment or a conversation, name the event or recording by its title and give the time ' +
+      'range from the start of the whole recording (e.g. "at Payments conference networking, 6:28–6:41"). Never ' +
+      'mention parts, files or conversation numbers: to the user it is one recording.\n' +
       '- Some recordings list "names heard" and, for events, "conversations" with time ranges. ' +
       'For "who did I talk to about X": give the conversation\'s time range, and either the name ' +
       'the user confirmed or the name options with why (e.g. "probably Pedro: he was called Pedro ' +
       'twice"), saying plainly when no name was said. Suggest confirming the name on the recording ' +
-      'page. Never present an unconfirmed option as certain.\n' +
+      'page. Never present an unconfirmed option as certain. A name "confirmed by the user" is who that ' +
+      'conversation was with, even if the transcript never says it: answer with it.\n' +
       '- Long transcripts show the stretches around the question\'s words, with "[… N lines not shown …]" ' +
       'where lines were left out, and each line starts with its minute ([12m], [1:05m]). If the answer ' +
       'could be in a part not shown, say so rather than guessing.\n' +
@@ -580,6 +646,8 @@ async function answerFrom(
   // marker in the prose always becomes a clickable pill, even on a run where the model returns
   // an incomplete list (Haiku does, intermittently) — and a marker with no pill is a dead
   // reference in an answer whose whole point is being traceable.
+  // Sources show the meeting's title for every file of it, as the answer does.
+  const titleFor = (id: string) => ((parts.get(id)?.part ?? 1) > 1 ? parts.get(id)!.title : null) ?? (byId.get(id) as IndexRow | undefined)?.title ?? 'Untitled'
   const byMarker = new Map(marked.map((m) => [m.marker, m.id]))
   const out = new Map<number, { marker: number; session_id: string; title: string; quote: string }>()
 
@@ -588,7 +656,7 @@ async function answerFrom(
     out.set(c.marker, {
       marker: c.marker,
       session_id: c.session_id,
-      title: (byId.get(c.session_id) as IndexRow).title ?? 'Untitled',
+      title: titleFor(c.session_id),
       quote: c.quote ?? '',
     })
   }
@@ -598,7 +666,7 @@ async function answerFrom(
     if (out.has(n)) continue
     const id = byMarker.get(n)
     if (!id || !byId.has(id)) continue
-    out.set(n, { marker: n, session_id: id, title: (byId.get(id) as IndexRow).title ?? 'Untitled', quote: '' })
+    out.set(n, { marker: n, session_id: id, title: titleFor(id), quote: '' })
   }
 
   const citations = Array.from(out.values()).sort((a, b) => a.marker - b.marker)
@@ -624,4 +692,66 @@ export async function setArchiveChat(userEmail: string, messages: ArchiveTurn[])
       { onConflict: 'user_email' },
     )
   if (error) throw new Error(error.message)
+}
+
+/* ---------------------------------------------------- conversations by meaning */
+
+const PICK_SCHEMA = {
+  type: 'object',
+  properties: {
+    picks: { type: 'array', items: { type: 'integer' }, description: 'Numbers of the conversations that could answer the question, best first. Empty if none.' },
+  },
+  required: ['picks'],
+  additionalProperties: false,
+} as const
+
+/**
+ * The conversations of an event that a question is about, chosen by MEANING from their one-line
+ * summaries ("disputes" finds the stretch summarised as "chargeback tooling"), returned with
+ * their full text and times from the start of the meeting. The transcript fit above works on
+ * words; this is what finds a paraphrase in hour 6 of a 7-hour event. One small Haiku call, only
+ * when the recordings read have conversations.
+ */
+async function pickConversations(
+  question: string,
+  ids: string[],
+  convos: Record<string, Segment[]>,
+  parts: Map<string, PartInfo>,
+  byId: Map<string, { title?: string | null }>,
+  userEmail: string,
+): Promise<{ sessionId: string; header: string; text: string }[]> {
+  const list = ids.flatMap((id) => (convos[id] ?? []).filter((g) => g.kind !== 'other').map((g) => ({ id, g })))
+  if (!list.length) return []
+  const off = (id: string) => parts.get(id)?.offset ?? 0
+  const titleOf = (id: string) => eventName(parts.get(id)?.title ?? byId.get(id)?.title ?? '') || 'a recording'
+  const lines = list.map(({ id, g }, i) => `[${i + 1}] ${titleOf(id)} · ${clock(g.start_sec + off(id))}–${clock(g.end_sec + off(id))} · ${g.topic} · ${g.gist ?? ''}${g.confirmed_name ? ` · with ${g.confirmed_name}` : ''}`)
+  const res = await anthropic.messages.parse({
+    model: MODEL,
+    max_tokens: 4000,
+    system:
+      'You pick which conversations, from one-line summaries, could answer a question about them. Judge by MEANING: ' +
+      'the user asks in their own words ("disputes") for what may have been said differently ("chargebacks"). ' +
+      'Pick at most 4, best first. Pick none if none fits.',
+    messages: [{ role: 'user', content: `Conversations:\n${lines.join('\n')}\n\nQuestion: ${question}` }],
+    output_config: { format: jsonSchemaOutputFormat(PICK_SCHEMA), effort: 'low' },
+  })
+  const chosen = (res.parsed_output?.picks ?? []).map((n) => list[Math.trunc(n) - 1]).filter(Boolean).slice(0, 4)
+  if (!chosen.length) return []
+  const need = Array.from(new Set(chosen.map((c) => c.id)))
+  const { data } = await supabaseAdmin.from('pen_sessions').select('id,transcript,transcript_edits,speaker_map').eq('user_email', userEmail).in('id', need)
+  const rows = new Map(((data ?? []) as { id: string; transcript: Transcript; transcript_edits: Record<string, string> | null; speaker_map: SpeakerMap | null }[]).map((r) => [r.id, r]))
+  return chosen.flatMap(({ id, g }) => {
+    const r = rows.get(id)
+    const u = r?.transcript?.utterances ?? []
+    if (!u.length) return []
+    const text = u.slice(g.first_utt, g.last_utt + 1)
+      .map((x, k) => {
+        const i = g.first_utt + k
+        return `[${hm(off(id) + x.start / 1000)}] ${namedDialogue([x], r!.speaker_map, r!.transcript_edits?.[String(i)] !== undefined ? { '0': r!.transcript_edits[String(i)] } : null)}`
+      })
+      .join('\n')
+      .slice(0, 16000)
+    const header = `${titleOf(id)} · ${clock(g.start_sec + off(id))}–${clock(g.end_sec + off(id))} · ${g.topic}${g.confirmed_name ? ` · with ${g.confirmed_name} (confirmed)` : ''}`
+    return [{ sessionId: id, header, text }]
+  })
 }

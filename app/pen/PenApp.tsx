@@ -912,6 +912,7 @@ export default function PenApp({
               splitting={joining}
               onSplit={() => active.merge_group && void splitGroup(active.merge_group)}
               onCombine={locked ? undefined : () => setCombineFor(active.id)}
+              onEventDay={locked ? undefined : (id) => { void refresh().then(() => openSession(id)) }}
               chatOpen={chatOpen} onToggleChat={() => setChatOpen((v) => !v)}
               onNotes={(type) => makeNotes(active.id, type)}
               askCategory={catAsk[active.id]}
@@ -1522,6 +1523,7 @@ export default function PenApp({
                 splitting={joining}
                 onSplit={() => active.merge_group && void splitGroup(active.merge_group)}
                 onCombine={locked ? undefined : () => setCombineFor(active.id)}
+              onEventDay={locked ? undefined : (id) => { void refresh().then(() => openSession(id)) }}
                 chatOpen={chatOpen} onToggleChat={() => setChatOpen((v) => !v)}
                 onNotes={(type) => makeNotes(active.id, type)}
                 askCategory={catAsk[active.id]}
@@ -2266,8 +2268,10 @@ function PartTranscript({ part, onUpdateNotes }: { part: PenSession; onUpdateNot
 
 function Detail({
   session, tab, setTab, chatOpen, onToggleChat, onNotes, onDelete, onPatch, askCategory, selfEmail, onBack, notion,
-  parts, onSplit, splitting, onPeopleChanged, onCombine,
+  parts, onSplit, splitting, onPeopleChanged, onCombine, onEventDay,
 }: {
+  /** "Combine this day into one event" made a new recording: refresh and open it. */
+  onEventDay?: (primaryId: string) => void
   /** "Combine with…": open the picker. Absent on a read-only or paused account. */
   onCombine?: () => void
   session: PenSession
@@ -2351,6 +2355,10 @@ function Detail({
 
   const n: PenNotes = session.notes ?? {}
   const utts = session.transcript?.utterances ?? []
+  // Any file of the meeting has speech. A day combined into one event can start with a silent
+  // fragment, and gating on the first file alone hid its conversations, names and chat.
+  const spoken = parts.some((p) => (p.transcript?.utterances?.length ?? 0) > 0)
+  const totalUtts = parts.reduce((t, p) => t + (p.transcript?.utterances?.length ?? 0), 0)
   const joined = parts.length > 1
   // A joined meeting is measured end to end, not by whichever part you happen to be looking
   // at — the whole point of the join is that it is one meeting.
@@ -2399,11 +2407,11 @@ function Detail({
 
   // Conference mode: offered for long recordings with many voices, on demand otherwise.
   const nameIds = nameParts.map((p) => p.id)
-  const { data: namesData } = useNames(utts.length ? nameIds : [])
+  const { data: namesData } = useNames(spoken ? nameIds : [])
   const { running: splittingConvos } = useSplitting(nameIds)
   const hasConvos = !!namesData && nameIds.some((id) => (namesData.recordings[id]?.segments.length ?? 0) > 0)
   const suggestEvent = totalSec >= 25 * 60 && speakerCount >= 4
-  const canSplit = utts.length > 0 && totalSec >= 10 * 60
+  const canSplit = spoken && totalSec >= 10 * 60
 
   async function toggleAction(i: number) {
     const next = new Set(done)
@@ -2481,7 +2489,7 @@ function Detail({
             {n.summary && (
               <span className="pen-chip" data-tone="accent"><Icon name="sparkle" size={14} filled />{T.aiSummarised}</span>
             )}
-            {utts.length > 0 && (
+            {spoken && (
               <span className="pen-chip"><Icon name="check" size={14} />{session.source_channel === 'import' ? T.imported : T.transcribed}</span>
             )}
             {session.status === 'transcribing' && (
@@ -2526,12 +2534,12 @@ function Detail({
           {/* Keyed off the transcript, not the status. A session can land in `error` with a
               perfectly good transcript (a failed save, a transient API error), and gating the
               retry on status left it with no way out of the UI. */}
-          {utts.length > 0 && (
+          {spoken && (
             <button className="pen-btn" onClick={() => regenerate()} disabled={busy}>
               {busy ? T.working : session.status === 'noted' ? T.redoNotes : T.writeNotes}
             </button>
           )}
-          {utts.length > 0 && (
+          {spoken && (
             <button className={`pen-btn ${chatOpen ? 'pen-btn-accent' : ''}`} onClick={onToggleChat}>
               {chatOpen ? T.hideChat : T.askMeeting}
             </button>
@@ -2568,12 +2576,12 @@ function Detail({
           {/* Keyed off the transcript, not the status. A session can land in `error` with a
               perfectly good transcript (a failed save, a transient API error), and gating the
               retry on status left it with no way out of the UI. */}
-          {utts.length > 0 && (
+          {spoken && (
             <button className="pen-btn" onClick={() => regenerate()} disabled={busy}>
               {busy ? T.working : session.status === 'noted' ? T.redoNotes : T.writeNotes}
             </button>
           )}
-          {utts.length > 0 && (
+          {spoken && (
             <button className={`pen-btn ${chatOpen ? 'pen-btn-accent' : ''}`} onClick={onToggleChat}>
               {chatOpen ? T.hideChat : T.askMeeting}
             </button>
@@ -2620,11 +2628,11 @@ function Detail({
                       borderBottom: tab === t ? '2.5px solid var(--accent)' : '2.5px solid transparent',
                       marginBottom: -1,
                     }}>
-              {T.tabs[t]}{t === 'transcript' && utts.length ? ` ${utts.length}` : ''}
+              {T.tabs[t]}{t === 'transcript' && totalUtts ? ` ${totalUtts}` : ''}
             </button>
           ))}
         </div>
-        {utts.length > 0 && (
+        {spoken && (
           <div className="pen-tabrow-cat flex items-center gap-2 pb-1.5">
             <span className="pen-label">{T.category}</span>
             <CategoryPicker
@@ -2653,7 +2661,7 @@ function Detail({
         )}
       </div>
 
-      {pendingType && utts.length > 0 && (
+      {pendingType && spoken && (
         <div className="pen-relabel" role="status">
           <span>{T.relabeled(typeLabel(pendingType, lang))}</span>
           <span className="pen-relabel-acts">
@@ -2722,7 +2730,7 @@ function Detail({
               sessionId={session.id}
               blocks={blocks}
               saveState={notesState}
-              canEnhance={utts.length > 0}
+              canEnhance={spoken}
               onChange={(next) => { dirtyNotes.current = true; setBlocks(next) }}
             />
           </div>
@@ -2737,7 +2745,7 @@ function Detail({
               </Muted>
             </div>
           )}
-          {utts.length > 0 && !n.summary && session.status !== 'transcribing' && (
+          {spoken && !n.summary && session.status !== 'transcribing' && (
             <div className="pen-sec">
               <Muted>
                 {session.status === 'error'
@@ -2760,8 +2768,8 @@ function Detail({
             </div>
           )}
 
-          {utts.length > 0 && (
-            <Conversations parts={nameParts} suggest={suggestEvent} onJump={jumpTo} onPeopleChanged={onPeopleChanged} onDraft={setSheet} />
+          {spoken && (
+            <Conversations parts={nameParts} suggest={suggestEvent} onJump={jumpTo} onPeopleChanged={onPeopleChanged} onDraft={setSheet} onCombined={onEventDay} />
           )}
 
           {/* Mock (14 Oct): Next actions first and full width (it is the work: checkboxes,
@@ -2842,7 +2850,7 @@ function Detail({
             </div>
           )}
 
-          <PeoplePanel sessionId={session.id} notes={n} status={session.status} onChanged={onPeopleChanged} parts={utts.length ? nameParts : undefined} onJump={jumpTo} />
+          <PeoplePanel sessionId={session.id} notes={n} status={session.status} onChanged={onPeopleChanged} parts={spoken ? nameParts : undefined} onJump={jumpTo} />
 
           {!!n.missed?.length && (
             <div className="pen-sec">

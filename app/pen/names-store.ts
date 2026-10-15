@@ -92,3 +92,21 @@ export function useSplitting(ids: string[]): { running: boolean; error: string |
   )
   return { running, error }
 }
+
+/* ------------------------------------------------ combining a day into one event */
+
+const combining = new Map<string, number>()
+
+/** The event recording just created by "Combine this day": its conversations are on their way. */
+export function markCombining(primaryId: string) {
+  combining.set(primaryId, Date.now())
+  emit()
+}
+
+export function useCombining(primaryId: string | undefined): boolean {
+  return useSyncExternalStore(
+    (l) => { listeners.add(l); return () => { listeners.delete(l) } },
+    () => !!primaryId && Date.now() - (combining.get(primaryId) ?? 0) < 6 * 60_000,
+    () => false,
+  )
+}

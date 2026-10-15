@@ -128,3 +128,38 @@ export function combinedDialogue(segments: PenSession[]): string {
   })
   return parts.join('\n')
 }
+
+/** "6:33" from seconds since the start of the meeting. */
+function hm(sec: number): string {
+  const m = Math.floor(sec / 60)
+  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`
+}
+
+/**
+ * Every part of a meeting in order, each line stamped with its time FROM THE START OF THE
+ * MEETING ("[6:33] Pedro: …"), so an answer can point to the moment the user will find on the
+ * page. Part headers say where the recorder started a new file and that labels restart there.
+ */
+export function timedDialogue(segments: PenSession[], markers?: Map<string, Map<number, string>>): string {
+  const out: string[] = []
+  let offsetSec = 0
+  segments.forEach((s, i) => {
+    if (segments.length > 1) {
+      out.push(i === 0
+        ? `--- PART 1 of ${segments.length} (from 0:00) ---`
+        : `--- PART ${i + 1} of ${segments.length} (from ${hm(offsetSec)}; a new file, so speaker labels restart here) ---`)
+    }
+    const u = s.transcript?.utterances ?? []
+    if (u.length) {
+      u.forEach((x, k) => {
+        // An event's conversation starts here: say so in place, with who it was with.
+        const mark = markers?.get(s.id)?.get(k)
+        if (mark) out.push(`=== ${mark} ===`)
+        const line = namedDialogue([x], s.speaker_map as SpeakerMap | null, s.transcript_edits?.[String(k)] !== undefined ? { '0': s.transcript_edits[String(k)] } : null)
+        out.push(`[${hm(offsetSec + x.start / 1000)}] ${line}`)
+      })
+    } else if (s.transcript?.text) out.push(s.transcript.text)
+    offsetSec += s.duration_sec ?? 0
+  })
+  return out.join('\n')
+}
