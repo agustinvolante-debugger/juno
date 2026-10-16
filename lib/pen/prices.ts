@@ -5,6 +5,7 @@
 //                  a shipping address is required when the pen is bought.
 //   Given pens     the founders hand out pens; that link charges $5 today for the first 2 months,
 //                  then $9.99 a month (renews unless cancelled).
+//   Local          Chile CLP 9.990 / 89.990 a year / pen 59.990; Brazil R$ 59,90 / R$ 459 / pen R$ 360.
 //
 // Stripe prices are found by lookup_key at runtime (lib/pen/stripe.ts priceIdFor), made in test
 // and live by .pentest/stripe-prices.mts. The env var next to each key is only a fallback.

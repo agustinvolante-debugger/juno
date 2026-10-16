@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Instrument_Serif, Literata, IBM_Plex_Mono, Inter, Playfair_Display, Lora } from 'next/font/google'
+import { Instrument_Serif, Literata, IBM_Plex_Mono, Inter, Newsreader, Lora } from 'next/font/google'
 import './pen-theme.css'
 // The signed-in app's skin. Scoped to the app's own surfaces; the landing pages never match it.
 import './app-skin-literals.css'
@@ -38,13 +38,14 @@ const ui = Inter({
   display: 'swap',
   variable: '--font-ui',
 })
-// The landing pages' type (13 Oct): Playfair Display italic headlines, Lora for everything else,
-// Lora italic for the "J" of the wordmark. Only landing-apple.css uses them, and preload is off,
-// so the app never downloads them.
-const lpHead = Playfair_Display({
+// The landing pages' type: Newsreader italic headlines and wordmark "J" (15 Oct; Playfair Display
+// italic's swash Q read as a "2" and its J as an F), Lora for everything else. Only
+// landing-apple.css uses them, and preload is off, so the app never downloads them.
+// Variable weight plus the optical-size axis, so the big headlines get the display cut.
+const lpHead = Newsreader({
   subsets: ['latin'],
-  weight: '400',
   style: 'italic',
+  axes: ['opsz'],
   display: 'swap',
   preload: false,
   variable: '--font-lp-head',

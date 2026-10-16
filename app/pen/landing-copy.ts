@@ -34,7 +34,9 @@ export type RoleDemo = { tab: string; short: string; q: string; a: string; sourc
 
 export type Copy = {
   nav: { features: string; pen: string; pricing: string; signIn: string; home: string }
-  cta: { trialPen: (d: number) => string; trialOwn: (d: number) => string; yearly: string; halfyear: string; seeWhat: string }
+  /** No free trial and no 6-month plan (15 Oct): `start` is the one "get it" label; the plan
+   *  cards carry their own. */
+  cta: { start: string; monthly: string; yearly: string; seeWhat: string }
   hero: { noPen: string }
   audience: { ask: string; found: (n: number) => string; aria: string }
   pen: { h2: string; sub: string; open: string; storageK: string; storageV: string; batteryK: string; batteryV: string; specs: { k: string; v: string }[]; inBox: string; soon: string; soonBody: string }
@@ -48,36 +50,32 @@ export type Copy = {
     includedTitle: string
     included: string[]
     monthly: string
-    halfyear: string
     yearly: string
     perMonth: string
-    perHalf: string
     perYear: string
-    penLineMonthly: (trial: number, pen: string) => string
-    penLineIncluded: (perMonth: string) => string
-    ownLineMonthly: (trial: number) => string
-    ownLineHalf: (perMonth: string) => string
-    ownLineYear: (perMonth: string) => string
+    /** Under the price on a card with the pen: "+ $65 once for the pen". */
+    plusPen: (pen: string) => string
+    /** The pen, wherever it is offered on its own (specs, the scroll scene). */
+    penLine: (pen: string) => string
+    lineMonthly: string
+    lineYearly: (perMonth: string) => string
     tradeMonthlyPen: string
-    tradeHalfPen: string
     tradeYearPen: string
     tradeOwnMonthly: string
-    tradeOwnHalf: string
     tradeOwnYear: string
-    ribbonPen: string
     ribbonBest: string
     soonTitle: string
     soonBody: string
     soonCta: string
   }
-  closing: { h2: string; sub: (trial: number) => string }
+  closing: { h2: string; sub: string }
   footer: { consent: string; trademarks: string; privacy: string; terms: string }
   switcher: string
 }
 
 const EN: Copy = {
   nav: { features: 'What it does', pen: 'The pen', pricing: 'Pricing', signIn: 'Sign in', home: 'Juno Pen, home' },
-  cta: { trialPen: (d) => `Start ${d} days free`, trialOwn: (d) => `Start ${d} days free`, yearly: 'Get the year', halfyear: 'Get 6 months', seeWhat: 'See what it does' },
+  cta: { start: 'Get Juno Pen', monthly: 'Start monthly', yearly: 'Get the year', seeWhat: 'See what it does' },
   hero: {
     noPen: 'No pen? Bring audio or transcripts from your phone, Plaud, Pocket or any recorder.',
   },
@@ -108,9 +106,9 @@ const EN: Copy = {
   },
   pricing: {
     h2: 'Unlimited recording on every plan.',
-    sub: 'With the Juno pen, or with the recorder you already have. Same notes, same search, same everything.',
-    tabPen: 'With the Juno pen',
-    tabOwn: 'Your own recorder',
+    sub: 'The software is one price. The pen is an optional add-on, paid once, with either plan.',
+    tabPen: 'Software + pen',
+    tabOwn: 'Software only',
     tabAria: 'Choose how you record',
     ownSub: 'Your phone, WhatsApp voice notes, Plaud, Pocket, or any recorder that gives you audio or a transcript.',
     includedTitle: 'Every plan includes',
@@ -125,29 +123,23 @@ const EN: Copy = {
       'Notes in the language you spoke',
     ],
     monthly: 'Monthly',
-    halfyear: '6 months',
     yearly: 'Yearly',
     perMonth: 'a month',
-    perHalf: 'every 6 months',
     perYear: 'a year',
-    penLineMonthly: (t, pen) => `${t} days free · pen ${pen} once`,
-    penLineIncluded: (pm) => `${pm} a month · pen included`,
-    ownLineMonthly: (t) => `${t} days free`,
-    ownLineHalf: (pm) => `${pm} a month · billed today`,
-    ownLineYear: (pm) => `${pm} a month · billed today`,
-    tradeMonthlyPen: 'You buy the pen, and you can stop any month you like.',
-    tradeHalfPen: 'The pen is on us, paid up front for half a year.',
-    tradeYearPen: 'The pen is on us, and it works out cheapest.',
+    plusPen: (pen) => `+ ${pen} once for the pen`,
+    penLine: (pen) => `The pen: ${pen} once, with either plan`,
+    lineMonthly: 'Cancel any month',
+    lineYearly: (pm) => `${pm} a month · paid upfront`,
+    tradeMonthlyPen: 'We ship the pen to your address. Cancel the plan any month.',
+    tradeYearPen: 'A year paid upfront, the pen shipped to your address.',
     tradeOwnMonthly: 'Record on your phone or any recorder and upload the file.',
-    tradeOwnHalf: 'The same, paid up front for half a year.',
-    tradeOwnYear: 'The same, paid for a year, and it works out cheapest.',
-    ribbonPen: 'Pen included',
+    tradeOwnYear: 'The same, a year at a time, and it works out cheapest.',
     ribbonBest: 'Best value',
     soonTitle: '',
     soonBody: '',
     soonCta: '',
   },
-  closing: { h2: 'Your next meeting, remembered.', sub: (t) => `Try it free for ${t} days. The pen ships in the post.` },
+  closing: { h2: 'Your next meeting, remembered.', sub: 'Start on your phone today. Add the pen whenever you like.' },
   footer: {
     consent: 'Recording a conversation needs everyone’s permission in many places, Florida included. Juno Pen asks you to confirm consent before it processes anything.',
     trademarks: 'Plaud and Pocket are trademarks of their owners. Juno Pen is not affiliated with them.',
@@ -159,7 +151,7 @@ const EN: Copy = {
 
 const ES: Copy = {
   nav: { features: 'Qué hace', pen: 'El lápiz', pricing: 'Precios', signIn: 'Entrar', home: 'Juno Pen, inicio' },
-  cta: { trialPen: (d) => `Prueba ${d} días gratis`, trialOwn: (d) => `Prueba ${d} días gratis`, yearly: 'Contratar el año', halfyear: 'Contratar 6 meses', seeWhat: 'Mira qué hace' },
+  cta: { start: 'Empieza ahora', monthly: 'Empezar mensual', yearly: 'Contratar el año', seeWhat: 'Mira qué hace' },
   hero: {
     noPen: '¿Sin lápiz? Funciona con audios o transcripciones de tu celular, Plaud, Pocket o cualquier grabadora.',
   },
@@ -207,29 +199,23 @@ const ES: Copy = {
       'Notas en el idioma en que hablaste',
     ],
     monthly: 'Mensual',
-    halfyear: '6 meses',
     yearly: 'Anual',
     perMonth: 'al mes',
-    perHalf: 'cada 6 meses',
     perYear: 'al año',
-    penLineMonthly: (t, pen) => `${t} días gratis · lápiz ${pen} una vez`,
-    penLineIncluded: (pm) => `${pm} al mes · lápiz incluido`,
-    ownLineMonthly: (t) => `${t} días gratis`,
-    ownLineHalf: (pm) => `${pm} al mes · se cobra hoy`,
-    ownLineYear: (pm) => `${pm} al mes · se cobra hoy`,
-    tradeMonthlyPen: 'Compras el lápiz y puedes cancelar cuando quieras.',
-    tradeHalfPen: 'El lápiz va por nuestra cuenta, pagando medio año por adelantado.',
-    tradeYearPen: 'El lápiz va por nuestra cuenta, y sale más barato.',
+    plusPen: (pen) => `+ ${pen} una vez por el lápiz`,
+    penLine: (pen) => `El lápiz: ${pen} una vez, con cualquier plan`,
+    lineMonthly: 'Cancela cuando quieras',
+    lineYearly: (pm) => `${pm} al mes · pago por adelantado`,
+    tradeMonthlyPen: 'Te enviamos el lápiz a tu dirección. Cancela el plan cuando quieras.',
+    tradeYearPen: 'Un año pagado por adelantado, y el lápiz enviado a tu dirección.',
     tradeOwnMonthly: 'Graba con el celular o cualquier grabadora y mándalo por WhatsApp o súbelo.',
-    tradeOwnHalf: 'Lo mismo, pagando medio año por adelantado.',
     tradeOwnYear: 'Lo mismo, pagando un año, y sale más barato.',
-    ribbonPen: 'Lápiz incluido',
     ribbonBest: 'Mejor precio',
     soonTitle: 'El lápiz llega pronto',
     soonBody: 'Estamos trayendo el lápiz Juno a Chile. Déjanos tu correo y te avisamos apenas esté disponible. Mientras tanto, prueba Juno con tu celular.',
     soonCta: 'Avísame cuando llegue',
   },
-  closing: { h2: 'Tu próxima reunión, recordada.', sub: (t) => `Pruébalo gratis por ${t} días, con tu celular o cualquier grabadora.` },
+  closing: { h2: 'Tu próxima reunión, recordada.', sub: 'Empieza hoy con tu celular o cualquier grabadora.' },
   footer: {
     consent: 'Grabar una conversación requiere el permiso de todos en muchos lugares. Juno Pen te pide confirmar el consentimiento antes de procesar cualquier cosa.',
     trademarks: 'Plaud y Pocket son marcas de sus respectivos dueños. Juno Pen no está afiliado a ellas.',
@@ -241,7 +227,7 @@ const ES: Copy = {
 
 const PT: Copy = {
   nav: { features: 'O que faz', pen: 'A caneta', pricing: 'Preços', signIn: 'Entrar', home: 'Juno Pen, início' },
-  cta: { trialPen: (d) => `Teste ${d} dias grátis`, trialOwn: (d) => `Teste ${d} dias grátis`, yearly: 'Assinar o ano', halfyear: 'Assinar 6 meses', seeWhat: 'Veja o que faz' },
+  cta: { start: 'Comece agora', monthly: 'Assinar mensal', yearly: 'Assinar o ano', seeWhat: 'Veja o que faz' },
   hero: {
     noPen: 'Sem caneta? Funciona com áudios ou transcrições do seu celular, Plaud, Pocket ou qualquer gravador.',
   },
@@ -289,29 +275,23 @@ const PT: Copy = {
       'Notas no idioma em que você falou',
     ],
     monthly: 'Mensal',
-    halfyear: '6 meses',
     yearly: 'Anual',
     perMonth: 'por mês',
-    perHalf: 'a cada 6 meses',
     perYear: 'por ano',
-    penLineMonthly: (t, pen) => `${t} dias grátis · caneta ${pen} uma vez`,
-    penLineIncluded: (pm) => `${pm} por mês · caneta incluída`,
-    ownLineMonthly: (t) => `${t} dias grátis`,
-    ownLineHalf: (pm) => `${pm} por mês · cobrado hoje`,
-    ownLineYear: (pm) => `${pm} por mês · cobrado hoje`,
-    tradeMonthlyPen: 'Você compra a caneta e pode cancelar quando quiser.',
-    tradeHalfPen: 'A caneta é por nossa conta, pagando meio ano adiantado.',
-    tradeYearPen: 'A caneta é por nossa conta, e sai mais barato.',
+    plusPen: (pen) => `+ ${pen} uma vez pela caneta`,
+    penLine: (pen) => `A caneta: ${pen} uma vez, com qualquer plano`,
+    lineMonthly: 'Cancele quando quiser',
+    lineYearly: (pm) => `${pm} por mês · pago adiantado`,
+    tradeMonthlyPen: 'Enviamos a caneta para o seu endereço. Cancele o plano quando quiser.',
+    tradeYearPen: 'Um ano pago adiantado, e a caneta enviada para o seu endereço.',
     tradeOwnMonthly: 'Grave com o celular ou qualquer gravador e mande pelo WhatsApp ou envie pelo site.',
-    tradeOwnHalf: 'O mesmo, pagando meio ano adiantado.',
     tradeOwnYear: 'O mesmo, pagando um ano, e sai mais barato.',
-    ribbonPen: 'Caneta incluída',
     ribbonBest: 'Melhor preço',
     soonTitle: 'A caneta chega em breve',
     soonBody: 'Estamos trazendo a caneta Juno para o Brasil. Deixe seu e-mail e avisamos assim que estiver disponível. Enquanto isso, teste o Juno com o seu celular.',
     soonCta: 'Avise-me quando chegar',
   },
-  closing: { h2: 'Sua próxima reunião, lembrada.', sub: (t) => `Teste grátis por ${t} dias, com o celular ou qualquer gravador.` },
+  closing: { h2: 'Sua próxima reunião, lembrada.', sub: 'Comece hoje com o celular ou qualquer gravador.' },
   footer: {
     consent: 'Gravar uma conversa exige a permissão de todos em muitos lugares. O Juno Pen pede que você confirme o consentimento antes de processar qualquer coisa.',
     trademarks: 'Plaud e Pocket são marcas de seus respectivos donos. O Juno Pen não é afiliado a elas.',

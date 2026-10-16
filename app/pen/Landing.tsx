@@ -12,8 +12,8 @@ import PenFilm from './film/PenFilm'
 import HowToPlayer from './how-to/HowToPlayer'
 import type { HowToKitKey } from './film/HowToScene'
 import Icon, { type IconName } from './Icon'
-import { PLAN_MONTHLY_USD, PLAN_HALFYEAR_USD, PLAN_ANNUAL_USD, PEN_USD, SOFTWARE_MONTHLY_USD, SOFTWARE_HALFYEAR_USD, SOFTWARE_ANNUAL_USD, TRIAL_DAYS, TRIAL_DAYS_POSTED } from '@/lib/pen/plan'
-import { COPY, LOCAL_PRICES, money, type Copy, type Market, type RoleDemo } from './landing-copy'
+import { PRICES, fmtUsd } from '@/lib/pen/prices'
+import { COPY, money, type Copy, type Market, type RoleDemo } from './landing-copy'
 import { AUD_PARAM, KITS, PLUS, type Kit, type Plus } from './landing-audiences'
 
 // The signed-out face of tryjunoapp.com, in three versions.
@@ -47,10 +47,17 @@ export function signup(params: string, market: Market): string {
   return `${SIGN_UP}?${params}${extra}`
 }
 
-/** What a software-only plan costs where the visitor is. */
-function ownPrice(market: Market, plan: 'monthly' | 'halfyear'): string {
-  if (market.currency === 'usd') return money(plan === 'monthly' ? SOFTWARE_MONTHLY_USD : SOFTWARE_HALFYEAR_USD, 'usd')
-  return money(LOCAL_PRICES[market.currency][plan], market.currency)
+/** A software price where the visitor is: PRICES in dollars, or PRICES.local in CLP/BRL. */
+function softwarePrice(market: Market, plan: 'monthly' | 'yearly'): string {
+  if (market.currency === 'usd') return fmtUsd(PRICES[plan])
+  return money(PRICES.local[market.currency][plan], market.currency)
+}
+
+/** The yearly plan as a monthly figure (CLP rounded to 10). */
+function yearlyPerMonth(market: Market): string {
+  if (market.currency === 'usd') return fmtUsd(PRICES.yearly / 12)
+  const y = PRICES.local[market.currency].yearly / 12
+  return money(market.currency === 'clp' ? Math.round(y / 10) * 10 : Math.round(y * 100) / 100, market.currency)
 }
 
 /**
@@ -130,8 +137,8 @@ export default function Landing({ market = { lang: 'en', currency: 'usd' }, audi
 function useMainCta(): { label: string; href: (from: string) => string } {
   const { t, market, latam } = useL()
   return latam
-    ? { label: t.cta.trialOwn(TRIAL_DAYS), href: (from) => signup(`plan=monthly&offer=own-recorder&from=${from}`, market) }
-    : { label: t.cta.trialPen(TRIAL_DAYS_POSTED), href: (from) => signup(`from=${from}`, market) }
+    ? { label: t.cta.start, href: (from) => signup(`plan=monthly&offer=own-recorder&from=${from}`, market) }
+    : { label: t.cta.start, href: (from) => signup(`from=${from}`, market) }
 }
 
 function Nav() {
@@ -1008,33 +1015,29 @@ function PlanCardView({ p, delay }: { p: PlanCard; delay: number }) {
   )
 }
 
+// Prices of 15 Oct (lib/pen/prices.ts): software $9.99 a month or $90 a year paid upfront, no
+// trial, no 6-month plan. The pen is a one-time add-on to either plan, shipped to the address
+// given at checkout. The link targets are the ones checkout already reads (plan + offer).
+
+/** Software + pen. Dollars only: the pen is sold in the US. */
 export function penPlans(t: Copy, market: Market): PlanCard[] {
   const P = t.pricing
+  const pen = fmtUsd(PRICES.pen)
   return [
     {
       name: P.monthly,
-      price: money(PLAN_MONTHLY_USD, 'usd'),
+      price: fmtUsd(PRICES.monthly),
       per: P.perMonth,
-      line: P.penLineMonthly(TRIAL_DAYS_POSTED, money(PEN_USD, 'usd')),
+      line: P.plusPen(pen),
       trade: P.tradeMonthlyPen,
       href: signup('plan=monthly&offer=posted-pen&from=pricing', market),
-      cta: t.cta.trialPen(TRIAL_DAYS_POSTED),
-    },
-    {
-      name: P.halfyear,
-      price: money(PLAN_HALFYEAR_USD, 'usd'),
-      per: P.perHalf,
-      line: P.penLineIncluded(money(PLAN_HALFYEAR_USD / 6, 'usd')),
-      trade: P.tradeHalfPen,
-      href: signup('plan=halfyear&offer=posted-pen&from=pricing', market),
-      cta: t.cta.halfyear,
-      ribbon: P.ribbonPen,
+      cta: t.cta.monthly,
     },
     {
       name: P.yearly,
-      price: money(PLAN_ANNUAL_USD, 'usd'),
+      price: fmtUsd(PRICES.yearly),
       per: P.perYear,
-      line: P.penLineIncluded(money(Math.round(PLAN_ANNUAL_USD / 12), 'usd')),
+      line: P.plusPen(pen),
       trade: P.tradeYearPen,
       href: signup('plan=annual&offer=posted-pen&from=pricing', market),
       cta: t.cta.yearly,
@@ -1044,44 +1047,30 @@ export function penPlans(t: Copy, market: Market): PlanCard[] {
   ]
 }
 
+/** Software only, in the visitor's currency (USD, or CLP/BRL from PRICES.local). */
 export function ownPlans(t: Copy, market: Market): PlanCard[] {
   const P = t.pricing
-  const half = market.currency === 'usd' ? SOFTWARE_HALFYEAR_USD : LOCAL_PRICES[market.currency].halfyear
   return [
     {
       name: P.monthly,
-      price: ownPrice(market, 'monthly'),
+      price: softwarePrice(market, 'monthly'),
       per: P.perMonth,
-      line: P.ownLineMonthly(TRIAL_DAYS),
+      line: P.lineMonthly,
       trade: P.tradeOwnMonthly,
       href: signup('plan=monthly&offer=own-recorder&from=pricing', market),
-      cta: t.cta.trialOwn(TRIAL_DAYS),
-      pro: market.lang !== 'en',
+      cta: t.cta.monthly,
     },
     {
-      name: P.halfyear,
-      price: ownPrice(market, 'halfyear'),
-      per: P.perHalf,
-      line: P.ownLineHalf(money(market.currency === 'clp' ? Math.round(half / 6 / 10) * 10 : Math.round((half / 6) * 100) / 100, market.currency)),
-      trade: P.tradeOwnHalf,
-      href: signup('plan=halfyear&offer=own-recorder&from=pricing', market),
-      cta: t.cta.halfyear,
+      name: P.yearly,
+      price: softwarePrice(market, 'yearly'),
+      per: P.perYear,
+      line: P.lineYearly(yearlyPerMonth(market)),
+      trade: P.tradeOwnYear,
+      href: signup('plan=annual&offer=own-recorder&from=pricing', market),
+      cta: t.cta.yearly,
+      ribbon: P.ribbonBest,
+      pro: market.lang !== 'en',
     },
-    // Yearly is dollars only: there is no CLP/BRL yearly price.
-    ...(market.currency === 'usd'
-      ? [
-          {
-            name: P.yearly,
-            price: money(SOFTWARE_ANNUAL_USD, 'usd'),
-            per: P.perYear,
-            line: P.ownLineYear(money(Math.round(SOFTWARE_ANNUAL_USD / 12), 'usd')),
-            trade: P.tradeOwnYear,
-            href: signup('plan=annual&offer=own-recorder&from=pricing', market),
-            cta: t.cta.yearly,
-            ribbon: P.ribbonBest,
-          },
-        ]
-      : []),
   ]
 }
 
@@ -1243,7 +1232,7 @@ function Closing() {
         <div className="pen-lp2-close-card">
           <PenArt id="close-pen" className="pen-lp2-close-pen" />
           <h2 className="pen-lp-h2 pen-lp2-h2">{t.closing.h2}</h2>
-          <p className="pen-lp2-sub">{t.closing.sub(latam ? TRIAL_DAYS : TRIAL_DAYS_POSTED)}</p>
+          <p className="pen-lp2-sub">{t.closing.sub}</p>
           <Link href={cta.href('closing')} className="pen-lp-btn pen-lp-btn-accent pen-lp2-btn-lg">{cta.label}</Link>
         </div>
       </Reveal>
