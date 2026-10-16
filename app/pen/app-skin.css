@@ -112,6 +112,10 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
   .pen-brand-name { font-size: 20px; letter-spacing: -0.03em; }
   /* The dashboard's sidebar brand reads larger than the Settings header's. */
   .pen-brand-home .pen-brand-name { font-size: 26px; }
+  /* The wordmark and tagline span exactly the logo's height: name at its top, tagline at its foot. */
+  .pen-brand-home > div { display: flex; flex-direction: column; justify-content: space-between; height: 40px; }
+  .pen-brand-home .pen-brand-name { line-height: 0.82; }
+  .pen-brand-home .pen-brand-tag { line-height: 1; margin: 0; }
   /* The wordmark, set exactly as the landing nav's (.lpa-brand / .lpa-j in landing-apple.css):
      Lora semibold with the "J" in Newsreader italic. Same faces, weight and tracking, so the
      app and the landing carry one brand. */
