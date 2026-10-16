@@ -3314,13 +3314,16 @@ body:has(.pen-root) {
 .pen-tour-ring { position: fixed; border-radius: 14px; box-shadow: 0 0 0 2px var(--accent), 0 0 0 6px rgba(11, 107, 68, .25); pointer-events: none; }
 .pen-tour-card {
   position: fixed; display: flex; flex-direction: column; gap: 8px; padding: 18px 18px 14px;
+  /* Never taller than the visible screen (max-height set from the visual viewport in Tour.tsx):
+     the content scrolls and the buttons stay pinned at the bottom, reachable on a phone. */
+  overflow-y: auto; overscroll-behavior: contain;
   border-radius: 16px; background: var(--paper); border: 1px solid var(--line);
   box-shadow: 0 22px 50px -18px rgba(22, 21, 15, .5);
 }
 .pen-tour-count { font-family: var(--font-mono); font-size: var(--t-label); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
 .pen-tour-title { margin: 0; font-family: var(--font-display); font-size: 26px; line-height: 1.12; color: var(--ink); }
 .pen-tour-body { margin: 0; font-size: var(--t-small); line-height: 1.55; color: var(--soft); }
-.pen-tour-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+.pen-tour-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; flex-wrap: wrap; position: sticky; bottom: -14px; padding: 10px 0 14px; margin-bottom: -14px; background: var(--paper); }
 .pen-tour-nav { display: flex; gap: 8px; }
 .pen-tour-skip { font-size: var(--t-small); color: var(--dim); background: none; border: 0; padding: 4px 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .pen-tour-skip:hover { color: var(--ink); }
@@ -3819,9 +3822,11 @@ html.pen-m-lock, html.pen-m-lock body { height: 100%; overflow: hidden; overscro
 /* The dim is its own element, a solid layer at reduced opacity: an rgba background on the
    overlay and a ::before were both drawn far lighter than asked (measured 2 Oct). */
 .pen-promo-dim { position: absolute; inset: 0; background: #16150F; opacity: .62; }
-.pen-promo-card { position: relative; }
+.pen-promo-card { position: relative;   /* Fits the visible screen on a phone (Safari's bars included); the content scrolls. */
+  max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow-y: auto;
+}
 .pen-promo-card {
-  width: min(440px, 100%); display: flex; flex-direction: column; gap: 14px; overflow: hidden;
+  width: min(440px, 100%); display: flex; flex-direction: column; gap: 14px; overflow-x: hidden; overflow-y: auto;
   background: var(--panel); border-radius: 18px; padding: 0 28px 28px;
   box-shadow: 0 0 0 1px rgba(22, 21, 15, .12), 0 30px 80px -10px rgba(0, 0, 0, .55);
 }

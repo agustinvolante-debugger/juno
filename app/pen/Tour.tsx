@@ -132,7 +132,8 @@ export default function Tour({
   // Find this step's target; skip the step if it isn't on screen.
   const locate = useCallback(() => {
     setVw(window.innerWidth)
-    setVh(window.innerHeight)
+    // The visible height: on a phone Safari's bars take part of innerHeight's screen.
+    setVh(Math.round(window.visualViewport?.height ?? window.innerHeight))
     if (!step.target) return setRect(null)
     const el = visibleTarget(step.target)
     if (!el) {
@@ -156,9 +157,12 @@ export default function Tour({
     const on = () => locate()
     window.addEventListener('resize', on)
     window.addEventListener('scroll', on, true)
+    // Safari's bars growing and shrinking change the visible height without a window resize.
+    window.visualViewport?.addEventListener('resize', on)
     return () => {
       window.removeEventListener('resize', on)
       window.removeEventListener('scroll', on, true)
+      window.visualViewport?.removeEventListener('resize', on)
     }
   }, [locate])
 
@@ -231,7 +235,7 @@ export default function Tour({
         <div className="pen-tour-dim" style={{ inset: 0 }} />
       )}
 
-      <div className="pen-tour-card" style={{ left: card.left, top: card.top, width: card.w }}>
+      <div className="pen-tour-card" style={{ left: card.left, top: card.top, width: card.w, maxHeight: vh ? Math.max(220, vh - card.top - 12) : undefined }}>
         <div className="pen-tour-count">{`${i + 1} ${ui.of} ${steps.length}`}</div>
         <h2 className="pen-tour-title">{step.title}</h2>
         <p className="pen-tour-body">{step.body}</p>
