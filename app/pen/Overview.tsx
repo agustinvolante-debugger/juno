@@ -525,6 +525,10 @@ export default function Overview({
   }, [toast])
 
   const part = hour === null ? 'morning' : hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'
+  const firstWeek = !stats.recordings || ownRecordings === 0
+  // First week with nothing waiting: the card's head carries the one tap, so the line below
+  // doesn't repeat it (the card decides the same from what it loads).
+  const connectInHead = firstWeek && !(suggestions?.open?.length)
   const card = (
     <JunoCard
       greeting={T.greet(part, firstName)}
@@ -532,7 +536,7 @@ export default function Overview({
       initial={suggestions}
       onOpenRecording={onOpen}
       phone={phone}
-      firstWeek={!stats.recordings || ownRecordings === 0}
+      firstWeek={firstWeek}
       onUpload={onUpload}
       next={next}
       whatsapp={whatsapp}
@@ -542,7 +546,7 @@ export default function Overview({
     return (
       <div className="pen-home" data-phone={phone || undefined}>
         {card}
-        {phone && <NextLine next={next} whatsapp={whatsapp} />}
+        {phone && <NextLine next={next} whatsapp={whatsapp} hideConnect={connectInHead} />}
       </div>
     )
   }
@@ -563,7 +567,7 @@ export default function Overview({
         <Today actions={mineList} max={phone ? 3 : 5} total={openCount} onTick={tick} onOpen={onOpen} onDraft={draft} onSeeAll={() => setOpen('todo')} />
 
         {phone ? (
-          <NextLine next={next} whatsapp={whatsapp} />
+          <NextLine next={next} whatsapp={whatsapp} hideConnect={connectInHead} />
         ) : (
           <>
             <WorthALook missed={missed} count={missedCount} onHandle={handle} onPromote={promote} onOpen={onOpen} onSeeAll={() => setOpen('missed')} />

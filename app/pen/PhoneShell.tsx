@@ -119,7 +119,7 @@ export default function PhoneShell({
 
       <nav className="pen-m-tabs" aria-label={T.tabs}>
         {TABS.map((t) => t.id === 'search' && chatLink ? (
-          <a key={t.id} className="pen-m-tab" href={chatLink.href} target="_blank" rel="noreferrer">
+          <a key={t.id} className="pen-m-tab" data-tab={t.id} href={chatLink.href} target="_blank" rel="noreferrer">
             <Icon name="chat" size={23} />
             <span>{chatLink.label}</span>
           </a>
@@ -128,6 +128,7 @@ export default function PhoneShell({
             key={t.id}
             type="button"
             className="pen-m-tab"
+            data-tab={t.id}
             data-on={tab === t.id}
             aria-current={tab === t.id ? 'page' : undefined}
             onClick={() => onTab(t.id)}

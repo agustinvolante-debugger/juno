@@ -67,6 +67,7 @@ const EN = {
   badCode: (settings: string) => `That code didn't work. Codes last 30 minutes. Get a fresh one at ${settings}.`,
   linked: (email: string) => `Linked to ${email}. ✅`,
   optIn: 'I\'ll also text you reminders and briefs from your meetings. Reply STOP anytime.',
+  welcome: 'You\'re all set. Three things to try:\n• Ask “What did I promise this week?”\n• Say “Remind me Friday at 9 to send the proposal”\n• Or send me a recording, or a voice note.',
   stopAll: 'Done, I won\'t message you first anymore. Reply START to turn it back on. You can still ask me anything.',
   stopKind: (what: string) => `Done, no more ${what}. Reply START to turn everything back on. You can still ask me anything.`,
   startAll: 'Done, I\'ll text you reminders and briefs from your meetings again. Reply STOP anytime.',
@@ -127,6 +128,7 @@ const BOT: Record<Lang, typeof EN> = {
     badCode: (settings) => `Ese código no funcionó. Los códigos duran 30 minutos. Pide uno nuevo en ${settings}.`,
     linked: (email) => `Vinculado a ${email}. ✅`,
     optIn: 'También te escribiré recordatorios y resúmenes de tus reuniones. Responde STOP cuando quieras.',
+    welcome: 'Todo listo. Tres cosas para probar:\n• Pregunta “¿Qué prometí esta semana?”\n• Escribe “Recuérdame el viernes a las 9 enviar la propuesta”\n• O mándame una grabación o una nota de voz.',
     stopAll: 'Listo, ya no te escribiré primero. Responde START para volver a activarlo. Puedes seguir preguntándome lo que quieras.',
     stopKind: (what) => `Listo, no más ${what}. Responde START para volver a activar todo. Puedes seguir preguntándome lo que quieras.`,
     startAll: 'Listo, te volveré a escribir recordatorios y resúmenes de tus reuniones. Responde STOP cuando quieras.',
@@ -184,6 +186,7 @@ const BOT: Record<Lang, typeof EN> = {
     badCode: (settings) => `Esse código não funcionou. Os códigos valem por 30 minutos. Pegue um novo em ${settings}.`,
     linked: (email) => `Vinculado a ${email}. ✅`,
     optIn: 'Também vou te mandar lembretes e resumos das suas reuniões. Responda STOP quando quiser.',
+    welcome: 'Tudo pronto. Três coisas para testar:\n• Pergunte “O que eu prometi esta semana?”\n• Escreva “Me lembra sexta às 9 de enviar a proposta”\n• Ou me mande uma gravação ou um áudio.',
     stopAll: 'Pronto, não vou mais te escrever primeiro. Responda START para ativar de novo. Você ainda pode me perguntar qualquer coisa.',
     stopKind: (what) => `Pronto, sem mais ${what}. Responda START para ativar tudo de novo. Você ainda pode me perguntar qualquer coisa.`,
     startAll: 'Pronto, vou voltar a te mandar lembretes e resumos das suas reuniões. Responda STOP quando quiser.',
@@ -347,9 +350,17 @@ async function linkPhone(msg: Inbound, code: string): Promise<void> {
   // The LINK message came in before there was a link, so it was stored without the email; with
   // it, channelFor sees the window this message just opened.
   await supabaseAdmin.from('pen_whatsapp_messages').update({ email: link.email }).eq('id', msg.id).is('email', null).then(() => {}, () => {})
-  const L = BOT[await langFor(msg.from, link.email)]
-  // The opt-in Meta asks for before Juno writes first (plan section I).
-  await sendText(msg.from, `${L.linked(link.email)}\n\n${L.help}\n\n${L.optIn}`)
+  await sendText(msg.from, linkedReply(await langFor(msg.from, link.email), link.email))
+}
+
+/**
+ * The reply to a LINK that worked: linked, three things to try (16 Oct, the one-tap link from
+ * the app lands here, so this is the user's first message from Juno), and the opt-in Meta asks
+ * for before Juno writes first (plan section I). The full help is one "help" away.
+ */
+export function linkedReply(lang: Lang, email: string): string {
+  const L = BOT[lang]
+  return `${L.linked(email)}\n\n${L.welcome}\n\n${L.optIn}`
 }
 
 /* -------------------------------------------------------------- STOP/START */

@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import Icon, { type IconName } from './Icon'
 import { useCopy, useLang } from './LangContext'
+import GetWhatsApp from './GetWhatsApp'
 import { getJson, postJson, errMessage } from '@/lib/pen/http'
 import { fmtDate, shortDate, type Copy } from '@/lib/pen/i18n'
 import type { AcceptOutcome, WebSuggestion } from '@/lib/pen/suggestion-view'
@@ -90,7 +91,6 @@ const JN_EN = {
   nextMeeting: (when: string, who: string) => `${when} I’ll send you a brief before you meet ${who}`,
   nextNone: 'I’ll message you when something comes up.',
   openChat: (app: string) => `Open ${app}`,
-  connectWa: 'Connect WhatsApp so I can message you',
   today: 'Today',
   tomorrow: 'Tomorrow',
 }
@@ -162,7 +162,6 @@ const JN: Copy<typeof JN_EN> = {
     nextMeeting: (when, who) => `${when} te mando un resumen antes de ver a ${who}`,
     nextNone: 'Te escribo cuando surja algo.',
     openChat: (app) => `Abrir ${app}`,
-    connectWa: 'Conecta WhatsApp para que pueda escribirte',
     today: 'Hoy',
     tomorrow: 'Mañana',
   },
@@ -231,7 +230,6 @@ const JN: Copy<typeof JN_EN> = {
     nextMeeting: (when, who) => `${when} te mando um resumo antes de você encontrar ${who}`,
     nextNone: 'Eu te escrevo quando surgir algo.',
     openChat: (app) => `Abrir o ${app}`,
-    connectWa: 'Conecte o WhatsApp para eu poder te escrever',
     today: 'Hoje',
     tomorrow: 'Amanhã',
   },
@@ -556,6 +554,10 @@ export function JunoCard({
   const week = did.filter((s) => s.decidedAt && Date.now() - Date.parse(s.decidedAt) < WEEK_MS)
   const shown = phone || more ? open : open.slice(0, HERO_MAX)
 
+  // The first week, nothing waiting: the two ways to start, side by side in the card's head.
+  const firstEmpty = loaded && firstWeek && !open.length
+  const connectInHead = firstEmpty && !!whatsapp && !whatsapp.linked
+  const headActions = firstEmpty && (!!onUpload || connectInHead)
   const line = !loaded ? ' ' : waiting > 0 ? T.needYou(waiting) : firstWeek ? T.firstWeek : T.caughtUp
 
   return (
@@ -563,11 +565,16 @@ export function JunoCard({
       <header className="pen-juno-head">
         <h2 id="pen-juno-title" className="pen-display pen-juno-hello" data-ready={ready}>{greeting}</h2>
         <p className="pen-juno-line" aria-live="polite">{line}</p>
-        {loaded && firstWeek && !open.length && onUpload && (
-          <button type="button" className="pen-juno-upload" onClick={onUpload}>
-            <Icon name="plus" size={16} />
-            {T.upload}
-          </button>
+        {headActions && (
+          <div className="pen-juno-first">
+            {onUpload && (
+              <button type="button" className="pen-juno-upload" onClick={onUpload}>
+                <Icon name="plus" size={16} />
+                {T.upload}
+              </button>
+            )}
+            {connectInHead && whatsapp && <GetWhatsApp number={whatsapp.number} variant="pill" />}
+          </div>
         )}
       </header>
 
@@ -620,7 +627,7 @@ export function JunoCard({
         </div>
       )}
 
-      {!phone && <NextLine next={next} whatsapp={whatsapp} />}
+      {!phone && <NextLine next={next} whatsapp={whatsapp} hideConnect={connectInHead} />}
     </section>
   )
 }
@@ -677,7 +684,7 @@ function whenLabel(iso: string, tz: string, lang: ReturnType<typeof useLang>, T:
  * The bridge to the phone: when Juno will message next and a way into the chat. Not linked: the
  * way to link. Hidden when the app has no WhatsApp at all (a server without the number).
  */
-export function NextLine({ next, whatsapp }: { next: NextUpView | null; whatsapp: WaLink }) {
+export function NextLine({ next, whatsapp, hideConnect = false }: { next: NextUpView | null; whatsapp: WaLink; hideConnect?: boolean }) {
   const T = useCopy(JN)
   const lang = useLang()
   // The time is formatted in the browser, after mount: the server's "today" is not the viewer's.
@@ -686,20 +693,14 @@ export function NextLine({ next, whatsapp }: { next: NextUpView | null; whatsapp
     setWhen(next ? whenLabel(next.at, next.tz, lang, T) : null)
   }, [next, lang, T])
   if (!whatsapp) return null
-  if (!whatsapp.linked) {
-    return (
-      <a className="pen-next" data-linked="false" href="/pen/settings/whatsapp">
-        <Icon name="chat" size={17} />
-        <span className="pen-next-text">{T.connectWa}</span>
-        <Icon name="chevron" size={15} className="pen-next-go" />
-      </a>
-    )
-  }
+  // Not linked: one tap opens WhatsApp with the LINK message typed (GetWhatsApp). In the first
+  // week the card's head carries that button instead, so it isn't offered twice.
+  if (!whatsapp.linked) return hideConnect ? null : <GetWhatsApp number={whatsapp.number} variant="line" />
   const app = whatsapp.imessage ? 'iMessage' : 'WhatsApp'
   const href = whatsapp.imessage ? `sms:+${whatsapp.imessage.replace(/\D/g, '')}` : `https://wa.me/${whatsapp.number}`
   const text = next && when ? (next.kind === 'meeting' ? T.nextMeeting(when, next.about) : T.nextAbout(when, next.about)) : next ? ' ' : T.nextNone
   return (
-    <div className="pen-next" data-linked="true">
+    <div className="pen-next" data-linked="true" data-tour="wa">
       <Icon name="clock" size={17} />
       <span className="pen-next-text">{text}</span>
       <a className="pen-next-open" href={href} target="_blank" rel="noreferrer">

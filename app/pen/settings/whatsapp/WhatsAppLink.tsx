@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useCopy } from '../../LangContext'
 import type { Copy } from '@/lib/pen/i18n'
 import JunoMessages, { type Prefs } from './JunoMessages'
+import GetWhatsApp from '../../GetWhatsApp'
 
 const WA_EN = {
   startFailed: 'Could not start linking',
@@ -146,9 +147,9 @@ export default function WhatsAppLink({
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(loadError)
 
-  // On a phone the button goes straight to WhatsApp with the message typed. On a computer it
-  // shows a QR to scan with the phone, since that is where WhatsApp (and the pen) lives.
-  async function start(channel: 'wa' | 'im' = 'wa') {
+  // iMessage linking: the same code, sent to Juno's iMessage number. (WhatsApp is GetWhatsApp's
+  // one tap.) On a phone the button goes straight to Messages with the text typed.
+  async function start(channel: 'im' = 'im') {
     setVia(channel)
     setBusy(true)
     setErr(null)
@@ -157,7 +158,7 @@ export default function WhatsAppLink({
       const j = await r.json()
       if (!r.ok) throw new Error(j.error ?? T.startFailed)
       const phoneDevice = window.matchMedia('(pointer: coarse)').matches && window.innerWidth < 900
-      if (phoneDevice) window.location.href = channel === 'im' && imessage ? smsLink(imessage, `LINK ${j.code}`) : j.waLink
+      if (phoneDevice && imessage) window.location.href = smsLink(imessage, `LINK ${j.code}`)
       setLink({ code: j.code, waLink: j.waLink, qr: j.qr })
     } catch (e) {
       setErr((e as Error).message)
@@ -209,23 +210,13 @@ export default function WhatsAppLink({
               <button type="button" className="pen-btn" onClick={unlink} disabled={busy}>{T.unlink}</button>
             </div>
           </>
-        ) : link && via === 'wa' ? (
-          <div className="pen-wa-link">
-            <div className="pen-wa-qr" aria-label={T.qrAria} dangerouslySetInnerHTML={{ __html: link.qr }} />
-            <div className="pen-wa-steps">
-              <p className="pen-set-fine pen-wa-desk">{T.scan}</p>
-              <p className="pen-set-fine">{T.message(link.code, pretty(number))}</p>
-              <p className="pen-set-fine">{T.updates}</p>
-              <p className="pen-set-fine">{T.proactive}</p>
-              <div className="pen-set-actions">
-                <a className="pen-btn pen-wa-open" href={link.waLink} target="_blank" rel="noreferrer">{T.openWith}</a>
-              </div>
-            </div>
-          </div>
         ) : (
-          <div className="pen-set-actions">
-            <button type="button" className="pen-btn pen-btn-accent" onClick={() => start('wa')} disabled={busy}>{T.link}</button>
-          </div>
+          // One tap (16 Oct): WhatsApp opens with "LINK <code>" typed, on the phone in the same
+          // window, on a computer in a new tab, plus the QR to scan with the phone.
+          <>
+            <GetWhatsApp number={number} variant="button" qr onLinked={(p) => { setPhone(p); setLink(null) }} />
+            <p className="pen-set-fine">{T.proactive}</p>
+          </>
         )}
       </div>
 

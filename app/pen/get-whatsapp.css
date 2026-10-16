@@ -1,0 +1,134 @@
+/* One tap to Juno on WhatsApp (GetWhatsApp.tsx, 16 Oct).
+
+   An extension of the app skin: the one blue for the action, the WhatsApp mark as the only
+   other colour (it says where the tap goes). On the blue Juno card everything is white. */
+
+.pen-root:has(.pen-page, .pen-m, .pen-set) {
+
+  .pen-gw { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .pen-gw-glyph { flex: none; fill: currentColor; }
+
+  /* ----------------------------------------------------- primary (Settings, the sheet) */
+  .pen-gw-btn { display: inline-flex; align-items: center; justify-content: center; align-self: flex-start; gap: 9px; min-height: 46px; padding: 0 22px 0 18px; }
+  .pen-gw-btn .pen-gw-glyph { fill: #fff; }
+
+  /* ----------------------------------------------------- the Home line: the whole row taps */
+  .pen-gw[data-variant='line'] { gap: 0; }
+  .pen-gw-line {
+    width: 100%; border: 0; background: none; padding: 0; text-align: left; cursor: pointer;
+    font: inherit; font-family: var(--ui); font-size: 14.5px; line-height: 1.4;
+  }
+  .pen-gw-line .pen-gw-glyph { fill: #25D366; }
+  .pen-gw-onetap { font-weight: 500; color: var(--dim); white-space: nowrap; }
+  .pen-gw-line:disabled { cursor: progress; }
+  @media (hover: hover) {
+    .pen-gw-line:hover .pen-next-text { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+    .pen-gw-line:hover .pen-next-go { translate: 2px 0; }
+  }
+  .pen-gw-line .pen-next-go { transition: translate .18s cubic-bezier(.16, 1, .3, 1); }
+
+  .pen-juno .pen-gw-line .pen-gw-glyph { fill: #fff; }
+  .pen-juno .pen-gw-onetap { color: var(--j-dim); }
+  .pen-juno .pen-gw[data-variant='line'] { border-top: 1px solid var(--j-line); }
+  .pen-juno .pen-gw[data-variant='line'] .pen-next { border-top: 0; }
+  /* The phone's glass row under Today. */
+  .pen-home > .pen-gw[data-variant='line'] {
+    padding: 4px 8px 4px 16px; border-radius: 16px;
+    background: var(--g-fill); -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+    border: 1px solid var(--g-edge); box-shadow: var(--g-shadow);
+  }
+  .pen-home > .pen-gw[data-variant='line'] .pen-gw-sent { padding: 0 0 10px 28px; }
+
+  /* ----------------------------------------------------- secondary pill (first week, on blue) */
+  .pen-gw[data-variant='pill'] { align-self: flex-start; }
+  .pen-gw-pill {
+    display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px;
+    border-radius: 9999px; border: 1px solid rgba(255, 255, 255, .38); background: rgba(255, 255, 255, .1);
+    color: #fff; font-family: var(--ui); font-size: 15px; font-weight: 600; cursor: pointer;
+    transition: background-color .18s ease, border-color .18s ease;
+  }
+  .pen-gw-pill:hover:not(:disabled) { background: rgba(255, 255, 255, .18); border-color: rgba(255, 255, 255, .6); }
+
+  /* ----------------------------------------------------- quiet link (upload toast) */
+  .pen-gw[data-variant='link'] { align-items: flex-start; }
+  .pen-gw-link {
+    display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 0;
+    border: 0; background: none; cursor: pointer;
+    font-family: var(--ui); font-size: 14px; font-weight: 600; color: var(--accent-ink);
+  }
+  .pen-gw-link .pen-gw-glyph { fill: #25D366; }
+  .pen-gw-link:hover:not(:disabled) { text-decoration: underline; text-underline-offset: 3px; }
+
+  /* ----------------------------------------------------- after the tap */
+  .pen-gw-sent { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+  .pen-gw-sent-text { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 6px; }
+  .pen-gw-fb { margin: 0; font-family: var(--ui); font-size: 13.5px; line-height: 1.5; color: var(--soft); text-wrap: pretty; max-width: 62ch; }
+  .pen-gw-err { margin: 0; font-size: 13.5px; color: var(--danger, #b42318); }
+  .pen-juno .pen-gw-fb { color: var(--j-soft); }
+  .pen-juno .pen-gw-err { color: #ffe1dd; }
+  .pen-juno .pen-gw[data-variant='line'] .pen-gw-sent { padding: 0 0 12px 28px; }
+  .pen-gw-qr { width: 156px; height: 156px; flex: none; padding: 10px; background: #fff; border-radius: 14px; border: 1px solid var(--hair); }
+  .pen-gw-qr svg { width: 100%; height: 100%; display: block; }
+  @media (max-width: 680px) { .pen-gw-qr, .pen-gw .pen-wa-desk { display: none; } }
+
+  .pen-gw-line:focus-visible, .pen-gw-link:focus-visible, .pen-gw-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 12px; }
+  .pen-juno .pen-gw-line:focus-visible, .pen-juno .pen-gw-pill:focus-visible { outline-color: #fff; }
+
+  /* ----------------------------------------------------- the phone's Chat-tab sheet */
+  .pen-gw-sheet-wrap {
+    position: fixed; inset: 0; z-index: 110; display: flex; align-items: flex-end;
+    background: rgba(10, 20, 40, .36);
+    animation: pen-gw-fade .2s ease-out both;
+  }
+  .pen-gw-sheet {
+    position: relative; width: 100%; display: flex; flex-direction: column; gap: 10px;
+    padding: 10px 20px calc(18px + env(safe-area-inset-bottom, 0px));
+    border-radius: 24px 24px 0 0; background: var(--panel, #fff);
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, .04), 0 -18px 40px -14px rgba(0, 20, 60, .28);
+    animation: pen-gw-rise .32s cubic-bezier(.16, 1, .3, 1) both;
+  }
+  .pen-gw-sheet-grip { align-self: center; width: 38px; height: 5px; border-radius: 9999px; background: var(--hair); margin-bottom: 8px; }
+  .pen-gw-sheet-x {
+    position: absolute; top: 12px; right: 12px; width: 40px; height: 40px; border-radius: 9999px;
+    display: grid; place-items: center; border: 0; background: var(--sunk); color: var(--soft); cursor: pointer;
+  }
+  .pen-gw-sheet-mark {
+    width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center;
+    background: #25D366; color: #fff; box-shadow: 0 6px 16px -8px rgba(18, 140, 70, .7);
+  }
+  .pen-gw-sheet-mark .pen-gw-glyph { fill: #fff; }
+  .pen-gw-sheet-title { margin: 6px 0 0; font-family: var(--ui); font-size: 22px; font-weight: 600; letter-spacing: -0.025em; color: var(--ink); }
+  .pen-gw-sheet-body { margin: 0 0 8px; font-size: 15.5px; line-height: 1.5; color: var(--soft); text-wrap: pretty; }
+  .pen-gw-sheet .pen-gw-btn { align-self: stretch; justify-content: center; min-height: 52px; font-size: 16px; }
+  .pen-gw-sheet-web {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px;
+    border: 0; background: none; cursor: pointer;
+    font-family: var(--ui); font-size: 15px; font-weight: 600; color: var(--accent-ink);
+  }
+}
+
+@keyframes pen-gw-fade { from { opacity: 0; } }
+@keyframes pen-gw-rise { from { transform: translateY(100%); } }
+@media (prefers-reduced-motion: reduce) {
+  .pen-gw-sheet-wrap, .pen-gw-sheet { animation: none; }
+}
+
+/* First week: "Upload a recording" and the one tap, side by side in the Juno card's head. */
+.pen-root:has(.pen-page, .pen-m) .pen-juno-first {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px;
+  .pen-juno-upload { margin-top: 0; }
+}
+
+/* "Recording is ready" toast (dark): the one tap sits under the title, quiet. */
+.pen-root .pen-ready-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0; }
+.pen-root .pen-ready-wa .pen-gw-link { min-height: 30px; font-size: 13.5px; color: rgba(255, 255, 255, .86); }
+.pen-root .pen-ready-wa .pen-gw-link:hover:not(:disabled) { color: #fff; }
+.pen-root .pen-ready-wa .pen-gw-link .pen-gw-glyph { fill: #30d158; }
+.pen-root .pen-ready-wa .pen-gw-fb { color: rgba(255, 255, 255, .78); font-size: 12.5px; }
+.pen-root .pen-ready-wrap[data-phone] .pen-ready-main { flex: 1 1 calc(100% - 90px); }
+.pen-root .pen-ready-wa .pen-gw-link { text-align: left; }
+
+/* The tour's film step on a phone: the film scrolls inside the card, so Next stays on screen. */
+@media (max-width: 680px) {
+  .pen-root .pen-tour-video { max-height: calc(100dvh - 300px); }
+}

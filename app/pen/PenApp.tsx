@@ -16,6 +16,7 @@ import TranscriptImport from './TranscriptImport'
 import NotionImport from './NotionImport'
 import GranolaImport from './GranolaImport'
 import Tour from './Tour'
+import GetWhatsApp, { WaChatSheet } from './GetWhatsApp'
 import { speakersIn, type SpeakerMap } from '@/lib/pen/speakers'
 import ChatView from './ChatView'
 import DocView from './DocView'
@@ -264,8 +265,16 @@ export default function PenApp({
     if (view.k === 'session') setPhoneTab('recordings')
     else if (view.k === 'chat' || view.k === 'doc') { setPhoneTab('search'); lastChat.current = view }
   }, [view])
+  // The Chat tab before WhatsApp (or iMessage) is linked: a sheet with the one tap to Juno on
+  // WhatsApp, or the web chat. Choosing the web chat is remembered on this phone.
+  const [waSheet, setWaSheet] = useState(false)
   /** A tab tap. Tapping the tab you're on goes back to its first screen, as apps do. */
-  const goTab = (t: PhoneTab) => {
+  const goTab = (t: PhoneTab, viaSheet = false) => {
+    if (t === 'search' && !viaSheet && phoneTab !== 'search' && whatsapp && !whatsapp.linked) {
+      let web = false
+      try { web = localStorage.getItem('juno-webchat') === '1' } catch {}
+      if (!web) { setWaSheet(true); return }
+    }
     if (t === 'home' || (t === 'recordings' && (phoneTab === 'recordings' || view.k !== 'session'))) setView({ k: 'archive' })
     if (t === 'search' && view.k !== 'chat' && view.k !== 'doc') setView(lastChat.current)
     if (t === 'search' && phoneTab === 'search') { setChatSeed(null); setView({ k: 'chat', id: null }) }
@@ -576,6 +585,15 @@ export default function PenApp({
     })
     if (done.length) setReady((r) => [...r.filter((id) => !done.includes(id)), ...done])
   }, [sessions, watchReady])
+  // Localhost only: ?ready=1 shows the "recording is ready" toast for the newest recording, for
+  // reviewing its design (like ?promo=1).
+  const readyPreview = useRef(false)
+  useEffect(() => {
+    if (readyPreview.current || process.env.NODE_ENV !== 'development' || !sessions.length) return
+    if (new URLSearchParams(window.location.search).get('ready') !== '1') return
+    readyPreview.current = true
+    setReady([sessions[0].id])
+  }, [sessions])
 
   /* ---------------------------------------------------------------- connect */
 
@@ -764,6 +782,19 @@ export default function PenApp({
   const listed = useMemo(() => sessions.filter((s) => (s.merge_index ?? 0) === 0), [sessions])
   // The sample recording is not the user's own: with nothing else, Home asks for the first one.
   const ownRecordings = useMemo(() => listed.filter((s) => s.source_channel !== 'sample').length, [listed])
+  // The tour starts on Home (its steps point at Home), and ends by opening the sample recording,
+  // or the newest one when there is no sample. Nothing to open: it ends on "Upload" instead.
+  const openTour = () => {
+    setView({ k: 'archive' })
+    setPhoneTab('home')
+    setTourOpen(true)
+  }
+  // Prefer one where Juno has something to offer, so "things I can do for you" isn't empty.
+  const offerFor = suggestions?.open.find((x) => x.sessionId && listed.some((s) => s.id === x.sessionId))?.sessionId
+  const tourPick = listed.find((s) => s.source_channel === 'sample') ?? listed.find((s) => s.id === offerFor) ?? listed[0]
+  const tourFirst = tourPick
+    ? () => { openSession(tourPick.id); setTab('note') }
+    : undefined
 
   const visible = useMemo(
     () => (catFilter ? listed.filter((x) => bucketOf(displayType(x.meeting_type)) === catFilter) : listed),
@@ -901,6 +932,7 @@ export default function PenApp({
     <ReadyToast
       T={T}
       phone={isPhone}
+      whatsapp={whatsapp ?? null}
       items={ready.map((id) => {
         const x = sessions.find((y) => y.id === id)
         return { id, title: x?.title || x?.client_name || x?.source_name || T.untitled }
@@ -949,7 +981,7 @@ export default function PenApp({
     let title = ''
     let onBack: (() => void) | undefined
     let left: React.ReactNode = null
-    let right: React.ReactNode = <Account email={email} name={name} avatar={avatar} onTour={() => setTourOpen(true)} />
+    let right: React.ReactNode = <Account email={email} name={name} avatar={avatar} onTour={openTour} />
     let fill = false
 
     if (phoneTab === 'home') {
@@ -1250,7 +1282,18 @@ export default function PenApp({
           />
         )}
         {gImport && <GranolaImport connected={Boolean(granola?.connected)} onClose={() => { setGImport(false); void refresh() }} onQueued={() => window.setTimeout(() => void refresh(), 8000)} />}
-        {tourOpen && <Tour lang={appLang} onClose={closeTour} onUpload={() => { setPhoneTab('upload'); fileInput.current?.click() }} />}
+        {tourOpen && <Tour lang={appLang} phone linked={Boolean(whatsapp?.linked)} onClose={closeTour} onUpload={() => { setPhoneTab('upload'); fileInput.current?.click() }} onOpenFirst={tourFirst} />}
+        {waSheet && whatsapp && !whatsapp.linked && (
+          <WaChatSheet
+            number={whatsapp.number}
+            onClose={() => setWaSheet(false)}
+            onWebChat={() => {
+              try { localStorage.setItem('juno-webchat', '1') } catch {}
+              setWaSheet(false)
+              goTab('search', true)
+            }}
+          />
+        )}
         {promoOpen && !tourOpen && <ReferralPromo T={T} onClose={closePromo} />}
         {askOpen && !tourOpen && !promoOpen && <FeedbackAsk T={T} onClose={closeAsk} />}
         <UploadCard uploads={uploads} onClose={() => setUploads((prev) => prev.filter((u) => u.state === 'waiting' || u.state === 'working'))} whatsapp={whatsapp ?? null} phone={isPhone} T={T} />
@@ -1348,7 +1391,7 @@ export default function PenApp({
         } : null}
         tip={sideCollapsed ? T.add : undefined}
       />
-      {tourOpen && <Tour lang={appLang} onClose={closeTour} onUpload={() => fileInput.current?.click()} />}
+      {tourOpen && <Tour lang={appLang} linked={Boolean(whatsapp?.linked)} onClose={closeTour} onUpload={() => fileInput.current?.click()} onOpenFirst={tourFirst} />}
       {promoOpen && !tourOpen && <ReferralPromo T={T} onClose={closePromo} />}
       {askOpen && !tourOpen && !promoOpen && <FeedbackAsk T={T} onClose={closeAsk} />}
       <UploadCard uploads={uploads} onClose={() => setUploads((prev) => prev.filter((u) => u.state === 'waiting' || u.state === 'working'))} whatsapp={whatsapp ?? null} phone={isPhone} T={T} />
@@ -1387,6 +1430,7 @@ export default function PenApp({
             className="pen-cat"
             data-active={catFilter === null && view.k !== 'archive' && view.k !== 'chat' && view.k !== 'doc'}
             aria-pressed={railAll && catFilter === null}
+            data-tour="recordings"
             aria-label={sideCollapsed ? T.allRecordingsNav : undefined}
             data-tip={sideCollapsed ? T.allRecordingsNav : undefined}
             onClick={() => { setCatFilter(null); setRailAll(true); setNavOpen(false) }}
@@ -1529,7 +1573,7 @@ export default function PenApp({
           </button>
           <input ref={fileInput} type="file" multiple accept={accept} className="hidden"
                  onChange={(e) => e.target.files && addFiles(e.target.files)} />
-          <Account email={email} name={name} avatar={avatar} onTour={() => { setNavOpen(false); setTourOpen(true) }} />
+          <Account email={email} name={name} avatar={avatar} onTour={() => { setNavOpen(false); openTour() }} />
         </div>
       </header>
 
@@ -3601,15 +3645,17 @@ function UploadCard({ uploads, onClose, whatsapp, phone, T }: { uploads: UploadI
               <ul>{failed.map((f) => <li key={f.key}><span className="pen-mono">{f.name}</span>: {f.error}</li>)}</ul>
             </div>
           )}
-          {whatsapp && ok + held > 0 && (
+          {whatsapp?.linked && ok + held > 0 && (
             <a
               className="pen-btn pen-btn-accent pen-upcard-wa"
-              href={whatsapp.linked ? `https://wa.me/${whatsapp.number}?text=${encodeURIComponent(T.waCallExamples[1])}` : '/pen/settings/whatsapp'}
-              {...(whatsapp.linked ? { target: '_blank', rel: 'noreferrer' } : {})}
+              href={`https://wa.me/${whatsapp.number}?text=${encodeURIComponent(T.waCallExamples[1])}`}
+              target="_blank" rel="noreferrer"
             >
-              {whatsapp.linked ? T.upAskWa : T.upConnectWa}
+              {T.upAskWa}
             </a>
           )}
+          {/* Not linked: a quiet one tap, so the next recording's briefing comes on WhatsApp. */}
+          {whatsapp && !whatsapp.linked && ok + held > 0 && <GetWhatsApp number={whatsapp.number} variant="link" label={T.upConnectWa} />}
         </>
       )}
       {uploads.length > 1 && (
@@ -3641,6 +3687,7 @@ function UploadCard({ uploads, onClose, whatsapp, phone, T }: { uploads: UploadI
 function ReadyToast({
   T,
   phone,
+  whatsapp = null,
   items,
   onOpen,
   onShowAll,
@@ -3648,6 +3695,8 @@ function ReadyToast({
 }: {
   T: AppCopy
   phone: boolean
+  /** Not linked: a quiet "Get it on WhatsApp next time" under the title. */
+  whatsapp?: { number: string; linked: boolean } | null
   items: { id: string; title: string }[]
   onOpen: (id: string) => void
   onShowAll: () => void
@@ -3689,7 +3738,10 @@ function ReadyToast({
           onFocus={() => setHold(true)} onBlur={() => setHold(false)}
         >
           <span className="pen-ready-ic" aria-hidden><Icon name="check" size={15} /></span>
-          <p className="pen-ready-text">{one ? T.readyOne(one.title) : T.readyMany(items.length)}</p>
+          <div className="pen-ready-main">
+            <p className="pen-ready-text">{one ? T.readyOne(one.title) : T.readyMany(items.length)}</p>
+            {whatsapp && !whatsapp.linked && <GetWhatsApp number={whatsapp.number} variant="link" className="pen-ready-wa" />}
+          </div>
           <button type="button" className="pen-ready-go" onClick={() => (one ? onOpen(one.id) : onShowAll())}>
             {one ? T.readyOpen : T.readyShow}
             <Icon name="chevron" size={14} />
