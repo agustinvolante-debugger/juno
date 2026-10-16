@@ -24,9 +24,17 @@ export type Announcement = {
   items: { title: L; body: L }[]
   /** Optional button; defaults to opening the app. */
   cta?: { label: L; path?: string }
+  /** "Hi Carlos," above the intro, from the person's name (profile, then signup, then account). */
+  greet?: boolean
+  /** A personal closing after the items, e.g. "Reply with anything… — Agustin". */
+  signoff?: L
+  /** Sender shown in the inbox, at the sending domain (Reply-To stays the support inbox). */
+  from?: string
 }
 
-export const ANNOUNCEMENTS: Announcement[] = []
+import smarter from './2026-10-16-smarter'
+
+export const ANNOUNCEMENTS: Announcement[] = [smarter]
 
 export function findAnnouncement(slug: string): Announcement | undefined {
   return ANNOUNCEMENTS.find((a) => a.slug === slug)

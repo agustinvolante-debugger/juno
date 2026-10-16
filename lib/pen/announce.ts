@@ -31,7 +31,7 @@ const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 export async function audience(): Promise<string[]> {
   const [acc, rec, prefs] = await Promise.all([
     supabaseAdmin.from('pen_accounts').select('email').eq('status', 'active'),
-    supabaseAdmin.from('pen_sessions').select('user_email').neq('source_channel', 'sample'),
+    supabaseAdmin.from('pen_sessions').select('user_email').or('source_channel.is.null,source_channel.neq.sample'),
     supabaseAdmin.from('pen_email_prefs').select('email').eq('product_updates', false),
   ])
   for (const r of [acc, rec, prefs]) if (r.error) throw new Error(r.error.message)
@@ -56,8 +56,25 @@ export async function unsubToken(email: string): Promise<string> {
   return ins.unsub_token as string
 }
 
-export function renderAnnouncement(a: Announcement, lang: Lang, unsubUrl: string): { subject: string; html: string; text: string } {
+const HI: Record<Lang, (n: string) => string> = { en: (n) => `Hi ${n},`, es: (n) => `Hola ${n},`, pt: (n) => `Oi ${n},` }
+const HI_NONE: Record<Lang, string> = { en: 'Hi there,', es: 'Hola,', pt: 'Olá,' }
+
+/** First name for the greeting: profile, then the signup form, then the account. */
+export async function firstNameOf(email: string): Promise<string | null> {
+  const e = email.toLowerCase()
+  const [p, s, a] = await Promise.all([
+    supabaseAdmin.from('pen_profiles').select('profile').ilike('user_email', e).maybeSingle(),
+    supabaseAdmin.from('pen_signups').select('name').ilike('email', e).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    supabaseAdmin.from('pen_accounts').select('name').ilike('email', e).maybeSingle(),
+  ])
+  const n = ((p.data?.profile as { name?: string } | null)?.name || (s.data?.name as string) || (a.data?.name as string) || '').trim()
+  return n.split(/\s+/)[0] || null
+}
+
+export function renderAnnouncement(a: Announcement, lang: Lang, unsubUrl: string, firstName?: string | null): { subject: string; html: string; text: string } {
   const F = FOOT[lang]
+  const hi = a.greet ? (firstName ? HI[lang](firstName) : HI_NONE[lang]) : null
+  const signoff = a.signoff?.[lang] ?? null
   const ctaLabel = a.cta?.label[lang] ?? F.open
   const ctaUrl = `${base()}${a.cta?.path ?? ''}`
   const items = a.items
@@ -76,29 +93,33 @@ export function renderAnnouncement(a: Announcement, lang: Lang, unsubUrl: string
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#FFFFFF;border:1px solid #DCD5C4;border-radius:16px">` +
     `<tr><td style="padding:28px 28px 8px">` +
     `<div style="font-family:Georgia,serif;font-size:26px;line-height:1.2;color:#16150F">${esc(a.subject[lang])}</div>` +
+    (hi ? `<p style="font-size:15px;line-height:1.6;color:#16150F;margin:14px 0 0">${esc(hi)}</p>` : '') +
     `<p style="font-size:15px;line-height:1.6;color:#514E45;margin:14px 0 22px">${esc(a.intro[lang])}</p>` +
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${items}</table>` +
+    (signoff ? signoff.split('\n').map((l) => `<p style="font-size:15px;line-height:1.6;color:#16150F;margin:0 0 10px">${esc(l)}</p>`).join('') + '<div style="height:12px"></div>' : '') +
     `<p style="margin:6px 0 26px"><a href="${esc(ctaUrl)}" style="display:inline-block;background:#0B6B44;color:#FFFFFF;text-decoration:none;font-weight:600;font-size:15px;padding:11px 18px;border-radius:10px">${esc(ctaLabel)}</a></p>` +
     `</td></tr></table>` +
     `<p style="max-width:560px;font-size:12px;line-height:1.6;color:#8E8A80;margin:16px auto 0">${esc(F.why)} <a href="${esc(unsubUrl)}" style="color:#8E8A80">${esc(F.unsub)}</a><br>Juno Pen · ${esc(LEGAL_FACTS.ADDRESS)}</p>` +
     `</td></tr></table></body></html>`
   const text = [
-    a.subject[lang],
+    ...(hi ? [hi] : []),
     a.intro[lang],
     ...a.items.map((it) => `• ${it.title[lang]}\n  ${it.body[lang]}`),
+    ...(signoff ? [signoff] : []),
     `${ctaLabel}: ${ctaUrl}`,
     `—\n${F.why}\n${F.unsub}: ${unsubUrl}\nJuno Pen · ${LEGAL_FACTS.ADDRESS}`,
   ].join('\n\n')
   return { subject: a.subject[lang], html, text }
 }
 
-async function sendOne(a: Announcement, email: string): Promise<{ ok: boolean; error?: string }> {
+async function sendOne(a: Announcement, email: string, name?: string | null): Promise<{ ok: boolean; error?: string }> {
   const lang = await userLang(email)
   const token = await unsubToken(email)
   const unsubUrl = `${base()}/api/pen/unsubscribe?t=${token}`
-  const m = renderAnnouncement(a, lang, unsubUrl)
+  const m = renderAnnouncement(a, lang, unsubUrl, a.greet ? (name ?? (await firstNameOf(email))) : null)
   return sendEmailResult({
     to: email,
+    ...(a.from ? { from: a.from } : {}),
     subject: m.subject,
     html: m.html,
     text: m.text,
@@ -108,13 +129,14 @@ async function sendOne(a: Announcement, email: string): Promise<{ ok: boolean; e
 }
 
 /** A single copy to one address, not logged. Always run this before sendToAll. */
-export async function sendTest(a: Announcement, email: string) {
-  return sendOne(a, email)
+export async function sendTest(a: Announcement, email: string, name?: string | null) {
+  return sendOne(a, email, name)
 }
 
 /** Everyone in the audience who hasn't had this one. Returns what happened, per address. */
-export async function sendToAll(a: Announcement, opts: { dryRun?: boolean } = {}) {
-  const people = await audience()
+export async function sendToAll(a: Announcement, opts: { dryRun?: boolean; only?: string[]; names?: Record<string, string> } = {}) {
+  // `only`: a hand-picked list (still logged, still never twice), instead of the whole audience.
+  const people = opts.only?.length ? opts.only.map((e) => e.toLowerCase()) : await audience()
   const { data: done, error } = await supabaseAdmin.from('pen_announcement_sends').select('email').eq('announcement', a.slug)
   if (error) throw new Error(error.message)
   const already = new Set((done ?? []).map((r) => String(r.email)))
@@ -125,7 +147,7 @@ export async function sendToAll(a: Announcement, opts: { dryRun?: boolean } = {}
     // Claimed before sending: a second run racing this one skips the address.
     const claim = await supabaseAdmin.from('pen_announcement_sends').insert({ announcement: a.slug, email, ok: false })
     if (claim.error) continue
-    const r = await sendOne(a, email)
+    const r = await sendOne(a, email, opts.names?.[email] ?? null)
     await supabaseAdmin.from('pen_announcement_sends').update({ ok: r.ok, error: r.ok ? null : (r.error ?? 'failed').slice(0, 500), sent_at: new Date().toISOString() }).eq('announcement', a.slug).eq('email', email)
     results.push({ email, ...r })
     // Resend's default limit is 2 requests a second.
