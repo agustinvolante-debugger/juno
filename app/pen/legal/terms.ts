@@ -31,6 +31,7 @@ export const TERMS: Record<Lang, LegalDoc> = {
         h: 'Your content',
         body: [
           'Your recordings, transcripts and notes are yours. You allow us to store, process and transmit them only to provide Juno Pen to you, including through the providers named in our Privacy Policy. We don’t claim ownership of them and we don’t sell them.',
+          'We delete the audio file of each recording 90 days after you upload it, unless you choose Keep this audio. The transcript, notes and everything else stay until you delete the recording.',
         ],
       },
       {
@@ -168,6 +169,7 @@ export const TERMS: Record<Lang, LegalDoc> = {
         h: 'Tu contenido',
         body: [
           'Tus grabaciones, transcripciones y notas son tuyas. Nos permites guardarlas, procesarlas y transmitirlas solo para prestarte Juno Pen, también a través de los proveedores indicados en nuestra Política de privacidad. No reclamamos su propiedad y no las vendemos.',
+          'Eliminamos el archivo de audio de cada grabación 90 días después de que la subes, salvo que elijas Conservar este audio. La transcripción, las notas y todo lo demás se quedan hasta que borres la grabación.',
         ],
       },
       {
@@ -305,6 +307,7 @@ export const TERMS: Record<Lang, LegalDoc> = {
         h: 'Seu conteúdo',
         body: [
           'Suas gravações, transcrições e notas são suas. Você nos autoriza a armazená-las, processá-las e transmiti-las apenas para prestar o Juno Pen a você, inclusive por meio dos fornecedores indicados na nossa Política de privacidade. Não reivindicamos a propriedade delas e não as vendemos.',
+          'Apagamos o arquivo de áudio de cada gravação 90 dias após o envio, a menos que você escolha Manter este áudio. A transcrição, as notas e todo o resto ficam até você apagar a gravação.',
         ],
       },
       {

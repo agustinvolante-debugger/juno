@@ -147,7 +147,8 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
         body: [
           {
             list: [
-              'Recordings, transcripts and notes: until you delete them, or ask us to delete your account.',
+              'Transcripts, notes and everything else from a recording: until you delete them, or ask us to delete your account.',
+              'Audio files: We delete the audio file of each recording 90 days after you upload it, unless you choose Keep this audio. The transcript, notes and everything else stay until you delete the recording.',
               'When you delete a recording, we remove it and its notes from our database, its audio from our storage, and the transcript AssemblyAI made of it. Copies can remain in our providers’ backups for a limited time.',
               'Otherwise, AssemblyAI’s standard policy is to delete audio within about 48 hours and the transcripts it keeps within about 30 days. Recordings sent on WhatsApp are not kept in our own file storage; we keep their transcript and notes.',
               'WhatsApp messages you send us: kept with your account until you ask us to delete them.',
@@ -362,7 +363,8 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
         body: [
           {
             list: [
-              'Grabaciones, transcripciones y notas: hasta que las borres o nos pidas borrar tu cuenta.',
+              'Transcripciones, notas y todo lo demás de una grabación: hasta que las borres o nos pidas borrar tu cuenta.',
+              'Archivos de audio: Eliminamos el archivo de audio de cada grabación 90 días después de que la subes, salvo que elijas Conservar este audio. La transcripción, las notas y todo lo demás se quedan hasta que borres la grabación.',
               'Cuando borras una grabación, la eliminamos junto con sus notas de nuestra base de datos, su audio de nuestro almacenamiento y la transcripción que hizo AssemblyAI. Pueden quedar copias en los respaldos de nuestros proveedores por un tiempo limitado.',
               'Si no la borras, la política estándar de AssemblyAI es borrar el audio en unas 48 horas y las transcripciones que guarda en unos 30 días. Las grabaciones enviadas por WhatsApp no se guardan en nuestro almacenamiento de archivos; guardamos su transcripción y sus notas.',
               'Mensajes de WhatsApp que nos envías: se guardan con tu cuenta hasta que nos pidas borrarlos.',
@@ -577,7 +579,8 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
         body: [
           {
             list: [
-              'Gravações, transcrições e notas: até você apagá-las ou nos pedir para apagar sua conta.',
+              'Transcrições, notas e todo o resto de uma gravação: até você apagá-las ou nos pedir para apagar sua conta.',
+              'Arquivos de áudio: Apagamos o arquivo de áudio de cada gravação 90 dias após o envio, a menos que você escolha Manter este áudio. A transcrição, as notas e todo o resto ficam até você apagar a gravação.',
               'Quando você apaga uma gravação, removemos a gravação e as notas do nosso banco de dados, o áudio do nosso armazenamento e a transcrição feita pela AssemblyAI. Podem restar cópias nos backups dos nossos fornecedores por um tempo limitado.',
               'Se você não apagar, a política padrão da AssemblyAI é apagar o áudio em cerca de 48 horas e as transcrições que ela guarda em cerca de 30 dias. As gravações enviadas pelo WhatsApp não ficam no nosso armazenamento de arquivos; guardamos a transcrição e as notas.',
               'Mensagens de WhatsApp que você nos envia: ficam com a sua conta até você pedir para apagá-las.',
