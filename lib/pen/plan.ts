@@ -1,14 +1,22 @@
 // The plan. One of them.
 //
+// 15 Oct 2026 (current): $9.99/month or $90/year, no trial, the pen $65 one-time and optional,
+// and a $5 link for pens handed over in person (lib/pen/prices.ts, trialDaysFor and planPrice
+// below). The dollar constants in this file are the history, kept because existing subscribers
+// and the landing page still read some of them; checkout no longer does.
+//
 // Was a free 120-minute Starter and a $15 Pro. Now: $45 covers the first three months and
 // the recorder, then $15/month, unlimited minutes. Nothing is free, so nothing in the product
 // may say it is.
+
+import { PRICES, GIVEN_PEN_DAYS, type StripePriceKey } from './prices'
 
 /** Charged up front. Covers the first three months and the pen. */
 export const UPFRONT_USD = 45
 export const UPFRONT_MONTHS = 3
 /** Charged monthly after the up-front period. */
 export const MONTHLY_USD = 15
+
 
 // ---------------------------------------------------------------------------
 // Agreed 22 Sep. The landing page still shows the numbers above; these are what
@@ -21,8 +29,10 @@ export const PLAN_MONTHLY_USD = 15
 export const PLAN_HALFYEAR_USD = 90
 /** Paid once a year, $12/month, and the recorder is included. */
 export const PLAN_ANNUAL_USD = 144
-/** One-time, on the monthly pen plan only. Costs us $40. */
+/** One-time, on the monthly pen plan only. Costs us $40. Superseded by PRICES.pen ($65) on 15 Oct;
+ *  still the free-pen minimum fee (FREE_PEN_FEE_USD), which those customers agreed to. */
 export const PEN_USD = 50
+export const FREE_PEN_FEE_USD = 50
 
 /**
  * Software only, for people who already record (phone, WhatsApp voice notes, Plaud, any
@@ -66,10 +76,10 @@ export const FREE_PEN_CAP = 25
  * Applies to free-pen checkouts made after the change only: the subscription carries
  * `pen_min_until` in its metadata, and earlier ones (whose terms said "never charged") don't.
  */
-/** Agreed 14 Oct: a pen the founders hand over in person. Nothing to post, so no address; 60
- *  days free, then the monthly plan; the pen is never charged and there is no cap (a forwarded
- *  link only gets a trial with a card on file, no hardware). */
-export const GIVEN_PEN_TRIAL_DAYS = 60
+/** Agreed 14 Oct, changed 15 Oct: a pen the founders hand over in person. Nothing to post, so no
+ *  address; $5 today covers the first 60 days, then the monthly plan; the pen is never charged
+ *  and there is no cap (a forwarded link only buys two months of software). */
+export const GIVEN_PEN_TRIAL_DAYS = GIVEN_PEN_DAYS
 
 export const FREE_PEN_MIN_MONTHS = 3
 export const FREE_PEN_MIN_DAYS = 85
@@ -91,29 +101,40 @@ export function parseOffer(v: unknown): Offer {
   return v === 'own-recorder' ? 'own-recorder' : v === 'free-pen' ? 'free-pen' : v === 'given-pen' ? 'given-pen' : 'posted-pen'
 }
 
-/** Free days before the first charge. Prepaid plans have none. */
+/**
+ * Free days before the first charge. Since 15 Oct only the two pen offers have any: the given
+ * pen's 60 days (paid for by the $5 at checkout) and the free pen's 30. Everything else is
+ * charged at checkout.
+ */
 export function trialDaysFor(offer: Offer, plan: Plan = 'monthly'): number {
   if (plan !== 'monthly') return 0
   if (offer === 'free-pen') return FREE_PEN_TRIAL_DAYS
   if (offer === 'given-pen') return GIVEN_PEN_TRIAL_DAYS
-  return offer === 'posted-pen' ? TRIAL_DAYS_POSTED : TRIAL_DAYS
+  return 0
+}
+
+/** The plans a new checkout can be for: the 6-month plan was dropped on 15 Oct. */
+export type CheckoutPlan = Exclude<Plan, 'halfyear'>
+export function checkoutPlan(v: unknown): CheckoutPlan {
+  return v === 'annual' || v === 'yearly' ? 'annual' : 'monthly'
+}
+
+/** Whether this offer buys (and posts) a pen. Since 15 Oct, 'posted-pen' means "pen bought". */
+export function buysPen(offer: Offer): boolean {
+  return offer === 'posted-pen'
 }
 
 /**
- * What each offer and plan costs, and the env var holding its Stripe price. Software only has
- * its own prices (same amounts as the pen plans) so its receipts never say "recorder included".
+ * What each offer and plan costs, and which Stripe price charges it (lib/pen/prices.ts). One
+ * software price whatever the offer; the pen is a separate one-time line. 'halfyear' is only
+ * here for subscribers who already have it (emails, the owners' table): nothing sells it.
  */
-export function planPrice(offer: Offer, plan: Plan): { usd: number; months: number; env: string } | null {
-  // Free pen: monthly only, the same price as the pen plan; the pen itself is never charged.
-  if (offer === 'free-pen' || offer === 'given-pen') return plan === 'monthly' ? { usd: PLAN_MONTHLY_USD, months: 1, env: 'STRIPE_PRICE_MONTHLY' } : null
-  if (offer === 'posted-pen') {
-    if (plan === 'monthly') return { usd: PLAN_MONTHLY_USD, months: 1, env: 'STRIPE_PRICE_MONTHLY' }
-    if (plan === 'halfyear') return { usd: PLAN_HALFYEAR_USD, months: 6, env: 'STRIPE_PRICE_HALFYEAR' }
-    return { usd: PLAN_ANNUAL_USD, months: 12, env: 'STRIPE_PRICE_ANNUAL' }
-  }
-  if (plan === 'monthly') return { usd: SOFTWARE_MONTHLY_USD, months: 1, env: 'STRIPE_PRICE_SOFTWARE_MONTHLY' }
-  if (plan === 'halfyear') return { usd: SOFTWARE_HALFYEAR_USD, months: 6, env: 'STRIPE_PRICE_SOFTWARE_HALFYEAR' }
-  return { usd: SOFTWARE_ANNUAL_USD, months: 12, env: 'STRIPE_PRICE_SOFTWARE_ANNUAL' }
+export function planPrice(offer: Offer, plan: Plan): { usd: number; months: number; price: StripePriceKey | null } | null {
+  if (plan === 'halfyear') return { usd: PLAN_HALFYEAR_USD, months: 6, price: null }
+  // The pen offers are monthly only.
+  if ((offer === 'free-pen' || offer === 'given-pen') && plan !== 'monthly') return null
+  if (plan === 'annual') return { usd: PRICES.yearly, months: 12, price: 'yearly' }
+  return { usd: PRICES.monthly, months: 1, price: 'monthly' }
 }
 
 export type Usage = {

@@ -1,4 +1,4 @@
-import { parsePlan, parseOffer, FREE_PEN_CAP } from '@/lib/pen/plan'
+import { parseOffer, checkoutPlan, FREE_PEN_CAP } from '@/lib/pen/plan'
 import { supabaseAdmin } from '@/lib/supabase'
 import { parseCurrency, parseLang } from '@/lib/pen/currency'
 import { NextResponse } from 'next/server'
@@ -81,8 +81,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Too many attempts. Try again in a few minutes.' }, { status: 429 })
   }
 
-  const offerIn = parseOffer(b.offer)
-  const v = validate(b, { needsAddress: (offerIn === 'posted-pen' || offerIn === 'free-pen') && b.waitlist !== 'pen', lang: parseLang(b.lang) })
+  // The offer. The two pen links (free, given) are offers of their own; otherwise it's whether
+  // they ticked the pen: 'posted-pen' when they buy it, 'own-recorder' when they don't. Links
+  // from before 15 Oct carry offer=posted-pen / own-recorder and still mean the same. Since 15 Oct
+  // the pen is sold in Chile and Brazil too, in CLP/BRL.
+  const linkOffer = parseOffer(b.offer)
+  const wantsPen = b.pen === '1' || b.pen === true || (b.pen === undefined && linkOffer === 'posted-pen')
+  const offerIn: Offer =
+    linkOffer === 'free-pen' || linkOffer === 'given-pen' ? linkOffer : wantsPen ? 'posted-pen' : 'own-recorder'
+  // The free pen is posted from the address on this form. A bought pen's address is taken by
+  // Stripe at checkout (required there), so the form doesn't ask for it.
+  const v = validate(b, { needsAddress: offerIn === 'free-pen' && b.waitlist !== 'pen', needsPhone: b.waitlist !== 'pen', lang: parseLang(b.lang) })
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
 
   // The free-pen link is capped: a forwarded link must not post unlimited hardware.
@@ -117,7 +126,8 @@ export async function POST(req: Request) {
     try {
       const offer: Offer = offerIn
       // The free pen is a monthly plan only, whatever the link says.
-      const plan: Plan = offer === 'free-pen' || offer === 'given-pen' ? 'monthly' : parsePlan(b.plan)
+      // The 6-month plan is gone: anything but yearly is monthly.
+      const plan: Plan = offer === 'free-pen' || offer === 'given-pen' ? 'monthly' : checkoutPlan(b.plan)
       // Came through a friend's link (/r/<code>): their first month is on us, and the friend
       // who sent it is credited once they pay (lib/pen/referrals.ts). Anything doubtful just
       // signs up without the referral.

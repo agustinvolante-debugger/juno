@@ -4,6 +4,8 @@
 // and the REST API is form-encoded POSTs. The dependency would be carrying a megabyte to save
 // forty lines.
 
+import { STRIPE_PRICES, type StripePriceKey } from './prices'
+
 /** Stripe takes form-encoded bodies with bracket notation, so nested objects flatten. */
 /** Exported so the bracket-notation flattening can be tested without a Stripe account. */
 export function encode(obj: Record<string, unknown>, prefix = ''): string[] {
@@ -49,6 +51,32 @@ async function stripe<T>(path: string, body?: Record<string, unknown>, idempoten
 export type CheckoutSession = { id: string; url: string }
 
 /**
+ * The Stripe price id for one of the 15 Oct prices (lib/pen/prices.ts), found by its lookup_key
+ * so test and live each resolve their own without env changes. Falls back to the env var named
+ * next to it; null when neither exists. Cached per key and per Stripe mode for the process.
+ */
+const priceCache = new Map<string, string>()
+export async function priceIdFor(k: StripePriceKey): Promise<string | null> {
+  const p = STRIPE_PRICES[k]
+  const mode = (process.env.STRIPE_SECRET_KEY ?? '').startsWith('sk_live') ? 'live' : 'test'
+  const cacheKey = `${mode}:${p.lookup}`
+  const hit = priceCache.get(cacheKey)
+  if (hit) return hit
+  try {
+    const r = await stripe<{ data: { id: string; unit_amount: number | null; currency: string }[] }>(`prices?lookup_keys[]=${encodeURIComponent(p.lookup)}&active=true&limit=1`)
+    const found = r.data?.[0]
+    // A price under this key with another amount would charge the wrong number: ignore it.
+    if (found && found.unit_amount === p.cents && found.currency === p.currency) {
+      priceCache.set(cacheKey, found.id)
+      return found.id
+    }
+  } catch {
+    // Stripe unreachable or no key: the env fallback below, then the caller's error.
+  }
+  return process.env[p.env] || null
+}
+
+/**
  * A subscription checkout that takes a card now and charges nothing until the trial ends.
  *
  * `payment_method_collection: 'always'` is the entire point of this function. Stripe's default
@@ -59,7 +87,7 @@ export type CheckoutSession = { id: string; url: string }
  */
 export async function createCheckoutSession(opts: {
   priceId: string
-  /** One-time prices charged at checkout alongside the subscription: the $50 recorder. */
+  /** One-time prices charged at checkout alongside the subscription: the $65 pen, the given pen's $5. */
   oneTimePriceIds?: string[]
   email: string
   trialDays: number
@@ -74,9 +102,11 @@ export async function createCheckoutSession(opts: {
   submitMessage?: string
   /** A returning customer: Stripe already has them (and maybe their card). Replaces `email`. */
   customerId?: string | null
-  /** A coupon applied up front (a referred friend on a prepaid plan). Stripe then refuses
+  /** A coupon applied up front (a referred friend's first month). Stripe then refuses
    *  promotion codes on the same checkout, so they're switched off. */
   coupon?: string | null
+  /** Countries a bought pen can be posted to: Stripe then requires a shipping address. */
+  shipTo?: string[] | null
 }): Promise<CheckoutSession> {
   return stripe<CheckoutSession>('checkout/sessions', {
     mode: 'subscription',
@@ -86,12 +116,15 @@ export async function createCheckoutSession(opts: {
     success_url: opts.successUrl,
     cancel_url: opts.cancelUrl,
     payment_method_collection: 'always',
+    // Every signup gives a phone (WhatsApp is how most people send recordings); Stripe makes it
+    // required once enabled. The cardholder name comes with the card.
+    phone_number_collection: { enabled: true },
+    ...(opts.shipTo?.length ? { shipping_address_collection: { allowed_countries: opts.shipTo } } : {}),
     ...(opts.coupon ? { discounts: [{ coupon: opts.coupon }] } : { allow_promotion_codes: true }),
     ...(opts.locale ? { locale: opts.locale } : {}),
     ...(opts.submitMessage ? { custom_text: { submit: { message: opts.submitMessage.slice(0, 1200) } } } : {}),
     subscription_data: {
-      // trialDays 0 means charge now: the yearly plan, where the recorder is included and
-      // shipping it before any payment would hand out free hardware to anyone who cancels.
+      // trialDays 0 means charge now: every plan since 15 Oct except the given pen's 60 days.
       ...(opts.trialDays > 0
         ? {
             trial_period_days: opts.trialDays,
@@ -308,12 +341,17 @@ export async function chargeCustomer(chargeId: string): Promise<string | null> {
   return c.customer ?? null
 }
 
-export const FRIEND_COUPON = 'juno-friend-month'
-
 /**
- * The friend's month off on a prepaid plan, made in Stripe the first time it's needed (test and
- * live each get their own). A month of the monthly price in each currency checkout can charge.
+ * A referred friend's first month, off at checkout on every plan (15 Oct prices: no trial left to
+ * absorb it, so it can't wait for a later bill). $9.99 once: the whole first bill on monthly
+ * (the pen, if bought, keeps its price), a month off the year on yearly.
+ *
+ * A new id because a coupon's amount can't change: 'juno-friend-month' ($15 off, the old monthly
+ * price) still exists in Stripe and is no longer used.
  */
+export const FRIEND_COUPON = 'juno-friend-month-999'
+
+/** Made in Stripe the first time it's needed (test and live each get their own). */
 export async function ensureFriendCoupon(local: { clp: number; brl: number }): Promise<string> {
   try {
     await stripe(`coupons/${FRIEND_COUPON}`)
@@ -323,7 +361,7 @@ export async function ensureFriendCoupon(local: { clp: number; brl: number }): P
       id: FRIEND_COUPON,
       name: 'First month free (invited by a friend)',
       duration: 'once',
-      amount_off: 1500,
+      amount_off: STRIPE_PRICES.monthly.cents,
       currency: 'usd',
       currency_options: { clp: { amount_off: Math.round(local.clp) }, brl: { amount_off: Math.round(local.brl * 100) } },
     }).catch((e) => {

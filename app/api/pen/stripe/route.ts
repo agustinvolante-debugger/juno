@@ -5,7 +5,9 @@ import { sendCancelScheduled, sendEnded, sendWelcomeBack } from '@/lib/pen/cance
 import { referralCheckout, referralInvoicePaid, referralRefund } from '@/lib/pen/referral-events'
 import { settleHoursCheckout } from '@/lib/pen/hours'
 import { sendEmailResult } from '@/lib/news/email'
-import { planPrice, parsePlan, parseOffer, penFeeDue, PEN_USD, FREE_PEN_MIN_MONTHS } from '@/lib/pen/plan'
+import { planPrice, parsePlan, parseOffer, penFeeDue, FREE_PEN_FEE_USD, FREE_PEN_MIN_MONTHS } from '@/lib/pen/plan'
+import { saveCheckoutDetails } from '@/lib/pen/signup'
+import { PRICES, fmtUsd } from '@/lib/pen/prices'
 import { LOCAL_PRICES, money, parseCurrency, parseLang } from '@/lib/pen/currency'
 import { rememberAppLanguage } from '@/lib/pen/profile'
 import { notifyPaid, notifyHours, notifyNote } from '@/lib/pen/notify-owner'
@@ -74,7 +76,7 @@ type StripeEvent = {
       status?: string
       current_period_end?: number
       customer_email?: string | null
-      customer_details?: { email?: string | null } | null
+      customer_details?: { email?: string | null; name?: string | null; phone?: string | null } | null
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } & Record<string, any>
   }
@@ -129,6 +131,14 @@ export async function POST(req: Request) {
         // The language they signed up in becomes their App language unless they already chose
         // one, so briefings and WhatsApp replies match from the first recording.
         if (o.metadata?.lang) await rememberAppLanguage(email, parseLang(o.metadata.lang)).catch(() => {})
+        // What Stripe collected: the address a bought pen is posted to (required there), and the
+        // name and phone (required since 15 Oct) for a signup row that lacks them. Before the
+        // owners' email (greet) and the referral checks, which both read the address.
+        await saveCheckoutDetails(email, {
+          name: o.customer_details?.name ?? null,
+          phone: o.customer_details?.phone ?? null,
+          shipping: o.metadata?.pen === '1' ? (o.collected_information?.shipping_details ?? o.shipping_details ?? null) : null,
+        }).catch((e) => console.warn(`pen checkout details not saved for ${email}: ${(e as Error).message}`))
         console.log(`pen stripe: checkout completed for ${email} (${o.metadata?.offer ?? '?'}), first=${first}`)
         if (first) await greet(email, o.metadata ?? {}, o.amount_total ?? null)
         // A friend's referral: their first month, and the count if they paid just now.
@@ -191,7 +201,7 @@ export async function POST(req: Request) {
         // will be charged" would be false.
         if (o.cancel_at_period_end || o.cancel_at) break
         const to = email || (await emailForSubscription(o))
-        if (to) await trialEnding(to, trialEnd(o), o.metadata?.plan ?? null, o.metadata?.offer ?? null, o.metadata?.lang, o.metadata?.currency ?? null).catch(() => {})
+        if (to) await trialEnding(to, trialEnd(o), o.metadata?.plan ?? null, o.metadata?.offer ?? null, o.metadata?.lang, o.metadata?.currency ?? null, o.items?.data?.[0]?.price ?? null).catch(() => {})
         break
       }
 
@@ -258,10 +268,10 @@ async function ended(sub: Record<string, any>) {
   const customer = typeof sub.customer === 'string' ? sub.customer : sub.customer?.id
   if (sub.status === 'canceled' && customer && penFeeDue(sub.metadata, Date.now())) {
     try {
-      const r = await chargePenFee({ customerId: customer, subscriptionId: sub.id, amountUsd: PEN_USD, description: `Juno pen: the free-pen plan ended before its ${FREE_PEN_MIN_MONTHS}-month minimum` })
+      const r = await chargePenFee({ customerId: customer, subscriptionId: sub.id, amountUsd: FREE_PEN_FEE_USD, description: `Juno pen: the free-pen plan ended before its ${FREE_PEN_MIN_MONTHS}-month minimum` })
       penCharged = true
       console.log(`pen minimum: charged the pen for ${sub.id} (${r.invoice}, ${r.status})`)
-      if (r.status !== 'paid') await notifyNote('Free-pen minimum: pen charge not paid', `The $${PEN_USD} pen charge for ${to ?? customer} is ${r.status} (invoice ${r.invoice}). Stripe will retry the card.`).catch(() => {})
+      if (r.status !== 'paid') await notifyNote('Free-pen minimum: pen charge not paid', `The $${FREE_PEN_FEE_USD} pen charge for ${to ?? customer} is ${r.status} (invoice ${r.invoice}). Stripe will retry the card.`).catch(() => {})
     } catch (e) {
       console.warn(`pen minimum: charge failed for ${sub.id}: ${(e as Error).message}`)
       await notifyNote('Free-pen minimum: pen charge failed', `Could not charge the pen for ${to ?? customer} (${sub.id}): ${(e as Error).message}`).catch(() => {})
@@ -300,6 +310,8 @@ const MAIL = {
   en: {
     trialSubject: 'Your Juno Pen trial ends in three days',
     trialBody: (when: string, charge: string) => `<p>Your free trial ends on ${when}, and the card on file will be charged ${charge}.</p>`,
+    givenSubject: 'Your first two months of Juno Pen end in three days',
+    givenBody: (when: string, charge: string) => `<p>The two months your ${fmtUsd(PRICES.givenPen.today)} paid for end on ${when}. From then Juno Pen is ${fmtUsd(PRICES.givenPen.then)} a month: the card on file will be charged ${charge}, and then every month until you cancel.</p>`,
     trialCancel: (url: string) => `<p>If Juno Pen hasn&rsquo;t earned that, <a href="${url}" style="color:#0B6B44">cancel here</a> before then and you won&rsquo;t be charged. No email, no call, nothing to explain.</p>`,
     inThreeDays: 'in three days',
     firstMonth: (p: string) => `${p} for the first month`,
@@ -314,8 +326,8 @@ const MAIL = {
     welcomeOwn: '<p>Upload anything to start: a voice memo off your phone works, and it&rsquo;s the fastest way to see what the write-up looks like.</p>',
     welcomePrepaid: (len: string) => `<p>Your ${len} started, and your recorder goes in the post shortly. In the meantime you can upload anything you already have; a voice memo works.</p>`,
     year: 'year', half: 'six months',
-    welcomeMonthlyPen: '<p>Your recorder goes in the post shortly, and your 21 free days have started. Upload anything you already have while it&rsquo;s on its way; a voice memo works.</p>',
-    welcomeGivenPen: '<p>You already have your Juno pen, and your 60 free days have started. Nothing is charged until the trial ends, and you can cancel anytime in Settings. Plug the pen into your computer and click Connect pen, or upload any recording you already have.</p>',
+    welcomeMonthlyPen: '<p>Your pen goes in the post shortly, to the address you gave at checkout. Upload anything you already have while it&rsquo;s on its way; a voice memo works.</p>',
+    welcomeGivenPen: `<p>You already have your Juno pen, and your first two months have started: that&rsquo;s what the ${fmtUsd(PRICES.givenPen.today)} paid for. After that it&rsquo;s ${fmtUsd(PRICES.givenPen.then)} a month, and you can cancel anytime in Settings. Plug the pen into your computer and click Connect pen, or upload any recording you already have.</p>`,
     welcomeFreePen: '<p>Your free Juno pen goes in the post shortly, and your 30 free days have started. Nothing is charged until the trial ends, and you can cancel anytime in Settings. Upload anything you already have while the pen is on its way; a voice memo works.</p>',
     invite: (url: string) => `<p>Know someone who’d use it? <a href="${url}" style="color:#0B6B44">Your invite link</a> gives them their first month free, and you a free month when they pay.</p>`,
     reply: 'Questions? Just reply to this email.',
@@ -323,6 +335,8 @@ const MAIL = {
   es: {
     trialSubject: 'Tu prueba de Juno Pen termina en tres días',
     trialBody: (when: string, charge: string) => `<p>Tu prueba gratis termina el ${when}, y se cobrará ${charge} a la tarjeta registrada.</p>`,
+    givenSubject: 'Tus primeros dos meses de Juno Pen terminan en tres días',
+    givenBody: (when: string, charge: string) => `<p>Los dos meses que pagaste con US${fmtUsd(PRICES.givenPen.today)} terminan el ${when}. Desde entonces Juno Pen cuesta US${fmtUsd(PRICES.givenPen.then)} al mes: se cobrará ${charge} a la tarjeta registrada, y luego cada mes hasta que canceles.</p>`,
     trialCancel: (url: string) => `<p>Si Juno Pen no te sirvió, <a href="${url}" style="color:#0B6B44">cancela aquí</a> antes de esa fecha y no se te cobrará. Sin correos, sin llamadas, sin explicaciones.</p>`,
     inThreeDays: 'en tres días',
     firstMonth: (p: string) => `${p} por el primer mes`,
@@ -337,8 +351,8 @@ const MAIL = {
     welcomeOwn: '<p>Para empezar, sube cualquier audio o mándalo por WhatsApp: una nota de voz del celular sirve, y es la forma más rápida de ver cómo queda el resumen.</p>',
     welcomePrepaid: (len: string) => `<p>Empezaron tus ${len}, y te enviaremos el lápiz pronto. Mientras tanto puedes subir cualquier audio que ya tengas.</p>`,
     year: '12 meses', half: 'seis meses',
-    welcomeMonthlyPen: '<p>Te enviaremos el lápiz pronto, y tus 21 días gratis ya empezaron. Mientras llega, sube cualquier audio que ya tengas.</p>',
-    welcomeGivenPen: '<p>Ya tienes tu lápiz Juno, y tus 60 días gratis ya empezaron. No se cobra nada hasta que termine la prueba, y puedes cancelar cuando quieras en Configuración. Conecta el lápiz al computador y haz clic en Conectar el lápiz, o sube cualquier grabación que ya tengas.</p>',
+    welcomeMonthlyPen: '<p>Te enviaremos el lápiz pronto, a la dirección que diste al pagar. Mientras llega, sube cualquier audio que ya tengas.</p>',
+    welcomeGivenPen: `<p>Ya tienes tu lápiz Juno, y tus primeros dos meses ya empezaron: eso es lo que pagaste con US${fmtUsd(PRICES.givenPen.today)}. Después son US${fmtUsd(PRICES.givenPen.then)} al mes, y puedes cancelar cuando quieras en Configuración. Conecta el lápiz al computador y haz clic en Conectar el lápiz, o sube cualquier grabación que ya tengas.</p>`,
     welcomeFreePen: '<p>Tu lápiz Juno gratis sale por correo muy pronto, y tus 30 días gratis ya empezaron. No se cobra nada hasta que termine la prueba, y puedes cancelar cuando quieras en Configuración. Mientras llega, sube cualquier audio que ya tengas; una nota de voz sirve.</p>',
     invite: (url: string) => `<p>¿Conoces a alguien a quien le sirva? <a href="${url}" style="color:#0B6B44">Tu enlace de invitación</a> le da su primer mes gratis, y a ti un mes gratis cuando pague.</p>`,
     reply: '¿Preguntas? Solo responde este correo.',
@@ -346,6 +360,8 @@ const MAIL = {
   pt: {
     trialSubject: 'Seu teste do Juno Pen termina em três dias',
     trialBody: (when: string, charge: string) => `<p>Seu teste grátis termina em ${when}, e o cartão cadastrado será cobrado em ${charge}.</p>`,
+    givenSubject: 'Seus primeiros dois meses de Juno Pen terminam em três dias',
+    givenBody: (when: string, charge: string) => `<p>Os dois meses que você pagou com US${fmtUsd(PRICES.givenPen.today)} terminam em ${when}. A partir daí o Juno Pen custa US${fmtUsd(PRICES.givenPen.then)} por mês: o cartão cadastrado será cobrado em ${charge}, e depois todo mês até você cancelar.</p>`,
     trialCancel: (url: string) => `<p>Se o Juno Pen não valeu a pena, <a href="${url}" style="color:#0B6B44">cancele aqui</a> antes dessa data e nada será cobrado. Sem e-mails, sem ligações, sem explicações.</p>`,
     inThreeDays: 'em três dias',
     firstMonth: (p: string) => `${p} pelo primeiro mês`,
@@ -360,8 +376,8 @@ const MAIL = {
     welcomeOwn: '<p>Para começar, envie qualquer áudio pelo site ou pelo WhatsApp: uma mensagem de voz do celular serve, e é o jeito mais rápido de ver como fica o resumo.</p>',
     welcomePrepaid: (len: string) => `<p>Seus ${len} começaram, e enviaremos a caneta em breve. Enquanto isso, você pode enviar qualquer áudio que já tenha.</p>`,
     year: '12 meses', half: 'seis meses',
-    welcomeMonthlyPen: '<p>Enviaremos a caneta em breve, e seus 21 dias grátis já começaram. Enquanto ela chega, envie qualquer áudio que já tenha.</p>',
-    welcomeGivenPen: '<p>Você já tem sua caneta Juno, e seus 60 dias grátis já começaram. Nada é cobrado até o fim do teste, e você pode cancelar quando quiser em Configurações. Conecte a caneta ao computador e clique em Conectar a caneta, ou envie qualquer gravação que já tiver.</p>',
+    welcomeMonthlyPen: '<p>Enviaremos a caneta em breve, para o endereço que você informou no pagamento. Enquanto ela chega, envie qualquer áudio que já tenha.</p>',
+    welcomeGivenPen: `<p>Você já tem sua caneta Juno, e seus primeiros dois meses já começaram: é isso que os US${fmtUsd(PRICES.givenPen.today)} pagaram. Depois são US${fmtUsd(PRICES.givenPen.then)} por mês, e você pode cancelar quando quiser em Configurações. Conecte a caneta ao computador e clique em Conectar a caneta, ou envie qualquer gravação que já tiver.</p>`,
     welcomeFreePen: '<p>Sua caneta Juno grátis sai pelo correio em breve, e seus 30 dias grátis já começaram. Nada é cobrado até o fim do teste, e você pode cancelar quando quiser em Configurações. Enquanto ela chega, envie qualquer áudio que já tiver; uma mensagem de voz serve.</p>',
     invite: (url: string) => `<p>Conhece alguém que usaria? <a href="${url}" style="color:#0B6B44">Seu link de convite</a> dá a essa pessoa o primeiro mês grátis, e a você um mês grátis quando ela pagar.</p>`,
     reply: 'Dúvidas? É só responder este e-mail.',
@@ -372,13 +388,26 @@ function mailLang(v: unknown): MailLang {
   return v === 'es' || v === 'pt' ? v : 'en'
 }
 
-function trialCharge(plan: string | null, offer: string | null, lang: MailLang, currency: string | null): string {
+type SubPrice = { unit_amount?: number | null; currency?: string | null; recurring?: { interval?: string; interval_count?: number } | null }
+
+function trialCharge(plan: string | null, offer: string | null, lang: MailLang, currency: string | null, subPrice: SubPrice | null = null): string {
   const M = MAIL[lang]
+  // The subscription's own price first: it is what the card will actually be charged, including
+  // for anyone still trialing on a price from before 15 Oct.
+  if (subPrice?.unit_amount && subPrice.currency) {
+    const cur = parseCurrency(subPrice.currency)
+    if (cur === subPrice.currency) {
+      const amount = money(cur === 'clp' ? subPrice.unit_amount : subPrice.unit_amount / 100, cur)
+      const r = subPrice.recurring
+      const months = r?.interval === 'year' ? 12 * (r.interval_count ?? 1) : r?.interval_count ?? 1
+      return months === 1 ? M.firstMonth(amount) : M.firstMonths(amount, months)
+    }
+  }
   const p = planPrice(parseOffer(offer), parsePlan(plan))
   if (!p) return M.forPlan
   const cur = parseCurrency(currency)
   const amount =
-    cur === 'usd' ? money(p.usd, 'usd') : money(p.months === 1 ? LOCAL_PRICES[cur].monthly : LOCAL_PRICES[cur].halfyear, cur)
+    cur === 'usd' ? money(p.usd, 'usd') : money(p.months === 1 ? LOCAL_PRICES[cur].monthly : p.months === 12 ? LOCAL_PRICES[cur].yearly : LOCAL_PRICES[cur].halfyear, cur)
   return p.months === 1 ? M.firstMonth(amount) : M.firstMonths(amount, p.months)
 }
 
@@ -399,16 +428,17 @@ function billingUrl(): string {
   return portalLoginUrl() ?? `${base}/api/pen/billing`
 }
 
-async function trialEnding(email: string, endsAt: string | null, plan: string | null, offer: string | null = null, langRaw: unknown = null, currency: string | null = null) {
+async function trialEnding(email: string, endsAt: string | null, plan: string | null, offer: string | null = null, langRaw: unknown = null, currency: string | null = null, subPrice: SubPrice | null = null) {
   const lang = mailLang(langRaw)
   const M = MAIL[lang]
   const when = endsAt ? new Date(endsAt).toLocaleDateString(LOCALE[lang], { day: 'numeric', month: 'long' }) : M.inThreeDays
   await sendEmailResult({
     to: email,
-    subject: M.trialSubject,
+    subject: offer === 'given-pen' ? M.givenSubject : M.trialSubject,
     // The amount comes from the plan and currency they are on; a wrong amount here would be
     // a surprise charge.
-    html: shell(M.trialBody(when, trialCharge(plan, offer, lang, currency)) + M.trialCancel(billingUrl()) + `<p style="color:#514E45">${M.reply}</p>`),
+    // The given pen paid $5 for its two months, so it isn't a "free trial" to them.
+    html: shell((offer === 'given-pen' ? M.givenBody(when, trialCharge(plan, offer, lang, currency, subPrice)) : M.trialBody(when, trialCharge(plan, offer, lang, currency, subPrice))) + M.trialCancel(billingUrl()) + `<p style="color:#514E45">${M.reply}</p>`),
   })
 }
 
@@ -443,7 +473,7 @@ async function welcome(email: string, offer: string | null, plan: string | null,
             ? M.welcomeFreePen
             : plan === 'annual' || plan === 'halfyear'
             ? M.welcomePrepaid(plan === 'annual' ? M.year : M.half)
-            // The trial counts from sign-up, not delivery, so the email must not say otherwise.
+            // Monthly with the pen bought (since 15 Oct: charged today, no trial).
             : M.welcomeMonthlyPen) +
         M.invite(`${base}/settings/invite`) +
         `<p style="color:#514E45">${M.reply}</p>`,

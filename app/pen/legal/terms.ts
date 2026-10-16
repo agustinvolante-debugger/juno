@@ -1,7 +1,7 @@
 // Juno Pen terms of service, EN / ES / PT.
 //
 // Plans, trials and the fair-use line follow lib/pen/plan.ts and lib/pen/checkout.ts as of
-// 2 Oct 2026, and cancelling / read-only follows lib/pen/access.ts and lib/pen/cancel.ts. Amounts are deliberately not repeated here (they are shown at checkout), so a
+// 15 Oct 2026, and cancelling / read-only follows lib/pen/access.ts and lib/pen/cancel.ts. Amounts are deliberately not repeated here (they are shown at checkout), so a
 // price change doesn't make the terms wrong. If trial lengths or the 100-hour line change,
 // change them here too. The 12 months a read-only account is kept is KEEP_DAYS in access.ts.
 
@@ -45,10 +45,10 @@ export const TERMS: Record<Lang, LegalDoc> = {
         body: [
           {
             list: [
-              'Plans are monthly, every 6 months or yearly, with the Juno pen or with your own recorder. The price, the currency and what is included are shown before you pay.',
-              'Monthly plans start with a free trial: 7 days with your own recorder, 21 days with the pen, 30 days when the pen is offered free, 60 days when we hand you the pen in person. We take a card at signup and charge it when the trial ends, unless you cancel first. If there is no valid card when the trial ends, the plan is cancelled.',
+              'Plans are monthly or yearly. The Juno pen is optional and bought once with either plan; when you buy it we ask for the address to post it to. 6-month plans bought before 15 October 2026 renew as before until we tell you otherwise. The price, the currency and what is included are shown before you pay.',
+              'Plans are charged when you sign up; there is no free trial. Two exceptions: when we hand you the pen in person, a one-time charge at signup (shown before you pay) covers your first 2 months, and when the pen is offered free, your first 30 days are free. In both cases we take a card at signup and charge the monthly plan when that period ends, unless you cancel first. If there is no valid card then, the plan is cancelled.',
               'When the pen is offered free, it comes with a 3-month minimum: the free month plus two paid months. If the plan ends before then, the pen is charged once, at the price shown at signup, when the plan ends. Either way the pen is yours to keep. Free pens from signups before 10 October 2026, and pens we hand you in person, are never charged.',
-              'On the monthly pen plan, the pen is a one-time charge at signup. On the 6-month and yearly plans, the pen is included and the plan is paid up front, with no trial.',
+              'The yearly plan is paid up front for the year. A pen you buy is a one-time charge at signup, on either plan.',
               'Plans renew automatically for the same length until you cancel. We will tell you before a price change applies to you.',
               'Where tax applies, it is shown at checkout.',
               'If a payment fails, your account becomes read-only (see Cancelling) until the card is updated. Your recordings stay.',
@@ -183,10 +183,10 @@ export const TERMS: Record<Lang, LegalDoc> = {
         body: [
           {
             list: [
-              'Los planes son mensuales, semestrales o anuales, con el lápiz Juno o con tu propia grabadora. El precio, la moneda y lo que incluye se muestran antes de pagar.',
-              'Los planes mensuales empiezan con una prueba gratis: 7 días con tu propia grabadora, 21 días con el lápiz, 30 días cuando el lápiz se ofrece gratis, 60 días cuando te entregamos el lápiz en persona. Pedimos una tarjeta al registrarte y la cobramos cuando termina la prueba, salvo que canceles antes. Si no hay una tarjeta válida al terminar la prueba, el plan se cancela.',
+              'Los planes son mensuales o anuales. El lápiz Juno es opcional y se compra una sola vez con cualquiera de los dos; si lo compras, te pedimos la dirección para enviarlo. Los planes semestrales contratados antes del 15 de octubre de 2026 se renuevan igual que antes hasta que te avisemos. El precio, la moneda y lo que incluye se muestran antes de pagar.',
+              'Los planes se cobran al registrarte; no hay prueba gratis. Dos excepciones: cuando te entregamos el lápiz en persona, un cobro único al registrarte (que ves antes de pagar) cubre tus primeros 2 meses, y cuando el lápiz se ofrece gratis, tus primeros 30 días son gratis. En ambos casos pedimos una tarjeta al registrarte y cobramos el plan mensual cuando termina ese período, salvo que canceles antes. Si entonces no hay una tarjeta válida, el plan se cancela.',
               'Cuando el lápiz se ofrece gratis, viene con un mínimo de 3 meses: el mes gratis más dos meses pagados. Si el plan termina antes, el lápiz se cobra una sola vez, al precio indicado al registrarte, cuando termina el plan. En cualquier caso el lápiz es tuyo. Los lápices gratis de registros anteriores al 10 de octubre de 2026, y los que te entregamos en persona, nunca se cobran.',
-              'En el plan mensual con lápiz, el lápiz se cobra una sola vez al registrarte. En los planes semestral y anual, el lápiz está incluido y el plan se paga por adelantado, sin prueba.',
+              'El plan anual se paga por adelantado por el año. Un lápiz que compras se cobra una sola vez al registrarte, con cualquiera de los dos planes.',
               'Los planes se renuevan automáticamente por el mismo período hasta que canceles. Te avisaremos antes de que un cambio de precio se aplique a ti.',
               'Cuando corresponde algún impuesto, se muestra al pagar.',
               'Si un pago falla, tu cuenta queda solo de lectura (ver Cancelar) hasta que actualices la tarjeta. Tus grabaciones se mantienen.',
@@ -321,10 +321,10 @@ export const TERMS: Record<Lang, LegalDoc> = {
         body: [
           {
             list: [
-              'Os planos são mensais, semestrais ou anuais, com a caneta Juno ou com o seu próprio gravador. O preço, a moeda e o que está incluído aparecem antes do pagamento.',
-              'Os planos mensais começam com um teste grátis: 7 dias com o seu próprio gravador, 21 dias com a caneta, 30 dias quando a caneta é oferecida grátis, 60 dias quando entregamos a caneta em mãos. Pedimos um cartão no cadastro e cobramos quando o teste termina, a menos que você cancele antes. Se não houver um cartão válido quando o teste terminar, o plano é cancelado.',
+              'Os planos são mensais ou anuais. A caneta Juno é opcional e comprada uma única vez com qualquer um dos dois; se você comprar, pedimos o endereço para enviá-la. Planos semestrais contratados antes de 15 de outubro de 2026 se renovam como antes até avisarmos. O preço, a moeda e o que está incluído aparecem antes do pagamento.',
+              'Os planos são cobrados no cadastro; não há teste grátis. Duas exceções: quando entregamos a caneta em mãos, uma cobrança única no cadastro (mostrada antes do pagamento) cobre seus primeiros 2 meses, e quando a caneta é oferecida grátis, seus primeiros 30 dias são grátis. Nos dois casos pedimos um cartão no cadastro e cobramos o plano mensal quando esse período termina, a menos que você cancele antes. Se não houver um cartão válido nesse momento, o plano é cancelado.',
               'Quando a caneta é oferecida grátis, ela vem com um mínimo de 3 meses: o mês grátis mais dois meses pagos. Se o plano terminar antes, a caneta é cobrada uma única vez, pelo preço mostrado no cadastro, quando o plano termina. De qualquer forma a caneta é sua. Canetas grátis de cadastros anteriores a 10 de outubro de 2026, e as que entregamos em mãos, nunca são cobradas.',
-              'No plano mensal com caneta, a caneta é cobrada uma única vez no cadastro. Nos planos semestral e anual, a caneta está incluída e o plano é pago adiantado, sem teste.',
+              'O plano anual é pago adiantado pelo ano. Uma caneta que você compra é cobrada uma única vez no cadastro, com qualquer um dos dois planos.',
               'Os planos se renovam automaticamente pelo mesmo período até você cancelar. Avisaremos antes que uma mudança de preço valha para você.',
               'Quando houver imposto, ele aparece no pagamento.',
               'Se um pagamento falhar, sua conta fica somente leitura (veja Cancelamento) até o cartão ser atualizado. Suas gravações continuam lá.',

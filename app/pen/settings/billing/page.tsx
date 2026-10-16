@@ -4,7 +4,7 @@ import { clockFor } from '@/lib/pen/access'
 import { canCancel } from '@/lib/pen/cancel'
 import { canPause } from '@/lib/pen/pause'
 import { getSubscription } from '@/lib/pen/stripe'
-import { penFeeDue, PEN_USD } from '@/lib/pen/plan'
+import { penFeeDue, FREE_PEN_FEE_USD } from '@/lib/pen/plan'
 import BillingPanel from './BillingPanel'
 
 export const dynamic = 'force-dynamic'
@@ -21,7 +21,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
   // accounts are asked.
   const endsAt = (trial ? account?.trial_ends_at : account?.current_period_end) ?? null
   const sub = account?.offer === 'free-pen' && account.stripe_subscription_id ? await getSubscription(account.stripe_subscription_id).catch(() => null) : null
-  const penFee = sub && penFeeDue(sub.metadata, endsAt) ? `US$${PEN_USD}` : null
+  const penFee = sub && penFeeDue(sub.metadata, endsAt) ? `US$${FREE_PEN_FEE_USD}` : null
   return (
     <BillingPanel
       pausedUntil={isPaused(account) ? account!.paused_until! : null}
