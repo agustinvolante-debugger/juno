@@ -692,7 +692,8 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
   /* ---- the sidebar brand is a Home button ---- */
   .pen-brand-home {
     width: 100%; text-align: left; background: none; border: 0; cursor: pointer; border-radius: 14px;
-    margin: -4px -6px 0; padding: 4px 6px 16px; color: inherit;
+    /* Sits lower than the card's edge, in line with the search bar and greeting beside it. */
+    margin: 8px -6px 4px; padding: 6px 6px 18px; color: inherit;
   }
   .pen-brand-home:hover .pen-brand-name { color: var(--accent-ink); }
   .pen-brand-home:focus-visible { outline: 2px solid var(--sk-blue-hi); outline-offset: 2px; }
