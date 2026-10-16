@@ -13,12 +13,15 @@ import { sendEmailResult } from '@/lib/news/email'
 import { LEGAL_FACTS } from '@/app/pen/legal/config'
 import type { Lang } from './currency'
 import { userLang } from './user-lang'
-import type { Announcement } from './announcements'
+import type { Announcement, AnnounceImage } from './announcements'
+import { getLinkByEmail } from './whatsapp/store'
+import { channelFor } from './proactive'
+import { botNumber } from './whatsapp/meta'
 
-const FOOT: Record<Lang, { why: string; unsub: string; open: string }> = {
-  en: { why: 'You’re getting this because you use Juno Pen.', unsub: 'Unsubscribe from product updates', open: 'Open Juno Pen' },
-  es: { why: 'Te llega porque usas Juno Pen.', unsub: 'Dejar de recibir novedades', open: 'Abrir Juno Pen' },
-  pt: { why: 'Você recebe este e-mail porque usa o Juno Pen.', unsub: 'Parar de receber novidades', open: 'Abrir o Juno Pen' },
+const FOOT: Record<Lang, { why: string; unsub: string; unsubShort: string; open: string }> = {
+  en: { why: 'You’re getting this because you use Juno Pen.', unsub: 'Unsubscribe from product updates', unsubShort: 'Unsubscribe', open: 'Open Juno Pen' },
+  es: { why: 'Te llega porque usas Juno Pen.', unsub: 'Dejar de recibir novedades', unsubShort: 'Darte de baja', open: 'Abrir Juno Pen' },
+  pt: { why: 'Você recebe este e-mail porque usa o Juno Pen.', unsub: 'Parar de receber novidades', unsubShort: 'Cancelar inscrição', open: 'Abrir o Juno Pen' },
 }
 
 function base(): string {
@@ -71,43 +74,98 @@ export async function firstNameOf(email: string): Promise<string | null> {
   return n.split(/\s+/)[0] || null
 }
 
-export function renderAnnouncement(a: Announcement, lang: Lang, unsubUrl: string, firstName?: string | null): { subject: string; html: string; text: string } {
+/** Which chat the person can be sent to: the one they last wrote from, or none linked. */
+export type LinkState = 'whatsapp' | 'imessage' | null
+
+/** Linked WhatsApp (pen_whatsapp_links.linked_at), and iMessage when that's where they last wrote. */
+export async function linkStateOf(email: string): Promise<LinkState> {
+  const link = await getLinkByEmail(email.toLowerCase()).catch(() => null)
+  if (!link?.linked_at) return null
+  const ch = await channelFor(email.toLowerCase()).catch(() => null)
+  return ch?.imessage ? 'imessage' : 'whatsapp'
+}
+
+/** Images: absolute from the public site, or ANNOUNCE_ASSET_BASE (e.g. localhost) for previews. */
+function assetBase(): string {
+  return (process.env.ANNOUNCE_ASSET_BASE || base()).replace(/\/$/, '')
+}
+
+function img(im: AnnounceImage, lang: Lang, style = ''): string {
+  const src = typeof im.src === 'string' ? im.src : im.src[lang]
+  const h = typeof im.height === 'number' ? im.height : im.height[lang]
+  return `<img src="${esc(assetBase() + src)}" width="${im.width}" height="${h}" alt="${esc(im.alt[lang])}" style="display:block;width:${im.width}px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;${style}">`
+}
+
+/** The one button: the person's chat when linked, else the page that links WhatsApp. */
+function ctaFor(a: Announcement, lang: Lang, link: LinkState): { label: string; url: string } {
+  const c = a.ctaByLink
+  if (!c) return { label: a.cta?.label[lang] ?? FOOT[lang].open, url: `${base()}${a.cta?.path ?? ''}` }
+  const sms = (process.env.SENDBLUE_NUMBER ?? '').replace(/\D/g, '')
+  const wa = botNumber()
+  if (link === 'imessage' && sms) return { label: c.imessage[lang], url: `sms:+${sms}` }
+  if (link && wa) return { label: c.whatsapp[lang], url: `https://wa.me/${wa}` }
+  return { label: c.unlinked[lang], url: `${base()}${c.unlinkedPath}` }
+}
+
+export function renderAnnouncement(
+  a: Announcement,
+  lang: Lang,
+  unsubUrl: string,
+  firstName?: string | null,
+  link: LinkState = null,
+): { subject: string; html: string; text: string } {
   const F = FOOT[lang]
   const hi = a.greet ? (firstName ? HI[lang](firstName) : HI_NONE[lang]) : null
+  const inline = a.greet === 'inline'
+  const intro = a.intro[lang] + (a.introUnlinked && !link ? ` ${a.introUnlinked[lang]}` : '')
   const signoff = a.signoff?.[lang] ?? null
-  const ctaLabel = a.cta?.label[lang] ?? F.open
-  const ctaUrl = `${base()}${a.cta?.path ?? ''}`
+  const cta = ctaFor(a, lang, link)
+  const headline = a.headline?.[lang] ?? a.subject[lang]
+  const P = 'font-size:16px;line-height:1.6;color:#16150F'
   const items = a.items
     .map(
       (it) =>
-        `<tr><td style="padding:0 0 18px">` +
-        `<div style="font-size:16px;font-weight:600;color:#16150F">${esc(it.title[lang])}</div>` +
-        `<div style="font-size:15px;line-height:1.55;color:#514E45;margin-top:4px">${esc(it.body[lang])}</div>` +
+        `<tr><td style="padding:0 0 26px">` +
+        `<div style="font-size:17px;line-height:1.35;font-weight:700;color:#16150F">${esc(it.title[lang])}</div>` +
+        `<div style="font-size:16px;line-height:1.6;color:#3F3C34;margin-top:6px">${esc(it.body[lang])}</div>` +
+        (it.image ? `<div style="margin-top:14px">${img(it.image, lang)}</div>` : '') +
         `</td></tr>`,
     )
     .join('')
+  const button =
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 8px"><tr>` +
+    `<td bgcolor="#0B6B44" style="border-radius:10px;background:#0B6B44">` +
+    `<a href="${esc(cta.url)}" style="display:inline-block;padding:13px 22px;font-size:16px;font-weight:700;color:#FFFFFF;text-decoration:none;border-radius:10px">${esc(cta.label)}</a>` +
+    `</td></tr></table>`
+  const foot = a.footer
+    ? `${esc(a.footer[lang])} · <a href="${esc(unsubUrl)}" style="color:#6F6B61">${esc(F.unsubShort)}</a> · Juno Pen, ${esc(LEGAL_FACTS.ADDRESS)}`
+    : `${esc(F.why)} <a href="${esc(unsubUrl)}" style="color:#6F6B61">${esc(F.unsub)}</a><br>Juno Pen · ${esc(LEGAL_FACTS.ADDRESS)}`
   const html =
-    `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>` +
-    `<body style="margin:0;background:#F2EFE5;font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#16150F">` +
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:28px 16px">` +
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#FFFFFF;border:1px solid #DCD5C4;border-radius:16px">` +
-    `<tr><td style="padding:28px 28px 8px">` +
-    `<div style="font-family:Georgia,serif;font-size:26px;line-height:1.2;color:#16150F">${esc(a.subject[lang])}</div>` +
-    (hi ? `<p style="font-size:15px;line-height:1.6;color:#16150F;margin:14px 0 0">${esc(hi)}</p>` : '') +
-    `<p style="font-size:15px;line-height:1.6;color:#514E45;margin:14px 0 22px">${esc(a.intro[lang])}</p>` +
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${items}</table>` +
-    (signoff ? signoff.split('\n').map((l) => `<p style="font-size:15px;line-height:1.6;color:#16150F;margin:0 0 10px">${esc(l)}</p>`).join('') + '<div style="height:12px"></div>' : '') +
-    `<p style="margin:6px 0 26px"><a href="${esc(ctaUrl)}" style="display:inline-block;background:#0B6B44;color:#FFFFFF;text-decoration:none;font-weight:600;font-size:15px;padding:11px 18px;border-radius:10px">${esc(ctaLabel)}</a></p>` +
-    `</td></tr></table>` +
-    `<p style="max-width:560px;font-size:12px;line-height:1.6;color:#8E8A80;margin:16px auto 0">${esc(F.why)} <a href="${esc(unsubUrl)}" style="color:#8E8A80">${esc(F.unsub)}</a><br>Juno Pen · ${esc(LEGAL_FACTS.ADDRESS)}</p>` +
+    `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
+    `<meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><title>${esc(a.subject[lang])}</title></head>` +
+    `<body style="margin:0;padding:0;background:#F2EFE5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#16150F">` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#F2EFE5"><tr><td align="center" style="padding:28px 12px">` +
+    `<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" bgcolor="#FFFFFF" style="width:100%;max-width:600px;background:#FFFFFF;border:1px solid #DCD5C4;border-radius:16px">` +
+    `<tr><td style="padding:28px 32px 8px">` +
+    (a.brand ? `<div style="margin:0 0 22px">${img(a.brand, lang)}</div>` : '') +
+    `<h1 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:28px;line-height:1.2;font-weight:400;color:#16150F">${esc(headline)}</h1>` +
+    (hi && !inline ? `<p style="${P};margin:14px 0 0">${esc(hi)}</p>` : '') +
+    `<p style="${P};margin:14px 0 26px">${esc(hi && inline ? `${hi} ${intro}` : intro)}</p>` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${items}</table>` +
+    (signoff ? signoff.split('\n').map((l) => `<p style="${P};margin:0 0 10px">${esc(l)}</p>`).join('') + '<div style="height:12px"></div>' : '') +
+    button +
+    `<div style="height:22px"></div></td></tr></table>` +
+    `<p style="max-width:600px;font-size:12px;line-height:1.6;color:#6F6B61;margin:16px auto 0;padding:0 8px">${foot}</p>` +
     `</td></tr></table></body></html>`
   const text = [
-    ...(hi ? [hi] : []),
-    a.intro[lang],
+    headline,
+    hi && inline ? `${hi} ${intro}` : [...(hi ? [hi] : []), intro].join('\n\n'),
     ...a.items.map((it) => `• ${it.title[lang]}\n  ${it.body[lang]}`),
     ...(signoff ? [signoff] : []),
-    `${ctaLabel}: ${ctaUrl}`,
-    `—\n${F.why}\n${F.unsub}: ${unsubUrl}\nJuno Pen · ${LEGAL_FACTS.ADDRESS}`,
+    `${cta.label.replace(/\s*→$/, '')}: ${cta.url}`,
+    a.footer
+      ? `—\n${a.footer[lang]}\n${F.unsubShort}: ${unsubUrl}\nJuno Pen, ${LEGAL_FACTS.ADDRESS}`
+      : `—\n${F.why}\n${F.unsub}: ${unsubUrl}\nJuno Pen · ${LEGAL_FACTS.ADDRESS}`,
   ].join('\n\n')
   return { subject: a.subject[lang], html, text }
 }
@@ -116,7 +174,9 @@ async function sendOne(a: Announcement, email: string, name?: string | null): Pr
   const lang = await userLang(email)
   const token = await unsubToken(email)
   const unsubUrl = `${base()}/api/pen/unsubscribe?t=${token}`
-  const m = renderAnnouncement(a, lang, unsubUrl, a.greet ? (name ?? (await firstNameOf(email))) : null)
+  // Only the per-person button needs the link state.
+  const link = a.ctaByLink || a.introUnlinked ? await linkStateOf(email) : null
+  const m = renderAnnouncement(a, lang, unsubUrl, a.greet ? (name ?? (await firstNameOf(email))) : null, link)
   return sendEmailResult({
     to: email,
     ...(a.from ? { from: a.from } : {}),
