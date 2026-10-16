@@ -9,6 +9,8 @@ import Icon, { type IconName } from './Icon'
 import HowToPlayer from './how-to/HowToPlayer'
 import type { HowToKitKey } from './film/HowToScene'
 import { PRICES, fmtUsd } from '@/lib/pen/prices'
+import { money } from '@/lib/pen/currency'
+import { BrandMark, type MarkKey } from './brand-marks'
 import { COPY, type Copy, type Market } from './landing-copy'
 import { AUD_PARAM, KITS, PLUS, PRO, type Kit, type ProLine } from './landing-audiences'
 import { INVITED, SIGN_IN, ownPlans, penPlans, signup, type PlanCard } from './Landing'
@@ -33,9 +35,9 @@ function jj(text: React.ReactNode): React.ReactNode {
 // - English (US): the pen IS sold, as a one-time add-on to either plan (no trial since 15 Oct).
 //   Pricing has both tabs (software + pen / software only), and the English-only pieces stay: the
 //   Notion badge and section, the how-to video, and the "No pen?" line into the own-recorder tab.
-// - Spanish and Portuguese: the pen is NOT sold in Latin America yet. It is shown as the product
-//   and its future, every pen section carries "coming soon" and the waitlist link, and every
-//   primary button starts the software-only monthly plan.
+// - Spanish (Chile, CLP) and Portuguese (Brazil, BRL): since 15 Oct the pen is sold there too, the
+//   same way: an optional one-time add-on, shipped to the address given at checkout, priced in
+//   the local currency (PRICES.local). The Notion section and the how-to video stay English-only.
 //
 // Motion: transform and opacity only. Nothing starts hidden on the server: content below the
 // fold is armed after mount and rises in when it scrolls into view, so a slow connection or a
@@ -70,27 +72,61 @@ const EXTRA = {
   },
 } as const
 
+/** The English-only hero badge (Notion shipped Oct 13); it now points at the Connectors section. */
 const NOTION_EN = {
   badgeTag: 'New',
   badge: 'Juno now writes your meetings into Notion',
-  kicker: 'New · Works with Notion',
-  h2: 'Every meeting, straight into your Notion.',
-  sub: 'Connect Notion once. Each recording’s notes land in your own “Juno Pen notes” table the moment they’re ready. Nothing to copy, nothing to paste.',
-  points: [
-    'Summary, to-dos as checkboxes and who was there, on every page',
-    'Already record with Notion AI Meeting Notes? Import them, and Juno writes the to-dos and the follow-up email',
-    'Included in every plan',
-  ],
-  crumb: 'Meetings / Juno Pen notes',
-  table: 'Juno Pen notes',
-  cols: ['Name', 'Date', 'People', 'To-dos'],
-  today: 'Today',
-  yesterday: 'Yesterday',
-  weekly: ['Weekly check-in', 'Mon', 'Team'],
-  summary: 'Summary',
-  todos: 'To-dos',
-  open: 'Open the full note in Juno →',
 } as const
+
+/**
+ * The Connectors section (15 Oct): four groups that tell the whole story of where a meeting goes
+ * after the pen hears it. Every claim is something the product does today. A mark is a Simple
+ * Icons brand mark (brand-marks.tsx), a plain name badge where no usable logo exists, or our own
+ * icon for "any audio".
+ */
+type ConnMark = { mark: MarkKey; label: string } | { badge: string } | { icon: IconName; label: string }
+type ConnGroup = { key: 'cal' | 'docs' | 'tasks' | 'ai'; title: string; line: string; marks: ConnMark[]; said: string; did: string; fine: string }
+const CONN_MARKS: Record<ConnGroup['key'], ConnMark[]> = {
+  cal: [{ mark: 'googlecalendar', label: 'Google Calendar' }, { mark: 'apple', label: 'Apple Calendar' }, { badge: 'Outlook' }],
+  docs: [{ mark: 'googledocs', label: 'Google Docs' }, { mark: 'googlesheets', label: 'Google Sheets' }, { mark: 'notion', label: 'Notion' }],
+  tasks: [{ mark: 'whatsapp', label: 'WhatsApp' }, { mark: 'googlesheets', label: 'Google Sheets' }, { mark: 'gmail', label: 'Gmail' }],
+  ai: [{ mark: 'whatsapp', label: 'WhatsApp' }, { mark: 'imessage', label: 'iMessage' }, { badge: 'Granola' }, { badge: 'Plaud' }, { badge: 'Pocket' }, { icon: 'wave', label: 'Audio' }],
+}
+const CONNECT = {
+  en: {
+    nav: 'Connectors',
+    h2: 'Works with the tools you already use.',
+    sub: 'The pen hears the meeting. Juno puts what was said where it belongs.',
+    groups: [
+      { key: 'cal', title: 'Calendar', line: 'Dates said out loud land on your calendar.', said: '“Tuesday at 2 works, Tom.”', did: 'On your calendar, Tom invited.', fine: 'Google Calendar: adds, moves and deletes events, with Meet links and invites. Apple Calendar and Outlook: one tap to add.' },
+      { key: 'docs', title: 'Documents', line: 'The documents you would have written anyway.', said: 'The pricing call', did: 'A Doc and a price Sheet in your Drive.', fine: 'Google Docs and Sheets in your own Drive. Notion pages with the summary, to-dos as checkboxes and who was there.' },
+      { key: 'tasks', title: 'Tasks', line: 'Every promise made in the room, kept track of.', said: '“I’ll send Chris the deck by Friday.”', did: 'Reminder Thursday, 9 AM.', fine: 'To-dos with due dates and who is waiting. Reminders on WhatsApp, “Juno is waiting on you”, export to Sheets. Follow-up emails drafted for you.' },
+      { key: 'ai', title: 'An assistant that was in the room', line: 'Ask anything about any meeting on WhatsApp or iMessage.', said: '“What did the CTO say about pricing?”', did: 'The answer, and the moment she said it.', fine: 'It speaks up first and does tasks by chat. Imports add to its memory: Granola, Plaud, Pocket, Notion AI meeting notes, any audio or transcript.' },
+    ],
+  },
+  es: {
+    nav: 'Conexiones',
+    h2: 'Funciona con lo que ya usas.',
+    sub: 'El lápiz escucha la reunión. Juno deja lo que se dijo donde corresponde.',
+    groups: [
+      { key: 'cal', title: 'Calendario', line: 'Las fechas que se dicen en voz alta llegan a tu calendario.', said: '“El martes a las 2 me sirve, Tomás.”', did: 'En tu calendario, con Tomás invitado.', fine: 'Google Calendar: crea, mueve y borra eventos, con enlace de Meet e invitaciones. Apple Calendar y Outlook: agregar con un toque.' },
+      { key: 'docs', title: 'Documentos', line: 'Los documentos que igual ibas a escribir.', said: 'La llamada de precios', did: 'Un Doc y una planilla de precios en tu Drive.', fine: 'Google Docs y Sheets en tu propio Drive. Páginas de Notion con el resumen, las tareas como casillas y quién estuvo.' },
+      { key: 'tasks', title: 'Tareas', line: 'Cada compromiso de la reunión, con seguimiento.', said: '“Le mando la presentación a Cristián el viernes.”', did: 'Recordatorio el jueves a las 9.', fine: 'Tareas con fecha y quién está esperando. Recordatorios por WhatsApp, “Juno te está esperando”, exportar a Sheets. Correos de seguimiento redactados.' },
+      { key: 'ai', title: 'Un asistente que estuvo en la reunión', line: 'Pregunta lo que quieras de cualquier reunión por WhatsApp o iMessage.', said: '“¿Qué dijo la CTO sobre los precios?”', did: 'La respuesta, y el momento en que lo dijo.', fine: 'Habla primero y hace tareas por chat. Lo que importas suma a su memoria: Granola, Plaud, Pocket, notas de Notion AI, cualquier audio o transcripción.' },
+    ],
+  },
+  pt: {
+    nav: 'Conexões',
+    h2: 'Funciona com o que você já usa.',
+    sub: 'A caneta ouve a reunião. O Juno coloca o que foi dito no lugar certo.',
+    groups: [
+      { key: 'cal', title: 'Agenda', line: 'Datas ditas em voz alta vão para a sua agenda.', said: '“Terça às 14h funciona, Tomás.”', did: 'Na sua agenda, com o Tomás convidado.', fine: 'Google Calendar: cria, move e apaga eventos, com link do Meet e convites. Apple Calendar e Outlook: adicionar com um toque.' },
+      { key: 'docs', title: 'Documentos', line: 'Os documentos que você escreveria de qualquer jeito.', said: 'A call de preços', did: 'Um Doc e uma planilha de preços no seu Drive.', fine: 'Google Docs e Sheets no seu próprio Drive. Páginas do Notion com o resumo, as tarefas como caixas de seleção e quem estava lá.' },
+      { key: 'tasks', title: 'Tarefas', line: 'Cada compromisso da reunião, acompanhado.', said: '“Mando a apresentação para o Cristiano até sexta.”', did: 'Lembrete na quinta, às 9h.', fine: 'Tarefas com prazo e quem está esperando. Lembretes no WhatsApp, “O Juno está esperando você”, exportar para o Sheets. E-mails de acompanhamento redigidos.' },
+      { key: 'ai', title: 'Um assistente que estava na reunião', line: 'Pergunte qualquer coisa sobre qualquer reunião no WhatsApp ou no iMessage.', said: '“O que a CTO disse sobre preços?”', did: 'A resposta, e o momento em que ela disse.', fine: 'Ele fala primeiro e faz tarefas pelo chat. As importações alimentam a memória dele: Granola, Plaud, Pocket, notas do Notion AI, qualquer áudio ou transcrição.' },
+    ],
+  },
+} as const satisfies Record<'en' | 'es' | 'pt', { nav: string; h2: string; sub: string; groups: readonly Omit<ConnGroup, 'marks'>[] }>
 
 const LANGS: { code: 'en' | 'es' | 'pt'; label: string }[] = [
   { code: 'en', label: 'English' },
@@ -183,8 +219,8 @@ function CountUp({ to }: { to: number }) {
 /* ------------------------------------------------------------------ the market */
 
 /**
- * What the page needs to know about where the visitor is. `sold` is whether the pen can be
- * bought there (the US only, for now); everything market-dependent below reads this.
+ * What the page needs to know about where the visitor is. `en` gates the English-only pieces
+ * (Notion, the how-to film); the pen is sold in every market (US, Chile, Brazil since 15 Oct).
  */
 type Lpa = {
   market: Market
@@ -192,51 +228,43 @@ type Lpa = {
   p: (typeof PLUS)['en']
   kits: Kit[]
   x: (typeof EXTRA)['en' | 'es' | 'pt']
-  sold: boolean
-  /** The one "get it" label and where it goes: signup's own choice in the US, software-only monthly elsewhere. */
+  en: boolean
+  /** The pen's one-time price in the visitor's currency: "$65", "$59.990", "R$ 360". */
+  pen: string
+  /** The one "get it" label and where it goes: signup's own choice, in every market. */
   ctaLabel: string
   cta: (from: string) => string
-  waitlist: (from: string) => string
+}
+
+/** The pen's price where the visitor is: PRICES.pen in dollars, or PRICES.local in CLP/BRL. */
+export function penPrice(market: Market): string {
+  return market.currency === 'usd' ? fmtUsd(PRICES.pen) : money(PRICES.local[market.currency].pen, market.currency)
 }
 
 function lpaFor(market: Market): Lpa {
   const lang = market.lang
   const t = COPY[lang]
-  const sold = lang === 'en'
   return {
     market,
     t,
     p: PLUS[lang],
     kits: KITS[lang],
     x: EXTRA[lang],
-    sold,
+    en: lang === 'en',
+    pen: penPrice(market),
     ctaLabel: t.cta.start,
-    cta: sold
-      ? (from) => signup(`from=${from}`, market)
-      : (from) => signup(`plan=monthly&offer=own-recorder&from=${from}`, market),
-    waitlist: (from) => signup(`offer=posted-pen&waitlist=pen&from=${from}`, market),
+    cta: (from) => signup(`from=${from}`, market),
   }
 }
 
 const LpaCtx = createContext<Lpa>(lpaFor({ lang: 'pt', currency: 'brl' }))
 const useLpa = () => useContext(LpaCtx)
 
-/** The "coming soon" line every pen section carries where the pen isn't sold. */
-function SoonLine({ dark = false }: { dark?: boolean }) {
-  const { t } = useLpa()
-  return (
-    <p className={`lpa-soonline${dark ? ' lpa-soonline-dark' : ''}`}>
-      <span className="lpa-chip">{t.pen.soon}</span>
-      <span>{t.pen.soonBody}</span>
-    </p>
-  )
-}
-
 /* ------------------------------------------------------------------------- page */
 
 export default function LandingApple({ market, audience = null, invitedBy = null }: { market: Market; audience?: string | null; invitedBy?: string | null }) {
   const lpa = lpaFor(market)
-  const { t, p, kits, x, sold, ctaLabel, cta, waitlist } = lpa
+  const { t, p, kits, x, en, ctaLabel, cta } = lpa
   const lang = market.lang
   const [aud, setAudState] = useState(() => {
     const key = AUD_PARAM[(audience ?? '').toLowerCase()]
@@ -278,7 +306,7 @@ export default function LandingApple({ market, audience = null, invitedBy = null
           <nav className="lpa-nav-links" aria-label="Juno Pen">
             <a href="#pen" className="lpa-navlink lpa-hide-sm">{t.nav.pen}</a>
             <a href="#features" className="lpa-navlink lpa-hide-sm">{t.nav.features}</a>
-            {sold && <a href="#notion" className="lpa-navlink lpa-hide-md">Notion</a>}
+            <a href="#connectors" className="lpa-navlink lpa-hide-md">{CONNECT[lang].nav}</a>
             <a href="#pricing" className="lpa-navlink lpa-hide-sm">{t.nav.pricing}</a>
             <Link href={SIGN_IN} className="lpa-navlink">{t.nav.signIn}</Link>
             <Link href={cta('nav')} className="lpa-btn lpa-btn-sm">{ctaLabel}</Link>
@@ -287,9 +315,9 @@ export default function LandingApple({ market, audience = null, invitedBy = null
       </header>
 
       <main id="lpa-main">
-        <Hero ctaLabel={ctaLabel} ctaHref={cta('hero')} waitlistHref={waitlist('hero')} />
-        <PenOpens waitlistHref={waitlist('pen')} />
-        <Specs waitlistHref={waitlist('specs')} />
+        <Hero ctaLabel={ctaLabel} ctaHref={cta('hero')} />
+        <PenOpens />
+        <Specs />
         <SoundToNotes kitIndex={aud} setAud={setAud} />
 
         {/* ------------------------------------------------------ how it works */}
@@ -311,7 +339,7 @@ export default function LandingApple({ market, audience = null, invitedBy = null
           </div>
         </section>
 
-        {sold && <Film kit={kit} />}
+        {en && <Film kit={kit} />}
 
         <WhatsApp kitIndex={aud} ctaLabel={ctaLabel} ctaHref={cta('whatsapp')} />
         <Assistant kitKey={kit.key} />
@@ -360,7 +388,9 @@ export default function LandingApple({ market, audience = null, invitedBy = null
           </div>
         </section>
 
-        {sold && <NotionSec kit={kit} ctaLabel={ctaLabel} ctaHref={cta('notion')} />}
+        <Connectors />
+
+        <Pricing market={market} />
 
         {/* ----------------------------------------------------------- privacy */}
         <section className="lpa-tile lpa-tile-parch">
@@ -381,10 +411,8 @@ export default function LandingApple({ market, audience = null, invitedBy = null
           </div>
         </section>
 
-        <Pricing market={market} waitlistHref={waitlist('pricing')} />
-
         {/* --------------------------------------------------------------- faq */}
-        <section id="faq" className="lpa-tile lpa-tile-parch">
+        <section id="faq" className="lpa-tile lpa-tile-white">
           <div className="lpa-wrap lpa-narrow">
             <Reveal className="lpa-center"><h2 className="lpa-h2">{jj(p.faq.h2)}</h2></Reveal>
             <Reveal delay={0.08} className="lpa-faq">
@@ -411,11 +439,6 @@ export default function LandingApple({ market, audience = null, invitedBy = null
             <Reveal delay={0.15} className="lpa-close-pen">
               <div className="lpa-float"><PenArt id="close-pen" className="lpa-pen-svg" shadow={false} /></div>
             </Reveal>
-            {!sold && (
-              <Reveal delay={0.2} className="lpa-close-soon">
-                <SoonLine dark />
-              </Reveal>
-            )}
           </div>
         </section>
       </main>
@@ -431,6 +454,7 @@ export default function LandingApple({ market, audience = null, invitedBy = null
             <nav className="lpa-foot-links" aria-label="Juno Pen">
               <a href="#pen">{t.nav.pen}</a>
               <a href="#features">{t.nav.features}</a>
+              <a href="#connectors">{CONNECT[lang].nav}</a>
               <a href="#pricing">{t.nav.pricing}</a>
               <Link href={`/privacy${legal}`}>{t.footer.privacy}</Link>
               <Link href={`/terms${legal}`}>{t.footer.terms}</Link>
@@ -458,8 +482,8 @@ export default function LandingApple({ market, audience = null, invitedBy = null
 
 /* ------------------------------------------------------------------------- hero */
 
-function Hero({ ctaLabel, ctaHref, waitlistHref }: { ctaLabel: string; ctaHref: string; waitlistHref: string }) {
-  const { t, p, sold } = useLpa()
+function Hero({ ctaLabel, ctaHref }: { ctaLabel: string; ctaHref: string }) {
+  const { p, en } = useLpa()
   const ref = useRef<HTMLElement>(null)
   const reduce = useReducedMotion()
   // As the hero scrolls away the words lift and fade, and the pen drifts up and grows a touch.
@@ -471,8 +495,8 @@ function Hero({ ctaLabel, ctaHref, waitlistHref }: { ctaLabel: string; ctaHref: 
   return (
     <section ref={ref} className="lpa-tile lpa-tile-black lpa-hero" data-hero>
       <motion.div className="lpa-wrap lpa-center lpa-hero-copy" style={{ y: copyY, opacity: copyO }}>
-        {sold ? (
-          <a href="#notion" className="lpa-newbadge lpa-in">
+        {en ? (
+          <a href="#connectors" className="lpa-newbadge lpa-in">
             <span className="lpa-newbadge-tag">{NOTION_EN.badgeTag}</span>
             <span>{NOTION_EN.badge}</span>
             <Icon name="chevron" size={14} />
@@ -501,20 +525,13 @@ function Hero({ ctaLabel, ctaHref, waitlistHref }: { ctaLabel: string; ctaHref: 
       </motion.div>
 
       <div className="lpa-wrap lpa-center">
-        {sold ? (
-          <NoPenLine />
-        ) : (
-          <p className="lpa-hero-soon">
-            <span className="lpa-chip">{t.pen.soon}</span>
-            <Link href={waitlistHref} className="lpa-link-dark">{t.pricing.soonCta}<Icon name="chevron" size={14} /></Link>
-          </p>
-        )}
+        <NoPenLine />
       </div>
     </section>
   )
 }
 
-/** English only: "No pen?" links on to the own-recorder plans (and opens that tab). */
+/** "No pen?" links on to the own-recorder plans (and opens that tab). */
 function NoPenLine() {
   const { t } = useLpa()
   // The question part ("No pen?") is set in bold; the rest links on to the plans.
@@ -528,12 +545,12 @@ function NoPenLine() {
   )
 }
 
-/** Where the pen is sold: what it costs and the button, in place of the waitlist. */
+/** What the pen costs where the visitor is, and the button. */
 function PenBuy({ dark = false }: { dark?: boolean }) {
-  const { t, ctaLabel, cta } = useLpa()
+  const { t, pen, ctaLabel, cta } = useLpa()
   return (
     <>
-      <p className={`lpa-soonline${dark ? ' lpa-soonline-dark' : ''}`}>{t.pricing.penLine(fmtUsd(PRICES.pen))}</p>
+      <p className={`lpa-soonline${dark ? ' lpa-soonline-dark' : ''}`}>{t.pricing.penLine(pen)}</p>
       <Link href={cta(dark ? 'pen' : 'specs')} className={dark ? 'lpa-link-dark' : 'lpa-link'}>{ctaLabel}<Icon name="chevron" size={14} /></Link>
     </>
   )
@@ -541,8 +558,8 @@ function PenBuy({ dark = false }: { dark?: boolean }) {
 
 /* ---------------------------------------------------------- the pen opens (scroll) */
 
-function PenOpens({ waitlistHref }: { waitlistHref: string }) {
-  const { t, sold } = useLpa()
+function PenOpens() {
+  const { t } = useLpa()
   const ref = useRef<HTMLElement>(null)
   const scrollYProgress = useSectionProgress(ref, 'pin')
   // Phase 1 (0 to .4): the pen swings level and comes forward. Phase 2 (.45 to .65): it opens
@@ -566,7 +583,7 @@ function PenOpens({ waitlistHref }: { waitlistHref: string }) {
         <div className="lpa-wrap lpa-scene-in">
           <div className="lpa-scene-caps">
             <motion.div className="lpa-scene-cap lpa-scene-cap1" style={{ opacity: cap1, y: cap1y }}>
-              {sold ? <span className="lpa-eyebrow lpa-eyebrow-dark">{jj(t.nav.pen)}</span> : <span className="lpa-chip">{jj(t.pen.soon)}</span>}
+              <span className="lpa-eyebrow lpa-eyebrow-dark">{jj(t.nav.pen)}</span>
               <h2 className="lpa-h2 lpa-on-dark">{jj(t.pen.h2)}</h2>
               <p className="lpa-lead lpa-on-dark-soft">{t.pen.sub}</p>
             </motion.div>
@@ -574,7 +591,7 @@ function PenOpens({ waitlistHref }: { waitlistHref: string }) {
               <span className="lpa-eyebrow lpa-eyebrow-dark">USB-C</span>
               <h2 className="lpa-h2 lpa-on-dark">{jj(t.pen.open)}</h2>
               <p className="lpa-lead lpa-on-dark-soft">{t.pen.specs[1].v}</p>
-              {sold ? <PenBuy dark /> : <Link href={waitlistHref} className="lpa-link-dark">{t.pricing.soonCta}<Icon name="chevron" size={14} /></Link>}
+              <PenBuy dark />
             </motion.div>
           </div>
           <motion.div className="lpa-scene-stage" style={{ rotate, scale }}>
@@ -596,8 +613,8 @@ function PenOpens({ waitlistHref }: { waitlistHref: string }) {
 
 /* ------------------------------------------------------------------------ specs */
 
-function Specs({ waitlistHref }: { waitlistHref: string }) {
-  const { t, p, x, sold } = useLpa()
+function Specs() {
+  const { t, p, x } = useLpa()
   return (
     <section className="lpa-tile lpa-tile-parch">
       <div className="lpa-wrap">
@@ -630,14 +647,7 @@ function Specs({ waitlistHref }: { waitlistHref: string }) {
           <p>{t.pen.inBox}</p>
         </Reveal>
         <Reveal className="lpa-center lpa-specs-soon">
-          {sold ? (
-            <PenBuy />
-          ) : (
-            <>
-              <SoonLine />
-              <Link href={waitlistHref} className="lpa-link">{t.pricing.soonCta}<Icon name="chevron" size={14} /></Link>
-            </>
-          )}
+          <PenBuy />
         </Reveal>
       </div>
     </section>
@@ -674,8 +684,9 @@ function SoundToNotes({ kitIndex, setAud }: { kitIndex: number; setAud: (i: numb
     if (r && r.top > window.innerHeight) setArmed(true)
   }, [reduce])
   const show = !armed || inView
+  // Hidden start only once armed, so a remount on audience change replays the entrance.
   const item = (i: number) => ({
-    initial: false as const,
+    initial: armed ? { opacity: 0, y: 14 } : (false as const),
     animate: show ? { opacity: 1, y: 0 } : { opacity: 0, y: 14 },
     transition: show ? { duration: 0.7, delay: 0.5 + i * 0.35, ease: EASE } : { duration: 0 },
   })
@@ -697,7 +708,10 @@ function SoundToNotes({ kitIndex, setAud }: { kitIndex: number; setAud: (i: numb
           <p className="lpa-promise" aria-live="polite">{kit.promise}</p>
         </Reveal>
 
-        <div className="lpa-s2n" ref={ref} key={kit.key}>
+        {/* The in-view watcher sits on a wrapper that stays mounted: on the keyed scene it kept
+            watching the removed node after an audience change, and the new cards stayed hidden. */}
+        <div ref={ref}>
+        <div className="lpa-s2n" key={kit.key}>
           <div className="lpa-s2n-sound" data-live={inView && !reduce}>
             <span className="lpa-rec"><span className="lpa-rec-dot" />{L.recording}</span>
             <div className="lpa-wave" aria-hidden>
@@ -723,6 +737,7 @@ function SoundToNotes({ kitIndex, setAud }: { kitIndex: number; setAud: (i: numb
               <p>{kit.seq.missed}</p>
             </motion.div>
           </div>
+        </div>
         </div>
       </div>
     </section>
@@ -866,23 +881,21 @@ function ByChat() {
 
 /* ---------------------------------------------------------------------- pricing */
 
-function Pricing({ market, waitlistHref }: { market: Market; waitlistHref: string }) {
-  const { t, sold } = useLpa()
+function Pricing({ market }: { market: Market }) {
+  const { t } = useLpa()
   const P = t.pricing
-  // Where the pen is sold there are two groups, one at a time: software + pen (leads) and
-  // software only, two cards each (monthly, yearly). Elsewhere: the software plans and the
-  // coming-soon pen card.
-  const [group, setGroup] = useState<'pen' | 'own'>(sold ? 'pen' : 'own')
+  // Two groups, one at a time: software + pen (leads) and software only, two cards each
+  // (monthly, yearly). Every market, priced in its own currency.
+  const [group, setGroup] = useState<'pen' | 'own'>('pen')
   // "No pen?" in the hero links to #plans-own: open that tab (the browser scrolls to it).
   useEffect(() => {
-    if (!sold) return
     const open = () => {
       if (window.location.hash === '#plans-own') setGroup('own')
     }
     open()
     window.addEventListener('hashchange', open)
     return () => window.removeEventListener('hashchange', open)
-  }, [sold])
+  }, [])
   const plans = group === 'pen' ? penPlans(t, market) : ownPlans(t, market)
   const ribbons = plans.some((pl) => pl.ribbon)
   const grid = (
@@ -899,38 +912,31 @@ function Pricing({ market, waitlistHref }: { market: Market; waitlistHref: strin
           <span className="lpa-eyebrow">{jj(t.nav.pricing)}</span>
           <h2 className="lpa-h2">{jj(P.h2)}</h2>
           <p className="lpa-lead">{P.sub}</p>
-          {!sold && <p className="lpa-own-sub">{P.ownSub}</p>}
         </Reveal>
-        {sold ? (
-          <>
-            <div id="plans-own" className="lpa-center lpa-tabs-row">
-              <div className="lpa-tabs" role="tablist" aria-label={P.tabAria}>
-                {(['pen', 'own'] as const).map((g) => (
-                  <button
-                    key={g}
-                    type="button"
-                    role="tab"
-                    id={`lpa-plans-tab-${g}`}
-                    aria-controls="lpa-plans-panel"
-                    aria-selected={group === g}
-                    data-plans-tab={g}
-                    data-on={group === g}
-                    className="lpa-tab"
-                    onClick={() => setGroup(g)}
-                  >
-                    {g === 'pen' ? P.tabPen : P.tabOwn}
-                  </button>
-                ))}
-              </div>
-              {group === 'own' && <p className="lpa-own-sub">{P.ownSub}</p>}
-            </div>
-            <div id="lpa-plans-panel" role="tabpanel" aria-labelledby={`lpa-plans-tab-${group}`}>
-              {grid}
-            </div>
-          </>
-        ) : (
-          grid
-        )}
+        <div id="plans-own" className="lpa-center lpa-tabs-row">
+          <div className="lpa-tabs" role="tablist" aria-label={P.tabAria}>
+            {(['pen', 'own'] as const).map((g) => (
+              <button
+                key={g}
+                type="button"
+                role="tab"
+                id={`lpa-plans-tab-${g}`}
+                aria-controls="lpa-plans-panel"
+                aria-selected={group === g}
+                data-plans-tab={g}
+                data-on={group === g}
+                className="lpa-tab"
+                onClick={() => setGroup(g)}
+              >
+                {g === 'pen' ? P.tabPen : P.tabOwn}
+              </button>
+            ))}
+          </div>
+          {group === 'own' && <p className="lpa-own-sub">{P.ownSub}</p>}
+        </div>
+        <div id="lpa-plans-panel" role="tabpanel" aria-labelledby={`lpa-plans-tab-${group}`}>
+          {grid}
+        </div>
         <Reveal className="lpa-glass-slot lpa-included-slot">
           <GlassCard className="lpa-included">
             <h3 className="lpa-h5">{jj(P.includedTitle)}</h3>
@@ -939,19 +945,6 @@ function Pricing({ market, waitlistHref }: { market: Market; waitlistHref: strin
             </ul>
           </GlassCard>
         </Reveal>
-        {!sold && (
-          <Reveal className="lpa-glass-slot lpa-pensoon-slot">
-            <GlassCard className="lpa-pensoon">
-              <div className="lpa-pensoon-art" aria-hidden><PenArt id="soon-pen" className="lpa-pen-svg" /></div>
-              <div className="lpa-pensoon-copy">
-                <span className="lpa-chip lpa-chip-light">{t.pen.soon}</span>
-                <h3 className="lpa-h4">{jj(P.soonTitle)}</h3>
-                <p>{P.soonBody}</p>
-                <Link href={waitlistHref} className="lpa-link">{P.soonCta}<Icon name="chevron" size={14} /></Link>
-              </div>
-            </GlassCard>
-          </Reveal>
-        )}
       </div>
     </section>
   )
@@ -1049,63 +1042,47 @@ function Film({ kit }: { kit: Kit }) {
 /* ----------------------------------------------------------------------- notion */
 
 /**
- * English only: what the customer sees in their Notion, the "Juno Pen notes" table
- * (lib/pen/notion.ts makes it) and one of its pages, for the chosen audience. Drawn in the
- * page's own type: no Notion screenshot or logo.
+ * Connectors: where a meeting goes after the pen hears it, in four groups. Each tile has its
+ * marks, one benefit line, and a live example: what was said, then (rising in a beat later) what
+ * Juno did with it. That second beat is the section's one moment of motion.
  */
-function NotionSec({ kit, ctaLabel, ctaHref }: { kit: Kit; ctaLabel: string; ctaHref: string }) {
-  const N = NOTION_EN
-  const n = kit.note
-  const names = n.people.map(([name]) => name.split(' ')[0]).slice(0, 2).join(', ')
-  const rows: [string, string, string, number][] = [
-    [n.title, N.today, names, 3],
-    [kit.seq.title, N.yesterday, kit.hero.who.split(' ')[0], 1],
-    [N.weekly[0], N.weekly[1], N.weekly[2], 0],
-  ]
+function Connectors() {
+  const { market } = useLpa()
+  const C = CONNECT[market.lang]
   return (
-    <section id="notion" className="lpa-tile lpa-tile-black">
-      <div className="lpa-wrap lpa-nt">
-        <Reveal>
-          <span className="lpa-eyebrow lpa-eyebrow-dark">{jj(N.kicker)}</span>
-          <h2 className="lpa-h2 lpa-on-dark">{jj(N.h2)}</h2>
-          <p className="lpa-lead lpa-on-dark-soft">{N.sub}</p>
-          <ul className="lpa-checks lpa-checks-1 lpa-checks-dark">
-            {N.points.map((it) => <li key={it}><Icon name="check" size={16} />{it}</li>)}
-          </ul>
-          <div className="lpa-ctas">
-            <Link href={ctaHref} className="lpa-btn lpa-btn-lg">{ctaLabel}</Link>
-          </div>
+    <section id="connectors" className="lpa-tile lpa-tile-black">
+      <div className="lpa-wrap">
+        <Reveal className="lpa-center">
+          <h2 className="lpa-h2 lpa-on-dark">{jj(C.h2)}</h2>
+          <p className="lpa-lead lpa-on-dark-soft">{C.sub}</p>
         </Reveal>
-        <Reveal delay={0.12} className="lpa-nt-stage">
-          <div className="lpa-nt-win" aria-hidden>
-            <div className="lpa-nt-bar"><span className="lpa-nt-dots"><i /><i /><i /></span><span>{N.crumb}</span></div>
-            <div className="lpa-nt-body">
-              <p className="lpa-nt-title">{N.table}</p>
-              <div className="lpa-nt-table">
-                <div className="lpa-nt-row lpa-nt-head">{N.cols.map((c) => <span key={c}>{c}</span>)}</div>
-                {rows.map(([title, date, who, open], i) => (
-                  // Keyed by position: a meeting's note and its recording can share a title
-                  // (Students, Family), and a duplicate key here blanked the page on switch.
-                  <div key={i} className="lpa-nt-row" data-new={i === 0 ? 'true' : undefined}>
-                    <span className="lpa-nt-name">{title}</span><span>{date}</span><span>{who}</span><span className="lpa-nt-num">{open}</span>
-                  </div>
-                ))}
+        <ul className="lpa-conn">
+          {C.groups.map((g, i) => (
+            <Reveal key={g.key} as="li" delay={(i % 2) * 0.1} className="lpa-conn-tile">
+              <div className="lpa-conn-marks">
+                {CONN_MARKS[g.key].map((m) =>
+                  'badge' in m ? (
+                    <span key={m.badge} className="lpa-conn-mark lpa-conn-badge">{m.badge}</span>
+                  ) : 'mark' in m ? (
+                    <span key={m.mark} className="lpa-conn-mark" title={m.label}><BrandMark name={m.mark} /></span>
+                  ) : (
+                    <span key={m.icon} className="lpa-conn-mark lpa-conn-ic" title={m.label}><Icon name={m.icon} size={20} /></span>
+                  ),
+                )}
               </div>
-            </div>
-          </div>
-          <div className="lpa-nt-page" key={kit.key} aria-hidden>
-            <p className="lpa-nt-page-title">{n.title}</p>
-            <span className="lpa-label">{N.summary}</span>
-            <p className="lpa-nt-p">{n.summary}</p>
-            <span className="lpa-label">{N.todos}</span>
-            <ul className="lpa-todos">
-              {n.actions.map((a, i) => (
-                <li key={a} data-done={i === 0}><span className="lpa-tick"><Icon name="check" size={12} /></span><span>{a}</span></li>
-              ))}
-            </ul>
-            <p className="lpa-nt-link">{N.open}</p>
-          </div>
-        </Reveal>
+              <h3 className="lpa-h4 lpa-on-dark">{jj(g.title)}</h3>
+              <p className="lpa-conn-line">{g.line}</p>
+              <div className="lpa-conn-ex">
+                <p className="lpa-conn-said">{g.said}</p>
+                <Reveal delay={0.45 + (i % 2) * 0.1} className="lpa-conn-did">
+                  <span className="lpa-conn-tick" aria-hidden><Icon name="check" size={12} /></span>
+                  <span>{g.did}</span>
+                </Reveal>
+              </div>
+              <p className="lpa-conn-fine">{g.fine}</p>
+            </Reveal>
+          ))}
+        </ul>
       </div>
     </section>
   )

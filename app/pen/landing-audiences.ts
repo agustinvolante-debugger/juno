@@ -650,7 +650,7 @@ const ES_PLUS: Plus = {
   faq: {
     h2: 'Preguntas',
     items: [
-      ['¿Necesito el lápiz?', 'No. Juno funciona con grabaciones del celular o del computador, notas de voz de WhatsApp, Plaud, Pocket o cualquier audio o transcripción que importes. Con el lápiz es mejor: siempre va contigo, graba con un clic y escucha toda la sala. Llega pronto a Chile.'],
+      ['¿Necesito el lápiz?', 'No. Juno funciona con grabaciones del celular o del computador, notas de voz de WhatsApp, Plaud, Pocket o cualquier audio o transcripción que importes. Con el lápiz es mejor: siempre va contigo, graba con un clic y escucha toda la sala. Puedes sumarlo a cualquier plan y te lo enviamos a tu dirección en Chile.'],
       ['¿Es legal grabar una conversación?', 'Depende de dónde estés. En muchos lugares se necesita el permiso de todos. Juno Pen te pide confirmar el consentimiento antes de procesar nada, para que preguntar se vuelva costumbre.'],
       ['¿Qué idiomas entiende?', 'Transcribe español, inglés, portugués y muchos otros idiomas. La app, los correos y WhatsApp funcionan en español, inglés y portugués, y las notas vuelven en el idioma en que hablaste, salvo que elijas otro.'],
       ['¿Cuánto se demoran las notas?', 'Normalmente unos minutos después de que llega la grabación. Te llegan a la app y al correo, y de vuelta a WhatsApp si la mandaste por ahí.'],
@@ -954,7 +954,7 @@ const PT_PLUS: Plus = {
   faq: {
     h2: 'Perguntas',
     items: [
-      ['Preciso da caneta?', 'Não. O Juno funciona com gravações do celular ou do computador, mensagens de voz do WhatsApp, Plaud, Pocket ou qualquer áudio ou transcrição que você importar. Com a caneta é melhor: está sempre com você, grava com um clique e ouve a sala inteira. Chega em breve ao Brasil.'],
+      ['Preciso da caneta?', 'Não. O Juno funciona com gravações do celular ou do computador, mensagens de voz do WhatsApp, Plaud, Pocket ou qualquer áudio ou transcrição que você importar. Com a caneta é melhor: está sempre com você, grava com um clique e ouve a sala inteira. Dá para adicionar a qualquer plano, e enviamos para o seu endereço no Brasil.'],
       ['É legal gravar uma conversa?', 'Depende de onde você está. Em muitos lugares é preciso a permissão de todos. O Juno Pen pede para você confirmar o consentimento antes de processar qualquer coisa, para que perguntar vire hábito.'],
       ['Quais idiomas ele entende?', 'Transcreve português, inglês, espanhol e muitos outros idiomas. O app, os e-mails e o WhatsApp funcionam em português, inglês e espanhol, e as notas voltam no idioma em que você falou, a menos que escolha outro.'],
       ['Quanto tempo até as notas ficarem prontas?', 'Normalmente alguns minutos depois que a gravação chega. Elas aparecem no app e no seu e-mail, e voltam no WhatsApp se você mandou por lá.'],

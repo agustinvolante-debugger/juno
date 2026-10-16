@@ -1019,14 +1019,14 @@ function PlanCardView({ p, delay }: { p: PlanCard; delay: number }) {
 // trial, no 6-month plan. The pen is a one-time add-on to either plan, shipped to the address
 // given at checkout. The link targets are the ones checkout already reads (plan + offer).
 
-/** Software + pen. Dollars only: the pen is sold in the US. */
+/** Software + pen, in the visitor's currency: the pen is sold in the US, Chile and Brazil (15 Oct). */
 export function penPlans(t: Copy, market: Market): PlanCard[] {
   const P = t.pricing
-  const pen = fmtUsd(PRICES.pen)
+  const pen = market.currency === 'usd' ? fmtUsd(PRICES.pen) : money(PRICES.local[market.currency].pen, market.currency)
   return [
     {
       name: P.monthly,
-      price: fmtUsd(PRICES.monthly),
+      price: softwarePrice(market, 'monthly'),
       per: P.perMonth,
       line: P.plusPen(pen),
       trade: P.tradeMonthlyPen,
@@ -1035,7 +1035,7 @@ export function penPlans(t: Copy, market: Market): PlanCard[] {
     },
     {
       name: P.yearly,
-      price: fmtUsd(PRICES.yearly),
+      price: softwarePrice(market, 'yearly'),
       per: P.perYear,
       line: P.plusPen(pen),
       trade: P.tradeYearPen,

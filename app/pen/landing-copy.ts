@@ -182,7 +182,7 @@ const ES: Copy = {
   },
   pricing: {
     h2: 'Grabación ilimitada en todos los planes.',
-    sub: 'Con tu celular o la grabadora que ya tienes. El lápiz llega pronto. Mismo resumen, misma búsqueda, todo igual.',
+    sub: 'El software tiene un solo precio. El lápiz es opcional, se paga una vez, con cualquier plan, y te lo enviamos a tu dirección en Chile.',
     tabPen: 'Con el lápiz Juno',
     tabOwn: 'Con tu celular o grabadora',
     tabAria: 'Elige cómo grabas',
@@ -215,7 +215,7 @@ const ES: Copy = {
     soonBody: 'Estamos trayendo el lápiz Juno a Chile. Déjanos tu correo y te avisamos apenas esté disponible. Mientras tanto, prueba Juno con tu celular.',
     soonCta: 'Avísame cuando llegue',
   },
-  closing: { h2: 'Tu próxima reunión, recordada.', sub: 'Empieza hoy con tu celular o cualquier grabadora.' },
+  closing: { h2: 'Tu próxima reunión, recordada.', sub: 'Empieza hoy con tu celular. Suma el lápiz cuando quieras.' },
   footer: {
     consent: 'Grabar una conversación requiere el permiso de todos en muchos lugares. Juno Pen te pide confirmar el consentimiento antes de procesar cualquier cosa.',
     trademarks: 'Plaud y Pocket son marcas de sus respectivos dueños. Juno Pen no está afiliado a ellas.',
@@ -258,7 +258,7 @@ const PT: Copy = {
   },
   pricing: {
     h2: 'Gravação ilimitada em todos os planos.',
-    sub: 'Com o seu celular ou o gravador que você já tem. A caneta chega em breve. Mesmo resumo, mesma busca, tudo igual.',
+    sub: 'O software tem um preço só. A caneta é opcional, paga uma vez, com qualquer plano, e enviada para o seu endereço no Brasil.',
     tabPen: 'Com a caneta Juno',
     tabOwn: 'Com seu celular ou gravador',
     tabAria: 'Escolha como você grava',
@@ -291,7 +291,7 @@ const PT: Copy = {
     soonBody: 'Estamos trazendo a caneta Juno para o Brasil. Deixe seu e-mail e avisamos assim que estiver disponível. Enquanto isso, teste o Juno com o seu celular.',
     soonCta: 'Avise-me quando chegar',
   },
-  closing: { h2: 'Sua próxima reunião, lembrada.', sub: 'Comece hoje com o celular ou qualquer gravador.' },
+  closing: { h2: 'Sua próxima reunião, lembrada.', sub: 'Comece hoje com o celular. Adicione a caneta quando quiser.' },
   footer: {
     consent: 'Gravar uma conversa exige a permissão de todos em muitos lugares. O Juno Pen pede que você confirme o consentimento antes de processar qualquer coisa.',
     trademarks: 'Plaud e Pocket são marcas de seus respectivos donos. O Juno Pen não é afiliado a elas.',
