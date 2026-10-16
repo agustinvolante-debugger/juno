@@ -1,15 +1,18 @@
 // Local money for the markets that pay in their own currency.
 //
-// Only software-only (own recorder) plans have local prices; the pen plans are sold in the
-// US in dollars. Each local price is a real Stripe price in that currency (not a conversion),
-// so the number on the page is the number on the card statement.
+// Since 15 Oct every plan and the pen have real Stripe prices in CLP and BRL (lib/pen/prices.ts
+// PRICES.local), not conversions, so the number on the page is the number on the card statement.
+// The given-pen link is dollars only.
+
+import { PRICES } from './prices'
 
 export type Currency = 'usd' | 'clp' | 'brl'
 export type Lang = 'en' | 'es' | 'pt'
 
-export const LOCAL_PRICES: Record<Exclude<Currency, 'usd'>, { monthly: number; halfyear: number }> = {
-  clp: { monthly: 11990, halfyear: 49990 },
-  brl: { monthly: 59.9, halfyear: 269 },
+/** `halfyear` is the old 6-month price, still read by the landing page; nothing sells it. */
+export const LOCAL_PRICES: Record<Exclude<Currency, 'usd'>, { monthly: number; yearly: number; pen: number; halfyear: number }> = {
+  clp: { ...PRICES.local.clp, halfyear: 49990 },
+  brl: { ...PRICES.local.brl, halfyear: 269 },
 }
 
 export function money(amount: number, currency: Currency): string {

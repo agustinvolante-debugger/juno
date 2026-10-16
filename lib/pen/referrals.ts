@@ -1,11 +1,13 @@
 // Referrals, stage 1 (agreed 2 Oct; plan in juno_project/Notes/pen-referrals.html).
 //
 // Give a month, get a month:
-//   · The friend gets their first month free: credit that zeroes the first monthly bill, or
-//     a month off at checkout on a 6-month or yearly plan (no trial there to absorb it).
+//   · The friend gets their first month free: since 15 Oct, $9.99 off at checkout on every plan
+//     (coupon juno-friend-month-999): the whole first month on monthly, a month off the $90
+//     year. Before, monthly plans got it as credit behind their trial; there is no trial now.
 //   · A referral counts on the friend's first real payment (> $0). That's the count we show.
 //   · The referrer earns 1 month per paying friend (2 for a 6-month friend, 3 for a yearly
-//     one), +1 bonus on the 3rd and 5th friend, at most 12 months in any 12.
+//     one), +1 bonus on the 3rd and 5th friend, at most 12 months in any 12. A month is one of
+//     their own monthly bills, or $9.99 on a prepaid plan (referral-events.ts rewardMonth).
 //   · Stage 2 (lib/pen/referral-events.ts): a referral whose card or shipping address matches
 //     the referrer's, or a card another of their friends used, is void. A daily job credits the
 //     referrer 14 days after the payment; a refund or chargeback before then voids it, and after

@@ -7,7 +7,8 @@
 
 import { supabaseAdmin } from '@/lib/supabase'
 import { sendEmailResult } from '@/lib/news/email'
-import { planPrice, parseOffer, parsePlan } from './plan'
+import { planPrice, parseOffer, parsePlan, FREE_PEN_FEE_USD } from './plan'
+import { PRICES, fmtUsd } from './prices'
 
 const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
@@ -22,11 +23,11 @@ function recipient(): string[] | null {
 function planLabel(plan: string | null, offer: string | null): string {
   const o = parseOffer(offer)
   const p = parsePlan(plan)
-  if (o === 'given-pen') return 'PEN GIVEN IN PERSON, 60-day trial, then $15/month, no pen charge'
-  if (o === 'free-pen') return 'FREE PEN (invited agent), 30-day trial, then $15/month, 3-month minimum (pen charged $50 if it ends sooner)'
+  if (o === 'given-pen') return `PEN GIVEN IN PERSON, ${fmtUsd(PRICES.givenPen.today)} today for ${PRICES.givenPen.months} months, then ${fmtUsd(PRICES.givenPen.then)}/month, no pen charge`
+  if (o === 'free-pen') return `FREE PEN (invited agent), 30-day trial, then ${fmtUsd(PRICES.monthly)}/month, 3-month minimum (pen charged $${FREE_PEN_FEE_USD} if it ends sooner)`
   const len = p === 'annual' ? 'yearly' : p === 'halfyear' ? '6 months' : 'monthly'
   const price = planPrice(o, p)
-  return `${o === 'own-recorder' ? 'Own recorder' : 'With pen'}, ${len}${price ? ` ($${price.usd})` : ''}`
+  return `${o === 'own-recorder' ? 'Software only' : `With pen (${fmtUsd(PRICES.pen)}, post it)`}, ${len}${price ? ` (${fmtUsd(price.usd)})` : ''}`
 }
 
 async function signupRow(email: string) {

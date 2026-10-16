@@ -27,6 +27,8 @@ import {
 import { notifyReferralPaid, notifyReferralNote } from './notify-owner'
 import { sendEmailResult } from '@/lib/news/email'
 import { userLang } from './user-lang'
+import { STRIPE_PRICES } from './prices'
+import { LOCAL_PRICES } from './currency'
 
 const money = (amount: number, currency: string) =>
   currency === 'clp' ? `$${amount.toLocaleString('es-CL')} CLP` : `${(amount / 100).toFixed(2)} ${currency.toUpperCase()}`
@@ -83,9 +85,10 @@ export async function referralCheckout(o: Record<string, any>, email: string): P
     }
   }
 
-  // Monthly plans: the first monthly bill comes after the trial, so the friend's month is
-  // credit on their account. Prepaid plans already got it off at checkout (the coupon).
-  if (o.metadata.plan === 'monthly' && customer && typeof o.subscription === 'string' && (await claimFriendCredit(r.id))) {
+  // Since 15 Oct the friend's month is off at checkout on every plan (the coupon, metadata
+  // friend=coupon), because there's no trial left for credit to wait behind. Credit is only for
+  // a monthly checkout opened before that (trial, no coupon) and completed after.
+  if (o.metadata.friend !== 'coupon' && o.metadata.plan === 'monthly' && customer && typeof o.subscription === 'string' && (await claimFriendCredit(r.id))) {
     try {
       const m = monthlyAmount(await getSubscription(o.subscription))
       if (!m) throw new Error('no price on the subscription')
@@ -97,7 +100,9 @@ export async function referralCheckout(o: Record<string, any>, email: string): P
     }
   }
 
-  // The pen ($50) or a prepaid plan is paid right here, so the referral counts now.
+  // Anything paid right here (the first month or year after the friend's $9.99 off, or the pen)
+  // counts the referral now. A $0 checkout (monthly, no pen, the whole month off) counts on the
+  // first paid invoice instead.
   if (o.payment_status === 'paid' && (o.amount_total ?? 0) > 0) {
     await countPayment({ customerId: customer, email, amount: o.amount_total, currency: o.currency ?? null })
   }
@@ -220,6 +225,22 @@ const GIVEN_MAIL = {
 } as const
 
 /**
+ * What one free month is worth to this referrer, as Stripe credit. On a monthly plan, one of their
+ * own bills (whatever price they're on). On a prepaid plan (yearly, or a 6-month one from before
+ * 15 Oct), a month of the monthly price in their currency: $9.99, not $90 / 12 = $7.50, so "a free
+ * month" is the same $9.99 whichever plan the referrer chose. It comes off their next renewal.
+ */
+export function rewardMonth(sub: Parameters<typeof monthlyAmount>[0]): { amount: number; currency: string } | null {
+  const m = monthlyAmount(sub)
+  if (!m) return null
+  const r = sub.items?.data?.[0]?.price?.recurring
+  const prepaid = r?.interval === 'year' || (r?.interval === 'month' && (r.interval_count ?? 1) > 1)
+  if (!prepaid) return m
+  const list = m.currency === 'usd' ? STRIPE_PRICES.monthly.cents : m.currency === 'clp' ? LOCAL_PRICES.clp.monthly : m.currency === 'brl' ? Math.round(LOCAL_PRICES.brl.monthly * 100) : null
+  return list ? { amount: list, currency: m.currency } : m
+}
+
+/**
  * The owners credit a paid referral (stage 1 does this by hand, after the refund window): the
  * referrer's months as Stripe credit, in their own plan's currency, within the yearly cap.
  */
@@ -237,7 +258,7 @@ export async function giveReward(id: string): Promise<{ months: number }> {
   if (months <= 0) throw new Error(`${r.referrer_email} has had ${CAP_MONTHS} free months this year, the cap.`)
   const acct = await getAccount(r.referrer_email)
   if (!acct?.stripe_customer_id || !acct.stripe_subscription_id) throw new Error(`${r.referrer_email} isn’t billed through Stripe, so there’s nothing to credit.`)
-  const m = monthlyAmount(await getSubscription(acct.stripe_subscription_id))
+  const m = rewardMonth(await getSubscription(acct.stripe_subscription_id))
   if (!m) throw new Error('Couldn’t read the referrer’s plan price from Stripe.')
   const friend = firstName(r.referee_name, r.referee_email)
   const txn = await addCredit(acct.stripe_customer_id, m.amount * months, m.currency, `Referral: ${friend} joined (${months} free month${months === 1 ? '' : 's'})`, `pen-ref-${r.id}`)

@@ -3,7 +3,7 @@
 // Each is sent by whoever "claims" the state change (setCancelAt / deactivate / activate return
 // true exactly once), so the in-app menu, Stripe's portal and webhook retries can't double up.
 
-import { PEN_USD } from './plan'
+import { FREE_PEN_FEE_USD } from './plan'
 import { sendEmailResult } from '@/lib/news/email'
 import { userLang } from './user-lang'
 import { KEEP_DAYS, lastFullDay } from './access'
@@ -93,7 +93,7 @@ export async function sendCancelScheduled(email: string, cancelAt: string, offer
     subject: M.scheduledSubject,
     html: shell(
       M.scheduled(day(lastFullDay(cancelAt), lang), day(plusKeep(cancelAt), lang)) +
-        (penFee ? M.penFee(PEN_USD) : offer === 'free-pen' || offer === 'posted-pen' || offer === 'given-pen' ? M.pen : '') +
+        (penFee ? M.penFee(FREE_PEN_FEE_USD) : offer === 'free-pen' || offer === 'posted-pen' || offer === 'given-pen' ? M.pen : '') +
         link(billingLink(), M.changed) +
         `<p style="color:#514E45">${M.reply}</p>`,
     ),
@@ -107,7 +107,7 @@ export async function sendEnded(email: string, endedAt: string, penCharged = fal
   await sendEmailResult({
     to: email,
     subject: M.endedSubject,
-    html: shell(M.ended(day(plusKeep(endedAt), lang)) + (penCharged ? M.penCharged(PEN_USD) : '') + link(billingLink(), M.reactivate) + `<p style="color:#514E45">${M.reply}</p>`),
+    html: shell(M.ended(day(plusKeep(endedAt), lang)) + (penCharged ? M.penCharged(FREE_PEN_FEE_USD) : '') + link(billingLink(), M.reactivate) + `<p style="color:#514E45">${M.reply}</p>`),
   })
 }
 
