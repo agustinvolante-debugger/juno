@@ -895,7 +895,7 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
   .pen-heard-find:focus-within { border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-wash); }
   .pen-heard-find input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; font: inherit; font-size: 14px; color: var(--ink); }
   .pen-heard-find input::placeholder { color: var(--dim); }
-  .pen-heard-lede, .pen-convo-lede { margin: 6px 0 0; font-size: 14px; line-height: 1.45; color: var(--soft); max-width: 68ch; }
+  .pen-heard-lede, .pen-convo-lede { margin: 6px 0 0; font-size: 14px; line-height: 1.45; color: var(--soft); }
   .pen-heard-list { list-style: none; margin: 10px 0 0; padding: 0; }
   .pen-heard-item + .pen-heard-item { border-top: 1px solid var(--hair); }
   .pen-heard-row {
@@ -966,7 +966,7 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
   .pen-convo-topic strong { font-size: 16.5px; font-weight: 600; color: var(--ink); text-wrap: balance; }
   .pen-convo-len { font-size: 13px; color: var(--dim); font-variant-numeric: tabular-nums; }
   .pen-convo-kind { padding: 1px 8px; border-radius: 9999px; font-size: 12px; font-weight: 600; background: var(--sunk); color: var(--soft); }
-  .pen-convo-gist { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--soft); max-width: 72ch; }
+  .pen-convo-gist { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--soft); }
   .pen-convo-item[data-kind='other'] .pen-convo-topic strong { color: var(--soft); font-weight: 500; }
   .pen-convo-who { margin-top: 4px; }
   .pen-convo-type { display: inline-flex; gap: 6px; align-items: center; }
@@ -994,7 +994,7 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
   }
   .pen-convo-offer > p { margin: 0; font-size: 14.5px; color: var(--accent-ink); }
   .pen-convo-offer-body { min-width: 0; }
-  .pen-convo-offer-body > p { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--ink); max-width: 70ch; }
+  .pen-convo-offer-body > p { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--ink); }
   .pen-convo-offer-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   .pen-convo-offer .pen-spin { flex: none; margin-top: 2px; }
 
@@ -1037,7 +1037,7 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
 
   /* "Combine this day into one event". */
   .pen-convo-day { margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: var(--sunk); border: 1px solid var(--hair); }
-  .pen-convo-day > p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--soft); max-width: 70ch; }
+  .pen-convo-day > p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--soft); }
   .pen-convo-day .pen-convo-offer-acts { margin-top: 10px; }
   .pen-convo-offer .pen-convo-day { background: var(--panel); }
   .pen-convo-day .pen-btn, .pen-convo-offer-acts .pen-btn { display: inline-flex; align-items: center; gap: 6px; }

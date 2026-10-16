@@ -1,10 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createPortal } from 'react-dom'
 import Image from 'next/image'
-import Icon from './Icon'
+import Icon, { type IconName } from './Icon'
 import { COMMON_TYPES, slugType, isViewing, displayType, BUCKETS, bucketOf, type Bucket } from '@/lib/pen/categories'
 import type { PenSession, MeetingType, ChatTurn, PenNotes, NoteBlock, Mention } from '@/lib/pen/store'
 import type { PersonCard } from '@/lib/pen/people'
@@ -999,17 +999,6 @@ export default function PenApp({
             </div>
           ) : (
             <>
-              {/* iOS can't hand a file from a USB drive to Safari (the picker's Open spins and
-                  gives up, 28 Sep); copying it to the phone first works. `accept` is undefined
-                  exactly on iOS (see useAccept). */}
-              {mounted && accept === undefined && (
-                <details className="pen-m-howto">
-                  <summary>{T.iosPenTitle}</summary>
-                  <p>{T.iosPenLede}</p>
-                  <ol>{T.iosPenSteps.map((st) => <li key={st}>{st}</li>)}</ol>
-                  <p className="pen-m-howto-tip">{T.iosPenTip}</p>
-                </details>
-              )}
               <p className="pen-m-lede">{T.mUploadLede}</p>
               {supportsPicker && (
                 <button type="button" className="pen-m-rowbtn" onClick={connectPen}>
@@ -2693,6 +2682,84 @@ function Detail({
     setPendingType(v)
   }
 
+  // ---- the action row: what fits stays out, the rest goes under More (16 Oct).
+  // Priority order. Each action renders as a row pill or as a menu item; `label` and `icon` feed
+  // the hidden replica that measures it.
+  type RowAction = { key: string; label: string; icon?: IconName; node: (inMenu: boolean) => React.ReactNode }
+  const hasNote = !!(n.summary || n.actions?.length)
+  const actions: RowAction[] = []
+  if (spoken) {
+    const label = chatOpen ? T.hideChat : T.askMeeting
+    actions.push({ key: 'ask', label, icon: 'chat', node: (m) => (
+      <button className={chatOpen && !m ? 'pen-btn pen-btn-accent' : 'pen-btn'} role={m ? 'menuitem' : undefined} onClick={onToggleChat}>
+        <Icon name="chat" size={15} />{label}
+      </button>
+    ) })
+    // Keyed off the transcript, not the status. A session can land in `error` with a perfectly
+    // good transcript (a failed save, a transient API error), and gating the retry on status
+    // left it with no way out of the UI.
+    const redo = busy ? T.working : session.status === 'noted' ? T.redoNotes : T.writeNotes
+    actions.push({ key: 'redo', label: redo, icon: 'sparkle', node: (m) => (
+      <button className="pen-btn" role={m ? 'menuitem' : undefined} onClick={() => regenerate()} disabled={busy}>
+        <Icon name="sparkle" size={15} />{redo}
+      </button>
+    ) })
+  }
+  if (onCombine && !joined && utts.length > 0) {
+    actions.push({ key: 'combine', label: T.combineWith, icon: 'link', node: (m) => (
+      <button className="pen-btn" role={m ? 'menuitem' : undefined} onClick={onCombine}>
+        <Icon name="link" size={15} />{T.combineWith}
+      </button>
+    ) })
+  }
+  if (onCombine && canSplit) {
+    const label = hasConvos ? T.resplitConvos : T.splitConvos
+    actions.push({ key: 'split', label, icon: 'people', node: (m) => (
+      <button className="pen-btn" role={m ? 'menuitem' : undefined} disabled={splittingConvos} onClick={() => { setTab('note'); void startSplit(nameIds) }}>
+        <Icon name="people" size={15} />{label}
+      </button>
+    ) })
+  }
+  if (notion && hasNote) {
+    const sent = notion.connected ? notion.sent?.[session.id] ?? null : null
+    actions.push({ key: 'notion', label: sent ? `${T.notionOpen} ↗` : T.notionSend, node: (m) => (
+      <NotionButton key={session.id} menu={m} sessionId={session.id} connected={notion.connected} sentUrl={notion.sent?.[session.id] ?? null} />
+    ) })
+  }
+  if (google && hasNote) {
+    actions.push({ key: 'gdoc', label: T.gdocSend, icon: 'doc', node: (m) => (
+      <GoogleDocsButton key={`g${session.id}`} menu={m} sessionId={session.id} connected={google.drive} />
+    ) })
+  }
+  const actRowEl = useRef<HTMLDivElement>(null)
+  const actBriefEl = useRef<HTMLDivElement>(null)
+  const actMoreEl = useRef<HTMLDetailsElement>(null)
+  const actMeasureEl = useRef<HTMLDivElement>(null)
+  const actPhone = useIsPhone()
+  const [actFit, setActFit] = useState(0)
+  const actSig = actions.map((a) => `${a.key}:${a.label}`).join('|')
+  useLayoutEffect(() => {
+    const row = actRowEl.current, brief = actBriefEl.current, more = actMoreEl.current, measure = actMeasureEl.current
+    if (!row || !brief || !more || !measure) return
+    if (actPhone) { setActFit(0); return }
+    // Replica widths change only with the labels, so they are read once per label set; a
+    // resize (window, sidebar) only re-reads the row and the two always-visible controls.
+    const widths = Array.from(measure.children, (c) => (c as HTMLElement).getBoundingClientRect().width)
+    const fit = () => {
+      const gap = parseFloat(getComputedStyle(row).columnGap) || 8
+      const avail = row.clientWidth
+      let used = brief.getBoundingClientRect().width + gap + more.getBoundingClientRect().width
+      let k = 0
+      while (k < widths.length && used + gap + widths[k] <= avail + 0.5) { used += gap + widths[k]; k++ }
+      setActFit(k)
+    }
+    fit()
+    const ro = new ResizeObserver(fit)
+    ro.observe(row)
+    ro.observe(brief)
+    return () => ro.disconnect()
+  }, [actSig, actPhone])
+
   return (
     <div className="min-w-0">
       {/* --------------------------------------------------------- header */}
@@ -2779,50 +2846,24 @@ function Detail({
           )}
           <AudioLine parts={parts} T={T} lang={lang} onKeep={(keep) => onPatch({ keep_audio: keep })} />
         </div>
-        <div className="pen-d-actions flex flex-wrap items-center gap-2">
-          <SendBriefing
-            selfEmail={selfEmail}
-            sessionId={session.id}
-            sentAt={session.briefing_sent_at}
-            disabled={!n.summary && !n.actions?.length && !n.missed?.length && !n.open_questions?.length}
-            onSent={(iso) => void onPatch({ briefing_sent_at: iso })}
-          />
-          {spoken && (
-            <button className={`pen-btn pen-d-ask ${chatOpen ? 'pen-btn-accent' : ''}`} onClick={onToggleChat}>
-              <Icon name="chat" size={15} /><span className="pen-d-ask-l">{chatOpen ? T.hideChat : T.askMeeting}</span><span className="pen-d-ask-s">{chatOpen ? T.hideChat : T.askShort}</span>
-            </button>
-          )}
-          {/* Two visible actions; everything else under More, on every screen size (the phone had
-              this already, the desktop showed eight equal pills). */}
-          <details className="pen-d-more" onToggle={(e) => { if (!(e.currentTarget as HTMLDetailsElement).open) setConfirmDelete(false) }}>
+        {/* As many actions as fit on one row, in priority order; the rest, and always Delete,
+            under More (16 Oct). The widths come from the hidden replicas below, so nothing is
+            laid out twice and the row never wraps or jumps. The phone keeps Send + More. */}
+        <div ref={actRowEl} className="pen-d-actions flex items-center gap-2" data-fit={actFit}>
+          <div ref={actBriefEl} className="pen-d-brief">
+            <SendBriefing
+              selfEmail={selfEmail}
+              sessionId={session.id}
+              sentAt={session.briefing_sent_at}
+              disabled={!n.summary && !n.actions?.length && !n.missed?.length && !n.open_questions?.length}
+              onSent={(iso) => void onPatch({ briefing_sent_at: iso })}
+            />
+          </div>
+          {actions.slice(0, actFit).map((a) => <Fragment key={a.key}>{a.node(false)}</Fragment>)}
+          <details ref={actMoreEl} className="pen-d-more" onToggle={(e) => { if (!(e.currentTarget as HTMLDetailsElement).open) setConfirmDelete(false) }}>
             <summary className="pen-btn" aria-label={T.moreActions}><Icon name="more" size={16} /><span className="pen-d-more-l">{T.more}</span></summary>
             <div className="pen-d-menu" role="menu">
-          {/* Phone: Ask lives in this overflow, so the toolbar is one primary action and More. */}
-          {spoken && (
-            <button className="pen-btn pen-d-ask-item" role="menuitem" onClick={onToggleChat}>
-              <Icon name="chat" size={15} />{chatOpen ? T.hideChat : T.askMeeting}
-            </button>
-          )}
-          {/* Keyed off the transcript, not the status. A session can land in `error` with a
-              perfectly good transcript (a failed save, a transient API error), and gating the
-              retry on status left it with no way out of the UI. */}
-          {spoken && (
-            <button className="pen-btn" role="menuitem" onClick={() => regenerate()} disabled={busy}>
-              <Icon name="sparkle" size={15} />{busy ? T.working : session.status === 'noted' ? T.redoNotes : T.writeNotes}
-            </button>
-          )}
-          {onCombine && !joined && utts.length > 0 && (
-            <button className="pen-btn" role="menuitem" onClick={onCombine}>
-              <Icon name="link" size={15} />{T.combineWith}
-            </button>
-          )}
-          {onCombine && canSplit && (
-            <button className="pen-btn" role="menuitem" disabled={splittingConvos} onClick={() => { setTab('note'); void startSplit(nameIds) }}>
-              <Icon name="people" size={15} />{hasConvos ? T.resplitConvos : T.splitConvos}
-            </button>
-          )}
-          {notion && (n.summary || n.actions?.length) ? <NotionButton key={session.id} sessionId={session.id} connected={notion.connected} sentUrl={notion.sent?.[session.id] ?? null} /> : null}
-          {google && (n.summary || n.actions?.length) ? <GoogleDocsButton key={`g${session.id}`} sessionId={session.id} connected={google.drive} /> : null}
+          {actions.slice(actFit).map((a) => <Fragment key={a.key}>{a.node(true)}</Fragment>)}
           {/* Two-step, inline. Deletion takes the audio with it and cannot be undone, so it
               asks — but a modal for one row would be heavier than the action deserves. */}
           {confirmDelete ? (
@@ -2838,6 +2879,12 @@ function Detail({
           )}
             </div>
           </details>
+          {/* Static copies of every optional action at its row size, measured once per label set. */}
+          <div ref={actMeasureEl} className="pen-d-measure" aria-hidden="true" inert>
+            {actions.map((a) => (
+              <span key={a.key} className="pen-btn">{a.icon && <Icon name={a.icon} size={15} />}{a.label}</span>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -3617,10 +3664,24 @@ function ReadyToast({
   }, [key, hold])
   const [host, setHost] = useState<Element | null>(null)
   useEffect(() => { setHost(document.querySelector('.pen-root') ?? document.body) }, [])
+  // The browser's top layer, so no header can cover it: on an iPhone the phone header (blurred,
+  // composited) painted over the toast whatever its z-index, and Open it could not be tapped.
+  // A manual popover is above every stacking context; where popovers are missing, the fixed
+  // position and z-index below still apply. It stays open (empty, click-through) so the live
+  // region is always in the tree; re-shown on each arrival so it sits above anything newer.
+  const wrapRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = wrapRef.current as (HTMLDivElement & { showPopover?: () => void; hidePopover?: () => void }) | null
+    if (!el || typeof el.showPopover !== 'function') return
+    try {
+      if (el.matches(':popover-open')) el.hidePopover?.()
+      el.showPopover()
+    } catch { /* not supported, or detached mid-render: the fixed fallback still shows it */ }
+  }, [host, key])
   if (!host) return null
   const one = items.length === 1 ? items[0] : null
   return createPortal(
-    <div className="pen-ready-wrap" data-phone={phone || undefined} role="status" aria-live="polite">
+    <div ref={wrapRef} popover="manual" className="pen-ready-wrap" data-phone={phone || undefined} role="status" aria-live="polite">
       {items.length > 0 && (
         <div
           className="pen-toast pen-ready"
@@ -3720,14 +3781,15 @@ function FeedbackAsk({ T, onClose }: { T: AppCopy; onClose: (answered: boolean) 
 }
 
 /** "Send to Notion" on a note (lib/pen/notion.ts). Not connected yet: goes to Settings → Notion. */
-function NotionButton({ sessionId, connected, sentUrl }: { sessionId: string; connected: boolean; sentUrl: string | null }) {
+function NotionButton({ sessionId, connected, sentUrl, menu }: { sessionId: string; connected: boolean; sentUrl: string | null; menu?: boolean }) {
+  const role = menu ? 'menuitem' : undefined
   const T = useCopy(APP_COPY)
   const [busy, setBusy] = useState(false)
   // Already in Notion (sent by hand or automatically): open it rather than offer to send.
   const [url, setUrl] = useState<string | null>(sentUrl)
   const [err, setErr] = useState<string | null>(null)
-  if (!connected) return <a className="pen-btn" href="/pen/settings/notion">{T.notionSend}</a>
-  if (url) return <a className="pen-notion-sent" href={url} target="_blank" rel="noreferrer">{T.notionOpen} ↗</a>
+  if (!connected) return <a className="pen-btn" role={role} href="/pen/settings/notion">{T.notionSend}</a>
+  if (url) return <a className="pen-notion-sent" role={role} href={url} target="_blank" rel="noreferrer">{T.notionOpen} ↗</a>
   async function send() {
     setBusy(true); setErr(null)
     try {
@@ -3742,7 +3804,7 @@ function NotionButton({ sessionId, connected, sentUrl }: { sessionId: string; co
   }
   return (
     <>
-      <button type="button" className="pen-btn" onClick={send} disabled={busy}>{busy ? T.notionSending : T.notionSend}</button>
+      <button type="button" className="pen-btn" role={role} onClick={send} disabled={busy}>{busy ? T.notionSending : T.notionSend}</button>
       {err && <span className="pen-ref-err">{err}</span>}
     </>
   )
@@ -3755,13 +3817,14 @@ function NotionButton({ sessionId, connected, sentUrl }: { sessionId: string; co
  * "Send to Google Docs" on a note (lib/pen/google-exports.ts). The Doc is made once; sending
  * again opens the same one. Not connected yet: Settings → Google, at Docs & Sheets.
  */
-function GoogleDocsButton({ sessionId, connected }: { sessionId: string; connected: boolean }) {
+function GoogleDocsButton({ sessionId, connected, menu }: { sessionId: string; connected: boolean; menu?: boolean }) {
+  const role = menu ? 'menuitem' : undefined
   const T = useCopy(APP_COPY)
   const [busy, setBusy] = useState(false)
   const [url, setUrl] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
-  if (!connected) return <a className="pen-btn" role="menuitem" href="/pen/settings/google"><Icon name="doc" size={15} />{T.gdocSend}</a>
-  if (url) return <a className="pen-notion-sent" href={url} target="_blank" rel="noreferrer">{T.gdocOpen} ↗</a>
+  if (!connected) return <a className="pen-btn" role={role} href="/pen/settings/google"><Icon name="doc" size={15} />{T.gdocSend}</a>
+  if (url) return <a className="pen-notion-sent" role={role} href={url} target="_blank" rel="noreferrer">{T.gdocOpen} ↗</a>
   async function send() {
     setBusy(true); setErr(null)
     // Opened now, inside the click, so the browser doesn't block it; pointed at the Doc when it exists.
@@ -3780,7 +3843,7 @@ function GoogleDocsButton({ sessionId, connected }: { sessionId: string; connect
   }
   return (
     <>
-      <button type="button" className="pen-btn" role="menuitem" onClick={send} disabled={busy}><Icon name="doc" size={15} />{busy ? T.notionSending : T.gdocSend}</button>
+      <button type="button" className="pen-btn" role={role} onClick={send} disabled={busy}><Icon name="doc" size={15} />{busy ? T.notionSending : T.gdocSend}</button>
       {err && <span className="pen-ref-err">{err}</span>}
     </>
   )

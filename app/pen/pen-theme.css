@@ -1749,7 +1749,7 @@ body:has(.pen-root) {
   border-radius: 999px; padding: 4px 10px; white-space: nowrap;
 }
 .pen-aicard-body {
-  margin: 0; max-width: 70ch; font-family: var(--serif); font-size: 16.5px; line-height: 1.66; color: var(--ink);
+  margin: 0; font-family: var(--serif); font-size: 16.5px; line-height: 1.66; color: var(--ink);
 }
 
 /* Decided / to do / still open, side by side. Three short lists stacked read as one
@@ -3540,26 +3540,10 @@ html.pen-m-lock, html.pen-m-lock body { height: 100%; overflow: hidden; overscro
 .pen-m-body .pen-d-actions > :first-child .pen-btn { width: 100%; justify-content: center; }
 .pen-m-body .pen-d-more > summary { min-height: 44px; min-width: 44px; justify-content: center; padding: 0 12px; }
 .pen-m-body .pen-d-more > summary .pen-d-more-l { display: none; }
-.pen-d-ask-s { display: none; }
-.pen-m-body .pen-d-ask-l { display: none; }
-.pen-m-body .pen-d-ask-s { display: inline; }
 .pen-m-body .pen-doc > .pen-jn { order: -1; margin: 0 0 18px; }
 
 /* Phones: the mark alone carries the brand so Sign in and the CTA both fit. */
 @media (max-width: 460px) { .pen-lp-nav .pen-lp-wordmark { display: none; } .pen-lp-nav nav { gap: 8px; } }
-
-/* iPhone: how to upload a pen recording (copy it to the phone first). */
-.pen-m-howto { border-radius: 16px; background: var(--warn-wash); border: 1px solid var(--warn-line); padding: 0 16px; }
-.pen-m-howto summary {
-  min-height: 48px; display: flex; align-items: center; cursor: pointer; list-style: none;
-  font-size: 15px; font-weight: 600; color: var(--ink);
-}
-.pen-m-howto summary::-webkit-details-marker { display: none; }
-.pen-m-howto summary::after { content: '›'; margin-left: auto; font-size: 20px; color: var(--warn); transition: transform .15s; }
-.pen-m-howto[open] summary::after { transform: rotate(90deg); }
-.pen-m-howto p { margin: 0 0 8px; font-size: 14.5px; line-height: 1.5; color: var(--soft); }
-.pen-m-howto ol { list-style: decimal; margin: 0 0 12px; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; font-size: 15px; line-height: 1.45; color: var(--ink); }
-.pen-m-howto .pen-m-howto-tip { font-size: 13.5px; color: var(--dim); padding-bottom: 8px; }
 
 /* The @ list rises out of the composer, so the composer must stay a positioning box even where
    the phone chat pins it (position: static above made the list open off-screen). */
@@ -4007,8 +3991,8 @@ html.pen-m-lock, html.pen-m-lock body { height: 100%; overflow: hidden; overscro
 .pen-lp2-notion-points svg { flex: none; margin-top: 4px; }
 
 /* ------------------------------------------------------------------ recording actions
-   Send briefing and Ask this meeting stay out; the rest is under More, on every screen size
-   (critique 15 Oct: the desktop showed eight equal pills). */
+   Send briefing stays out, then as many actions as fit on one row; the rest, and Delete, under
+   More (16 Oct; the measure lives in Detail). */
 .pen-d-more { display: block; position: relative; }
 .pen-d-more > summary { list-style: none; min-height: 40px; cursor: pointer; gap: 7px; }
 .pen-d-more > summary::-webkit-details-marker { display: none; }

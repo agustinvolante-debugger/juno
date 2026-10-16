@@ -49,7 +49,7 @@
     font-size: clamp(28px, 2.6vw, 38px); line-height: 1.1; letter-spacing: -0.035em; text-wrap: balance;
   }
   .pen-juno-hello[data-ready='false'] { visibility: hidden; }
-  .pen-juno-line { margin: 0; font-size: 17px; line-height: 1.45; font-weight: 500; color: var(--j-soft); text-wrap: pretty; max-width: 60ch; }
+  .pen-juno-line { margin: 0; font-size: 17px; line-height: 1.45; font-weight: 500; color: var(--j-soft); text-wrap: pretty; }
   .pen-juno-upload {
     align-self: flex-start; margin-top: 12px; display: inline-flex; align-items: center; gap: 8px;
     min-height: 44px; padding: 0 20px; border-radius: 9999px; border: 0;
@@ -238,12 +238,12 @@
      DOM order now, so it is undone here. */
   .pen-m-body .pen-doc > .pen-aicard, .pen-m-body .pen-doc > .pen-jn { order: 0; }
 
-  /* The summary: three lines, Read more, a reading measure. */
+  /* The summary: three lines, Read more, the full width of its box (the founder prefers it to a measure). */
   .pen-summary { padding: 16px 20px 12px; }
   .pen-doc > .pen-jn-none + .pen-summary, .pen-doc > .pen-jn + .pen-summary { margin-top: 0; }
   .pen-summary .pen-aicard-title { margin: 0 0 6px; font-family: var(--ui); font-size: 14px; font-weight: 600; color: var(--accent-ink); }
   .pen-summary .pen-aicard-body {
-    max-width: 62ch; font-size: 16.5px; line-height: 1.6;
+    font-size: 16.5px; line-height: 1.6;
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden;
   }
   .pen-summary .pen-aicard-body[data-open='true'] { display: block; -webkit-line-clamp: unset; line-clamp: none; overflow: visible; }
@@ -293,9 +293,19 @@
   }
   .pen-d-actions .pen-brief:not([data-state='sent']):not([data-state='failed']):not(:disabled):hover { background: linear-gradient(180deg, #2385ec, #0071e3); }
   .pen-d-actions .pen-brief-more { width: auto; min-width: 40px; padding: 0 14px; gap: 5px; font-size: 14px; font-weight: 600; }
-  .pen-d-ask-item { display: none; }
-  .pen-m-body .pen-d-ask { display: none; }
-  .pen-m-body .pen-d-ask-item { display: inline-flex; }
+  /* One row, never wrapped: what does not fit is moved under More by the measure in Detail. */
+  .pen-d-actions { position: relative; flex-wrap: nowrap; min-width: 0; }
+  .pen-d-brief { flex: none; display: flex; }
+  .pen-d-actions > .pen-btn, .pen-d-actions > .pen-notion-sent, .pen-d-actions > .pen-d-more { flex: none; }
+  /* The replicas the measure reads: laid out at row size, never seen, never scrolled to. */
+  .pen-d-measure {
+    position: absolute; left: 0; top: 0; width: 0; height: 0; overflow: hidden;
+    display: flex; gap: 8px; visibility: hidden; pointer-events: none;
+  }
+  .pen-d-measure > * { flex: none; }
+  /* In More, actions read as a list: start-aligned, not centred pills. */
+  .pen-d-actions .pen-d-menu :is(.pen-btn, .pen-notion-sent) { justify-content: flex-start; width: 100%; padding: 0 14px; }
+  .pen-d-actions .pen-d-menu .pen-btn-quiet { margin-left: 0; }
 
   /* ================================================ recording header (16 Oct) */
   /* The title takes the full width on its own; the actions sit in one row under it. */
@@ -351,9 +361,11 @@
 
   /* ================================================ ready toast (16 Oct) */
   /* The app's toast (dark, quiet), at the top so it reads as news rather than a status line. */
-  .pen-ready-wrap {
-    position: fixed; z-index: 950; left: 50%; transform: translateX(-50%);
-    top: 18px; width: max-content; max-width: calc(100vw - 32px); pointer-events: none;
+  /* Shown as a manual popover (the top layer); the UA popover box is undone here. */
+  .pen-ready-wrap, .pen-ready-wrap[popover] {
+    position: fixed; z-index: 2147483000; inset: 18px auto auto 50%; transform: translateX(-50%);
+    margin: 0; padding: 0; border: 0; background: transparent; overflow: visible; color: inherit;
+    width: max-content; height: auto; max-width: calc(100vw - 32px); pointer-events: none;
   }
   .pen-ready-wrap[data-phone] { top: calc(env(safe-area-inset-top, 0px) + 10px); width: calc(100vw - 24px); max-width: 520px; }
   .pen-ready {
