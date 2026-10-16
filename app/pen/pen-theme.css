@@ -3928,6 +3928,10 @@ html.pen-m-lock, html.pen-m-lock body { height: 100%; overflow: hidden; overscro
 .pen-nimp-row:disabled { opacity: .55; cursor: not-allowed; }
 .pen-nimp-tag { align-self: flex-start; margin-top: 4px; font-style: normal; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--sunk); color: var(--soft); }
 
+/* Import from Granola: several to pick, and "all not yet in Juno" as a quiet text button. */
+.pen-gimp-all { padding: 0; border: 0; background: none; font: inherit; font-size: 14px; color: var(--accent-ink); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.pen-gimp-all:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+
 /* Landing: "New" badge above the English hero, pointing at the Notion section. */
 .pen-lp2-newbadge {
   display: inline-flex; align-items: center; gap: 8px; margin-bottom: 18px; padding: 5px 12px 5px 5px; border-radius: 999px;
