@@ -84,13 +84,13 @@ const NOTION_EN = {
  * Icons brand mark (brand-marks.tsx), a plain name badge where no usable logo exists, or our own
  * icon for "any audio".
  */
-type ConnMark = { mark: MarkKey; label: string } | { badge: string } | { icon: IconName; label: string }
+type ConnMark = { mark: MarkKey; label: string } | { badge: string } | { icon: IconName; label: string } | { img: string; label: string }
 type ConnGroup = { key: 'cal' | 'docs' | 'tasks' | 'ai'; title: string; line: string; marks: ConnMark[]; said: string; did: string; fine: string }
 const CONN_MARKS: Record<ConnGroup['key'], ConnMark[]> = {
-  cal: [{ mark: 'googlecalendar', label: 'Google Calendar' }, { mark: 'apple', label: 'Apple Calendar' }, { badge: 'Outlook' }],
+  cal: [{ mark: 'googlecalendar', label: 'Google Calendar' }, { mark: 'apple', label: 'Apple Calendar' }, { img: '/brands/outlook.png', label: 'Outlook' }],
   docs: [{ mark: 'googledocs', label: 'Google Docs' }, { mark: 'googlesheets', label: 'Google Sheets' }, { mark: 'notion', label: 'Notion' }],
   tasks: [{ mark: 'whatsapp', label: 'WhatsApp' }, { mark: 'googlesheets', label: 'Google Sheets' }, { mark: 'gmail', label: 'Gmail' }],
-  ai: [{ mark: 'whatsapp', label: 'WhatsApp' }, { mark: 'imessage', label: 'iMessage' }, { badge: 'Granola' }, { badge: 'Plaud' }, { badge: 'Pocket' }, { icon: 'wave', label: 'Audio' }],
+  ai: [{ mark: 'whatsapp', label: 'WhatsApp' }, { mark: 'imessage', label: 'iMessage' }, { img: '/brands/granola.png', label: 'Granola' }, { img: '/brands/plaud.png', label: 'Plaud' }, { img: '/brands/pocket.png', label: 'Pocket' }, { icon: 'wave', label: 'Audio' }],
 }
 const CONNECT = {
   en: {
@@ -1061,7 +1061,9 @@ function Connectors() {
             <Reveal key={g.key} as="li" delay={(i % 2) * 0.1} className="lpa-conn-tile">
               <div className="lpa-conn-marks">
                 {CONN_MARKS[g.key].map((m) =>
-                  'badge' in m ? (
+                  'img' in m ? (
+                    <span key={m.label} className="lpa-conn-mark" title={m.label}><img src={m.img} alt={m.label} width={22} height={22} className="lpa-conn-img" /></span>
+                  ) : 'badge' in m ? (
                     <span key={m.badge} className="lpa-conn-mark lpa-conn-badge">{m.badge}</span>
                   ) : 'mark' in m ? (
                     <span key={m.mark} className="lpa-conn-mark" title={m.label}><BrandMark name={m.mark} /></span>

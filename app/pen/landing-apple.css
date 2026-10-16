@@ -685,3 +685,6 @@
   .lpa-conn-tile { padding: 24px 20px; }
   .lpa-conn-line { font-size: 17px; }
 }
+
+/* Logos the founders supplied (public/brands/): same box as the drawn marks. */
+.lpa-conn-img { width: 22px; height: 22px; object-fit: contain; border-radius: 5px; display: block; }
