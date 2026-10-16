@@ -22,7 +22,7 @@ const ITEMS: { href: string; label: 'profile' | 'WhatsApp'; icon: IconName }[] =
  * `whatsapp` is false until WhatsApp (Meta Cloud API) or iMessage is configured, so nobody finds a page that can't work.
  * `billing` is true for anyone Stripe knows: pause, and the way into Stripe's portal.
  */
-export default function SettingsNav({ whatsapp = false, billing = false, notion = false, calendar = false, imessage = false }: { whatsapp?: boolean; billing?: boolean; notion?: boolean; calendar?: boolean; imessage?: boolean }) {
+export default function SettingsNav({ whatsapp = false, billing = false, notion = false, calendar = false, imessage = false, granola = false }: { whatsapp?: boolean; billing?: boolean; notion?: boolean; calendar?: boolean; imessage?: boolean; granola?: boolean }) {
   const T = useCopy(SN)
   const path = usePathname()
   return (
@@ -37,6 +37,12 @@ export default function SettingsNav({ whatsapp = false, billing = false, notion 
         <Link href="/pen/settings/notion" className="pen-cat" data-active={path === '/pen/settings/notion'} aria-current={path === '/pen/settings/notion' ? 'page' : undefined}>
           <Icon name="link" size={19} />
           <span className="pen-cat-label">Notion</span>
+        </Link>
+      )}
+      {granola && (
+        <Link href="/pen/settings/granola" className="pen-cat" data-active={path === '/pen/settings/granola'} aria-current={path === '/pen/settings/granola' ? 'page' : undefined}>
+          <Icon name="link" size={19} />
+          <span className="pen-cat-label">Granola</span>
         </Link>
       )}
       {calendar && (

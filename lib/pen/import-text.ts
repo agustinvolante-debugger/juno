@@ -24,6 +24,14 @@ export type ImportOpts = {
   durationSec?: number | null
   /** Where it came from, e.g. 'text:notion:<block id>', which is also how a repeat is spotted. */
   storagePath?: string
+  /**
+   * When the notes are written: 'after' the response (default), 'now' before returning, or
+   * 'caller' (a background batch writes them itself with finishImport, the recording waits
+   * as 'transcribed', which the app also picks up if the batch runs out of time).
+   */
+  notes?: 'after' | 'now' | 'caller'
+  /** Who "Me" is when the transcript says so (Granola): the user's own name goes on the label. */
+  selfLabel?: string
   /** Runs once the notes are written (e.g. send them on to Notion). Never throws. */
   afterNotes?: (session: NonNullable<Awaited<ReturnType<typeof getSession>>>) => Promise<void>
 }
@@ -66,7 +74,7 @@ export async function importText(email: string, o: ImportOpts): Promise<{ id: st
   const onCall = await peopleOnSession(email, session.id).catch(() => [])
   const speakerMap: SpeakerMap = {}
   for (const [labelKey, name] of Object.entries(parsed.names)) {
-    if (isSelfName(name, profile.name)) {
+    if (isSelfName(name, profile.name) || (o.selfLabel && name.trim() === o.selfLabel)) {
       speakerMap[labelKey] = { name: profile.name?.trim() || 'You', me: true, source: 'auto' }
       continue
     }
@@ -82,20 +90,63 @@ export async function importText(email: string, o: ImportOpts): Promise<{ id: st
     metered_sec: durationSec ?? parsed.estSec,
   })
 
-  // Notes take about a minute on a long transcript: after the response.
-  after(async () => {
-    try {
-      const fresh = await getSession(email, session.id)
-      if (!fresh) return
-      const r = await writeNotes({ email, session: fresh, claim: true })
-      if (r === 'taken' || !r.session) return
-      const people = await peopleOnSession(email, session.id).catch(() => [])
-      await Promise.all(people.map((p) => enrichPerson(email, p.id).catch(() => {})))
-      if (o.afterNotes) await o.afterNotes(r.session).catch(() => {})
-    } catch (e) {
-      console.warn(`pen: import notes failed for ${session.id}: ${(e as Error).message}`)
-    }
-  })
+  // Notes take about a minute on a long transcript: after the response (or as the caller says).
+  const notes = () => finishImport(email, session.id, o.afterNotes)
+  if (o.notes === 'now') await notes()
+  else if (o.notes !== 'caller') after(notes)
 
   return { id: session.id, turns: parsed.utterances.length, speakers: Object.values(parsed.names) }
+}
+
+/** Juno's notes for an imported transcript, then the people on it refreshed. Never throws. */
+export async function finishImport(email: string, sessionId: string, afterNotes?: ImportOpts['afterNotes']): Promise<void> {
+  try {
+    const fresh = await getSession(email, sessionId)
+    if (!fresh || fresh.status !== 'transcribed') return
+    const r = await writeNotes({ email, session: fresh, claim: true })
+    if (r === 'taken' || !r.session) return
+    const people = await peopleOnSession(email, sessionId).catch(() => [])
+    await Promise.all(people.map((p) => enrichPerson(email, p.id).catch(() => {})))
+    if (afterNotes) await afterNotes(r.session).catch(() => {})
+  } catch (e) {
+    console.warn(`pen: import notes failed for ${sessionId}: ${(e as Error).message}`)
+  }
+}
+
+/**
+ * A meeting that arrives with notes but no transcript (Granola without one, e.g. its free plan
+ * over the connector): a recording with the source's summary and the user's own notes, marked
+ * notes-only. Nothing to transcribe or meter, and no model call.
+ */
+export async function importNotesOnly(email: string, o: {
+  title: string
+  summary: string | null
+  ownNotes: string | null
+  sourceName: string
+  storagePath: string
+  recordedAt?: string | null
+  durationSec?: number | null
+}): Promise<{ id: string }> {
+  const body = [o.summary?.trim(), o.ownNotes?.trim() ? `My notes\n${o.ownNotes.trim()}` : null].filter(Boolean).join('\n\n')
+  if (!body) throw Object.assign(new Error('That meeting has no transcript and no notes to import.'), { status: 400 })
+  const { session } = await createSession({
+    user_email: email,
+    storage_path: o.storagePath,
+    source_name: o.sourceName,
+    mime: 'text/plain',
+    bytes: body.length,
+    duration_sec: o.durationSec && o.durationSec > 0 ? Math.round(o.durationSec) : null,
+    recorded_at: o.recordedAt ?? new Date().toISOString(),
+    consent: true,
+    title: o.title,
+    source_channel: 'import',
+  })
+  const plain = (o.summary ?? '').replace(/^#+\s*/gm, '').replace(/\*\*/g, '').trim()
+  await updateSession(session.id, {
+    status: 'noted',
+    notes: { headline: o.title, summary: plain.slice(0, 4000) || undefined, notes_only: true },
+    user_notes: body.slice(0, 60_000),
+    error_text: null,
+  })
+  return { id: session.id }
 }

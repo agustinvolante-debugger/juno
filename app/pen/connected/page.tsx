@@ -12,7 +12,7 @@ export default async function ConnectedPage({ searchParams }: { searchParams: Pr
   const sp = await searchParams
   const one = (k: string) => (typeof sp[k] === 'string' ? (sp[k] as string) : '')
   const lang = asLang(one('lang'))
-  const app: ConnectApp = one('app') === 'notion' ? 'notion' : one('app') === 'gdrive' ? 'gdrive' : 'gcal'
+  const app: ConnectApp = one('app') === 'notion' ? 'notion' : one('app') === 'gdrive' ? 'gdrive' : one('app') === 'granola' ? 'granola' : 'gcal'
   const L = COPY[lang]
   const error = one('error')
   const wa = botNumber()

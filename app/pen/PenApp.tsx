@@ -14,6 +14,7 @@ import TranscriptEditor from './TranscriptEditor'
 import SpeakerNames from './SpeakerNames'
 import TranscriptImport from './TranscriptImport'
 import NotionImport from './NotionImport'
+import GranolaImport from './GranolaImport'
 import Tour from './Tour'
 import { speakersIn, type SpeakerMap } from '@/lib/pen/speakers'
 import ChatView from './ChatView'
@@ -114,6 +115,7 @@ export default function PenApp({
   showReferral = false,
   showFeedback = false,
   notion = null,
+  granola = null,
   google = null,
 }: {
   /** Null when Google isn't set up on the server; drive = Docs & Sheets connected (lib/pen/google-drive.ts). */
@@ -128,6 +130,8 @@ export default function PenApp({
   showFeedback?: boolean
   /** Null when Notion isn't set up on the server (lib/pen/notion.ts). */
   notion?: { connected: boolean; sent?: Record<string, string> } | null
+  /** Null when Granola import isn't live on the server (lib/pen/granola.ts). */
+  granola?: { connected: boolean } | null
   /** Juno Pen's WhatsApp number and whether this account has linked a phone. Null when off. */
   whatsapp?: { number: string; linked: boolean; imessage?: string | null } | null
   /** Home's "Juno is waiting on you", rendered on the server so it doesn't pop in. */
@@ -165,6 +169,15 @@ export default function PenApp({
   const [dragOver, setDragOver] = useState(false)
   const [tab, setTab] = useState<'note' | 'transcript'>('note')
   const [chatOpen, setChatOpen] = useState(false)
+  // ?import=granola: Settings → Granola's "Import from Granola" opens the picker here.
+  useEffect(() => {
+    const u = new URL(window.location.href)
+    if (u.searchParams.get('import') !== 'granola') return
+    if (granola) setGImport(true)
+    u.searchParams.delete('import')
+    window.history.replaceState(null, '', u.toString())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   // ?open=<recording id>: a link from outside the app (a Notion page's "Open in Juno") lands on
   // that note. The parameter is dropped afterwards so a reload doesn't keep reopening it.
   useEffect(() => {
@@ -302,6 +315,7 @@ export default function PenApp({
   const [peopleLoaded, setPeopleLoaded] = useState(false)
   const [txImport, setTxImport] = useState(false)
   const [nImport, setNImport] = useState(false)
+  const [gImport, setGImport] = useState(false)
   // The tour: once on first sign-in (the account remembers), and from the menu on demand.
   const [tourOpen, setTourOpen] = useState(false)
   useEffect(() => {
@@ -938,6 +952,12 @@ export default function PenApp({
                   <span>{T.importNotion}</span>
                 </button>
               )}
+              {granola && (
+                <button type="button" className="pen-m-rowbtn" onClick={() => setGImport(true)}>
+                  <Icon name="link" size={19} />
+                  <span>{T.importGranola}</span>
+                </button>
+              )}
               <button type="button" className="pen-m-bigbtn" onClick={() => fileInput.current?.click()}>
                 <Icon name="plus" size={22} />
                 <span><strong>{T.mChoose}</strong><em>{T.mChooseSub}</em></span>
@@ -1159,6 +1179,7 @@ export default function PenApp({
             onImported={(id) => { setNImport(false); void refresh(); openSession(id) }}
           />
         )}
+        {gImport && <GranolaImport connected={Boolean(granola?.connected)} onClose={() => { setGImport(false); void refresh() }} onQueued={() => window.setTimeout(() => void refresh(), 8000)} />}
         {tourOpen && <Tour lang={appLang} onClose={closeTour} onUpload={() => { setPhoneTab('upload'); fileInput.current?.click() }} />}
         {promoOpen && !tourOpen && <ReferralPromo T={T} onClose={closePromo} />}
         {askOpen && !tourOpen && !promoOpen && <FeedbackAsk T={T} onClose={closeAsk} />}
@@ -1239,6 +1260,7 @@ export default function PenApp({
         T={T}
         onTranscript={!readOnly && !paused ? () => { setNavOpen(false); setTxImport(true) } : null}
         onNotion={!readOnly && !paused && notion ? () => { setNavOpen(false); setNImport(true) } : null}
+        onGranola={!readOnly && !paused && granola ? () => { setNavOpen(false); setGImport(true) } : null}
         whatsapp={whatsapp ? {
           href: whatsapp.linked ? `https://wa.me/${whatsapp.number}` : '/pen/settings/whatsapp',
           external: whatsapp.linked,
@@ -1264,6 +1286,7 @@ export default function PenApp({
           onImported={(id) => { setNImport(false); void refresh(); openSession(id) }}
         />
       )}
+      {gImport && <GranolaImport connected={Boolean(granola?.connected)} onClose={() => { setGImport(false); void refresh() }} onQueued={() => window.setTimeout(() => void refresh(), 8000)} />}
 
       <nav className="pen-cats">
         <div className="pen-cats-list">
@@ -2786,6 +2809,7 @@ function Detail({
           </div>
 
           {n.empty && <div className="pen-sec"><Muted>{T.mEmpty}</Muted></div>}
+          {n.notes_only && <div className="pen-sec"><Muted>{T.mNotesOnly}</Muted></div>}
           {session.status === 'transcribing' && <div className="pen-sec"><Muted>{T.mTranscribing}</Muted></div>}
           {session.status === 'uploaded' && <div className="pen-sec"><Muted>{T.mUploaded}</Muted></div>}
           {session.status === 'held' && (
@@ -3561,15 +3585,17 @@ function ImportMenu({
   T,
   onTranscript,
   onNotion,
+  onGranola,
   whatsapp,
 }: {
   T: AppCopy
   onTranscript: (() => void) | null
   onNotion: (() => void) | null
+  onGranola: (() => void) | null
   whatsapp: { href: string; external: boolean; label: string } | null
 }) {
   const m = useMenu()
-  if (!onTranscript && !onNotion && !whatsapp) return null
+  if (!onTranscript && !onNotion && !onGranola && !whatsapp) return null
   const pick = (fn: () => void) => () => { m.setOpen(false); fn() }
   return (
     <div className="pen-imenu" ref={m.wrap}>
@@ -3595,6 +3621,11 @@ function ImportMenu({
           {onNotion && (
             <button type="button" role="menuitem" className="pen-menu-item" onClick={pick(onNotion)}>
               <Icon name="link" size={15} />{T.importNotion}
+            </button>
+          )}
+          {onGranola && (
+            <button type="button" role="menuitem" className="pen-menu-item" onClick={pick(onGranola)}>
+              <Icon name="link" size={15} />{T.importGranola}
             </button>
           )}
           {whatsapp && (

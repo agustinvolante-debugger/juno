@@ -39,6 +39,8 @@ export type PenNotes = {
     revealed_criteria?: string[]
   }
   client_name?: string
+  /** Imported with notes but no transcript (e.g. Granola without one): nothing to quote or search by speaker. */
+  notes_only?: boolean
 }
 
 export type ChatTurn = { role: 'user' | 'assistant'; content: string; ts: number }
