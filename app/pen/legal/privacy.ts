@@ -124,6 +124,12 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
         ],
       },
       {
+        h: 'Granola',
+        body: [
+          'If you connect Granola, Juno Pen stores your Granola API key or sign-in token encrypted and uses it only to read the meetings you choose to import (title, date, attendees, transcript, summary and your own notes). Disconnect in Settings → Granola to delete it.',
+        ],
+      },
+      {
         h: 'AI and model training',
         body: [
           {
@@ -333,6 +339,12 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
         ],
       },
       {
+        h: 'Granola',
+        body: [
+          'Si conectas Granola, Juno Pen guarda cifrada tu clave API o tu sesión de Granola y la usa solo para leer las reuniones que elijas importar (título, fecha, asistentes, transcripción, resumen y tus notas). Desconéctalo en Ajustes → Granola para borrarla.',
+        ],
+      },
+      {
         h: 'IA y entrenamiento de modelos',
         body: [
           {
@@ -539,6 +551,12 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
           'Se você conectar o Google Docs e Planilhas, o Juno Pen pede ao Google uma única permissão (drive.file): criar arquivos no seu Google Drive e abrir só os que o Juno Pen criou. O Juno Pen não vê nenhum outro arquivo do seu Drive.',
           'O Juno Pen cria um Doc ou uma planilha só quando você pede (as notas de uma gravação, um plano que você aprovou, suas tarefas ou contatos), numa pasta “Juno Pen”. Guardamos só um token de acesso criptografado, compartilhado com o Google Agenda se os dois estiverem conectados.',
           'Você pode desconectar em Configurações → Google. Os arquivos que o Juno Pen criou continuam no seu Drive e são seus.',
+        ],
+      },
+      {
+        h: 'Granola',
+        body: [
+          'Se você conectar o Granola, o Juno Pen guarda criptografada sua chave de API ou sessão do Granola e a usa só para ler as reuniões que você escolher importar (título, data, participantes, transcrição, resumo e suas notas). Desconecte em Configurações → Granola para apagá-la.',
         ],
       },
       {
