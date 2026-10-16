@@ -21,7 +21,7 @@ const SPRING = { type: 'spring' as const, stiffness: 420, damping: 34, mass: 0.7
 
 const NE_EN = {
   nothingBacked: 'Nothing in the recording backed up those notes, so nothing was added.',
-  enhanceFailed: 'Could not enhance those notes.',
+  enhanceFailed: 'I couldn’t polish those notes. Try again.',
   yourNotes: 'Your notes',
   saveFailedTitle: 'The last save failed — your text is still here but is not stored yet',
   notSaved: 'not saved',
@@ -29,9 +29,9 @@ const NE_EN = {
   saved: 'saved',
   enhanceTitle: 'Expand your shorthand using the recording',
   writeFirst: 'Write a note first',
-  enhancing: 'Enhancing',
-  enhance: 'Enhance',
-  placeholder: 'Jot it down however you like — “kitchen big win, price still an issue”. Then press Enhance.',
+  enhancing: 'Polishing',
+  enhance: 'Polish my notes',
+  placeholder: 'Jot it down however you like — “kitchen big win, price still an issue”. Then press Polish my notes.',
   greyNote: 'Grey text was written from the recording. Click it to edit — it turns black once you do.',
 }
 
@@ -39,7 +39,7 @@ const NE: Copy<typeof NE_EN> = {
   en: NE_EN,
   es: {
     nothingBacked: 'Nada en la grabación respaldaba esas notas, así que no se agregó nada.',
-    enhanceFailed: 'No se pudieron mejorar esas notas.',
+    enhanceFailed: 'No pude pulir esas notas. Inténtalo otra vez.',
     yourNotes: 'Tus notas',
     saveFailedTitle: 'El último guardado falló: tu texto sigue aquí, pero todavía no está guardado',
     notSaved: 'sin guardar',
@@ -47,14 +47,14 @@ const NE: Copy<typeof NE_EN> = {
     saved: 'guardado',
     enhanceTitle: 'Completa tus apuntes con lo que dice la grabación',
     writeFirst: 'Primero escribe una nota',
-    enhancing: 'Mejorando',
-    enhance: 'Mejorar',
-    placeholder: 'Anota como quieras: “la cocina les encantó, el precio sigue siendo tema”. Después presiona Mejorar.',
+    enhancing: 'Puliendo',
+    enhance: 'Pulir mis notas',
+    placeholder: 'Anota como quieras: “la cocina les encantó, el precio sigue siendo tema”. Después presiona Pulir mis notas.',
     greyNote: 'El texto gris se escribió a partir de la grabación. Haz clic para editarlo: se vuelve negro cuando lo cambias.',
   },
   pt: {
     nothingBacked: 'Nada na gravação confirmava essas notas, então nada foi adicionado.',
-    enhanceFailed: 'Não foi possível melhorar essas notas.',
+    enhanceFailed: 'Não consegui caprichar nessas notas. Tente de novo.',
     yourNotes: 'Suas notas',
     saveFailedTitle: 'O último salvamento falhou — seu texto continua aqui, mas ainda não foi salvo',
     notSaved: 'não salvo',
@@ -62,9 +62,9 @@ const NE: Copy<typeof NE_EN> = {
     saved: 'salvo',
     enhanceTitle: 'Complete suas anotações com o que diz a gravação',
     writeFirst: 'Escreva uma nota primeiro',
-    enhancing: 'Melhorando',
-    enhance: 'Melhorar',
-    placeholder: 'Anote do seu jeito — “adoraram a cozinha, o preço ainda pesa”. Depois aperte Melhorar.',
+    enhancing: 'Caprichando',
+    enhance: 'Caprichar nas notas',
+    placeholder: 'Anote do seu jeito — “adoraram a cozinha, o preço ainda pesa”. Depois aperte Caprichar nas notas.',
     greyNote: 'O texto cinza foi escrito a partir da gravação. Clique para editar — ele fica preto quando você muda.',
   },
 }

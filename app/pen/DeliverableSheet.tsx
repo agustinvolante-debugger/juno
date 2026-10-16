@@ -346,7 +346,7 @@ async function writeClipboard(text: string): Promise<boolean> {
  * question and missed item, ninety of them on a long phone page. `linkedin` adds the
  * connection note where a person is the subject.
  */
-export function DeliverableActions({ onPick, linkedin = false, item }: { onPick: (kind: Deliverable['kind']) => void; linkedin?: boolean; item?: string }) {
+export function DeliverableActions({ onPick, linkedin = false, item, label }: { onPick: (kind: Deliverable['kind']) => void; linkedin?: boolean; item?: string; /** The button's words; "Draft" by default. Home says who: "Email Titi". */ label?: string }) {
   const T = useCopy(DS)
   const [open, setOpen] = useState(false)
   const [at, setAt] = useState<{ top: number; left: number } | null>(null)
@@ -407,10 +407,11 @@ export function DeliverableActions({ onPick, linkedin = false, item }: { onPick:
         className="pen-do-btn"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={item ? T.draftFor(item) : undefined}
+        aria-label={item && !label ? T.draftFor(item) : undefined}
+        data-labelled={label ? 'true' : undefined}
         onClick={() => setOpen((v) => !v)}
       >
-        {T.draft}
+        {label ?? T.draft}
         <svg viewBox="0 0 20 20" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m6 8 4 4 4-4" /></svg>
       </button>
       {open && createPortal(

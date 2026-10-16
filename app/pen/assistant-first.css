@@ -1,0 +1,323 @@
+/* Assistant-first Home and recording page (16 Oct; critique 2026-10-16T18-06-45Z).
+
+   An extension of the app skin (app-skin.css), not a new look: Inter, the one blue, glass cards,
+   pill controls. What changes is the hierarchy. On Home, Juno speaks first in the one surface
+   that carries the strongest colour (the blue the skin already uses for every primary action);
+   everything below it is the quiet glass of the rest of the app. On a recording, what Juno can
+   do leads, the summary is three lines, and the reference lists fold away.
+
+   Scoped like app-skin.css: only inside the signed-in app's own surfaces (.pen-page desktop,
+   .pen-m phone), so the landing, signup and legal pages never match. */
+
+.pen-root:has(.pen-page, .pen-m) {
+
+  /* ------------------------------------------------------------ skip link */
+  .pen-skip {
+    position: absolute; left: 12px; top: -60px; z-index: 200;
+    padding: 10px 16px; border-radius: 9999px; background: var(--ink); color: #fff;
+    font-family: var(--ui); font-size: 14.5px; font-weight: 600; text-decoration: none;
+    transition: top .15s ease;
+  }
+  .pen-skip:focus { top: 12px; outline: 2px solid var(--sk-blue-hi); outline-offset: 2px; }
+  .pen-m .pen-skip:focus { top: calc(env(safe-area-inset-top, 0px) + 8px); }
+  #pen-main:focus, #pen-m-main:focus { outline: none; }
+
+  /* ============================================================ the Juno card */
+  .pen-home { gap: 18px; }
+
+  .pen-juno {
+    --j-ink: #fff;
+    --j-soft: rgba(255, 255, 255, .86);   /* 6.0:1 on the darkest stop, 5.2:1 on the lightest */
+    --j-dim: rgba(255, 255, 255, .78);
+    --j-line: rgba(255, 255, 255, .2);
+    --j-fill: rgba(255, 255, 255, .1);
+    position: relative; isolation: isolate; overflow: hidden;
+    padding: 26px 28px 14px; border-radius: 22px; color: var(--j-ink);
+    background:
+      radial-gradient(120% 140% at 100% 0%, rgba(120, 180, 255, .35), transparent 55%),
+      linear-gradient(155deg, #0a62c9 0%, #0052b0 55%, #00468f 100%);
+    border: 1px solid rgba(255, 255, 255, .18);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), 0 2px 4px rgba(0, 40, 100, .12), 0 22px 44px -18px rgba(0, 60, 140, .55);
+  }
+  .pen-juno[data-quiet='true'] { padding-bottom: 18px; }
+  .pen-juno ::selection { background: rgba(255, 255, 255, .35); color: #fff; }
+  .pen-juno :focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+  .pen-juno-head { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+  .pen-juno-hello {
+    margin: 0; color: var(--j-ink);
+    font-size: clamp(28px, 2.6vw, 38px); line-height: 1.1; letter-spacing: -0.035em; text-wrap: balance;
+  }
+  .pen-juno-hello[data-ready='false'] { visibility: hidden; }
+  .pen-juno-line { margin: 0; font-size: 17px; line-height: 1.45; font-weight: 500; color: var(--j-soft); text-wrap: pretty; max-width: 60ch; }
+  .pen-juno-upload {
+    align-self: flex-start; margin-top: 12px; display: inline-flex; align-items: center; gap: 8px;
+    min-height: 44px; padding: 0 20px; border-radius: 9999px; border: 0;
+    background: #fff; color: #0052b0; font-family: var(--ui); font-size: 15px; font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0, 30, 80, .2), 0 8px 18px -8px rgba(0, 20, 60, .5);
+    transition: translate .18s ease, box-shadow .18s ease;
+  }
+  @media (hover: hover) and (prefers-reduced-motion: no-preference) { .pen-juno-upload:hover { translate: 0 -1px; } }
+
+  /* Offers on the blue: rows, not cards in a card. Hairlines between, one white button each. */
+  .pen-juno-list { margin-top: 4px; }
+  .pen-juno .pen-jn-list > * + * { border-top-color: var(--j-line); }
+  .pen-juno .pen-jn-row { padding: 16px 0; }
+  .pen-juno .pen-jn-ic { background: var(--j-fill); color: #fff; }
+  .pen-juno .pen-jn-title { color: var(--j-ink); font-size: 16px; }
+  .pen-juno .pen-jn-when { background: rgba(255, 255, 255, .16); color: #fff; }
+  .pen-juno .pen-jn-why { color: var(--j-dim); }
+  .pen-juno .pen-jn-src { color: #fff; text-decoration: underline; text-decoration-color: rgba(255, 255, 255, .4); text-underline-offset: 3px; }
+  .pen-juno .pen-jn-src:hover { text-decoration-color: #fff; }
+  .pen-juno .pen-btn-accent, .pen-juno .pen-btn-accent:hover:not(:disabled) {
+    background: #fff; border-color: #fff; color: #0052b0;
+    box-shadow: 0 1px 2px rgba(0, 30, 80, .2), 0 8px 18px -8px rgba(0, 20, 60, .5);
+  }
+  .pen-juno .pen-btn-accent:hover:not(:disabled) { background: #f2f7fe; }
+  .pen-juno .pen-btn:not(.pen-btn-accent) { background: rgba(255, 255, 255, .12); border-color: var(--j-line); color: #fff; box-shadow: none; }
+  .pen-juno .pen-jn-quiet { color: var(--j-soft); }
+  .pen-juno .pen-jn-quiet:hover:not(:disabled) { background: rgba(255, 255, 255, .12); color: #fff; }
+  .pen-juno .pen-jn-ask-label { color: var(--j-soft); }
+  .pen-juno .pen-jn-input { border-color: transparent; }
+  .pen-juno .pen-jn-err { color: #ffe1dd; }
+  .pen-juno .pen-jn-settled, .pen-juno .pen-jn-settled[data-tone='quiet'] { color: #fff; }
+  .pen-juno .pen-jn-settled-what { color: var(--j-dim); }
+  .pen-juno .pen-jn-link { color: #fff; text-decoration-color: rgba(255, 255, 255, .5); }
+
+  .pen-juno-more {
+    display: inline-flex; align-items: center; min-height: 40px; margin: 2px 0 4px; padding: 0 14px 0 0;
+    font-family: var(--ui); font-size: 14.5px; font-weight: 600; color: #fff;
+    text-decoration: underline; text-decoration-color: rgba(255, 255, 255, .4); text-underline-offset: 3px;
+  }
+
+  /* "Done this week: 4 ▸" and its list. */
+  .pen-juno-done { border-top: 1px solid var(--j-line); padding: 6px 0 2px; }
+  .pen-juno-done-btn {
+    display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 8px 0 0;
+    font-family: var(--ui); font-size: 14.5px; font-weight: 600; color: var(--j-soft);
+  }
+  .pen-juno-done-btn:hover { color: #fff; }
+  .pen-juno-chev { transition: transform .2s ease; }
+  .pen-juno-done-btn[aria-expanded='true'] .pen-juno-chev { transform: rotate(90deg); }
+  .pen-juno .pen-did-list { margin: 0 0 8px; }
+  .pen-juno .pen-did + .pen-did { border-top-color: var(--j-line); }
+  .pen-juno .pen-did-what { color: var(--j-dim); font-weight: 500; }
+  .pen-juno .pen-did-title { color: #fff; }
+  .pen-juno .pen-did-title a { text-decoration-color: rgba(255, 255, 255, .4); }
+  .pen-juno .pen-did-when { color: var(--j-dim); }
+
+  /* ------------------------------------------------- "Next from Juno" line */
+  .pen-next {
+    display: flex; align-items: center; gap: 10px; min-height: 52px;
+    font-family: var(--ui); font-size: 14.5px; line-height: 1.4; color: var(--soft); text-decoration: none;
+  }
+  .pen-next > svg:first-child { flex: none; color: var(--accent); }
+  .pen-next-text { flex: 1; min-width: 0; text-wrap: pretty; }
+  .pen-next-open {
+    flex: none; display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 4px 0 12px;
+    font-weight: 600; color: var(--accent-ink); text-decoration: none; white-space: nowrap;
+  }
+  .pen-next-open:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .pen-next-go { flex: none; color: var(--dim); }
+  .pen-next[data-linked='false'] { font-weight: 600; color: var(--accent-ink); }
+  .pen-juno .pen-next { border-top: 1px solid var(--j-line); color: var(--j-soft); }
+  .pen-juno .pen-next > svg:first-child, .pen-juno .pen-next-go { color: #fff; }
+  .pen-juno .pen-next-open, .pen-juno .pen-next[data-linked='false'] { color: #fff; }
+  /* On the phone it stands alone, as a glass row under Today. */
+  .pen-home > .pen-next {
+    padding: 4px 8px 4px 16px; border-radius: 16px;
+    background: var(--g-fill); -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+    border: 1px solid var(--g-edge); box-shadow: var(--g-shadow);
+  }
+
+  /* --------------------------------------------- phone: swipe through offers */
+  .pen-juno[data-phone] { padding: 20px 18px 10px; border-radius: 20px; }
+  .pen-juno[data-phone] .pen-juno-hello { font-size: 28px; }
+  .pen-juno[data-phone] .pen-juno-line { font-size: 16px; }
+  .pen-swipe { margin: 4px -18px 0; }
+  .pen-swipe-track {
+    display: flex; overflow-x: auto; overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .pen-swipe-track::-webkit-scrollbar { display: none; }
+  .pen-swipe-card { flex: 0 0 100%; min-width: 0; padding: 0 18px; scroll-snap-align: start; scroll-snap-stop: always; }
+  .pen-swipe-card .pen-jn-row { padding: 12px 0 8px; }
+  .pen-swipe-card .pen-jn-acts { flex: 1 1 100%; margin-left: 0; flex-direction: column; align-items: stretch; gap: 2px; }
+  .pen-swipe-card .pen-jn-btn { width: 100%; min-height: 48px; justify-content: center; font-size: 16px; }
+  .pen-swipe-card .pen-jn-quiet { min-height: 44px; }
+  .pen-swipe-card .pen-jn-why { -webkit-line-clamp: 2; line-clamp: 2; }
+  .pen-swipe-nav { display: flex; align-items: center; justify-content: space-between; padding: 2px 18px 6px; }
+  .pen-swipe-dots { display: inline-flex; gap: 6px; }
+  .pen-swipe-dots button { width: 7px; height: 7px; border-radius: 9999px; background: rgba(255, 255, 255, .38); padding: 0; transition: width .2s ease, background .2s ease; }
+  .pen-swipe-dots button[data-on='true'] { width: 18px; background: #fff; }
+  .pen-swipe-n { font-size: 13px; font-weight: 600; color: var(--j-soft); font-variant-numeric: tabular-nums; }
+  @media (prefers-reduced-motion: reduce) { .pen-swipe-dots button { transition: none; } }
+
+  /* ================================================================ Today */
+  .pen-today .pen-card-more, .pen-worth .pen-card-more { width: 100%; margin: 0; padding: 12px 18px; border-top: 1px solid var(--hair); border-radius: 0 0 var(--sk-r-card) var(--sk-r-card); }
+  /* Nothing due: one quiet line, and You owe takes the width. */
+  .pen-today-nodue { margin: 0; padding: 10px 18px 0; font-size: 14px; color: var(--dim); }
+  .pen-today-cols[data-one] { grid-template-columns: minmax(0, 1fr); }
+  .pen-today-plain { padding: 4px 0; }
+  /* Row actions say what they do ("Email Titi"), at a real button size. */
+  .pen-row2 .pen-do { flex: none; align-self: center; }
+  .pen-row2 .pen-do-btn[data-labelled] {
+    min-height: 36px; padding: 0 12px; border-radius: 9999px; white-space: nowrap;
+    font-size: 13.5px; font-weight: 600; color: var(--accent-ink);
+  }
+
+  /* ================================================== Worth a second look */
+  .pen-worth {
+    border-radius: var(--sk-r-card);
+    background: var(--g-fill); -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+    border: 1px solid var(--g-edge); box-shadow: var(--g-shadow);
+  }
+  .pen-worth-head { padding: 16px 18px 6px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
+  .pen-worth-head .pen-card-title { font-size: 17px; }
+  .pen-worth-sub { margin: 0; font-size: 13.5px; color: var(--dim); }
+  .pen-worth .pen-card-list > li + li { border-top: 1px solid var(--hair); }
+  .pen-worth .pen-row2-text { -webkit-line-clamp: 2; line-clamp: 2; }
+
+  /* ========================================================= people strip */
+  .pen-pstrip { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 2px 2px 0; }
+  .pen-pstrip-title { flex: none; margin: 0; font-family: var(--ui); font-size: 14px; font-weight: 600; color: var(--soft); }
+  .pen-pstrip-list { flex: 1; min-width: 0; display: flex; gap: 6px; margin: 0; padding: 0; list-style: none; overflow: hidden; mask-image: linear-gradient(90deg, #000 88%, transparent); }
+  .pen-pstrip-p {
+    display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 0 12px 0 4px; border-radius: 9999px;
+    background: var(--g-pill); border: 1px solid var(--g-pill-line); box-shadow: var(--g-pill-shadow);
+    font-family: var(--ui); font-size: 14px; font-weight: 500; color: var(--ink); white-space: nowrap;
+  }
+  .pen-pstrip-p:hover { border-color: rgba(29, 29, 31, .18); }
+  .pen-pstrip-p .pen-avatar { width: 30px; height: 30px; font-size: 11.5px; }
+  .pen-pstrip-all {
+    flex: none; display: inline-flex; align-items: center; gap: 4px; min-height: 40px; padding: 0 6px 0 10px;
+    font-family: var(--ui); font-size: 14px; font-weight: 600; color: var(--accent-ink); white-space: nowrap;
+  }
+  .pen-pstrip-all:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+  /* ======================================================= sidebar: Add */
+  .pen-add { margin-bottom: 14px; border-radius: 22px; transition: background .15s ease, box-shadow .15s ease; }
+  .pen-add-btn { min-height: 46px; font-size: 15px; font-weight: 600; }
+  .pen-add-btn > svg:first-child { color: var(--accent); }
+  .pen-add-hint { margin: 6px 0 0; padding: 0 16px; font-size: 12.5px; color: var(--dim); }
+  .pen-add[data-over='true'] { background: var(--accent-wash); box-shadow: 0 0 0 2px var(--sk-blue); }
+  .pen-add[data-over='true'] .pen-add-hint { color: var(--accent-ink); font-weight: 600; }
+
+  /* ===================================================== rail: five + all */
+  .pen-rail-all {
+    display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 16px; margin-top: 2px;
+    font-family: var(--ui); font-size: 14px; font-weight: 600; color: var(--accent-ink);
+  }
+  .pen-rail-all[data-quiet] { color: var(--soft); margin-top: 8px; }
+  .pen-rail-totals { margin: 14px 4px 0; font-size: 13px; line-height: 1.5; color: var(--dim); font-variant-numeric: tabular-nums; }
+
+  /* ===================================================== the recording page */
+  /* No offers: one line, and the meeting chat as the next thing to do. */
+  .pen-jn-none {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0 0 18px;
+    padding: 12px 16px; border-radius: 14px; background: var(--accent-wash);
+    font-size: 15px; color: var(--soft);
+  }
+  .pen-jn-none > svg { flex: none; color: var(--accent); }
+  .pen-jn-none-ask {
+    display: inline-flex; align-items: center; gap: 4px; min-height: 36px; margin-left: auto;
+    font-family: var(--ui); font-size: 14.5px; font-weight: 600; color: var(--accent-ink);
+  }
+  .pen-jn-none-ask:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .pen-jn-loading { min-height: 0; padding: 0 4px; background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; animation: none; }
+  .pen-jn-loading .pen-skel-row { width: 46%; margin: 4px 0 0; }
+  .pen-doc > .pen-jn { margin: 0 0 18px; }
+  /* The offers lead; the old phone reordering (summary and offers pulled up with `order`) is the
+     DOM order now, so it is undone here. */
+  .pen-m-body .pen-doc > .pen-aicard, .pen-m-body .pen-doc > .pen-jn { order: 0; }
+
+  /* The summary: three lines, Read more, a reading measure. */
+  .pen-summary { padding: 16px 20px 12px; }
+  .pen-doc > .pen-jn-none + .pen-summary, .pen-doc > .pen-jn + .pen-summary { margin-top: 0; }
+  .pen-summary .pen-aicard-title { margin: 0 0 6px; font-family: var(--ui); font-size: 14px; font-weight: 600; color: var(--accent-ink); }
+  .pen-summary .pen-aicard-body {
+    max-width: 62ch; font-size: 16.5px; line-height: 1.6;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden;
+  }
+  .pen-summary .pen-aicard-body[data-open='true'] { display: block; -webkit-line-clamp: unset; line-clamp: none; overflow: visible; }
+  .pen-summary-more {
+    display: inline-flex; align-items: center; min-height: 36px; margin-top: 2px;
+    font-family: var(--ui); font-size: 14.5px; font-weight: 600; color: var(--accent-ink);
+  }
+  .pen-summary-more:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+  /* Your notes, folded to one line while empty. */
+  .pen-notes-box { margin-top: 14px; }
+  .pen-notes-add {
+    display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border-radius: 9999px;
+    background: var(--g-pill); border: 1px solid var(--g-pill-line); box-shadow: var(--g-pill-shadow);
+    font-family: var(--ui); font-size: 14.5px; font-weight: 500; color: var(--soft);
+  }
+  .pen-notes-add svg { color: var(--dim); }
+  .pen-notes-add:hover { color: var(--ink); border-color: rgba(29, 29, 31, .18); }
+
+  .pen-doc > .pen-n2-actions { margin-top: 16px; }
+
+  /* Decided / Still open / You might have missed / People: folded, with their counts. */
+  .pen-fold { margin-top: 10px; }
+  .pen-fold:not(.pen-fold-inner) {
+    padding: 0 18px; border-radius: var(--sk-r-card);
+    background: var(--g-fill); -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+    border: 1px solid var(--g-edge); box-shadow: var(--g-shadow);
+  }
+  .pen-fold:not(.pen-fold-inner)[open] { padding-bottom: 16px; }
+  .pen-fold > summary {
+    display: flex; align-items: center; gap: 10px; min-height: 52px; cursor: pointer; list-style: none;
+    font-family: var(--ui); font-size: 15.5px; font-weight: 600; color: var(--ink);
+  }
+  .pen-fold > summary::-webkit-details-marker { display: none; }
+  .pen-fold-chev { margin-left: auto; color: var(--dim); transition: transform .2s ease; }
+  .pen-fold[open] > summary .pen-fold-chev { transform: rotate(90deg); }
+  .pen-fold > summary:focus-visible { outline: 2px solid var(--sk-blue-hi); outline-offset: 2px; border-radius: 10px; }
+  .pen-fold-inner { margin-top: 6px; border-top: 1px solid var(--hair); }
+  .pen-fold-inner > summary { min-height: 44px; font-size: 14.5px; color: var(--soft); }
+  /* PeoplePanel brings its own section frame; inside the fold it sits flush. */
+  .pen-fold-people > .pen-sec { margin-top: 0; padding-top: 0; border-top: 0; }
+
+  /* Toolbar: Send briefing is the primary; the recipients button says what it is. */
+  .pen-d-actions .pen-brief:not([data-state='sent']):not([data-state='failed']):not(:disabled) {
+    background: linear-gradient(180deg, #1b7be3, #0066cc); border-color: #0062c4; color: #fff;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .32), 0 1px 2px rgba(0, 51, 122, .22), 0 8px 18px -8px rgba(0, 102, 204, .55);
+  }
+  .pen-d-actions .pen-brief:not([data-state='sent']):not([data-state='failed']):not(:disabled):hover { background: linear-gradient(180deg, #2385ec, #0071e3); }
+  .pen-d-actions .pen-brief-more { width: auto; min-width: 40px; padding: 0 14px; gap: 5px; font-size: 14px; font-weight: 600; }
+  .pen-d-ask-item { display: none; }
+  .pen-m-body .pen-d-ask { display: none; }
+  .pen-m-body .pen-d-ask-item { display: inline-flex; }
+
+  /* ===================================================== phone touch sizes */
+  .pen-m-body {
+    .pen-tick { position: relative; width: 26px; height: 26px; }
+    .pen-tick::before { content: ''; position: absolute; inset: -9px; }
+    .pen-row2-inner { min-height: 52px; }
+    .pen-tool { width: 44px; height: 44px; }
+    .pen-datechip { min-height: 32px; padding: 4px 10px; }
+    .pen-datechip::before { inset: -6px -4px; }
+    .pen-row2 .pen-do-btn[data-labelled] { min-height: 44px; }
+    /* The labelled action drops under the text on a phone, so the to-do keeps the width. */
+    .pen-today .pen-row2-inner { flex-wrap: wrap; }
+    .pen-today .pen-row2-main { flex: 1 1 calc(100% - 48px); }
+    .pen-today .pen-row2 .pen-do { margin: -4px 0 4px 40px; }
+    .pen-card-more { min-height: 48px; }
+    .pen-juno-done-btn, .pen-summary-more, .pen-jn-none-ask, .pen-notes-add { min-height: 44px; }
+    .pen-d-actions .pen-brief-more { min-width: 44px; }
+    .pen-home { gap: 14px; }
+    .pen-row2-main { position: relative; }
+    .pen-row2-open::after { content: ''; position: absolute; inset: -10px 0 auto; height: calc(100% + 20px); }
+    /* "+ Add people" beside Send briefing: a labelled pill, not a 44px square. */
+    .pen-d-actions .pen-brief-more { width: auto; padding: 0 14px; white-space: nowrap; }
+    /* A recording on a phone: the offers stay compact so your to-dos are close behind. */
+    .pen-doc > .pen-jn .pen-jn-why { -webkit-line-clamp: 1; line-clamp: 1; }
+    .pen-doc > .pen-jn .pen-jn-row { padding: 10px 0; }
+    .pen-doc > .pen-jn .pen-jn-acts { margin-left: 46px; }
+    /* The title is a label here, not a headline: the offers and to-dos come up the screen. */
+    .pen-title, .pen-title-input { font-size: 23px; line-height: 1.18; }
+    .pen-jn-none { padding: 6px 6px 6px 14px; font-size: 14.5px; }
+    .pen-doc.mt-7 { margin-top: 18px; }
+  }
+}

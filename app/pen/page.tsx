@@ -10,6 +10,7 @@ import PenApp from './PenApp'
 import { getLinkByEmail } from '@/lib/pen/whatsapp/store'
 import { channelFor } from '@/lib/pen/proactive'
 import { homeSuggestions } from '@/lib/pen/suggestions-web'
+import { nextFromJuno, type NextUp } from '@/lib/pen/next-up'
 import { botNumber, configured as whatsappReady } from '@/lib/pen/whatsapp/provider'
 import LandingApple from './LandingApple'
 import { headers, cookies } from 'next/headers'
@@ -71,6 +72,8 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
   let google: { drive: boolean } | null = null
   let granola: { connected: boolean } | null = null
   let suggestions: Awaited<ReturnType<typeof homeSuggestions>> | null = null
+  // Home's "Next from Juno": the next message Juno will send first, for a linked phone.
+  let next: NextUp | null = null
   try {
     // Sequential on purpose: if the tables are missing, the first call already tells us
     // and there is no point paying for the second.
@@ -113,6 +116,7 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
       // The phone's chat tab opens the channel the user last wrote from (iMessage or WhatsApp).
       const channel = link?.linked_at ? await channelFor(email).catch(() => null) : null
       whatsapp = { number: botNumber(), linked: Boolean(link?.linked_at), imessage: channel?.imessage ? process.env.SENDBLUE_NUMBER ?? null : null }
+      if (link?.linked_at) next = await nextFromJuno(email, link.phone, stats?.openActions ?? []).catch(() => null)
     }
   } catch (e) {
     // Almost always "table does not exist" before lib/pen/schema.sql has been run.
@@ -123,6 +127,8 @@ export default async function PenPage({ searchParams }: { searchParams: Promise<
     <PenApp
       initial={sessions}
       suggestions={suggestions}
+      next={next}
+      openId={typeof sp0.open === 'string' ? sp0.open : null}
       stats={stats}
       allowance={allowance}
       whatsapp={whatsapp}

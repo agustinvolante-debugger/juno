@@ -26,6 +26,7 @@ const SB_EN = {
   lastSent: (d: string) => `Last sent ${d}`,
   sendTitle: 'Email yourself the summary, what you missed, and what is still open',
   alsoTitle: 'Also send to someone else',
+  recipients: (n: number) => (n ? `${n} more` : 'Add people'),
   alsoSendTo: 'Also send to',
   always: 'always included',
   remove: (e: string) => `Remove ${e}`,
@@ -46,6 +47,7 @@ const SB: Copy<typeof SB_EN> = {
     lastSent: (d) => `Último envío: ${d}`,
     sendTitle: 'Envíate por correo el resumen, lo que se te pasó y lo que sigue pendiente',
     alsoTitle: 'Enviar también a otra persona',
+    recipients: (n: number) => (n ? `${n} más` : 'Agregar personas'),
     alsoSendTo: 'Enviar también a',
     always: 'siempre incluido',
     remove: (e) => `Quitar ${e}`,
@@ -63,6 +65,7 @@ const SB: Copy<typeof SB_EN> = {
     lastSent: (d) => `Último envio: ${d}`,
     sendTitle: 'Mande para o seu e-mail o resumo, o que passou batido e o que ainda está em aberto',
     alsoTitle: 'Enviar também para outra pessoa',
+    recipients: (n: number) => (n ? `mais ${n}` : 'Adicionar pessoas'),
     alsoSendTo: 'Enviar também para',
     always: 'sempre incluído',
     remove: (e) => `Remover ${e}`,
@@ -237,7 +240,9 @@ export default function SendBriefing({
         aria-expanded={open}
         title={T.alsoTitle}
       >
-        {extras.length ? `+${extras.length}` : '+'}
+        {/* Labelled (16 Oct): a bare "+" did not say it adds people to the email. */}
+        <span aria-hidden="true">+</span>
+        <span className="pen-brief-more-l">{T.recipients(extras.length)}</span>
       </button>
 
       <AnimatePresence>

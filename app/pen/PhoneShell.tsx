@@ -21,10 +21,10 @@ const TABS: { id: PhoneTab; icon: IconName }[] = [
   { id: 'search', icon: 'chat' },
 ]
 
-const PS: Copy<Record<PhoneTab, string> & { back: string; tabs: string }> = {
-  en: { home: 'Home', upload: 'Upload', recordings: 'Recordings', search: 'Chat', back: 'Back', tabs: 'Main' },
-  es: { home: 'Inicio', upload: 'Subir', recordings: 'Grabaciones', search: 'Chat', back: 'Atrás', tabs: 'Principal' },
-  pt: { home: 'Início', upload: 'Enviar', recordings: 'Gravações', search: 'Chat', back: 'Voltar', tabs: 'Principal' },
+const PS: Copy<Record<PhoneTab, string> & { back: string; tabs: string; skip: string }> = {
+  en: { home: 'Home', upload: 'Upload', recordings: 'Recordings', search: 'Chat', back: 'Back', tabs: 'Main', skip: 'Skip to main content' },
+  es: { home: 'Inicio', upload: 'Subir', recordings: 'Grabaciones', search: 'Chat', back: 'Atrás', tabs: 'Principal', skip: 'Ir al contenido principal' },
+  pt: { home: 'Início', upload: 'Enviar', recordings: 'Gravações', search: 'Chat', back: 'Voltar', tabs: 'Principal', skip: 'Ir para o conteúdo principal' },
 }
 
 export default function PhoneShell({
@@ -97,6 +97,7 @@ export default function PhoneShell({
 
   return (
     <div className="pen-m" ref={shell} data-kb={kb}>
+      <a className="pen-skip" href="#pen-m-main">{T.skip}</a>
       <header className="pen-m-top">
         <div className="pen-m-top-side">
           {onBack ? (
@@ -111,7 +112,7 @@ export default function PhoneShell({
         <div className="pen-m-top-side pen-m-top-right">{right}</div>
       </header>
 
-      <main ref={body} className="pen-m-body" data-fill={fill}>
+      <main ref={body} id="pen-m-main" tabIndex={-1} className="pen-m-body" data-fill={fill}>
         {banners}
         {children}
       </main>

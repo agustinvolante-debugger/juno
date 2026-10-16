@@ -12,14 +12,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { AnimatePresence, LayoutGroup, motion, useReducedMotion, useIsPresent, animate } from 'motion/react'
+import { AnimatePresence, LayoutGroup, motion, useReducedMotion, useIsPresent } from 'motion/react'
 import type { ArchiveStats, OpenAction, OpenMissed, ClientCard } from '@/lib/pen/stats'
 import type { PersonCard } from '@/lib/pen/people'
 import { getJson, postJson, patchJson, del, errMessage } from '@/lib/pen/http'
 import { RowMenu, RenameInput } from './RowMenu'
-import { WaitingOnYou, DateChip, type Lists } from './JunoNoticed'
+import { JunoCard, NextLine, DateChip, type Lists, type NextUpView, type WaLink } from './JunoNoticed'
 import Icon, { type IconName } from './Icon'
-import DeliverableSheet, { type SheetRequest } from './DeliverableSheet'
+import DeliverableSheet, { DeliverableActions, type SheetRequest } from './DeliverableSheet'
 import { isMine } from '@/lib/pen/todo-labels'
 import { useCopy, useLang } from './LangContext'
 import { shortDate as fmtShort, ago as fmtAgo, plural, type Copy } from '@/lib/pen/i18n'
@@ -38,13 +38,13 @@ const OV_EN = {
   saveFailed: 'That did not save. Try again.',
   markedDone: 'Marked done',
   markedHandled: 'Marked handled',
-  addedTodo: 'Added to Still to do',
+  addedTodo: 'Added to your to-dos',
   heading: (n: number) => `${n} recording${n === 1 ? '' : 's'}, and what came out of them`,
   recorded: (t: string) => `${t} recorded`,
   latest: (d: string) => ` · latest ${d}`,
-  todo: 'Still to do',
+  todo: 'Your to-dos',
   todoEmpty: 'Nothing outstanding. Actions from each recording land here.',
-  missed: 'Nearly missed',
+  missed: 'Worth a second look',
   missedSub: 'said once, easy to lose',
   missedWeek: (n: number) => `${n} new this week · said once, easy to lose`,
   missedEmpty: 'Nothing slipped through. When a meeting has something easy to miss, it shows up here.',
@@ -122,6 +122,10 @@ const OV_EN = {
   confirmDeletePerson: (n: string) => `Delete ${n} from your People? Their recordings stay; only the contact and its links to recordings are removed.`,
   dupName: 'Someone with that name is already in your People.',
   personFailed: 'That did not work. Try again.',
+  seeAllN: (n: number) => `See all ${n}`,
+  emailWho: (n: string) => `Email ${n}`,
+  worthSub: 'From this week. Said once, easy to lose.',
+  recentPeople: 'Recent people',
   emptyBody: 'Plug the pen in and import one recording. From the second one on, Juno Pen starts joining them up: what the same people keep asking for, what you keep forgetting, what is still outstanding across everything.',
 }
 
@@ -131,13 +135,13 @@ const OV: Copy<typeof OV_EN> = {
     saveFailed: 'No se guardó. Inténtalo otra vez.',
     markedDone: 'Marcada como hecha',
     markedHandled: 'Marcado como resuelto',
-    addedTodo: 'Agregado a Pendientes',
+    addedTodo: 'Agregado a tus pendientes',
     heading: (n) => (n === 1 ? '1 grabación, y lo que salió de ella' : `${n} grabaciones, y lo que salió de ellas`),
     recorded: (t) => `${t} grabadas`,
     latest: (d) => ` · la última el ${d}`,
-    todo: 'Pendientes',
+    todo: 'Tus pendientes',
     todoEmpty: 'No hay nada pendiente. Las tareas de cada grabación aparecen aquí.',
-    missed: 'Casi se te pasa',
+    missed: 'Vale la pena revisar',
     missedSub: 'se dijo una vez, fácil de perder',
     missedWeek: (n: number) => `${n} ${n === 1 ? 'nuevo' : 'nuevos'} esta semana · se dijo una vez`,
     missedEmpty: 'No se te escapó nada. Cuando una reunión tenga algo fácil de pasar por alto, aparecerá aquí.',
@@ -214,19 +218,23 @@ const OV: Copy<typeof OV_EN> = {
     confirmDeletePerson: (n) => `¿Eliminar a ${n} de tus Personas? Sus grabaciones se quedan; solo se borran el contacto y sus vínculos con las grabaciones.`,
     dupName: 'Ya hay alguien con ese nombre en tus Personas.',
     personFailed: 'No funcionó. Inténtalo otra vez.',
+    seeAllN: (n) => `Ver todo (${n})`,
+    emailWho: (n) => `Escribir a ${n}`,
+    worthSub: 'De esta semana. Se dijo una vez, fácil de perder.',
+    recentPeople: 'Personas recientes',
     emptyBody: 'Conecta el lápiz e importa una grabación. Desde la segunda, Juno Pen empieza a conectarlas: lo que las mismas personas siguen pidiendo, lo que se te sigue olvidando, lo que sigue pendiente en todo.',
   },
   pt: {
     saveFailed: 'Não foi salvo. Tente de novo.',
     markedDone: 'Marcada como feita',
     markedHandled: 'Marcado como resolvido',
-    addedTodo: 'Adicionado a Pendências',
+    addedTodo: 'Adicionado às suas tarefas',
     heading: (n) => (n === 1 ? '1 gravação, e o que saiu dela' : `${n} gravações, e o que saiu delas`),
     recorded: (t) => `${t} gravadas`,
     latest: (d) => ` · a última em ${d}`,
-    todo: 'Pendências',
+    todo: 'Suas tarefas',
     todoEmpty: 'Nada pendente. As tarefas de cada gravação aparecem aqui.',
-    missed: 'Quase passou batido',
+    missed: 'Vale uma segunda olhada',
     missedSub: 'dito uma vez, fácil de perder',
     missedWeek: (n: number) => `${n} ${n === 1 ? 'novo' : 'novos'} esta semana · dito uma vez`,
     missedEmpty: 'Nada escapou. Quando uma reunião tiver algo fácil de perder, aparece aqui.',
@@ -303,6 +311,10 @@ const OV: Copy<typeof OV_EN> = {
     confirmDeletePerson: (n) => `Excluir ${n} das suas Pessoas? As gravações continuam; só o contato e os vínculos com as gravações são removidos.`,
     dupName: 'Já existe alguém com esse nome nas suas Pessoas.',
     personFailed: 'Não funcionou. Tente de novo.',
+    seeAllN: (n) => `Ver tudo (${n})`,
+    emailWho: (n) => `Escrever para ${n}`,
+    worthSub: 'Desta semana. Dito uma vez, fácil de perder.',
+    recentPeople: 'Pessoas recentes',
     emptyBody: 'Conecte a caneta e importe uma gravação. A partir da segunda, o Juno Pen começa a ligar os pontos: o que as mesmas pessoas continuam pedindo, o que você continua esquecendo, o que ainda está pendente em tudo.',
   },
 }
@@ -318,7 +330,20 @@ export default function Overview({
   firstName = null,
   suggestions = null,
   sheets = false,
+  phone = false,
+  ownRecordings = 1,
+  onUpload,
+  next = null,
+  whatsapp = null,
 }: {
+  /** The phone's Home: the Juno card, Today (3) and the WhatsApp line, nothing else. */
+  phone?: boolean
+  /** Recordings of the user's own (not the sample). None = the first-week prompt. */
+  ownRecordings?: number
+  onUpload?: () => void
+  /** Home's "Next from Juno" (lib/pen/next-up.ts). */
+  next?: NextUpView | null
+  whatsapp?: WaLink
   /** Google is set up and the account can act: "Export to Google Sheets" on To-do and People. */
   sheets?: boolean
   /** Juno's open offers and recent yeses, from the server render (JunoNoticed.tsx). */
@@ -499,93 +524,52 @@ export default function Overview({
     return () => clearTimeout(t)
   }, [toast])
 
-  if (!stats.recordings) return <EmptyArchive />
+  const part = hour === null ? 'morning' : hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'
+  const card = (
+    <JunoCard
+      greeting={T.greet(part, firstName)}
+      ready={hour !== null}
+      initial={suggestions}
+      onOpenRecording={onOpen}
+      phone={phone}
+      firstWeek={!stats.recordings || ownRecordings === 0}
+      onUpload={onUpload}
+      next={next}
+      whatsapp={whatsapp}
+    />
+  )
+  if (!stats.recordings) {
+    return (
+      <div className="pen-home" data-phone={phone || undefined}>
+        {card}
+        {phone && <NextLine next={next} whatsapp={whatsapp} />}
+      </div>
+    )
+  }
 
-  const hours = stats.minutes / 60
   // Only the user's own to-dos count and show; everyone else's sit behind a filter in the panel.
   const mineList = actions.filter((a) => isMine(a))
   const othersList = actions.filter((a) => !isMine(a))
   const openCount = mineList.length + Math.max(0, stats.actionsOpen - stats.openActions.filter((a) => isMine(a)).length)
-  const doneCount = Math.max(0, stats.actionsTotal - stats.actionsOpen + doneExtra)
   const missedCount = missed.length + Math.max(0, (stats.missedOpen ?? 0) - (stats.openMissed?.length ?? 0))
-  const missedWeek = missed.filter((m) => Date.now() - Date.parse(m.when) < 7 * 86400000).length
-
-  const today = todayIso()
-  const overdueCount = mineList.filter((a) => a.dueDate && a.dueDate < today).length
-  const part = hour === null ? 'morning' : hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'
+  const draft = (a: OpenAction, kind: SheetRequest['kind']) => setSheet({ sessionId: a.sessionId, req: { kind, item: a.action } })
 
   return (
-    <div className="pen-home">
-      <header className="pen-home-head">
-        {/* Hidden until the viewer's clock is known, so it never flashes the wrong greeting. */}
-        <h2 className="pen-display pen-home-title" data-ready={hour !== null}>
-          {T.greet(part, firstName)}
-        </h2>
-        <p className="pen-home-meta">
-          {T.subline(stats.recordings, hours >= 1 ? `${hours.toFixed(1)} h` : `${stats.minutes} min`, stats.lastAt ? fmtShort(stats.lastAt, lang) : null)}
-        </p>
-      </header>
-
-      {/* First: what Juno heard and is waiting on you for, and what it did after a yes. */}
-      <WaitingOnYou onOpenRecording={onOpen} initial={suggestions} />
-
-      <Today actions={mineList} onTick={tick} onOpen={onOpen} onDraft={(a) => setSheet({ sessionId: a.sessionId, req: { kind: 'email', item: a.action } })} />
-
-      {/* The four totals, now a quiet ledger under Today (critique 15 Oct): what is due and what
-          Juno is waiting on lead; the archive-wide counts are reference. Each opens its list. */}
-      <div className="pen-stats">
-        <StatTile label={T.overdue} value={overdueCount} tone={overdueCount ? 'bad' : undefined} onClick={() => setOpen('todo')}>
-          <span className="pen-stat-line">{T.needsAttention}</span>
-        </StatTile>
-        <StatTile label={T.todo} value={openCount} onClick={() => setOpen('todo')}>
-          <FollowThrough done={doneCount} total={doneCount + openCount} />
-        </StatTile>
-        <StatTile label={T.missed} value={missedCount} onClick={() => setOpen('missed')}>
-          <span className="pen-stat-line">{T.newThisWeek(missedWeek)}</span>
-        </StatTile>
-        <StatTile label={T.people} value={people.length} loading={peopleLoading} onClick={() => setOpen('people')}>
-          <span className="pen-stat-line">{T.inRecordings}</span>
-        </StatTile>
-      </div>
-
+    <div className="pen-home" data-phone={phone || undefined}>
+      {/* Juno speaks first: what needs you, what it did, what it does next (critique 16 Oct). */}
+      {card}
 
       <LayoutGroup>
-        <div className="pen-home-cards pen-home-pair">
-          <HomeCard
-            kind="missed"
-            open={open}
-            onOpen={setOpen}
-            icon="alert"
-            title={T.missed}
-            count={missedCount}
-            compact
-            empty={T.missedEmpty}
-            seeAll={missedCount}
-          >
-            <AnimatePresence initial={false}>
-              {missed.slice(0, PREVIEW).map((m) => (
-                <MissedRow key={`${m.sessionId}:${m.index}`} m={m} onHandle={handle} onPromote={promote} onOpen={onOpen} />
-              ))}
-            </AnimatePresence>
-          </HomeCard>
+        <Today actions={mineList} max={phone ? 3 : 5} total={openCount} onTick={tick} onOpen={onOpen} onDraft={draft} onSeeAll={() => setOpen('todo')} />
 
-          <HomeCard
-            kind="people"
-            open={open}
-            onOpen={setOpen}
-            icon="people"
-            title={T.people}
-            count={people.length}
-            loading={peopleLoading}
-            compact
-            empty={T.peopleEmpty}
-            seeAll={people.length}
-          >
-            {people.slice(0, PREVIEW).map((p) => (
-              <PersonRow key={p.id} p={p} client={clientsByName.get(p.name.toLowerCase())} onAsk={onAskPerson} actions={personActions} />
-            ))}
-          </HomeCard>
-        </div>
+        {phone ? (
+          <NextLine next={next} whatsapp={whatsapp} />
+        ) : (
+          <>
+            <WorthALook missed={missed} count={missedCount} onHandle={handle} onPromote={promote} onOpen={onOpen} onSeeAll={() => setOpen('missed')} />
+            <PeopleStrip people={people} loading={peopleLoading} onAsk={onAskPerson} onSeeAll={() => setOpen('people')} />
+          </>
+        )}
 
         <Panel open={open} onClose={() => setOpen(null)}>
           {open === 'todo' && (
@@ -606,143 +590,12 @@ export default function Overview({
   )
 }
 
-/* ================================================================== card */
+/* ================================================================== panels */
 
 const TITLES: Record<Kind, { title: 'todo' | 'missed' | 'people'; icon: IconName }> = {
   todo: { title: 'todo', icon: 'checklist' },
   missed: { title: 'missed', icon: 'alert' },
   people: { title: 'people', icon: 'people' },
-}
-
-function HomeCard({
-  kind,
-  open,
-  onOpen,
-  icon,
-  title,
-  count,
-  sub,
-  empty,
-  seeAll,
-  loading = false,
-  compact = false,
-  children,
-}: {
-  /** Title only: the count and its line live in the stats row above. */
-  compact?: boolean
-  kind: Kind
-  open: Kind | null
-  onOpen: (k: Kind) => void
-  icon: IconName
-  title: string
-  count: number
-  sub?: React.ReactNode
-  empty: string
-  seeAll: number
-  loading?: boolean
-  children: React.ReactNode
-}) {
-  const T = useCopy(OV)
-  const reduce = useReducedMotion()
-  const isOpen = open === kind
-  const hasItems = count > 0
-  return (
-    // The grid slot stays put while its card is out as the panel, so the row does not reflow.
-    <div className="pen-card-slot">
-      {!isOpen && (
-        <motion.section
-          layoutId={reduce ? undefined : `home-${kind}`}
-          transition={MORPH}
-          className="pen-card"
-          data-kind={kind}
-          data-compact={compact || undefined}
-          aria-labelledby={`home-${kind}-title`}
-        >
-          <header className="pen-card-head">
-            <div className="pen-card-title-row">
-              <span className="pen-card-icon" data-kind={kind}><Icon name={icon} size={19} /></span>
-              <h3 id={`home-${kind}-title`} className="pen-card-title">{title}</h3>
-            </div>
-            {/* The figure gets its own line: read first, from across the desk. */}
-            {!compact && (loading ? <span className="pen-card-count pen-skel" aria-hidden>&nbsp;</span> : <Count value={count} className="pen-card-count" />)}
-            {!compact && <div className="pen-card-sub">{sub}</div>}
-          </header>
-
-          {loading
-            ? <ul className="pen-card-list" aria-busy="true">{[0, 1, 2].map((i) => <li key={i} className="pen-skel-row" />)}</ul>
-            : hasItems ? <ul className="pen-card-list">{children}</ul> : <p className="pen-card-empty">{empty}</p>}
-
-          {seeAll > PREVIEW && (
-            <button type="button" className="pen-card-more" onClick={() => onOpen(kind)} aria-haspopup="dialog">
-              {T.seeAll(seeAll)}
-              <Icon name="chevron" size={15} />
-            </button>
-          )}
-          {hasItems && seeAll <= PREVIEW && (
-            <button type="button" className="pen-card-more" data-quiet onClick={() => onOpen(kind)} aria-haspopup="dialog">
-              {T.open}
-              <Icon name="chevron" size={15} />
-            </button>
-          )}
-        </motion.section>
-      )}
-    </div>
-  )
-}
-
-/** One of the four figures under the greeting. A button: it opens the list it counts. */
-function StatTile({ label, value, tone, loading = false, onClick, children }: {
-  label: string
-  value: number
-  tone?: 'bad'
-  loading?: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <button type="button" className="pen-stat" data-tone={tone} onClick={onClick} aria-haspopup="dialog">
-      <span className="pen-stat-label">{label}</span>
-      {loading ? <span className="pen-stat-n pen-skel" aria-hidden>&nbsp;</span> : <Count value={value} className="pen-stat-n" />}
-      {children}
-    </button>
-  )
-}
-
-/** A figure that counts to its new value instead of jumping. */
-function Count({ value, className }: { value: number; className?: string }) {
-  const ref = useRef<HTMLSpanElement>(null)
-  const prev = useRef(value)
-  const reduce = useReducedMotion()
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    if (reduce || prev.current === value) {
-      el.textContent = String(value)
-      prev.current = value
-      return
-    }
-    const c = animate(prev.current, value, {
-      duration: 0.35,
-      ease: EASE_OUT,
-      onUpdate: (v) => (el.textContent = String(Math.round(v))),
-    })
-    prev.current = value
-    return () => c.stop()
-  }, [value, reduce])
-  return <span ref={ref} className={className}>{value}</span>
-}
-
-function FollowThrough({ done, total }: { done: number; total: number }) {
-  const T = useCopy(OV)
-  const pct = total ? Math.min(100, (done / total) * 100) : 0
-  return (
-    <span className="pen-follow">
-      <span className="pen-follow-bar" role="img" aria-label={T.ofDone(done, total)}>
-        <motion.span initial={false} animate={{ width: `${pct}%` }} transition={{ duration: 0.4, ease: EASE_OUT }} />
-      </span>
-      <span className="pen-follow-n">{T.ofDone(done, total)}</span>
-    </span>
-  )
 }
 
 /* ================================================================== rows */
@@ -791,7 +644,7 @@ function Peek({ on, children }: { on: boolean; children: React.ReactNode }) {
   )
 }
 
-function ActionRow({ a, onTick, onOpen, onDraft, full = false }: { a: OpenAction; onTick: (a: OpenAction) => void; onOpen: (id: string) => void; onDraft?: (a: OpenAction) => void; full?: boolean }) {
+function ActionRow({ a, onTick, onOpen, onDraft, full = false }: { a: OpenAction; onTick: (a: OpenAction) => void; onOpen: (id: string) => void; onDraft?: (a: OpenAction, kind: SheetRequest['kind']) => void; full?: boolean }) {
   const T = useCopy(OV)
   const lang = useLang()
   const peek = usePeek()
@@ -848,10 +701,14 @@ function ActionRow({ a, onTick, onOpen, onDraft, full = false }: { a: OpenAction
             </span>
           </span>
         </div>
+        {/* A labelled menu (Email / Memo / Task card), not a bare envelope: "Email Titi" says
+            who it is for. The menu takes focus, Escape closes it and returns focus. */}
         {onDraft && (
-          <button type="button" className="pen-row2-act" aria-label={T.draftFollowUp} title={T.draftFollowUp} onClick={() => onDraft(a)}>
-            <Icon name="mail" size={16} />
-          </button>
+          <DeliverableActions
+            item={a.action}
+            label={a.waiting ? T.emailWho(a.waiting.split(/[\s,]+/)[0]) : T.draftFollowUp}
+            onPick={(kind) => onDraft(a, kind)}
+          />
         )}
       </div>
       {!full && (
@@ -891,27 +748,36 @@ function dueLabel(iso: string, T: typeof OV_EN, lang: ReturnType<typeof useLang>
 }
 
 /**
- * The top of Home: what is due today (or overdue), and who is waiting on the user. Both come
- * from action_meta; until a recording has been labelled its to-dos have no date and no
- * "waiting", so an archive with no labels at all shows nothing here rather than a false
- * "nothing due".
+ * Today, under the Juno card: what is due (or overdue) and who is waiting on the user, capped
+ * at `max` rows with "See all" for the rest. Both come from action_meta; an archive with no labels
+ * yet shows the newest to-dos instead of a false "nothing due".
  */
-function Today({ actions, onTick, onOpen, onDraft }: { actions: OpenAction[]; onTick: (a: OpenAction) => void; onOpen: (id: string) => void; onDraft: (a: OpenAction) => void }) {
+function Today({ actions, max, total, onTick, onOpen, onDraft, onSeeAll }: {
+  actions: OpenAction[]
+  max: number
+  total: number
+  onTick: (a: OpenAction) => void
+  onOpen: (id: string) => void
+  onDraft: (a: OpenAction, kind: SheetRequest['kind']) => void
+  onSeeAll: () => void
+}) {
   const T = useCopy(OV)
   const lang = useLang()
-  if (!actions.some((a) => a.mine !== null)) return null
+  if (!actions.length) return null
+  const labelled = actions.some((a) => a.mine !== null)
   const today = todayIso()
-  // Overdue by more than two weeks is history, not today's list; it stays in Still to do.
+  // Overdue by more than two weeks is history, not today's list; it stays in Your to-dos.
   const floor = new Date(Date.now() - STALE_DAYS * 86_400_000).toISOString().slice(0, 10)
-  const due = actions
-    .filter((a) => a.dueDate && a.dueDate <= today && a.dueDate >= floor)
-    .sort((a, b) => a.dueDate!.localeCompare(b.dueDate!))
+  const due = labelled
+    ? actions.filter((a) => a.dueDate && a.dueDate <= today && a.dueDate >= floor).sort((a, b) => a.dueDate!.localeCompare(b.dueDate!)).slice(0, max)
+    : []
   const dueKeys = new Set(due.map((a) => `${a.sessionId}:${a.index}`))
   // Oldest promise first: someone waiting two weeks outranks someone waiting since this morning.
-  const waiting = actions
-    .filter((a) => a.waiting && !dueKeys.has(`${a.sessionId}:${a.index}`))
-    .sort((a, b) => a.when.localeCompare(b.when))
-    .slice(0, 5)
+  const waiting = labelled
+    ? actions.filter((a) => a.waiting && !dueKeys.has(`${a.sessionId}:${a.index}`)).sort((a, b) => a.when.localeCompare(b.when)).slice(0, Math.max(0, max - due.length))
+    : []
+  const plain = labelled ? [] : actions.slice(0, max)
+  const shown = due.length + waiting.length + plain.length
   return (
     <section className="pen-today" aria-labelledby="pen-today-title">
       <header className="pen-today-head">
@@ -919,26 +785,99 @@ function Today({ actions, onTick, onOpen, onDraft }: { actions: OpenAction[]; on
         <h3 id="pen-today-title" className="pen-card-title">{T.today}</h3>
         <span className="pen-today-date">{new Date().toLocaleDateString(lang === 'pt' ? 'pt-BR' : lang === 'es' ? 'es' : 'en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</span>
       </header>
-      <div className="pen-today-cols">
-        <div className="pen-today-col">
-          <h4 className="pen-today-sub">{T.dueNow}{due.length ? ` · ${due.length}` : ''}</h4>
-          <ul className="pen-card-list">
-            <AnimatePresence initial={false}>
-              {due.map((a) => <ActionRow key={`${a.sessionId}:${a.index}`} a={a} onTick={onTick} onOpen={onOpen} onDraft={a.waiting ? onDraft : undefined} />)}
-            </AnimatePresence>
-            {!due.length && <li className="pen-card-empty">{T.nothingDue}</li>}
-          </ul>
+      {labelled ? (
+        <>
+        {!due.length && <p className="pen-today-nodue">{T.nothingDue}</p>}
+        <div className="pen-today-cols" data-one={!due.length || undefined}>
+          {due.length > 0 && <div className="pen-today-col">
+            <h4 className="pen-today-sub">{T.dueNow}{due.length ? ` · ${due.length}` : ''}</h4>
+            <ul className="pen-card-list">
+              <AnimatePresence initial={false}>
+                {due.map((a) => <ActionRow key={`${a.sessionId}:${a.index}`} a={a} onTick={onTick} onOpen={onOpen} onDraft={a.waiting ? onDraft : undefined} />)}
+              </AnimatePresence>
+            </ul>
+          </div>}
+          <div className="pen-today-col">
+            <h4 className="pen-today-sub">{T.youOwe}{waiting.length ? ` · ${waiting.length}` : ''}</h4>
+            <ul className="pen-card-list">
+              <AnimatePresence initial={false}>
+                {waiting.map((a) => <ActionRow key={`${a.sessionId}:${a.index}`} a={a} onTick={onTick} onOpen={onOpen} onDraft={onDraft} />)}
+              </AnimatePresence>
+              {!waiting.length && <li className="pen-card-empty">{T.nobodyWaiting}</li>}
+            </ul>
+          </div>
         </div>
-        <div className="pen-today-col">
-          <h4 className="pen-today-sub">{T.youOwe}{waiting.length ? ` · ${waiting.length}` : ''}</h4>
-          <ul className="pen-card-list">
-            <AnimatePresence initial={false}>
-              {waiting.map((a) => <ActionRow key={`${a.sessionId}:${a.index}`} a={a} onTick={onTick} onOpen={onOpen} onDraft={onDraft} />)}
-            </AnimatePresence>
-            {!waiting.length && <li className="pen-card-empty">{T.nobodyWaiting}</li>}
-          </ul>
-        </div>
-      </div>
+        </>
+      ) : (
+        <ul className="pen-card-list pen-today-plain">
+          <AnimatePresence initial={false}>
+            {plain.map((a) => <ActionRow key={`${a.sessionId}:${a.index}`} a={a} onTick={onTick} onOpen={onOpen} />)}
+          </AnimatePresence>
+        </ul>
+      )}
+      {total > shown && (
+        <button type="button" className="pen-card-more" onClick={onSeeAll} aria-haspopup="dialog">
+          {T.seeAllN(total)}
+          <Icon name="chevron" size={15} />
+        </button>
+      )}
+    </section>
+  )
+}
+
+/* ====================================================== worth a second look */
+
+const MONEY_RE = /[$€£]|\bR\$|\b\d+(?:[.,]\d+)?\s?(?:k|m|mil|usd|eur|clp|brl|mxn)\b|\b(?:price|pricing|budget|cost|fee|invoice|pay|paid|precio|presupuesto|costo|pago|factura|preço|orçamento|custo|pagamento)\b/i
+const DATE_RE = /\b(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\b|\b(?:today|tomorrow|tonight|next week|deadline|lunes|martes|miércoles|jueves|viernes|mañana|semana que viene|hoje|amanhã|segunda|terça|quarta|quinta|sexta|prazo|plazo)\b|\b\d{1,2}[/:.]\d{1,2}\b|\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|ene|abr|ago|dic|fev|set|out|dez)[a-z]*\.?\s+\d{1,2}\b/i
+// Voice memos and notes-to-self: what they "nearly missed" is the user's own thinking aloud.
+const INTERNAL_RE = /\b(?:voice memo|memo|note to self|notes?|to-?do|reminder|nota|notas|apuntes|recordatorio|lembrete|anotações)\b/i
+
+/** Recency (this week), plus a person, a date or money in it; internal notes drop out. */
+function rankMissed(missed: OpenMissed[]): OpenMissed[] {
+  const now = Date.now()
+  return missed
+    .filter((m) => now - Date.parse(m.when) < 7 * 86_400_000 && !INTERNAL_RE.test(m.sessionTitle))
+    .map((m) => {
+      const text = `${m.item} ${m.why}`
+      const words = m.item.split(/\s+/).slice(1)
+      const person = words.some((w) => /^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,}/.test(w))
+      const score = 1 - (now - Date.parse(m.when)) / (7 * 86_400_000) + (MONEY_RE.test(text) ? 0.6 : 0) + (DATE_RE.test(text) ? 0.5 : 0) + (person ? 0.4 : 0)
+      return { m, score }
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map((x) => x.m)
+}
+
+/** The 1–3 things from this week most worth a second look. Hidden when there are none. */
+function WorthALook({ missed, count, onHandle, onPromote, onOpen, onSeeAll }: {
+  missed: OpenMissed[]
+  count: number
+  onHandle: (m: OpenMissed) => void
+  onPromote: (m: OpenMissed) => void
+  onOpen: (id: string) => void
+  onSeeAll: () => void
+}) {
+  const T = useCopy(OV)
+  const top = useMemo(() => rankMissed(missed), [missed])
+  if (!top.length) return null
+  return (
+    <section className="pen-worth" aria-labelledby="pen-worth-title">
+      <header className="pen-worth-head">
+        <h3 id="pen-worth-title" className="pen-card-title">{T.missed}</h3>
+        <p className="pen-worth-sub">{T.worthSub}</p>
+      </header>
+      <ul className="pen-card-list">
+        <AnimatePresence initial={false}>
+          {top.map((m) => <MissedRow key={`${m.sessionId}:${m.index}`} m={m} onHandle={onHandle} onPromote={onPromote} onOpen={onOpen} />)}
+        </AnimatePresence>
+      </ul>
+      {count > top.length && (
+        <button type="button" className="pen-card-more" data-quiet onClick={onSeeAll} aria-haspopup="dialog">
+          {T.seeAllN(count)}
+          <Icon name="chevron" size={15} />
+        </button>
+      )}
     </section>
   )
 }
@@ -988,32 +927,29 @@ function MissedRow({
   )
 }
 
-function PersonRow({ p, client, onAsk, actions }: { p: PersonCard; client?: ClientCard; onAsk: (p: PersonCard) => void; actions: PersonActions }) {
+/** Recent people as one compact row. Each asks about them; the full list is behind See all. */
+function PeopleStrip({ people, loading, onAsk, onSeeAll }: { people: PersonCard[]; loading: boolean; onAsk: (p: PersonCard) => void; onSeeAll: () => void }) {
   const T = useCopy(OV)
-  const lang = useLang()
-  const peek = usePeek()
-  const editing = actions.editing === p.id
+  if (loading || !people.length) return null
+  const recent = [...people].sort((a, b) => (b.lastAt ?? '').localeCompare(a.lastAt ?? '')).slice(0, 8)
   return (
-    <li className="pen-row2 pen-person-row" {...(editing ? {} : peek.bind)}>
-      <div className="pen-row2-inner">
-        <span className="pen-avatar pen-row2-avatar">{initials(p.name)}</span>
-        {editing ? (
-          <RenameInput value={p.name} label={T.nameLabel} error={actions.error} busy={actions.busy} onSave={(v) => void actions.rename(p, v)} onCancel={actions.cancel} />
-        ) : (
-          <button type="button" className="pen-row2-main" onClick={() => onAsk(p)} title={T.askAbout(p.name)}>
-            <span className="pen-row2-text pen-row2-name">{p.name}</span>
-            <span className="pen-row2-meta">
-              <span>{[plural(p.recordings, T.calls), p.lastAt && fmtAgo(p.lastAt, lang)].filter(Boolean).join(' · ')}</span>
-            </span>
-          </button>
-        )}
-        {!editing && <PersonMenu p={p} actions={actions} />}
-      </div>
-      {actions.failedId === p.id && !editing && actions.error && <p className="pen-chatrow-err" role="alert">{actions.error}</p>}
-      <Peek on={peek.on && !editing}>
-        <PersonDetail p={p} client={client} onAsk={onAsk} />
-      </Peek>
-    </li>
+    <section className="pen-pstrip" aria-labelledby="pen-pstrip-title">
+      <h3 id="pen-pstrip-title" className="pen-pstrip-title">{T.recentPeople}</h3>
+      <ul className="pen-pstrip-list">
+        {recent.map((p) => (
+          <li key={p.id}>
+            <button type="button" className="pen-pstrip-p" onClick={() => onAsk(p)} title={T.askAbout(p.name)}>
+              <span className="pen-avatar" aria-hidden="true">{initials(p.name)}</span>
+              <span className="pen-pstrip-name">{p.name.split(' ')[0]}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <button type="button" className="pen-pstrip-all" onClick={onSeeAll} aria-haspopup="dialog">
+        {T.seeAllN(people.length)}
+        <Icon name="chevron" size={15} />
+      </button>
+    </section>
   )
 }
 
@@ -1473,19 +1409,8 @@ function Toast({ toast, onClose }: { toast: { text: string; undo?: () => void; t
 /* ================================================================ helpers */
 
 function initials(s: string) {
-  const parts = s.trim().split(/\s+/).filter(Boolean)
+  // Letters only: 'Chris "CD" Dyas' or 'Titi (cofounder)' must not show a quote or a bracket.
+  const parts = s.replace(/[^\p{L}\s]/gu, ' ').trim().split(/\s+/).filter(Boolean)
   if (!parts.length) return '?'
   return (parts[0][0] + (parts[1]?.[0] ?? '')).toUpperCase()
-}
-
-function EmptyArchive() {
-  const T = useCopy(OV)
-  return (
-    <div className="pen-panel px-8 py-14 text-center">
-      <h2 className="pen-display text-[26px]">{T.emptyTitle}</h2>
-      <p className="mx-auto mt-3 max-w-[46ch] text-[16.5px] leading-relaxed" style={{ color: 'var(--soft)' }}>
-        {T.emptyBody}
-      </p>
-    </div>
-  )
 }

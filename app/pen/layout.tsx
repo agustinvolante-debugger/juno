@@ -4,6 +4,7 @@ import './pen-theme.css'
 // The signed-in app's skin. Scoped to the app's own surfaces; the landing pages never match it.
 import './app-skin-literals.css'
 import './app-skin.css'
+import './assistant-first.css'
 
 // Self-hosted at build time rather than fetched from Google at render.
 //

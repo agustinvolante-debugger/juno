@@ -27,6 +27,7 @@ import type { Part as NamePart } from './NamesHeard'
 import Conversations from './Conversations'
 import { useNames, startSplit, useSplitting } from './names-store'
 import { isOwner } from '@/lib/pen/owner'
+import { isMine } from '@/lib/pen/todo-labels'
 import PeoplePicker, { type Picked } from './PeoplePicker'
 import type { ArchiveStats } from '@/lib/pen/stats'
 import DeliverableSheet, { DeliverableActions, type SheetRequest } from './DeliverableSheet'
@@ -72,6 +73,8 @@ declare global {
 // browser and the picture discarded, so a walkthrough filmed on a phone still works.
 /** A category has to group at least this many recordings before it is worth navigating by. */
 const MIN_CAT = 3
+/** Recent recordings in the rail before "All recordings". */
+const RAIL_MAX = 5
 
 const MEDIA_RE = /\.(wav|wave|mp3|m4a|aac|ogg|opus|webm|amr|3gp|wma|flac|aif|aiff|mp4|m4v|mov|qt)$/i
 
@@ -103,6 +106,8 @@ type UploadItem = { key: string; name: string; phase: string; pct: number; state
 export default function PenApp({
   initial,
   suggestions = null,
+  next = null,
+  openId = null,
   stats,
   loadError,
   email,
@@ -135,6 +140,10 @@ export default function PenApp({
   granola?: { connected: boolean } | null
   /** Juno Pen's WhatsApp number and whether this account has linked a phone. Null when off. */
   whatsapp?: { number: string; linked: boolean; imessage?: string | null } | null
+  /** Home's "Next from Juno": the next message Juno sends first (lib/pen/next-up.ts). */
+  next?: import('./JunoNoticed').NextUpView | null
+  /** ?open=<recording id>, read on the server so the note renders first instead of Home. */
+  openId?: string | null
   /** Home's "Juno is waiting on you", rendered on the server so it doesn't pop in. */
   suggestions?: import('./JunoNoticed').Lists | null
   initial: PenSession[]
@@ -209,7 +218,10 @@ export default function PenApp({
       // No Intl zone or no storage: the phone's country code still gives a guess.
     }
   }, [])
-  const [view, setView] = useState<View>({ k: 'archive' })
+  // ?open=<id> is known on the server: start on that recording, so Home never flashes first.
+  const [view, setView] = useState<View>(() => (openId && initial.some((x) => x.id === openId) ? { k: 'session', id: openId } : { k: 'archive' }))
+  // The recent-recordings rail shows five; "All recordings" opens the whole list.
+  const [railAll, setRailAll] = useState(false)
   const [chatSeed, setChatSeed] = useState<{ text: string; mentions: Mention[] } | null>(null)
   const [chats, setChats] = useState<ChatSummary[]>([])
   const [docs, setDocs] = useState<DocSummary[]>([])
@@ -716,6 +728,8 @@ export default function PenApp({
   // A meeting the pen split across files shows up once, under its first part. The later
   // parts still exist and are reachable from it — they are just not separate meetings.
   const listed = useMemo(() => sessions.filter((s) => (s.merge_index ?? 0) === 0), [sessions])
+  // The sample recording is not the user's own: with nothing else, Home asks for the first one.
+  const ownRecordings = useMemo(() => listed.filter((s) => s.source_channel !== 'sample').length, [listed])
 
   const visible = useMemo(
     () => (catFilter ? listed.filter((x) => bucketOf(displayType(x.meeting_type)) === catFilter) : listed),
@@ -878,8 +892,12 @@ export default function PenApp({
       screen = stats ? (
         <>
         <ClockPill clock={allowance?.clock ?? null} T={T} phone />
-        <AskWhatsApp whatsapp={whatsapp ?? null} T={T} />
         <Overview
+          phone
+          ownRecordings={ownRecordings}
+          onUpload={locked ? undefined : () => { setPhoneTab('upload'); fileInput.current?.click() }}
+          next={next}
+          whatsapp={whatsapp ?? null}
           stats={stats}
           suggestions={suggestions}
           firstName={firstName}
@@ -1189,9 +1207,26 @@ export default function PenApp({
     )
   }
 
+  // The rail: five recordings unless the whole list was asked for (or a category narrows it).
+  const allGroups = groupByDay(visible, appLang, recOrder)
+  const railCapped = !railAll && !catFilter && visible.length > RAIL_MAX
+  const railGroups = railCapped
+    ? (() => {
+        let left = RAIL_MAX
+        const out: [string, PenSession[]][] = []
+        for (const [day, rows] of allGroups) {
+          if (left <= 0) break
+          out.push([day, rows.slice(0, left)])
+          left -= rows.length
+        }
+        return out
+      })()
+    : allGroups
+
   return (
     <LangProvider lang={appLang}>
     <main className="pen-page" data-ready={mounted}>
+      <a className="pen-skip" href="#pen-main">{T.skipMain}</a>
       {/* The sidebar is a page-level column running the full height, so the brand sits level
           with the search box rather than a header's height below it. Everything else — the
           header, the banners, the import tray and the note/rail grid — stacks to its right. */}
@@ -1221,22 +1256,14 @@ export default function PenApp({
             {resuming ? T.resuming : T.resumeNow}
           </button>
         </div>
-      ) : (
-      <>
-      <button className="pen-connect" onClick={connectPen}>
-        <Icon name="link" size={18} />
-        {T.connectPen}
-      </button>
+      ) : null}
 
-      {/* The drop target belongs next to Connect pen: they are the two ways a recording gets
-          in, and separating them meant the only visible route on a browser without the
-          folder picker was a link at the foot of a list on the other side of the screen.
-          Clickable as well as droppable, because "drag a file here" is not an instruction
-          everyone acts on. */}
-      <button
-        className="pen-drop pen-drop-side"
-        data-over={dragOver}
-        onClick={() => fileInput.current?.click()}
+      {/* One "Add" for every way in (16 Oct): connect the pen, upload audio, a transcript, Notion,
+          Granola, WhatsApp. Same handlers the separate buttons used; the block is still a drop
+          target for audio files. Secondary weight: the Juno card on Home gets the colour. */}
+      <AddMenu
+        T={T}
+        dragOver={dragOver}
         onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
         onDrop={(e) => {
@@ -1244,21 +1271,8 @@ export default function PenApp({
           setDragOver(false)
           if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files)
         }}
-      >
-        <Icon name="plus" size={17} />
-        <span>
-          <strong>{T.addFiles}</strong>
-          <em>{T.orDrag}</em>
-        </span>
-      </button>
-
-      </>
-      )}
-
-      {/* The other ways in, behind one quiet button: a transcript, Notion, and WhatsApp from the
-          phone. Same handlers and links the separate buttons used. */}
-      <ImportMenu
-        T={T}
+        onConnect={!locked ? () => { setNavOpen(false); connectPen() } : null}
+        onUpload={!locked ? () => { setNavOpen(false); fileInput.current?.click() } : null}
         onTranscript={!readOnly && !paused ? () => { setNavOpen(false); setTxImport(true) } : null}
         onNotion={!readOnly && !paused && notion ? () => { setNavOpen(false); setNImport(true) } : null}
         onGranola={!readOnly && !paused && granola ? () => { setNavOpen(false); setGImport(true) } : null}
@@ -1303,7 +1317,8 @@ export default function PenApp({
           <button
             className="pen-cat"
             data-active={catFilter === null && view.k !== 'archive' && view.k !== 'chat' && view.k !== 'doc'}
-            onClick={() => { setCatFilter(null); setNavOpen(false) }}
+            aria-pressed={railAll && catFilter === null}
+            onClick={() => { setCatFilter(null); setRailAll(true); setNavOpen(false) }}
           >
             <Icon name="recordings" size={19} />
             <span className="pen-cat-label">{T.allRecordingsNav}</span>
@@ -1539,7 +1554,7 @@ export default function PenApp({
           onClick={() => setNavOpen(false)}
         />
 
-        <section className="pen-shell-main min-w-0">
+        <section className="pen-shell-main min-w-0" id="pen-main" tabIndex={-1}>
           {view.k === 'chat' ? (
             <ChatView
               readOnly={readOnly}
@@ -1576,8 +1591,11 @@ export default function PenApp({
 
             stats ? (
               <>
-              <AskWhatsApp whatsapp={whatsapp ?? null} T={T} />
               <Overview
+                ownRecordings={ownRecordings}
+                onUpload={locked ? undefined : () => fileInput.current?.click()}
+                next={next}
+                whatsapp={whatsapp ?? null}
                 stats={stats}
                 suggestions={suggestions}
                 firstName={firstName}
@@ -1674,7 +1692,8 @@ export default function PenApp({
             </p>
           ) : (
             <div className="mt-6">
-              {groupByDay(visible, appLang, recOrder).map(([day, rows]) => (
+              {/* Five, newest first, unless the whole list was asked for or a category is picked. */}
+              {railGroups.map(([day, rows]) => (
                 <div key={day} className="mb-5">
                   <div className="pen-label mb-1.5">{day}</div>
                   {rows.map((s) => (
@@ -1696,6 +1715,20 @@ export default function PenApp({
                   ))}
                 </div>
               ))}
+              {railCapped && (
+                <button type="button" className="pen-rail-all" onClick={() => setRailAll(true)}>
+                  {T.allRecs(visible.length)}
+                  <Icon name="chevron" size={14} />
+                </button>
+              )}
+              {railAll && !catFilter && (
+                <>
+                  {stats && <p className="pen-rail-totals">{T.recTotals(stats.recordings, stats.minutes >= 60 ? `${(stats.minutes / 60).toFixed(1)} h` : `${stats.minutes} min`, stats.actionsOpen)}</p>}
+                  {visible.length > RAIL_MAX && (
+                    <button type="button" className="pen-rail-all" data-quiet onClick={() => setRailAll(false)}>{T.fewerRecs}</button>
+                  )}
+                </>
+              )}
             </div>
           )}
         </aside>
@@ -2417,7 +2450,11 @@ function Detail({
   const [blocks, setBlocks] = useState<NoteBlock[]>(() => blocksFrom(session.note_blocks, session.user_notes))
   const [notesState, setNotesState] = useState<'saved' | 'saving' | 'failed'>('saved')
   const dirtyNotes = useRef(false)
+  // "Your notes" folds to one line while empty; anything written keeps it open.
+  const hasNotes = (b: NoteBlock[]) => b.some((x) => x.text.trim())
+  const [notesOpen, setNotesOpen] = useState(() => hasNotes(blocksFrom(session.note_blocks, session.user_notes)))
   useEffect(() => {
+    setNotesOpen(hasNotes(blocksFrom(session.note_blocks, session.user_notes)))
     setBlocks(blocksFrom(session.note_blocks, session.user_notes))
     setNotesState('saved')
     dirtyNotes.current = false
@@ -2486,6 +2523,41 @@ function Detail({
     const d = Array.isArray(session.action_meta) && session.action_meta.length === (n.actions?.length ?? 0) ? session.action_meta[i]?.due_date : null
     return d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null
   })
+
+  // Your to-dos first; everyone else's fold away (action_meta, when it lines up with the list).
+  const meta = Array.isArray(session.action_meta) && session.action_meta.length === (n.actions?.length ?? 0) ? session.action_meta : null
+  const allIdx = (n.actions ?? []).map((_, i) => i)
+  const mineIdx = allIdx.filter((i) => isMine(meta?.[i] ?? null))
+  const othersIdx = allIdx.filter((i) => !isMine(meta?.[i] ?? null))
+  const actRow = (i: number) => {
+    const a = n.actions![i]
+    return (
+      <div key={i} className="pen-act pen-doable" data-done={done.has(i)}>
+        {/* The label is the 44px target; the box inside stays its drawn size. */}
+        <label className="pen-act-hit">
+          <input type="checkbox" className="pen-act-box" checked={done.has(i)} onChange={() => toggleAction(i)} aria-label={a.action} />
+        </label>
+        <div className="min-w-0 flex-1">
+          <div className="pen-act-text text-[16.5px] leading-snug">{a.action}</div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            {(a.owner || a.due || a.priority === 'high' || dueDates[i]) && (
+              <div className="pen-mono flex flex-wrap items-center gap-x-2 text-[13px]" style={{ color: 'var(--dim)' }}>
+                {a.priority === 'high' && <span style={{ color: 'var(--bad)' }}>{T.priority}</span>}
+                {a.owner && <span>{a.owner}</span>}
+                {/* A real date is also the way into the calendar; words alone ("next week") stay text. */}
+                {dueDates[i] ? (
+                  <DateChip sessionId={session.id} index={i} label={a.due || fmtDate(`${dueDates[i]}T12:00:00Z`, lang, { month: 'short', day: 'numeric', timeZone: 'UTC' })} />
+                ) : (
+                  a.due && <span style={{ color: 'var(--accent-ink)' }}>{a.due}</span>
+                )}
+              </div>
+            )}
+            <DeliverableActions item={a.action} onPick={(kind) => setSheet({ kind, item: a.action })} />
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   // Names heard and conversations read every part of a joined meeting, each at its own start.
   const nameParts = useMemo<NamePart[]>(() => {
@@ -2599,13 +2671,9 @@ function Detail({
           </div>
 
           {/* State, as labelled chips rather than one status word. */}
+          {/* Only states worth knowing (still working, failed, waiting for hours); a finished
+              recording needs no "AI summarised / Transcribed" badges (16 Oct). */}
           <div className="pen-chips">
-            {n.summary && (
-              <span className="pen-chip" data-tone="accent"><Icon name="sparkle" size={14} filled />{T.aiSummarised}</span>
-            )}
-            {spoken && (
-              <span className="pen-chip"><Icon name="check" size={14} />{session.source_channel === 'import' ? T.imported : T.transcribed}</span>
-            )}
             {session.status === 'transcribing' && (
               <span className="pen-chip" data-tone="warn"><Icon name="clock" size={14} />{T.chipTranscribing}</span>
             )}
@@ -2644,7 +2712,7 @@ function Detail({
             onSent={(iso) => void onPatch({ briefing_sent_at: iso })}
           />
           {spoken && (
-            <button className={`pen-btn ${chatOpen ? 'pen-btn-accent' : ''}`} onClick={onToggleChat}>
+            <button className={`pen-btn pen-d-ask ${chatOpen ? 'pen-btn-accent' : ''}`} onClick={onToggleChat}>
               <Icon name="chat" size={15} /><span className="pen-d-ask-l">{chatOpen ? T.hideChat : T.askMeeting}</span><span className="pen-d-ask-s">{chatOpen ? T.hideChat : T.askShort}</span>
             </button>
           )}
@@ -2653,6 +2721,12 @@ function Detail({
           <details className="pen-d-more" onToggle={(e) => { if (!(e.currentTarget as HTMLDetailsElement).open) setConfirmDelete(false) }}>
             <summary className="pen-btn" aria-label={T.moreActions}><Icon name="more" size={16} /><span className="pen-d-more-l">{T.more}</span></summary>
             <div className="pen-d-menu" role="menu">
+          {/* Phone: Ask lives in this overflow, so the toolbar is one primary action and More. */}
+          {spoken && (
+            <button className="pen-btn pen-d-ask-item" role="menuitem" onClick={onToggleChat}>
+              <Icon name="chat" size={15} />{chatOpen ? T.hideChat : T.askMeeting}
+            </button>
+          )}
           {/* Keyed off the transcript, not the status. A session can land in `error` with a
               perfectly good transcript (a failed save, a transient API error), and gating the
               retry on status left it with no way out of the UI. */}
@@ -2799,17 +2873,6 @@ function Detail({
         </div>
       ) : (
         <div className="pen-doc pen-reveal mt-7">
-          {/* His own notes come first on purpose: what he wrote is the spine. */}
-          <div className="pen-sec">
-            <NoteEditor
-              sessionId={session.id}
-              blocks={blocks}
-              saveState={notesState}
-              canEnhance={spoken}
-              onChange={(next) => { dirtyNotes.current = true; setBlocks(next) }}
-            />
-          </div>
-
           {n.empty && <div className="pen-sec"><Muted>{T.mEmpty}</Muted></div>}
           {n.notes_only && <div className="pen-sec"><Muted>{T.mNotesOnly}</Muted></div>}
           {session.status === 'transcribing' && <div className="pen-sec"><Muted>{T.mTranscribing}</Muted></div>}
@@ -2831,136 +2894,109 @@ function Detail({
             </div>
           )}
 
-          {n.summary && (
-            <div className="pen-aicard">
-              <div className="pen-aicard-head">
-                <span className="pen-aicard-title">
-                  <Icon name="sparkle" size={18} filled />
-                  {T.aiSummary}
-                </span>
-                <span className="pen-aicard-by">{T.byAi}</span>
+          {/* Assistant first (16 Oct): what Juno can do from this meeting leads, before any
+              reading. The same offers WhatsApp makes; nothing happens until a button is pressed. */}
+          {session.status === 'noted' && (
+            <JunoNoticed key={`jn-${session.id}`} sessionId={session.id} onAsk={spoken ? () => { if (!chatOpen) onToggleChat() } : undefined} />
+          )}
+
+          {n.summary && <Summary key={`sum-${session.id}`} text={n.summary} />}
+
+          {/* Your notes: under the summary, and folded to one line while empty. */}
+          <div className="pen-sec pen-notes-box">
+            {notesOpen ? (
+              <NoteEditor
+                sessionId={session.id}
+                blocks={blocks}
+                saveState={notesState}
+                canEnhance={spoken}
+                onChange={(next) => { dirtyNotes.current = true; setBlocks(next) }}
+              />
+            ) : (
+              <button type="button" className="pen-notes-add" onClick={() => setNotesOpen(true)}>
+                <Icon name="pen" size={15} />
+                {T.addNotes}
+              </button>
+            )}
+          </div>
+
+          {/* Your to-dos with their dates; everyone else's folded underneath. */}
+          {!!n.actions?.length && (
+            <div id="pen-n2-actions" className="pen-sec pen-card pen-n2-actions">
+              <div className="mb-1 flex items-baseline justify-between">
+                <span className="pen-sec-head"><span className="pen-badge" data-tone="accent"><Icon name="checklist" size={13} /></span>{T.yourTodos}</span>
+                {mineIdx.length > 0 && (
+                  <span className="pen-mono text-[13px]" style={{ color: 'var(--faint)' }}>
+                    {T.nDone(mineIdx.filter((i) => done.has(i)).length, mineIdx.length)}
+                  </span>
+                )}
               </div>
-              <p className="pen-aicard-body">{n.summary}</p>
+              <div className="mt-1.5">
+                {mineIdx.map((i) => actRow(i))}
+                {!mineIdx.length && <p className="pen-card-empty">{T.nothingMine}</p>}
+              </div>
+              {othersIdx.length > 0 && (
+                <details className="pen-fold pen-fold-inner">
+                  <summary>{T.othersTodos(othersIdx.length)}<Icon name="chevron" size={14} className="pen-fold-chev" /></summary>
+                  <div className="mt-1">{othersIdx.map((i) => actRow(i))}</div>
+                </details>
+              )}
             </div>
           )}
 
-          {/* What Juno heard that it can help with: the same offers WhatsApp makes. */}
-          {session.status === 'noted' && <JunoNoticed key={session.id} sessionId={session.id} />}
+          {!!n.decisions?.length && (
+            <details className="pen-fold pen-sec">
+              <summary><span className="pen-badge" data-tone="good"><Icon name="check" size={13} /></span>{T.decidedN(n.decisions.length)}<Icon name="chevron" size={14} className="pen-fold-chev" /></summary>
+              <ul className="mt-2 space-y-2">
+                {n.decisions.map((d, i) => (
+                  <li key={i} className="text-[16.5px]">
+                    {d.decision}
+                    {d.who && <span className="pen-mono ml-2 text-[13px]" style={{ color: 'var(--dim)' }}>{d.who}</span>}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+          {!!n.open_questions?.length && (
+            <details className="pen-fold pen-sec">
+              <summary><span className="pen-badge" data-tone="warn"><Icon name="question" size={13} /></span>{T.stillOpenN(n.open_questions.length)}<Icon name="chevron" size={14} className="pen-fold-chev" /></summary>
+              <ul className="mt-2 list-disc space-y-2.5 pl-5 text-[16.5px]">
+                {n.open_questions.map((q, i) => (
+                  <li key={i} className="pen-doable">
+                    {q}
+                    <div className="mt-1.5">
+                      <DeliverableActions item={q} onPick={(kind) => setSheet({ kind, item: q })} />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+          {!!n.missed?.length && (
+            <details className="pen-fold pen-sec">
+              <summary><span className="pen-badge" data-tone="warn"><Icon name="alert" size={13} /></span>{T.missedN(n.missed.length)}<Icon name="chevron" size={14} className="pen-fold-chev" /></summary>
+              <ul className="mt-2.5 space-y-3">
+                {n.missed.map((m, i) => (
+                  <li key={i} className="pen-doable text-[16.5px] leading-snug">
+                    {m.item}
+                    {m.why && <div className="mt-0.5 text-[14.5px]" style={{ color: 'var(--warn)' }}>{m.why}</div>}
+                    <div className="mt-1.5">
+                      <DeliverableActions item={m.item} onPick={(kind) => setSheet({ kind, item: m.item })} />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
 
           {spoken && (
             <Conversations parts={nameParts} suggest={suggestEvent} onJump={jumpTo} onPeopleChanged={onPeopleChanged} onDraft={setSheet} onCombined={onEventDay} />
           )}
 
-          {/* Mock (14 Oct): Next actions first and full width (it is the work: checkboxes,
-              "0/4 done"), then Decided and Still open side by side as a reference row, each
-              taking the full width when the other is empty. A one-line tally under the summary
-              jumps to each list. */}
-          {(!!n.decisions?.length || !!n.actions?.length || !!n.open_questions?.length) && (
-            <div className="pen-notes2">
-              <p className="pen-notes2-tally">
-                {[
-                  n.actions?.length ? <a key="a" href="#pen-n2-actions">{T.tallyActions(n.actions.length - done.size)}</a> : null,
-                  n.decisions?.length ? <a key="d" href="#pen-n2-decided">{T.tallyDecided(n.decisions.length)}</a> : null,
-                  n.open_questions?.length ? <a key="o" href="#pen-n2-open">{T.tallyOpen(n.open_questions.length)}</a> : null,
-                ].filter(Boolean).reduce<React.ReactNode[]>((acc, x, i) => (i ? [...acc, <span key={`s${i}`} aria-hidden="true"> · </span>, x] : [x]), [])}
-              </p>
-            {!!n.actions?.length && (
-              <div id="pen-n2-actions" className="pen-sec pen-card pen-n2-actions">
-                <div className="mb-1 flex items-baseline justify-between">
-                  <span className="pen-sec-head"><span className="pen-badge" data-tone="accent"><Icon name="checklist" size={13} /></span>{T.nextActions}</span>
-                  <span className="pen-mono text-[13px]" style={{ color: 'var(--faint)' }}>
-                    {T.nDone(done.size, n.actions.length)}
-                  </span>
-                </div>
-                <div className="mt-1.5">
-                  {n.actions.map((a, i) => (
-                    <div key={i} className="pen-act pen-doable" data-done={done.has(i)}>
-                      {/* The label is the 44px target; the box inside stays its drawn size. */}
-                      <label className="pen-act-hit">
-                        <input type="checkbox" className="pen-act-box" checked={done.has(i)} onChange={() => toggleAction(i)} aria-label={a.action} />
-                      </label>
-                      <div className="min-w-0 flex-1">
-                        <div className="pen-act-text text-[16.5px] leading-snug">{a.action}</div>
-                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                          {(a.owner || a.due || a.priority === 'high' || dueDates[i]) && (
-                            <div className="pen-mono flex flex-wrap items-center gap-x-2 text-[13px]" style={{ color: 'var(--dim)' }}>
-                              {a.priority === 'high' && <span style={{ color: 'var(--bad)' }}>{T.priority}</span>}
-                              {a.owner && <span>{a.owner}</span>}
-                              {/* A real date is also the way into the calendar; words alone ("next week") stay text. */}
-                              {dueDates[i] ? (
-                                <DateChip sessionId={session.id} index={i} label={a.due || fmtDate(`${dueDates[i]}T12:00:00Z`, lang, { month: 'short', day: 'numeric', timeZone: 'UTC' })} />
-                              ) : (
-                                a.due && <span style={{ color: 'var(--accent-ink)' }}>{a.due}</span>
-                              )}
-                            </div>
-                          )}
-                          <DeliverableActions item={a.action} onPick={(kind) => setSheet({ kind, item: a.action })} />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-              {(!!n.decisions?.length || !!n.open_questions?.length) && (
-                <div className="pen-n2-ref">
-            {!!n.decisions?.length && (
-              <div id="pen-n2-decided" className="pen-sec pen-card">
-                <span className="pen-sec-head"><span className="pen-badge" data-tone="good"><Icon name="check" size={13} /></span>{T.decided}</span>
-                <ul className="mt-2 space-y-2">
-                  {n.decisions.map((d, i) => (
-                    <li key={i} className="text-[16.5px]">
-                      {d.decision}
-                      {d.who && <span className="pen-mono ml-2 text-[13px]" style={{ color: 'var(--dim)' }}>{d.who}</span>}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {!!n.open_questions?.length && (
-              <div id="pen-n2-open" className="pen-sec pen-card">
-                <span className="pen-sec-head"><span className="pen-badge" data-tone="warn"><Icon name="question" size={13} /></span>{T.stillOpen}</span>
-                <ul className="mt-2 list-disc space-y-2.5 pl-5 text-[16.5px]">
-                  {n.open_questions.map((q, i) => (
-                    <li key={i} className="pen-doable">
-                      {q}
-                      <div className="mt-1.5">
-                        <DeliverableActions item={q} onPick={(kind) => setSheet({ kind, item: q })} />
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-                </div>
-              )}
-            </div>
-          )}
-
-          <PeoplePanel sessionId={session.id} notes={n} status={session.status} onChanged={onPeopleChanged} parts={spoken ? nameParts : undefined} onJump={jumpTo} />
-
-          {!!n.missed?.length && (
-            <div className="pen-sec">
-              <div className="pen-missed p-5">
-                <span className="pen-label" style={{ color: 'var(--warn)' }}>{T.missed}</span>
-                <ul className="mt-2.5 space-y-3">
-                  {n.missed.map((m, i) => (
-                    <li key={i} className="pen-doable text-[16.5px] leading-snug">
-                      {m.item}
-                      {m.why && <div className="mt-0.5 text-[14.5px]" style={{ color: 'var(--warn)' }}>{m.why}</div>}
-                      <div className="mt-1.5">
-                        <DeliverableActions item={m.item} onPick={(kind) => setSheet({ kind, item: m.item })} />
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          )}
-
-          
-
-          
+          <details className="pen-fold pen-sec pen-fold-people">
+            <summary><span className="pen-badge"><Icon name="people" size={13} /></span>{T.peopleNames}<Icon name="chevron" size={14} className="pen-fold-chev" /></summary>
+            <PeoplePanel sessionId={session.id} notes={n} status={session.status} onChanged={onPeopleChanged} parts={spoken ? nameParts : undefined} onJump={jumpTo} />
+          </details>
 
           {isViewing(session.meeting_type ?? n.meeting_type) && n.showing && <ShowingBlock showing={n.showing} />}
         </div>
@@ -2968,6 +3004,37 @@ function Detail({
 
       <DeliverableSheet request={sheet} sessionId={session.id} onClose={() => setSheet(null)} />
     </div>
+  )
+}
+
+/**
+ * The summary, three lines and "Read more": the gist without a wall of text before the to-dos.
+ * The button appears only when the text is actually cut.
+ */
+function Summary({ text }: { text: string }) {
+  const T = useCopy(APP_COPY)
+  const [open, setOpen] = useState(false)
+  const [cut, setCut] = useState(false)
+  const ref = useRef<HTMLParagraphElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const check = () => setCut(el.scrollHeight - el.clientHeight > 2)
+    check()
+    const ro = new ResizeObserver(check)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [text])
+  return (
+    <section className="pen-aicard pen-summary" aria-labelledby="pen-summary-h">
+      <h3 id="pen-summary-h" className="pen-aicard-title">{T.inShort}</h3>
+      <p ref={ref} className="pen-aicard-body" data-open={open}>{text}</p>
+      {(cut || open) && (
+        <button type="button" className="pen-summary-more" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+          {open ? T.readLess : T.readMore}
+        </button>
+      )}
+    </section>
   )
 }
 
@@ -3410,51 +3477,6 @@ function UploadCard({ uploads, onClose, whatsapp, phone, T }: { uploads: UploadI
 }
 
 /**
- * "Ask Juno on WhatsApp" on Home (Carlitos, 5 Oct: nothing told him how to ask on WhatsApp).
- * Linked: example questions that open the chat with the question typed. Not linked: the way
- * to link. Hidden for good once dismissed on this device.
- */
-function AskWhatsApp({ whatsapp, T }: { whatsapp: { number: string; linked: boolean } | null; T: AppCopy }) {
-  const [hidden, setHidden] = useState(true)
-  useEffect(() => {
-    let h = false
-    try { h = localStorage.getItem('juno-wa-callout-hidden') === '1' } catch {}
-    setHidden(h)
-  }, [])
-  // Linked users already have WhatsApp one tap away (the phone's tab) and "Juno is waiting on
-  // you" on Home; the callout would only push that down.
-  if (!whatsapp || whatsapp.linked || hidden) return null
-  const hide = () => {
-    setHidden(true)
-    try { localStorage.setItem('juno-wa-callout-hidden', '1') } catch {}
-  }
-  return (
-    <section className="pen-wacall" aria-label={T.waCallTitle}>
-      <div className="pen-wacall-head">
-        <span className="pen-wacall-icon" aria-hidden="true"><Icon name="chat" size={18} /></span>
-        <strong>{T.waCallTitle}</strong>
-        <button type="button" className="pen-wacall-hide" onClick={hide}>{T.waCallHide}</button>
-      </div>
-      {whatsapp.linked ? (
-        <>
-          <p>{T.waCallBody}</p>
-          <div className="pen-wacall-qs">
-            {T.waCallExamples.map((q) => (
-              <a key={q} className="pen-wacall-q" href={`https://wa.me/${whatsapp.number}?text=${encodeURIComponent(q)}`} target="_blank" rel="noreferrer">“{q}”</a>
-            ))}
-          </div>
-        </>
-      ) : (
-        <>
-          <p>{T.waCallConnectBody}</p>
-          <div><a className="pen-btn pen-btn-accent" href="/pen/settings/whatsapp">{T.waCallConnect}</a></div>
-        </>
-      )}
-    </section>
-  )
-}
-
-/**
  * "Help us make Juno better": three questions, once per account (lib/pen/feedback.ts). The
  * first is required; the two written ones are optional so a busy agent can answer in a tap.
  */
@@ -3634,41 +3656,66 @@ function useMenu() {
 }
 
 /**
- * "More ways to import": a transcript, Notion, WhatsApp. One secondary button under the drop
- * zone instead of three separate rows. Each item is the handler or link the old row used.
+ * The sidebar's one "Add" (16 Oct): every way a recording or notes gets in, behind a single
+ * secondary button that is also a drop target for audio files. Replaces Connect pen, Add audio
+ * files and More ways to import; each item is the handler or link the old button used.
  */
-function ImportMenu({
+function AddMenu({
   T,
+  dragOver,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  onConnect,
+  onUpload,
   onTranscript,
   onNotion,
   onGranola,
   whatsapp,
 }: {
   T: AppCopy
+  dragOver: boolean
+  onDragOver: (e: React.DragEvent) => void
+  onDragLeave: () => void
+  onDrop: (e: React.DragEvent) => void
+  onConnect: (() => void) | null
+  onUpload: (() => void) | null
   onTranscript: (() => void) | null
   onNotion: (() => void) | null
   onGranola: (() => void) | null
   whatsapp: { href: string; external: boolean; label: string } | null
 }) {
   const m = useMenu()
-  if (!onTranscript && !onNotion && !onGranola && !whatsapp) return null
+  if (!onConnect && !onUpload && !onTranscript && !onNotion && !onGranola && !whatsapp) return null
   const pick = (fn: () => void) => () => { m.setOpen(false); fn() }
   return (
-    <div className="pen-imenu" ref={m.wrap}>
+    <div className="pen-imenu pen-add" ref={m.wrap} data-over={dragOver} onDragOver={onUpload ? onDragOver : undefined} onDragLeave={onDragLeave} onDrop={onUpload ? onDrop : undefined}>
       <button
         ref={m.btn}
         type="button"
-        className="pen-imenu-btn"
+        className="pen-imenu-btn pen-add-btn"
         aria-haspopup="menu"
         aria-expanded={m.open}
+        aria-label={T.addAria}
         onClick={() => m.setOpen((v) => !v)}
       >
-        <Icon name="plus" size={15} />
-        <span>{T.moreImports}</span>
+        <Icon name="plus" size={17} />
+        <span>{T.add}</span>
         <Icon name="chevron" size={14} className="pen-imenu-chev" />
       </button>
+      {onUpload && <p className="pen-add-hint">{T.dropHere}</p>}
       {m.open && (
-        <div className="pen-menu" role="menu" aria-label={T.moreImports}>
+        <div className="pen-menu" role="menu" aria-label={T.addAria}>
+          {onConnect && (
+            <button type="button" role="menuitem" className="pen-menu-item" onClick={pick(onConnect)}>
+              <Icon name="usb" size={15} />{T.connectPen}
+            </button>
+          )}
+          {onUpload && (
+            <button type="button" role="menuitem" className="pen-menu-item" onClick={pick(onUpload)}>
+              <Icon name="plus" size={15} />{T.uploadAudio}
+            </button>
+          )}
           {onTranscript && (
             <button type="button" role="menuitem" className="pen-menu-item" onClick={pick(onTranscript)}>
               <Icon name="quote" size={15} />{T.importTranscript}
