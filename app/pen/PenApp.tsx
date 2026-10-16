@@ -1204,7 +1204,7 @@ export default function PenApp({
         aria-label={T.brandHome}
         onClick={() => { setView({ k: 'archive' }); setCatFilter(null); setNavOpen(false) }}
       >
-        <Image src="/juno_mark.png" alt="" width={34} height={34} className="pen-mark" priority />
+        <Image src="/juno_mark.png" alt="" width={40} height={40} className="pen-mark" priority />
         <div>
           <div className="pen-wordmark pen-brand-name"><span className="pen-wordmark-j">J</span>uno Pen</div>
           <div className="pen-brand-tag">{T.brandTag}</div>
