@@ -137,8 +137,8 @@ async function addToCalendar(ctx: Ctx, input: Record<string, unknown>): Promise<
   return {
     ok: true,
     when: r.when,
-    message: `Tap to add it, then come back: ${links.ics}  (Google Calendar: ${links.google})`,
-    note: 'Say the event and when in one line, then the message exactly (translate the words, never the links). Nothing is in their calendar until they tap.',
+    message: `Tap to add it, then come back: ${links.ics}  (Google Calendar: ${links.google} · Outlook: ${links.outlook})`,
+    note: 'Say the event and when in one line, then the message exactly (translate the words, never the links): the first link is for iPhone/Apple Calendar, then Google Calendar, then Outlook. Nothing is in their calendar until they tap.',
   }
 }
 
@@ -154,7 +154,7 @@ async function confirmGcalAdd(ctx: Ctx, args: Record<string, unknown>): Promise<
     return {
       ok: false,
       google_calendar_error: (e as Error).message.slice(0, 200),
-      message: `Tap to add it, then come back: ${links.ics}  (Google Calendar: ${links.google})`,
+      message: `Tap to add it, then come back: ${links.ics}  (Google Calendar: ${links.google} · Outlook: ${links.outlook})`,
       note: 'Say in one line it could not be added to Google Calendar directly, then give the message exactly.',
     }
   }
@@ -303,7 +303,7 @@ async function confirmInvite(ctx: Ctx, args: Record<string, unknown>): Promise<u
     ok: true,
     invited: toName ? `${toName} <${toEmail}>` : toEmail,
     when: whenLabel(Date.parse(ev.start), ev.tz ?? 'UTC'),
-    add_for_yourself: `Tap to add it, then come back: ${links.ics}  (Google Calendar: ${links.google})`,
+    add_for_yourself: `Tap to add it, then come back: ${links.ics}  (Google Calendar: ${links.google} · Outlook: ${links.outlook})`,
     note: 'Confirm who was invited and when, in one line; a copy went to the user by BCC and replies go to them. Then add_for_yourself exactly.',
   }
 }

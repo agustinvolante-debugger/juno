@@ -20,7 +20,7 @@ function short(q: string | null): string | null {
 
 export function view(s: Suggestion, lang: Lang, titles: Map<string, string>): WebSuggestion {
   const d = s.detail ?? {}
-  const cal = d.calendar as { ics?: string; google?: string } | undefined
+  const cal = d.calendar as { ics?: string; google?: string; outlook?: string } | undefined
   const decided = s.state === 'done' || s.state === 'accepted'
   return {
     id: s.id,
@@ -40,6 +40,7 @@ export function view(s: Suggestion, lang: Lang, titles: Map<string, string>): We
           gcalLink: typeof d.gcal_link === 'string' ? d.gcal_link : null,
           ics: cal?.ics ?? null,
           google: cal?.google ?? null,
+          outlook: cal?.outlook ?? null,
           notionUrl: typeof d.url === 'string' ? d.url : null,
           docDest: typeof d.url === 'string' ? (d.dest === 'google_docs' || d.url.includes('docs.google.com') ? 'google_docs' : 'notion') : null,
           remindAt: typeof d.remind_at === 'string' ? d.remind_at : null,

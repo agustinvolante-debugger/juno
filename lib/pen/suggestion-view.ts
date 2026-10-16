@@ -26,6 +26,7 @@ export type WebSuggestion = {
     gcalLink?: string | null
     ics?: string | null
     google?: string | null
+    outlook?: string | null
     /** The page's address (Notion or Google Docs; docDest says which). */
     notionUrl?: string | null
     docDest?: 'notion' | 'google_docs' | null

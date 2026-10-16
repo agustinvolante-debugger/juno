@@ -57,6 +57,7 @@ const JN_EN = {
   openEvent: 'Open event',
   appleCal: 'Apple Calendar',
   googleCal: 'Google Calendar',
+  outlookCal: 'Outlook',
   reminderAt: (w: string) => `Reminder set for ${w}`,
   onTodos: (d: string | null) => (d ? `On your to-dos for ${d}` : 'Added to your to-dos'),
   pageCreated: 'Page created in Notion',
@@ -109,6 +110,7 @@ const JN: Copy<typeof JN_EN> = {
     openEvent: 'Ver evento',
     appleCal: 'Calendario de Apple',
     googleCal: 'Google Calendar',
+    outlookCal: 'Outlook',
     reminderAt: (w) => `Recordatorio para el ${w}`,
     onTodos: (d) => (d ? `En tus pendientes para el ${d}` : 'Agregado a tus pendientes'),
     pageCreated: 'Página creada en Notion',
@@ -158,6 +160,7 @@ const JN: Copy<typeof JN_EN> = {
     openEvent: 'Ver evento',
     appleCal: 'Calendário da Apple',
     googleCal: 'Google Agenda',
+    outlookCal: 'Outlook',
     reminderAt: (w) => `Lembrete para ${w}`,
     onTodos: (d) => (d ? `Nas suas tarefas para ${d}` : 'Adicionado às suas tarefas'),
     pageCreated: 'Página criada no Notion',
@@ -378,7 +381,7 @@ function SettledLine({ s, how }: { s: WebSuggestion; how: Settled }) {
   let links: { href: string; label: string }[] = []
   if (s.kind === 'meeting') {
     if (o.addedTo === 'google') { text = T.addedGoogle; if (d.gcalLink) links = [{ href: d.gcalLink, label: T.openEvent }] }
-    else { text = T.addedFile; links = [d.ics && { href: d.ics, label: T.appleCal }, d.google && { href: d.google, label: T.googleCal }].filter(Boolean) as typeof links }
+    else { text = T.addedFile; links = [d.ics && { href: d.ics, label: T.appleCal }, d.google && { href: d.google, label: T.googleCal }, d.outlook && { href: d.outlook, label: T.outlookCal }].filter(Boolean) as typeof links }
   } else if (s.kind === 'followup') {
     text = o.reminderAt ? T.reminderAt(o.reminderAt) : T.onTodos(o.dueDate ? shortDate(`${o.dueDate}T12:00:00Z`, lang, 'UTC') : null)
   } else if (s.kind === 'notion') {

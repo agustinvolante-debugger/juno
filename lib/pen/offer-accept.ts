@@ -100,9 +100,10 @@ export async function acceptMeeting(ctx: AcceptCtx, s: Suggestion, tzIn: string,
       time_zone: `${tz} (${ZONE_NOTE})`,
       calendar_ics: links.ics,
       calendar_google: links.google,
+      calendar_outlook: links.outlook,
       note:
-        'Give both links as plain URLs: the first opens Apple Calendar on iPhone ("tap, Add, then come back here"), the second Google ' +
-        `Calendar. It has a 30-minute alert. Then offer in one line to email ${s.person ?? 'the other person'} an invite (needs their ` +
+        'Give the three links as plain URLs, each labelled: Apple Calendar (iPhone: "tap, Add, then come back here"), Google ' +
+        `Calendar, Outlook. It has a 30-minute alert. Then offer in one line to email ${s.person ?? 'the other person'} an invite (needs their ` +
         'email; use save_draft with the calendar link, never send without their yes).',
     }
   } catch (e) {

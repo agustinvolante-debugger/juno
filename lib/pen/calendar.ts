@@ -231,8 +231,22 @@ export function googleLink(input: CalEvent): string {
   return `https://calendar.google.com/calendar/render?${q.toString()}`
 }
 
-export function calendarLinks(ev: CalEvent): { ics: string; google: string } {
-  return { ics: `${baseUrl()}/api/pen/ics/${eventToken(ev)}`, google: googleLink(ev) }
+/** Outlook on the web (work or school accounts), the event filled in: one tap, then Save. Needs no
+ *  permission from the user's company, unlike a calendar connection. UTC times; Outlook shows them
+ *  in the user's own zone. */
+export function outlookLink(input: CalEvent): string {
+  const ev = tidy(input)
+  const startMs = Date.parse(ev.start)
+  const endMs = startMs + ev.durationMin! * 60000
+  const iso = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z')
+  const q = new URLSearchParams({ path: '/calendar/action/compose', rru: 'addevent', subject: ev.title, startdt: iso(startMs), enddt: iso(endMs) })
+  if (ev.description) q.set('body', ev.description)
+  if (ev.location) q.set('location', ev.location)
+  return `https://outlook.office.com/calendar/0/deeplink/compose?${q.toString()}`
+}
+
+export function calendarLinks(ev: CalEvent): { ics: string; google: string; outlook: string } {
+  return { ics: `${baseUrl()}/api/pen/ics/${eventToken(ev)}`, google: googleLink(ev), outlook: outlookLink(ev) }
 }
 
 /* ------------------------------------------------------------------ invite */
