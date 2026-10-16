@@ -474,3 +474,6 @@ alter table public.pen_segments enable row level security;  -- service role only
 -- Granola import (15 Oct 2026, lib/pen/granola.ts). One row per connected account: kind 'api' (secret = sealed grn_ key) or 'mcp' (secret = sealed JSON access/refresh token, client = the DCR registration used). Rows with email '_client:<redirect uri>' and kind 'client' hold Juno's DCR client, registered once per redirect URI. Imported meetings are pen_sessions with storage_path 'text:granola:<note id>' (the dedupe key); no other DDL.
 -- create table if not exists public.pen_granola (email text primary key, kind text not null check (kind in ('api','mcp','client')), secret text, client jsonb, account_email text, connected_at timestamptz not null default now(), last_import_at timestamptz, last_error text);
 -- alter table public.pen_granola enable row level security;  -- service role only
+-- 2026-10-15, 90-day audio retention (lib/pen/audio-retention.ts). Until these run the cron stays a dry run and refuses to delete.
+-- alter table public.pen_sessions add column if not exists audio_deleted_at timestamptz;
+-- alter table public.pen_sessions add column if not exists keep_audio boolean not null default false;

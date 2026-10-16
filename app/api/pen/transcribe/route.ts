@@ -29,6 +29,10 @@ export async function POST(req: Request) {
   if (!session) return NextResponse.json({ error: 'not found' }, { status: 404 })
   if (!session.consent) return NextResponse.json({ error: 'consent not confirmed' }, { status: 400 })
   if (session.status === 'transcribing') return NextResponse.json({ session })
+  // The 90-day rule removed the audio (lib/pen/audio-retention.ts): there is nothing to send.
+  if (session.audio_deleted_at) {
+    return NextResponse.json({ error: 'The audio of this recording was removed after 90 days, so it cannot be transcribed again. The transcript and notes are kept.' }, { status: 410 })
+  }
 
   try {
     const r = await startTranscription(email, session)

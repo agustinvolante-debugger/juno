@@ -122,6 +122,10 @@ export type PenSession = {
   segments_at?: string | null
   /** On-demand translation: { lang, utterances: string[] } parallel to transcript.utterances. */
   translation?: { lang: string; utterances: string[] } | null
+  /** When the audio was deleted under the 90-day rule (lib/pen/audio-retention.ts). Absent until the 2026-10-15 ALTER. */
+  audio_deleted_at?: string | null
+  /** "Keep this audio": never deleted by the 90-day rule. */
+  keep_audio?: boolean | null
   created_at: string
   updated_at: string
 }

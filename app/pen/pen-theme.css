@@ -1709,6 +1709,24 @@ body:has(.pen-root) {
 .pen-chip[data-tone='warn']   { background: var(--warn-wash); border-color: var(--warn-line); color: var(--warn); }
 .pen-chip[data-tone='bad']    { background: var(--bad-wash); border-color: #EFD6D2; color: var(--bad); }
 
+/* The 90-day audio rule: one quiet line under the chips, a status not an alert. */
+.pen-audio-line {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 7px; margin-top: 11px;
+  font-family: var(--ui); font-size: 13.5px; line-height: 1.45; color: var(--dim);
+}
+.pen-audio-line svg { flex: none; color: var(--dim); }
+.pen-audio-line[data-state='soon'] { align-items: flex-start; flex-wrap: nowrap; color: var(--soft); max-width: 68ch; }
+.pen-audio-line[data-state='soon'] svg { margin-top: 2px; color: var(--warn); }
+.pen-audio-line[data-state='kept'] svg { color: var(--accent-ink); }
+.pen-audio-toggle {
+  color: var(--soft); font-weight: 600; text-decoration: underline;
+  text-decoration-color: var(--line); text-underline-offset: 3px;
+  border-radius: 4px;
+}
+.pen-audio-toggle:hover { color: var(--accent-ink); text-decoration-color: currentColor; }
+.pen-audio-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pen-audio-toggle:disabled { opacity: .55; cursor: progress; }
+
 /* The summary is the machine's contribution, so it is tinted and attributed rather than
    sitting in the same plain type as everything the user wrote. */
 .pen-aicard {

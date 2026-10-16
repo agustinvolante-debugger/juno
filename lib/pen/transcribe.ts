@@ -53,6 +53,7 @@ async function stitchParts(session: PenSession): Promise<string> {
 
 export async function startTranscription(email: string, session: PenSession): Promise<StartResult> {
   if (!hasKey()) throw new Error('ASSEMBLYAI_API_KEY is not set. Add it to .env.local and to the Vercel project env.')
+  if (session.audio_deleted_at) throw new Error('The audio of this recording was removed after 90 days, so it cannot be transcribed again. The transcript and notes are kept.')
 
   const allowance = await getAllowance(email)
   if (!allowance.canProcess) {

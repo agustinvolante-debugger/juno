@@ -9,5 +9,6 @@ import { calendarModule } from './calendar'
 import { connectionsModule } from './connections'
 import { googleModule } from './google'
 import { granolaModule } from './granola'
+import { audioModule } from './audio'
 
-export const MODULES: ToolModule[] = [confirmModule, offersModule, parityModule, timezoneModule, calendarModule, connectionsModule, googleModule, granolaModule]
+export const MODULES: ToolModule[] = [confirmModule, offersModule, parityModule, timezoneModule, calendarModule, connectionsModule, googleModule, granolaModule, audioModule]

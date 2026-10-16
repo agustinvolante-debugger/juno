@@ -4,6 +4,7 @@
     { "path": "/api/news/digest", "schedule": "0 14 * * *" },
     { "path": "/api/vc/edgar-sync", "schedule": "10 6 * * *" },
     { "path": "/api/vc/enrich-cron", "schedule": "0 7 * * *" },
-    { "path": "/api/pen/referrals/cron", "schedule": "0 15 * * *" }
+    { "path": "/api/pen/referrals/cron", "schedule": "0 15 * * *" },
+    { "path": "/api/pen/audio-retention", "schedule": "30 8 * * *" }
   ]
 }

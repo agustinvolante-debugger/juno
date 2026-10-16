@@ -31,6 +31,7 @@ import PeoplePicker, { type Picked } from './PeoplePicker'
 import type { ArchiveStats } from '@/lib/pen/stats'
 import DeliverableSheet, { DeliverableActions, type SheetRequest } from './DeliverableSheet'
 import SendBriefing from './SendBriefing'
+import { storedAudio, AUDIO_DAYS, AUDIO_WARN_DAYS } from '@/lib/pen/audio-state'
 import { prepareAudio, fmtMB, fmtDur, SOFT_SIZE_LIMIT, needsPiecedUpload, durationWithoutDecoding, PIECE_BYTES } from '@/lib/pen/encode'
 import { postJson, getJson, patchJson, del, errMessage, PenHttpError } from '@/lib/pen/http'
 import type { ChatSummary } from '@/lib/pen/chats'
@@ -999,7 +1000,7 @@ export default function PenApp({
                   setErr(msg)
                   throw new Error(msg)
                 }
-                setSessions((prev) => prev.map((x) => (x.id === active.id ? { ...x, ...patch } : x)))
+                setSessions((prev) => prev.map((x) => (sameUnit(x, active, patch) ? { ...x, ...patch } : x)))
               }}
             />
             {chatOpen && <ChatPanel session={active} onChat={patchLocal} onClose={() => setChatOpen(false)} />}
@@ -1631,7 +1632,7 @@ export default function PenApp({
                     // Rethrow so the editor can show "not saved" rather than a false "saved".
                     throw new Error(msg)
                   }
-                  setSessions((prev) => prev.map((x) => (x.id === active.id ? { ...x, ...patch } : x)))
+                  setSessions((prev) => prev.map((x) => (sameUnit(x, active, patch) ? { ...x, ...patch } : x)))
                 }}
               />
               {chatOpen && <ChatPanel session={active} onChat={patchLocal} onClose={() => setChatOpen(false)} />}
@@ -2402,7 +2403,7 @@ function Detail({
   google?: { drive: boolean } | null
   onBack: () => void
   onDelete: () => void
-  onPatch: (p: Partial<Pick<PenSession, 'user_notes' | 'title' | 'client_name' | 'action_done' | 'note_blocks' | 'transcript_edits' | 'briefing_sent_at' | 'meeting_type'>>) => Promise<void>
+  onPatch: (p: Partial<Pick<PenSession, 'user_notes' | 'title' | 'client_name' | 'action_done' | 'note_blocks' | 'transcript_edits' | 'briefing_sent_at' | 'meeting_type' | 'keep_audio'>>) => Promise<void>
 }) {
   const T = useCopy(APP_COPY)
   const lang = useLang()
@@ -2632,6 +2633,7 @@ function Detail({
               </button>
             </p>
           )}
+          <AudioLine parts={parts} T={T} lang={lang} onKeep={(keep) => onPatch({ keep_audio: keep })} />
         </div>
         <div className="pen-d-actions flex flex-wrap items-center gap-2">
           <SendBriefing
@@ -3132,6 +3134,60 @@ function ChatPanel({ session, onChat, onClose }: { session: PenSession; onChat: 
 }
 
 /* ================================================================= helpers */
+
+/** A patch applies to the open recording; "Keep this audio" to every part of its meeting (the server does the same). */
+function sameUnit(x: PenSession, active: PenSession, patch: Record<string, unknown>): boolean {
+  if (x.id === active.id) return true
+  return 'keep_audio' in patch && !!active.merge_group && x.merge_group === active.merge_group
+}
+
+/**
+ * The 90-day audio rule, in one quiet line (lib/pen/audio-retention.ts). Only for recordings whose
+ * audio is ours to delete; imports and WhatsApp files say nothing. A joined meeting is one unit:
+ * kept if any part is, removed once any part's audio went.
+ */
+function AudioLine({ parts, T, lang, onKeep }: { parts: PenSession[]; T: AppCopy; lang: Lang; onKeep: (keep: boolean) => Promise<void> }) {
+  const [busy, setBusy] = useState(false)
+  const stored = parts.filter((p) => storedAudio(p.storage_path))
+  if (!stored.length) return null
+  const removed = stored.map((p) => p.audio_deleted_at).filter((d): d is string => !!d).sort()[0]
+  const kept = parts.some((p) => p.keep_audio === true)
+  // Days until the cron takes it: the meeting is as old as its newest upload. Nothing is said
+  // until the last 5 days; a kept recording always shows "Audio kept · Undo".
+  const daysLeft = Math.ceil((Math.max(...parts.map((p) => Date.parse(p.created_at))) + AUDIO_DAYS * 86_400_000 - Date.now()) / 86_400_000)
+  const toggle = async (keep: boolean) => {
+    setBusy(true)
+    try { await onKeep(keep) } catch { /* onPatch already shows the error */ } finally { setBusy(false) }
+  }
+  if (removed) {
+    return (
+      <p className="pen-audio-line" data-state="removed">
+        <Icon name="wave" size={15} />
+        <span>{T.audioRemoved(fmtDate(removed, lang, { dateStyle: 'medium' }))}</span>
+      </p>
+    )
+  }
+  if (kept) {
+    return (
+      <p className="pen-audio-line" data-state="kept">
+        <Icon name="lock" size={15} />
+        <span>{T.audioKept}</span>
+        <span aria-hidden="true">·</span>
+        <button type="button" className="pen-audio-toggle" disabled={busy} aria-pressed onClick={() => void toggle(false)}>{T.audioUndo}</button>
+      </p>
+    )
+  }
+  if (daysLeft > AUDIO_WARN_DAYS) return null
+  return (
+    <p className="pen-audio-line" data-state="soon">
+      <Icon name="hourglass" size={15} />
+      <span className="pen-audio-text">
+        {T.audioSoon(daysLeft)}{' '}
+        <button type="button" className="pen-audio-toggle" disabled={busy} aria-pressed={false} onClick={() => void toggle(true)}>{T.audioKeep}</button>
+      </span>
+    </p>
+  )
+}
 
 function Muted({ children }: { children: React.ReactNode }) {
   return <p className="text-[14.5px]" style={{ color: 'var(--dim)' }}>{children}</p>

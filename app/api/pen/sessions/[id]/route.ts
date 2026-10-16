@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { ownedPeople } from '@/lib/pen/people'
 import { authedEmail } from '@/lib/news/auth'
 import { getSession, updateSession, deleteSession } from '@/lib/pen/store'
+import { readOnlyRefusal } from '@/lib/pen/access'
+import { setKeepAudio } from '@/lib/pen/audio-keep'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,6 +26,15 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (!existing) return NextResponse.json({ error: 'not found' }, { status: 404 })
 
   const b = (await req.json().catch(() => ({}))) as Record<string, unknown>
+  // "Keep this audio" (90-day rule, lib/pen/audio-retention.ts). On its own: it covers every part
+  // of a joined meeting, and a read-only account cannot change what gets kept.
+  if (typeof b.keep_audio === 'boolean') {
+    const ended = await readOnlyRefusal(email)
+    if (ended) return NextResponse.json({ error: ended }, { status: 403 })
+    const r = await setKeepAudio(email, existing, b.keep_audio)
+    if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status })
+    return NextResponse.json({ ok: true, keep_audio: b.keep_audio, ids: r.ids })
+  }
   const patch: Record<string, unknown> = {}
   if (typeof b.user_notes === 'string') patch.user_notes = b.user_notes
   if (typeof b.title === 'string') patch.title = b.title
