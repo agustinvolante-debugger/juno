@@ -4,8 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createPortal } from 'react-dom'
 import Image from 'next/image'
-import Icon, { type IconName } from './Icon'
-import { COMMON_TYPES, slugType, isViewing, displayType, BUCKETS, BUCKET_ICON, bucketOf, type Bucket } from '@/lib/pen/categories'
+import Icon from './Icon'
+import { COMMON_TYPES, slugType, isViewing, displayType, BUCKETS, bucketOf, type Bucket } from '@/lib/pen/categories'
 import type { PenSession, MeetingType, ChatTurn, PenNotes, NoteBlock, Mention } from '@/lib/pen/store'
 import type { PersonCard } from '@/lib/pen/people'
 import { useTagPicker, TagMenu, shortLabel, type Taggable } from './TagPicker'
@@ -169,6 +169,11 @@ export default function PenApp({
     setNavOpen(false)
   }, [])
   const [pending, setPending] = useState<Pending[]>([])
+  // Recordings sent for transcription from this tab, watched until their notes are written; then
+  // a "ready" toast says so wherever the user is (16 Oct). The transcription poll moves their
+  // status along; this only notices the change. id -> when it was sent.
+  const [watchReady, setWatchReady] = useState<Record<string, number>>({})
+  const [ready, setReady] = useState<string[]>([])
   const [penName, setPenName] = useState<string | null>(null)
   const [consent, setConsent] = useState(false)
   const [eventMode, setEventMode] = useState(false)
@@ -237,6 +242,18 @@ export default function PenApp({
   }
   const [query, setQuery] = useState('')
   const [navOpen, setNavOpen] = useState(false)
+  // Desktop sidebar: full, or folded to an icon rail. The user's choice is remembered; opening a
+  // recording folds it for reading room unless they unfold it while there, and leaving the
+  // recording goes back to their choice (16 Oct).
+  const [sidePref, setSidePref] = useState<'open' | 'collapsed'>('open')
+  const [recUnfold, setRecUnfold] = useState(false)
+  const [sideAnim, setSideAnim] = useState(false)
+  useEffect(() => {
+    try { if (localStorage.getItem('pen.side') === 'collapsed') setSidePref('collapsed') } catch {}
+    // Only animate changes the user makes, not the remembered state arriving after hydration.
+    const t = window.setTimeout(() => setSideAnim(true), 400)
+    return () => window.clearTimeout(t)
+  }, [])
   const isPhone = useIsPhone()
   // Phone tabs. Opening a recording lands on Recordings, a chat or page on Search, wherever it
   // was opened from (a citation, a Home card), so the back arrow always means one thing.
@@ -293,20 +310,6 @@ export default function PenApp({
   }, [navOpen])
   const [catAsk, setCatAsk] = useState<Record<string, string[]>>({})
   const fileInput = useRef<HTMLInputElement>(null)
-
-  // The CATEGORIES group in the sidebar can be folded away; the choice is remembered.
-  const [catsOpen, setCatsOpen] = useState(true)
-  useEffect(() => {
-    try {
-      if (window.localStorage.getItem('pen.cats.open') === '0') setCatsOpen(false)
-    } catch {}
-  }, [])
-  const toggleCats = useCallback(() => {
-    setCatsOpen((v) => {
-      try { window.localStorage.setItem('pen.cats.open', v ? '0' : '1') } catch {}
-      return !v
-    })
-  }, [])
 
   const refreshChats = useCallback(async () => {
     try {
@@ -404,6 +407,15 @@ export default function PenApp({
 
   const activeId = view.k === 'session' ? view.id : null
   const active = useMemo(() => sessions.find((s) => s.id === activeId) ?? null, [sessions, activeId])
+  const inRec = Boolean(active)
+  useEffect(() => { if (!inRec) setRecUnfold(false) }, [inRec])
+  const sideCollapsed = inRec ? !recUnfold : sidePref === 'collapsed'
+  const toggleSide = () => {
+    if (inRec) return setRecUnfold(sideCollapsed)
+    const next = sidePref === 'collapsed' ? 'open' : 'collapsed'
+    setSidePref(next)
+    try { localStorage.setItem('pen.side', next) } catch {}
+  }
 
   // Feature-detect after mount, or the server and client disagree and the fallback banner flashes.
   const [mounted, setMounted] = useState(false)
@@ -544,6 +556,27 @@ export default function PenApp({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busyKey])
 
+  // Notes written for a watched upload: queue its toast. Failed, held or gone (or 45 minutes
+  // without notes): stop watching quietly; the recording's own page shows what happened.
+  useEffect(() => {
+    const ids = Object.keys(watchReady)
+    if (!ids.length) return
+    const done: string[] = []
+    const drop: string[] = []
+    for (const id of ids) {
+      const x = sessions.find((y) => y.id === id)
+      if (x?.status === 'noted') done.push(id)
+      else if (!x || x.status === 'error' || x.status === 'held' || Date.now() - watchReady[id] > 45 * 60_000) drop.push(id)
+    }
+    if (!done.length && !drop.length) return
+    setWatchReady((w) => {
+      const n = { ...w }
+      for (const id of [...done, ...drop]) delete n[id]
+      return n
+    })
+    if (done.length) setReady((r) => [...r.filter((id) => !done.includes(id)), ...done])
+  }, [sessions, watchReady])
+
   /* ---------------------------------------------------------------- connect */
 
   // Opens the same file picker as "Add audio files". It used to open a folder picker
@@ -680,6 +713,7 @@ export default function PenApp({
       }
       if (!tRes.ok) throw new Error((await tRes.json()).error ?? T.transcribeFailed)
       setSessions((prev) => prev.map((x) => (x.id === session.id ? { ...x, status: 'transcribing' as const } : x)))
+      setWatchReady((w) => ({ ...w, [session.id]: Date.now() }))
     }
     return 'done'
   }
@@ -850,6 +884,37 @@ export default function PenApp({
       setJoining(false)
     }
   }
+
+  /** Open a ready recording: a later part of a joined meeting opens the meeting itself. */
+  const openReady = (id: string) => {
+    const x = sessions.find((y) => y.id === id)
+    const primary = x?.merge_group && (x.merge_index ?? 0) > 0
+      ? sessions.find((y) => y.merge_group === x.merge_group && (y.merge_index ?? 0) === 0)?.id ?? id
+      : id
+    setReady([])
+    openSession(primary)
+    setTab('note')
+    setChatOpen(false)
+    if (!isPhone) window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+  const readyToast = (
+    <ReadyToast
+      T={T}
+      phone={isPhone}
+      items={ready.map((id) => {
+        const x = sessions.find((y) => y.id === id)
+        return { id, title: x?.title || x?.client_name || x?.source_name || T.untitled }
+      })}
+      onOpen={openReady}
+      onShowAll={() => {
+        setReady([])
+        setCatFilter(null)
+        if (isPhone) { setView({ k: 'archive' }); setPhoneTab('recordings') }
+        else { setView({ k: 'archive' }); setRailAll(true) }
+      }}
+      onClose={() => setReady([])}
+    />
+  )
 
   // ------------------------------------------------------------------ phone
   // The phone gets its own screens: a bottom tab bar (Home, Upload, Recordings, Search), a
@@ -1026,27 +1091,24 @@ export default function PenApp({
         )
       } else {
         title = T.recent
+        if (listed.length > 1) {
+          right = (
+            <>
+              <RecFilter
+                phone T={T} lang={appLang}
+                order={recOrder} onOrder={setRecOrder}
+                buckets={bucketCounts} total={listed.length}
+                cat={catFilter} onCat={setCatFilter}
+              />
+              {right}
+            </>
+          )
+        }
         screen = (
           <div className="pen-m-list">
-            {bucketCounts.length > 1 && (
-              <div className="pen-m-chips">
-                <button type="button" className="pen-m-chip" data-on={!catFilter} onClick={() => setCatFilter(null)}>{T.mAll}</button>
-                {bucketCounts.map(([b, n]) => (
-                  <button type="button" key={b} className="pen-m-chip" data-on={catFilter === b} onClick={() => setCatFilter(catFilter === b ? null : b)}>
-                    {bucketLabel(b, appLang)} <span>{n}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            {visible.length > 1 && (
-              <div className="pen-order-wrap">
-                <div className="pen-order" role="group" aria-label={T.orderLabel}>
-                  {(['added', 'date'] as const).map((o) => (
-                    <button key={o} type="button" className="pen-order-btn" aria-pressed={recOrder === o} onClick={() => setRecOrder(o)}>
-                      {o === 'added' ? T.orderAdded : T.orderDate}
-                    </button>
-                  ))}
-                </div>
+            {catFilter && (
+              <div className="pen-m-filterrow">
+                <RecFilterChip T={T} lang={appLang} cat={catFilter} onClear={() => setCatFilter(null)} />
               </div>
             )}
             {visible.length === 0 ? (
@@ -1203,6 +1265,7 @@ export default function PenApp({
         {promoOpen && !tourOpen && <ReferralPromo T={T} onClose={closePromo} />}
         {askOpen && !tourOpen && !promoOpen && <FeedbackAsk T={T} onClose={closeAsk} />}
         <UploadCard uploads={uploads} onClose={() => setUploads((prev) => prev.filter((u) => u.state === 'waiting' || u.state === 'working'))} whatsapp={whatsapp ?? null} phone={isPhone} T={T} />
+        {readyToast}
       </LangProvider>
     )
   }
@@ -1225,7 +1288,7 @@ export default function PenApp({
 
   return (
     <LangProvider lang={appLang}>
-    <main className="pen-page" data-ready={mounted}>
+    <main className="pen-page" data-ready={mounted} data-side={sideCollapsed ? 'collapsed' : 'open'} data-side-anim={sideAnim || undefined}>
       <a className="pen-skip" href="#pen-main">{T.skipMain}</a>
       {/* The sidebar is a page-level column running the full height, so the brand sits level
           with the search box rather than a header's height below it. Everything else — the
@@ -1233,18 +1296,31 @@ export default function PenApp({
       <div className="pen-side">
       {/* ------------------------------------------------------ navigation */}
       {/* The brand goes Home, like the Home item below it. */}
-      <button
-        type="button"
-        className="pen-brand pen-brand-home"
-        aria-label={T.brandHome}
-        onClick={() => { setView({ k: 'archive' }); setCatFilter(null); setNavOpen(false) }}
-      >
-        <Image src="/juno_mark.png" alt="" width={40} height={40} className="pen-mark" priority />
-        <div>
-          <div className="pen-wordmark pen-brand-name"><span className="pen-wordmark-j">J</span>uno Pen</div>
-          <div className="pen-brand-tag">{T.brandTag}</div>
-        </div>
-      </button>
+      <div className="pen-side-top">
+        <button
+          type="button"
+          className="pen-brand pen-brand-home"
+          aria-label={T.brandHome}
+          data-tip={sideCollapsed ? T.home : undefined}
+          onClick={() => { setView({ k: 'archive' }); setCatFilter(null); setNavOpen(false) }}
+        >
+          <Image src="/juno_mark.png" alt="" width={40} height={40} className="pen-mark" priority />
+          <div className="pen-brand-text">
+            <div className="pen-wordmark pen-brand-name"><span className="pen-wordmark-j">J</span>uno Pen</div>
+            <div className="pen-brand-tag">{T.brandTag}</div>
+          </div>
+        </button>
+        <button
+          type="button"
+          className="pen-side-toggle"
+          onClick={toggleSide}
+          aria-expanded={!sideCollapsed}
+          aria-label={sideCollapsed ? T.expandSide : T.collapseSide}
+          data-tip={sideCollapsed ? T.expandSide : T.collapseSide}
+        >
+          <Icon name="sidebar" size={18} />
+        </button>
+      </div>
 
       {readOnly ? (
         <ReadOnlyBanner T={T} />
@@ -1260,7 +1336,7 @@ export default function PenApp({
 
       {/* One "Add" for every way in (16 Oct): connect the pen, upload audio, a transcript, Notion,
           Granola, WhatsApp. Same handlers the separate buttons used; the block is still a drop
-          target for audio files. Secondary weight: the Juno card on Home gets the colour. */}
+          target for audio files. The blue primary (16 Oct): this is where uploads start. */}
       <AddMenu
         T={T}
         dragOver={dragOver}
@@ -1281,11 +1357,13 @@ export default function PenApp({
           external: whatsapp.linked,
           label: whatsapp.linked ? T.openWhatsApp : T.useWhatsApp,
         } : null}
+        tip={sideCollapsed ? T.add : undefined}
       />
       {tourOpen && <Tour lang={appLang} onClose={closeTour} onUpload={() => fileInput.current?.click()} />}
       {promoOpen && !tourOpen && <ReferralPromo T={T} onClose={closePromo} />}
       {askOpen && !tourOpen && !promoOpen && <FeedbackAsk T={T} onClose={closeAsk} />}
       <UploadCard uploads={uploads} onClose={() => setUploads((prev) => prev.filter((u) => u.state === 'waiting' || u.state === 'working'))} whatsapp={whatsapp ?? null} phone={isPhone} T={T} />
+      {readyToast}
       {txImport && (
         <TranscriptImport
           people={people}
@@ -1308,6 +1386,8 @@ export default function PenApp({
           <button
             className="pen-cat"
             data-active={view.k === 'archive'}
+            aria-label={sideCollapsed ? T.home : undefined}
+            data-tip={sideCollapsed ? T.home : undefined}
             onClick={() => { setView({ k: 'archive' }); setCatFilter(null); setNavOpen(false) }}
           >
             <Icon name="home" size={19} />
@@ -1318,6 +1398,8 @@ export default function PenApp({
             className="pen-cat"
             data-active={catFilter === null && view.k !== 'archive' && view.k !== 'chat' && view.k !== 'doc'}
             aria-pressed={railAll && catFilter === null}
+            aria-label={sideCollapsed ? T.allRecordingsNav : undefined}
+            data-tip={sideCollapsed ? T.allRecordingsNav : undefined}
             onClick={() => { setCatFilter(null); setRailAll(true); setNavOpen(false) }}
           >
             <Icon name="recordings" size={19} />
@@ -1326,45 +1408,36 @@ export default function PenApp({
           </button>
         </div>
 
-        {/* Fixed buckets, not the free-form labels. Measured on a real archive: 11 recordings
-            produced 10 distinct categories, 9 holding a single recording — a filter that
-            always returns one item is not a filter. The specific label still appears on each
-            recording row, where it is good description; navigation happens by bucket. Empty
-            buckets are hidden so the nav only ever offers somewhere to go. */}
-        {bucketCounts.length > 0 && (
-          <div className="pen-sec-toggle-wrap">
-            <button
-              type="button"
-              className="pen-sec-toggle pen-label"
-              aria-expanded={catsOpen}
-              aria-controls="pen-cats-buckets"
-              onClick={() => toggleCats()}
-            >
-              <span>{T.categories}</span>
-              <Icon name="chevron" size={14} className="pen-sec-chev" />
-            </button>
-          </div>
-        )}
-        {bucketCounts.length > 0 && catsOpen && (
-          <div className="pen-cats-list pen-cats-buckets" id="pen-cats-buckets">
-            {bucketCounts.map(([b, n]) => (
-              <button
-                key={b}
-                className="pen-cat"
-                data-active={catFilter === b}
-                onClick={() => { setCatFilter(catFilter === b ? null : b); setNavOpen(false) }}
-              >
-                <Icon name={BUCKET_ICON[b] as IconName} size={19} />
-                <span className="pen-cat-label">{bucketLabel(b, appLang)}</span>
-                <span className="pen-cat-n">{n}</span>
-              </button>
-            ))}
-          </div>
-        )}
       </nav>
 
       {/* --------------------------------- recordings (rail; ordered right in CSS) */}
 
+      {sideCollapsed ? (
+        <nav className="pen-side-icons" aria-label={T.chats}>
+          <button
+            type="button"
+            className="pen-cat"
+            data-active={view.k === 'chat'}
+            aria-label={T.newChat}
+            data-tip={T.newChat}
+            onClick={() => { setChatSeed(null); setView({ k: 'chat', id: null }) }}
+          >
+            <Icon name="chat" size={19} />
+          </button>
+          {docs.length > 0 && (
+            <button
+              type="button"
+              className="pen-cat"
+              data-active={view.k === 'doc'}
+              aria-label={`${T.pages}: ${docs[0].title}`}
+              data-tip={docs[0].title}
+              onClick={() => setView({ k: 'doc', id: docs[0].id })}
+            >
+              <Icon name="doc" size={19} />
+            </button>
+          )}
+        </nav>
+      ) : (
       <nav className="pen-saved">
         {/* ---------------------------------------------------------- chats */}
         <div className="pen-cats-head pen-label pen-cats-head-row pen-sec-label">
@@ -1426,10 +1499,13 @@ export default function PenApp({
           </>
         )}
       </nav>
+      )}
 
-      <div className="pen-side-meter">
-        <UsageBar allowance={allowance} />
-      </div>
+      {!sideCollapsed && (
+        <div className="pen-side-meter">
+          <UsageBar allowance={allowance} />
+        </div>
+      )}
       </div>
 
       <div className="pen-main-col">
@@ -1661,26 +1737,25 @@ export default function PenApp({
         {/* --------------------------------------- recent recordings (col 3) */}
         <aside className="pen-rail">
           <div className="pen-rail-head">
-            <span className="pen-rail-title">{T.recent}</span>
-            {!locked && (
-              <button className="pen-rail-new" onClick={() => fileInput.current?.click()}>
-                <Icon name="plus" size={15} />
-                {T.new}
-              </button>
-            )}
-          </div>
-
-          {visible.length > 1 && (
-            <div className="pen-order-wrap">
-              <div className="pen-order" role="group" aria-label={T.orderLabel}>
-                {(['added', 'date'] as const).map((o) => (
-                  <button key={o} type="button" className="pen-order-btn" aria-pressed={recOrder === o} onClick={() => setRecOrder(o)}>
-                    {o === 'added' ? T.orderAdded : T.orderDate}
-                  </button>
-                ))}
-              </div>
+            <span className="pen-rail-title">{railAll ? T.allRecordingsNav : T.recent}</span>
+            <div className="pen-rail-tools">
+              <RecFilterChip T={T} lang={appLang} cat={catFilter} onClear={() => setCatFilter(null)} />
+              {!locked && (
+                <button className="pen-rail-new" onClick={() => fileInput.current?.click()}>
+                  <Icon name="plus" size={15} />
+                  {T.new}
+                </button>
+              )}
+              {listed.length > 1 && (
+                <RecFilter
+                  T={T} lang={appLang}
+                  order={recOrder} onOrder={setRecOrder}
+                  buckets={bucketCounts} total={listed.length}
+                  cat={catFilter} onCat={setCatFilter}
+                />
+              )}
             </div>
-          )}
+          </div>
 
           {visible.length === 0 ? (
             <p className="mt-6 text-[14.5px] leading-relaxed" style={{ color: 'var(--dim)' }}>
@@ -2626,8 +2701,9 @@ function Detail({
         {T.allRecordings}
       </button>
 
-      <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 flex-1 basis-[280px]">
+      {/* Title on its own full-width row; the actions in one row underneath (16 Oct). */}
+      <div className="pen-d-head mt-3">
+        <div className="min-w-0">
           <TitleEdit
             title={session.title || n.headline || session.source_name || T.untitled}
             onSave={(next) => onPatch({ title: next })}
@@ -3122,6 +3198,22 @@ function ChatPanel({ session, onChat, onClose }: { session: PenSession; onChat: 
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }, [chat.length, thinking])
 
+  // Escape closes the panel, like Hide chat. Not while a menu, a sheet or a dialog has it.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      // (Only ones on screen: a closed <details> keeps its menu in the DOM.)
+      const open = Array.from(document.querySelectorAll<HTMLElement>('[role="menu"], [role="dialog"], [role="listbox"]'))
+      if (open.some((x) => !x.closest('details:not([open])') && x.getClientRects().length > 0)) return
+      // Escape in another text field (renaming the title, editing a note) belongs to that field.
+      const el = document.activeElement as HTMLElement | null
+      if (el && (el.matches('input, textarea, select, [contenteditable="true"]')) && !el.closest('.pen-chatpanel')) return
+      onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
   async function ask(question: string) {
     if (!question.trim() || thinking) return
     setError(null)
@@ -3146,14 +3238,16 @@ function ChatPanel({ session, onChat, onClose }: { session: PenSession; onChat: 
   }
 
   return (
-    <aside className="pen-panel flex max-h-[76vh] flex-col overflow-hidden xl:sticky xl:top-6">
-      <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: 'var(--line)' }}>
+    <aside className="pen-panel pen-chatpanel flex max-h-[76vh] flex-col overflow-hidden xl:sticky xl:top-6" aria-label={T.askMeeting}>
+      <div className="flex items-center justify-between border-b py-2 pl-4 pr-2" style={{ borderColor: 'var(--line)' }}>
         <span className="pen-label">{T.askMeeting}</span>
         <div className="flex items-center gap-3">
           {chat.length > 0 && (
             <button className="pen-mono text-[13px] underline" style={{ color: 'var(--dim)' }} onClick={reset}>{T.clear}</button>
           )}
-          <button className="pen-mono text-[14.5px] leading-none xl:hidden" style={{ color: 'var(--dim)' }} onClick={onClose}>×</button>
+          <button type="button" className="pen-chat-x" onClick={onClose} aria-label={T.closeChat} title={T.closeChat}>
+            <Icon name="close" size={16} />
+          </button>
         </div>
       </div>
 
@@ -3413,6 +3507,17 @@ function ReferralPromo({ T, onClose }: { T: AppCopy; onClose: () => void }) {
  */
 function UploadCard({ uploads, onClose, whatsapp, phone, T }: { uploads: UploadItem[]; onClose: () => void; whatsapp: { number: string; linked: boolean } | null; phone: boolean; T: AppCopy }) {
   const [open, setOpen] = useState(false)
+  // Finished without errors: the card goes away on its own 10 s later (16 Oct), held while the
+  // pointer or focus is on it. Errors stay until closed.
+  const [hold, setHold] = useState(false)
+  const settled = uploads.length > 0 && uploads.every((u) => u.state === 'done' || u.state === 'held')
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
+  useEffect(() => {
+    if (!settled || hold) return
+    const t = window.setTimeout(() => closeRef.current(), 10_000)
+    return () => window.clearTimeout(t)
+  }, [settled, hold])
   if (!uploads.length) return null
   const finished = uploads.filter((u) => u.state === 'done' || u.state === 'held' || u.state === 'error')
   const going = finished.length < uploads.length
@@ -3425,7 +3530,11 @@ function UploadCard({ uploads, onClose, whatsapp, phone, T }: { uploads: UploadI
   const host = typeof document !== 'undefined' ? document.querySelector('.pen-root') ?? document.body : null
   if (!host) return null
   return createPortal(
-    <div className="pen-upcard" data-phone={phone ? 'true' : undefined} role="status" aria-live="polite">
+    <div
+      className="pen-upcard" data-phone={phone ? 'true' : undefined} role="status" aria-live="polite"
+      onPointerEnter={() => setHold(true)} onPointerLeave={() => setHold(false)}
+      onFocus={() => setHold(true)} onBlur={() => setHold(false)}
+    >
       <div className="pen-upcard-head">
         <strong>{going ? T.upTitle(finished.length, uploads.length) : T.upDoneTitle(ok + held)}</strong>
         {!going && <button type="button" className="pen-upcard-x" onClick={onClose} aria-label={T.upClose}>&times;</button>}
@@ -3470,6 +3579,64 @@ function UploadCard({ uploads, onClose, whatsapp, phone, T }: { uploads: UploadI
             </li>
           ))}
         </ul>
+      )}
+    </div>,
+    host,
+  )
+}
+
+/**
+ * "Your recording "…" is ready. Open it" (16 Oct): at the top of the screen when the notes for a
+ * recording uploaded in this tab are written, wherever the user went meanwhile. One recording
+ * names itself and opens; several are counted and open the list. Hides after 12 s, held while
+ * the pointer or focus is on it. The live region stays mounted so the arrival is announced.
+ */
+function ReadyToast({
+  T,
+  phone,
+  items,
+  onOpen,
+  onShowAll,
+  onClose,
+}: {
+  T: AppCopy
+  phone: boolean
+  items: { id: string; title: string }[]
+  onOpen: (id: string) => void
+  onShowAll: () => void
+  onClose: () => void
+}) {
+  const [hold, setHold] = useState(false)
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
+  const key = items.map((x) => x.id).join(',')
+  useEffect(() => {
+    if (!key || hold) return
+    const t = window.setTimeout(() => closeRef.current(), 12_000)
+    return () => window.clearTimeout(t)
+  }, [key, hold])
+  const [host, setHost] = useState<Element | null>(null)
+  useEffect(() => { setHost(document.querySelector('.pen-root') ?? document.body) }, [])
+  if (!host) return null
+  const one = items.length === 1 ? items[0] : null
+  return createPortal(
+    <div className="pen-ready-wrap" data-phone={phone || undefined} role="status" aria-live="polite">
+      {items.length > 0 && (
+        <div
+          className="pen-toast pen-ready"
+          onPointerEnter={() => setHold(true)} onPointerLeave={() => setHold(false)}
+          onFocus={() => setHold(true)} onBlur={() => setHold(false)}
+        >
+          <span className="pen-ready-ic" aria-hidden><Icon name="check" size={15} /></span>
+          <p className="pen-ready-text">{one ? T.readyOne(one.title) : T.readyMany(items.length)}</p>
+          <button type="button" className="pen-ready-go" onClick={() => (one ? onOpen(one.id) : onShowAll())}>
+            {one ? T.readyOpen : T.readyShow}
+            <Icon name="chevron" size={14} />
+          </button>
+          <button type="button" className="pen-toast-x pen-ready-x" onClick={onClose} aria-label={T.readyClose}>
+            <Icon name="close" size={16} />
+          </button>
+        </div>
       )}
     </div>,
     host,
@@ -3635,7 +3802,7 @@ function useMenu() {
         btn.current?.focus()
       }
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        const items = Array.from(wrap.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])
+        const items = Array.from(wrap.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]') ?? [])
         if (!items.length) return
         e.preventDefault()
         const at = items.indexOf(document.activeElement as HTMLElement)
@@ -3646,13 +3813,103 @@ function useMenu() {
     document.addEventListener('mousedown', onDown)
     document.addEventListener('keydown', onKey)
     // Focus the first item, so the keyboard lands inside the menu it just opened.
-    requestAnimationFrame(() => wrap.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus())
+    requestAnimationFrame(() => (wrap.current?.querySelector<HTMLElement>('[role^="menuitem"][aria-checked="true"]') ?? wrap.current?.querySelector<HTMLElement>('[role^="menuitem"]'))?.focus())
     return () => {
       document.removeEventListener('mousedown', onDown)
       document.removeEventListener('keydown', onKey)
     }
   }, [open])
   return { open, setOpen, wrap, btn }
+}
+
+/**
+ * Sort and filter for the recordings list (16 Oct): one icon at the right of the list's header,
+ * replacing the sidebar's CATEGORIES group and the Recently added / By date toggle. Categories
+ * are the fixed buckets, not the free-form labels: on a real archive 11 recordings produced 10
+ * labels, 9 holding one recording, and a filter that always returns one item is not a filter.
+ * Empty buckets never appear. The active category also shows as a chip (RecFilterChip).
+ */
+function RecFilter({
+  T,
+  lang,
+  order,
+  onOrder,
+  buckets,
+  total,
+  cat,
+  onCat,
+  phone = false,
+}: {
+  T: AppCopy
+  lang: Lang
+  order: RecOrder
+  onOrder: (o: RecOrder) => void
+  buckets: readonly (readonly [Bucket, number])[]
+  total: number
+  cat: string | null
+  onCat: (b: string | null) => void
+  phone?: boolean
+}) {
+  const m = useMenu()
+  const pick = (fn: () => void) => () => { m.setOpen(false); fn() }
+  return (
+    <div className="pen-rf" ref={m.wrap} data-phone={phone || undefined}>
+      <button
+        ref={m.btn}
+        type="button"
+        className={phone ? 'pen-m-iconbtn pen-rf-btn' : 'pen-rf-btn'}
+        data-on={Boolean(cat)}
+        aria-haspopup="menu"
+        aria-expanded={m.open}
+        aria-label={T.filterAria}
+        title={phone ? undefined : T.filterAria}
+        onClick={() => m.setOpen((v) => !v)}
+      >
+        <Icon name="filter" size={phone ? 20 : 18} />
+        {cat && <span className="pen-rf-dot" aria-hidden />}
+      </button>
+      {m.open && (
+        <div className="pen-menu pen-menu-right pen-rf-menu" role="menu" aria-label={T.filterAria}>
+          <div className="pen-rf-label" role="presentation">{T.sortLabel}</div>
+          {(['added', 'date'] as const).map((o) => (
+            <button key={o} type="button" role="menuitemradio" aria-checked={order === o} className="pen-menu-item" onClick={pick(() => onOrder(o))}>
+              <span className="pen-rf-tick">{order === o && <Icon name="check" size={15} />}</span>
+              {o === 'added' ? T.orderAdded : T.orderDate}
+            </button>
+          ))}
+          {buckets.length > 1 && (
+            <>
+              <div className="pen-rf-label pen-rf-sep" role="presentation">{T.categories}</div>
+              <button type="button" role="menuitemradio" aria-checked={!cat} className="pen-menu-item" onClick={pick(() => onCat(null))}>
+                <span className="pen-rf-tick">{!cat && <Icon name="check" size={15} />}</span>
+                <span className="pen-rf-name">{T.mAll}</span>
+                <span className="pen-rf-n">{total}</span>
+              </button>
+              {buckets.map(([b, n]) => (
+                <button key={b} type="button" role="menuitemradio" aria-checked={cat === b} className="pen-menu-item" onClick={pick(() => onCat(b))}>
+                  <span className="pen-rf-tick">{cat === b && <Icon name="check" size={15} />}</span>
+                  <span className="pen-rf-name">{bucketLabel(b, lang)}</span>
+                  <span className="pen-rf-n">{n}</span>
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** The active category, as a chip that clears it. */
+function RecFilterChip({ T, lang, cat, onClear }: { T: AppCopy; lang: Lang; cat: string | null; onClear: () => void }) {
+  if (!cat) return null
+  const label = bucketLabel(cat as Bucket, lang)
+  return (
+    <button type="button" className="pen-rf-chip" onClick={onClear} aria-label={T.clearFilter(label)} title={T.clearFilter(label)}>
+      <span>{label}</span>
+      <Icon name="close" size={13} />
+    </button>
+  )
 }
 
 /**
@@ -3672,7 +3929,10 @@ function AddMenu({
   onNotion,
   onGranola,
   whatsapp,
+  tip,
 }: {
+  /** Folded sidebar: the label shown as a tooltip. */
+  tip?: string
   T: AppCopy
   dragOver: boolean
   onDragOver: (e: React.DragEvent) => void
@@ -3697,6 +3957,7 @@ function AddMenu({
         aria-haspopup="menu"
         aria-expanded={m.open}
         aria-label={T.addAria}
+        data-tip={tip}
         onClick={() => m.setOpen((v) => !v)}
       >
         <Icon name="plus" size={17} />

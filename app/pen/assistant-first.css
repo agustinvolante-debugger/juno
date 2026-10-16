@@ -196,9 +196,16 @@
   .pen-pstrip-all:hover { text-decoration: underline; text-underline-offset: 3px; }
 
   /* ======================================================= sidebar: Add */
+  /* The blue primary (16 Oct): the one place uploads start, same treatment as Send briefing. */
   .pen-add { margin-bottom: 14px; border-radius: 22px; transition: background .15s ease, box-shadow .15s ease; }
-  .pen-add-btn { min-height: 46px; font-size: 15px; font-weight: 600; }
-  .pen-add-btn > svg:first-child { color: var(--accent); }
+  .pen-add-btn {
+    min-height: 46px; font-size: 15px; font-weight: 600;
+    background: linear-gradient(180deg, #1b7be3, #0066cc); border-color: #0062c4; color: #fff;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .32), 0 1px 2px rgba(0, 51, 122, .22), 0 8px 18px -8px rgba(0, 102, 204, .55);
+  }
+  .pen-add-btn:hover { background: linear-gradient(180deg, #2385ec, #0071e3); border-color: #0062c4; }
+  .pen-add-btn:active { transform: scale(.98); }
+  .pen-add-btn > svg:first-child, .pen-add-btn .pen-imenu-chev { color: #fff; }
   .pen-add-hint { margin: 6px 0 0; padding: 0 16px; font-size: 12.5px; color: var(--dim); }
   .pen-add[data-over='true'] { background: var(--accent-wash); box-shadow: 0 0 0 2px var(--sk-blue); }
   .pen-add[data-over='true'] .pen-add-hint { color: var(--accent-ink); font-weight: 600; }
@@ -289,6 +296,144 @@
   .pen-d-ask-item { display: none; }
   .pen-m-body .pen-d-ask { display: none; }
   .pen-m-body .pen-d-ask-item { display: inline-flex; }
+
+  /* ================================================ recording header (16 Oct) */
+  /* The title takes the full width on its own; the actions sit in one row under it. */
+  .pen-d-head { display: flex; flex-direction: column; align-items: stretch; gap: 16px; }
+  .pen-d-head > .pen-d-actions { justify-content: flex-start; }
+  /* The row is full width now: on a phone the briefing group keeps its own width, so More stays
+     beside Add people instead of being pushed to the far edge. */
+  .pen-m-body .pen-d-head > .pen-d-actions > :first-child { flex: 0 1 auto; }
+
+  /* ================================================ Ask this meeting: close */
+  .pen-chat-x {
+    flex: none; display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 9999px;
+    color: var(--dim); transition: background .15s ease, color .15s ease;
+  }
+  .pen-chat-x:hover { background: var(--sunk); color: var(--ink); }
+  .pen-m-body .pen-chat-x { width: 44px; height: 44px; }
+
+  /* ================================================ recordings: sort + filter */
+  .pen-rail-head { flex-wrap: wrap; row-gap: 8px; }
+  .pen-rail-tools { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-left: auto; min-width: 0; }
+  .pen-rf { position: relative; flex: none; display: flex; }
+  .pen-rf-btn {
+    position: relative; display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 9999px;
+    color: var(--soft); background: var(--panel); border: 1px solid var(--line);
+    transition: background .15s ease, color .15s ease, border-color .15s ease;
+  }
+  .pen-rf-btn:hover { background: var(--sunk); color: var(--ink); }
+  .pen-rf-btn[aria-expanded='true'], .pen-rf-btn[data-on='true'] { color: var(--accent-ink); background: var(--accent-wash); border-color: var(--accent-line); }
+  .pen-rf[data-phone] .pen-rf-btn { width: 44px; height: 44px; border: 0; background: none; color: var(--ink); border-radius: 12px; }
+  .pen-rf[data-phone] .pen-rf-btn[aria-expanded='true'], .pen-rf[data-phone] .pen-rf-btn[data-on='true'] { color: var(--accent-ink); background: var(--accent-wash); }
+  .pen-rf-dot { position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border-radius: 9999px; background: var(--sk-blue); box-shadow: 0 0 0 2px var(--panel); }
+  .pen-rf[data-phone] .pen-rf-dot { top: 9px; right: 9px; }
+  /* Solid, not glass: it opens over the list, and the rows behind showed through the items. */
+  .pen-menu.pen-rf-menu { min-width: 236px; background: #fff; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .pen-rf-label { padding: 8px 12px 4px; font-family: var(--ui); font-size: 12px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--dim); }
+  .pen-rf-sep { margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--hair); }
+  .pen-rf-menu .pen-menu-item[aria-checked='true'] { color: var(--accent-ink); font-weight: 600; }
+  .pen-rf-tick { flex: none; display: inline-grid; place-items: center; width: 16px; }
+  .pen-rf-menu .pen-rf-tick svg { color: var(--accent); }
+  .pen-rf-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .pen-rf-n { margin-left: auto; padding-left: 16px; font-size: 13px; font-weight: 500; color: var(--faint); font-variant-numeric: tabular-nums; }
+  .pen-rf-chip {
+    display: inline-flex; align-items: center; gap: 6px; min-height: 32px; max-width: 168px; padding: 0 10px 0 12px;
+    border-radius: 9999px; background: var(--accent-wash); border: 1px solid var(--accent-line); color: var(--accent-ink);
+    font-family: var(--ui); font-size: 13px; font-weight: 600; transition: background .15s ease;
+  }
+  .pen-rf-chip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pen-rf-chip svg { flex: none; }
+  .pen-rf-chip:hover { background: #dcebfb; }
+  .pen-m-filterrow { display: flex; margin: 0 0 14px; }
+  .pen-m-filterrow .pen-rf-chip { min-height: 40px; max-width: 100%; padding: 0 14px 0 16px; font-size: 14.5px; }
+  @media (hover: none) { .pen-rf-menu .pen-menu-item { min-height: 44px; } }
+
+  /* ================================================ ready toast (16 Oct) */
+  /* The app's toast (dark, quiet), at the top so it reads as news rather than a status line. */
+  .pen-ready-wrap {
+    position: fixed; z-index: 950; left: 50%; transform: translateX(-50%);
+    top: 18px; width: max-content; max-width: calc(100vw - 32px); pointer-events: none;
+  }
+  .pen-ready-wrap[data-phone] { top: calc(env(safe-area-inset-top, 0px) + 10px); width: calc(100vw - 24px); max-width: 520px; }
+  .pen-ready {
+    pointer-events: auto; gap: 10px; padding: 8px 8px 8px 12px; border-radius: 16px; max-width: 560px;
+    background: rgba(29, 29, 31, .94); -webkit-backdrop-filter: saturate(160%) blur(16px); backdrop-filter: saturate(160%) blur(16px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .14), 0 18px 40px -14px rgba(0, 0, 0, .45);
+    color: #fff; font-size: 14.5px;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .pen-ready { animation: pen-ready-in .38s cubic-bezier(.16, 1, .3, 1) both; }
+    @keyframes pen-ready-in { from { opacity: 0; transform: translateY(-10px) scale(.98); } }
+  }
+  .pen-ready-ic { flex: none; display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 9999px; background: #30d158; color: #06240f; }
+  .pen-ready-text {
+    flex: 1 1 auto; min-width: 0; margin: 0; line-height: 1.35; font-weight: 500;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+  }
+  .pen-ready .pen-ready-go {
+    flex: none; display: inline-flex; align-items: center; gap: 3px; min-height: 36px; padding: 0 12px; border-radius: 9999px;
+    background: #fff; color: #0052b0; font-weight: 600; white-space: nowrap;
+  }
+  .pen-ready .pen-ready-go:hover { background: #eaf3fe; }
+  .pen-ready .pen-ready-x { flex: none; display: inline-grid; place-items: center; width: 36px; height: 36px; padding: 0; border-radius: 9999px; color: rgba(255, 255, 255, .72); }
+  .pen-ready .pen-ready-x:hover { background: rgba(255, 255, 255, .12); color: #fff; }
+  .pen-ready :focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  /* Phone: the sentence gets the width (two lines), Open it sits under it, aligned with the text. */
+  .pen-ready-wrap[data-phone] .pen-ready { max-width: none; flex-wrap: wrap; row-gap: 4px; padding: 10px 6px 10px 12px; }
+  .pen-ready-wrap[data-phone] .pen-ready-text { flex: 1 1 calc(100% - 90px); }
+  .pen-ready-wrap[data-phone] .pen-ready-go { order: 3; margin-left: 36px; }
+  .pen-ready-wrap[data-phone] .pen-ready-x { order: 2; }
+  .pen-ready-wrap[data-phone] .pen-ready-go, .pen-ready-wrap[data-phone] .pen-ready-x { min-height: 44px; }
+  .pen-ready-wrap[data-phone] .pen-ready-x { width: 44px; height: 44px; }
+
+  /* ================================================ folding sidebar (16 Oct) */
+  @media (min-width: 901px) {
+    .pen-side-top { display: flex; align-items: flex-start; gap: 4px; }
+    .pen-side-top > .pen-brand { flex: 1 1 auto; min-width: 0; }
+    .pen-brand-text { min-width: 0; overflow: hidden; white-space: nowrap; }
+    .pen-side-toggle {
+      flex: none; display: inline-grid; place-items: center; width: 34px; height: 34px; margin-top: 3px; border-radius: 10px;
+      color: var(--dim); transition: background .15s ease, color .15s ease;
+    }
+    .pen-side-toggle:hover { background: var(--sunk); color: var(--ink); }
+
+    .pen-page[data-side-anim] { transition: grid-template-columns .3s cubic-bezier(.2, .8, .2, 1); }
+    .pen-page[data-side='collapsed'] { grid-template-columns: 72px minmax(0, 1fr); }
+    .pen-page[data-side='collapsed'] > .pen-side { z-index: 50; align-items: center; padding: 12px 8px; overflow: visible; }
+    .pen-page[data-side='collapsed'] .pen-side-top { flex-direction: column; align-items: center; gap: 8px; padding-bottom: 14px; }
+    .pen-page[data-side='collapsed'] .pen-brand { padding: 0; min-height: 0; gap: 0; justify-content: center; }
+    .pen-page[data-side='collapsed'] .pen-brand-text,
+    .pen-page[data-side='collapsed'] .pen-paused { display: none; }
+    .pen-page[data-side='collapsed'] .pen-side-toggle { margin: 0; width: 40px; height: 40px; }
+    .pen-page[data-side='collapsed'] .pen-add { width: 44px; margin-bottom: 12px; }
+    .pen-page[data-side='collapsed'] .pen-add-btn { width: 44px; height: 44px; min-height: 44px; padding: 0; gap: 0; justify-content: center; }
+    .pen-page[data-side='collapsed'] .pen-add-btn > span,
+    .pen-page[data-side='collapsed'] .pen-add .pen-imenu-chev,
+    .pen-page[data-side='collapsed'] .pen-add-hint { display: none; }
+    /* Opens over the main column (often the blue Juno card): solid, not glass, so it stays legible. */
+    .pen-page[data-side='collapsed'] .pen-add .pen-menu { right: auto; width: max-content; min-width: 228px; background: #fff; -webkit-backdrop-filter: none; backdrop-filter: none; }
+    .pen-page[data-side='collapsed'] .pen-cats { width: 100%; }
+    .pen-page[data-side='collapsed'] .pen-cats-list { align-items: center; }
+    .pen-page[data-side='collapsed'] .pen-cat { width: 44px; height: 44px; padding: 0; gap: 0; justify-content: center; }
+    .pen-page[data-side='collapsed'] .pen-cat-label,
+    .pen-page[data-side='collapsed'] .pen-cat-n { display: none; }
+    .pen-side-icons {
+      display: flex; flex-direction: column; align-items: center; gap: 2px; width: 100%;
+      margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hair);
+    }
+    /* Labels as tooltips, on hover and on keyboard focus. */
+    .pen-page[data-side='collapsed'] .pen-side [data-tip] { position: relative; }
+    .pen-page[data-side='collapsed'] .pen-side [data-tip]:hover::after,
+    .pen-page[data-side='collapsed'] .pen-side [data-tip]:focus-visible::after {
+      content: attr(data-tip); position: absolute; z-index: 80; left: calc(100% + 12px); top: 50%; transform: translateY(-50%);
+      max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 6px 10px; border-radius: 8px;
+      background: var(--ink); color: #fff; font-family: var(--ui); font-size: 13px; font-weight: 500; line-height: 1.25; letter-spacing: 0;
+      box-shadow: 0 6px 18px -6px rgba(0, 0, 0, .35); pointer-events: none;
+    }
+    .pen-page[data-side='collapsed'] .pen-add-btn[aria-expanded='true']::after { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { .pen-page[data-side-anim] { transition: none; } }
 
   /* ===================================================== phone touch sizes */
   .pen-m-body {

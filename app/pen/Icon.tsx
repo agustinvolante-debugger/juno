@@ -14,6 +14,7 @@ export type IconName =
   | 'quote' | 'people' | 'clock' | 'calendar' | 'tag' | 'sparkle' | 'alert' | 'chevron'
   | 'back' | 'mail' | 'trash' | 'settings' | 'person' | 'hourglass'
   | 'lock' | 'battery' | 'mic' | 'usb' | 'pen' | 'save' | 'folder' | 'wave' | 'chat' | 'more' | 'bell' | 'doc'
+  | 'close' | 'filter' | 'sidebar'
 
 const P: Record<IconName, React.ReactNode> = {
   home:       <path d="M3.5 8.6 10 3.4l6.5 5.2V16a.9.9 0 0 1-.9.9h-3.4v-4.6H7.8v4.6H4.4a.9.9 0 0 1-.9-.9Z" />,
@@ -26,6 +27,9 @@ const P: Record<IconName, React.ReactNode> = {
   archive:    <><rect x="2.9" y="4.2" width="14.2" height="3.4" rx="1" /><path d="M4.4 7.6v7.3a1.3 1.3 0 0 0 1.3 1.3h8.6a1.3 1.3 0 0 0 1.3-1.3V7.6" /><path d="M8.2 10.9h3.6" /></>,
   search:     <><circle cx="8.8" cy="8.8" r="5.3" /><path d="M12.7 12.7 17 17" /></>,
   plus:       <path d="M10 4.4v11.2M4.4 10h11.2" />,
+  close:      <path d="M5.4 5.4l9.2 9.2M14.6 5.4l-9.2 9.2" />,
+  filter:     <path d="M3.4 5.6h13.2M5.8 10h8.4M8.4 14.4h3.2" />,
+  sidebar:    <><rect x="2.9" y="3.8" width="14.2" height="12.4" rx="2" /><path d="M7.6 3.8v12.4" /></>,
   link:       <><path d="M8.3 11.7 11.7 8.3" /><path d="M7.2 8.9 5.6 10.5a2.6 2.6 0 0 0 3.7 3.7l1.6-1.6" /><path d="M12.8 11.1l1.6-1.6a2.6 2.6 0 0 0-3.7-3.7L9.1 7.4" /></>,
   more:       <><circle cx="4.6" cy="10" r="1.35" fill="currentColor" stroke="none" /><circle cx="10" cy="10" r="1.35" fill="currentColor" stroke="none" /><circle cx="15.4" cy="10" r="1.35" fill="currentColor" stroke="none" /></>,
   bell:       <><path d="M5.2 13.6V9.2a4.8 4.8 0 0 1 9.6 0v4.4l1.3 1.6H3.9Z" /><path d="M8.4 16.9a1.7 1.7 0 0 0 3.2 0" /></>,
