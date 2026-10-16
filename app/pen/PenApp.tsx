@@ -1206,7 +1206,7 @@ export default function PenApp({
       >
         <Image src="/juno_mark.png" alt="" width={34} height={34} className="pen-mark" priority />
         <div>
-          <div className="pen-display pen-brand-name">Juno Pen</div>
+          <div className="pen-wordmark pen-brand-name"><span className="pen-wordmark-j">J</span>uno Pen</div>
           <div className="pen-brand-tag">{T.brandTag}</div>
         </div>
       </button>

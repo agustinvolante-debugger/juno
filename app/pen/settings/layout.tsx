@@ -48,7 +48,7 @@ export default async function SettingsLayout({ children }: { children: React.Rea
       <header className="pen-set-head">
         <Link href="/pen" className="pen-set-brand">
           <Image src="/juno_mark.png" alt="" width={30} height={30} className="pen-mark" priority />
-          <span className="pen-display pen-brand-name">Juno Pen</span>
+          <span className="pen-wordmark pen-brand-name"><span className="pen-wordmark-j">J</span>uno Pen</span>
         </Link>
         <Link href="/pen" className="pen-back">{T.back}</Link>
       </header>
