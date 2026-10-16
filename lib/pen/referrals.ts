@@ -5,8 +5,7 @@
 //     (coupon juno-friend-month-999): the whole first month on monthly, a month off the $90
 //     year. Before, monthly plans got it as credit behind their trial; there is no trial now.
 //   · A referral counts on the friend's first real payment (> $0). That's the count we show.
-//   · The referrer earns 1 month per paying friend (2 for a 6-month friend, 3 for a yearly
-//     one), +1 bonus on the 3rd and 5th friend, at most 12 months in any 12. A month is one of
+//   · The referrer earns 1 month per paying friend (any plan, since 15 Oct), +1 bonus on the 3rd and 5th friend, at most 12 months in any 12. A month is one of
 //     their own monthly bills, or $9.99 on a prepaid plan (referral-events.ts rewardMonth).
 //   · Stage 2 (lib/pen/referral-events.ts): a referral whose card or shipping address matches
 //     the referrer's, or a card another of their friends used, is void. A daily job credits the
@@ -193,9 +192,10 @@ export async function markPaid(m: { email?: string | null; customerId?: string |
 }
 
 /** Months a paying friend is worth before bonuses: their plan's length, in effect. */
-export function baseMonths(plan: string | null): number {
-  const p = parsePlan(plan)
-  return p === 'annual' ? 3 : p === 'halfyear' ? 2 : 1
+/** One month per paying friend, whatever plan they chose (founders, 15 Oct; it was 2 for a
+ *  6-month friend and 3 for a yearly one). */
+export function baseMonths(_plan: string | null): number {
+  return 1
 }
 
 export async function referralsBy(referrerEmail: string): Promise<Referral[]> {
