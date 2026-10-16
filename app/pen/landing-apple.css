@@ -25,7 +25,7 @@
   --lpa-r-xl: 28px;
   --lpa-pill: 9999px;
   --lpa-font: var(--font-lp-body), Lora, Georgia, "Times New Roman", serif;
-  --lpa-head: var(--font-lp-head), "Playfair Display", Georgia, serif;
+  --lpa-head: var(--font-lp-head), Newsreader, Georgia, serif;
   --lpa-gutter: 24px;
   --lpa-nav-h: 52px;
 
@@ -643,16 +643,45 @@
 }
 
 
-/* ------------------------------------------------------------- type (13 Oct) */
-/* Headlines: Playfair Display italic 400. Body, nav links and buttons: Lora 400. The "J" of the
-   wordmark: Lora italic. The old Inter values (weight 600, tight negative tracking) don't suit a
-   serif italic, so weight and tracking are reset here. */
+/* ------------------------------------------------------------- type (13 Oct, 15 Oct) */
+/* Headlines: Newsreader italic (15 Oct; was Playfair Display italic, whose swash Q read as a "2"
+   and whose J read as an F). Body, nav links and buttons: Lora 400. The "J" of the wordmark is
+   set in the headline italic too, so it is the same plain J everywhere. The old Inter values
+   (weight 600, tight negative tracking) don't suit a serif italic, so they are reset here. */
 .lpa .lpa-hero-h1, .lpa .lpa-display, .lpa .lpa-h2, .lpa .lpa-h4, .lpa .lpa-h5, .lpa h1, .lpa h2, .lpa h3 {
   font-family: var(--lpa-head);
   font-style: italic;
-  font-weight: 400;
-  letter-spacing: -0.01em;
+  font-weight: 450;
+  font-optical-sizing: auto;
+  letter-spacing: -0.015em;
 }
 .lpa .lpa-hero-h1 { line-height: 1.04; }
 .lpa .lpa-navlink, .lpa .lpa-btn, .lpa button, .lpa a.lpa-btn { font-family: var(--lpa-font); font-weight: 400; }
-.lpa .lpa-j { font-family: var(--lpa-font); font-style: italic; font-weight: 400; }
+.lpa .lpa-j { font-family: var(--lpa-head); font-style: italic; font-weight: inherit; }
+
+
+/* ------------------------------------------------- pricing, assistant, by chat (15 Oct) */
+.lpa-plans-1 { grid-template-columns: minmax(0, 1fr); max-width: 440px; }
+
+/* "It speaks up first": the phone on the left, the words on the right, on the light tile. */
+.lpa-wa-flip .lpa-chat { justify-self: start; box-shadow: 0 40px 80px -40px rgba(0, 0, 0, .45); }
+.lpa-chat-when { justify-self: center; margin: 8px 0 2px; padding: 3px 12px; border-radius: var(--lpa-pill); background: var(--lpa-tile-2); color: var(--lpa-on-dark-soft); font-size: 12px; letter-spacing: .02em; }
+.lpa-stopline { margin-top: 24px; font-size: 15px; color: var(--lpa-muted); }
+
+/* "Ask, and it's done": what you type, then what it connects to. */
+.lpa-bc { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 64px; align-items: start; margin-top: 64px; }
+.lpa-bc-asks { display: grid; gap: 12px; justify-items: end; }
+.lpa-bc-asks .lpa-bub { font-size: 17px; padding: 12px 18px; max-width: 92%; }
+.lpa-bc-side .lpa-h5 { font-size: 28px; line-height: 1.15; }
+.lpa-bc-list { margin: 20px 0 0; display: grid; }
+.lpa-bc-list > div { padding: 16px 0; border-top: 1px solid #2c2c2e; display: grid; gap: 4px; }
+.lpa-bc-list dt { font-weight: 600; color: var(--lpa-on-dark); }
+.lpa-bc-list dd { margin: 0; color: var(--lpa-on-dark-soft); font-size: 16px; line-height: 1.45; }
+.lpa-bc-home { margin-top: 20px; display: flex; gap: 14px; align-items: flex-start; padding: 20px 22px; border-radius: var(--lpa-r-lg); background: var(--lpa-tile); }
+.lpa-bc-dot { flex: none; width: 10px; height: 10px; margin-top: 9px; border-radius: 50%; background: var(--lpa-blue-dark); box-shadow: 0 0 0 5px rgba(41, 151, 255, .18); }
+.lpa-bc-home-h { font-family: var(--lpa-head); font-style: italic; font-size: 22px; color: var(--lpa-on-dark); }
+.lpa-bc-home-p { margin-top: 4px; color: var(--lpa-on-dark-soft); font-size: 15px; line-height: 1.45; }
+@media (max-width: 1023px) {
+  .lpa-bc { grid-template-columns: minmax(0, 1fr); gap: 48px; margin-top: 44px; }
+  .lpa-wa-flip > .lpa-chat { order: 2; }
+}

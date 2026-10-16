@@ -67,7 +67,21 @@ export type Plus = {
   priv: { h2: string; sub: string; question: string; agree: string; items: [string, string, string, string] }
   pen: { specs: [string, string, string, string]; allSpecs: string }
   faq: { h2: string; items: [string, string][] }
+  /** Juno speaking first on WhatsApp / iMessage (lib/pen/proactive.ts). */
+  asst: { h2: string; sub: string; points: [string, string, string, string]; stop: string }
+  /** Tasks by chat (lib/pen/whatsapp/tools) and what Juno connects to. */
+  does: {
+    h2: string
+    sub: string
+    asks: string[]
+    connectsTitle: string
+    connects: { name: string; what: string }[]
+    home: { h: string; p: string }
+  }
 }
+
+/** One line of the proactive thread: Juno, you, or a time divider ("Monday, 6:00 pm"). */
+export type ProLine = ['bot' | 'me' | 'when', string]
 
 /* ================================================================ English */
 
@@ -285,14 +299,14 @@ const EN_PLUS: Plus = {
     h2: 'Three steps. Nothing to set up.',
     steps: [
       { h: 'Record', p: 'Press once on the pen and put it in your pocket. Or use your phone, or any recorder you already have.' },
-      { h: 'Send it in', p: 'Plug the pen in, upload the file, or send it on WhatsApp like any voice note.' },
+      { h: 'Upload', p: 'Plug the pen in and upload the file, or send it on WhatsApp like any voice note.' },
       { h: 'Read, then ask', p: 'Minutes later: the note, your to-dos and the follow-up. Ask it anything after that.' },
     ],
     labels: { recording: 'recording', decided: 'Decided', missed: 'Nearly missed' },
   },
   wa: {
     h2: 'It lives in your WhatsApp.',
-    sub: 'Send the recording like any voice note. Then ask what you owe, send the follow-up and set a reminder, all from the chat. No app to learn.',
+    sub: 'The main way to use Juno. Send the recording like any voice note, then ask what you owe, send the follow-up and set a reminder, all from the chat. iMessage works too. No app to learn.',
     status: 'online',
   },
   today: {
@@ -332,13 +346,44 @@ const EN_PLUS: Plus = {
   faq: {
     h2: 'Questions',
     items: [
-      ['Do I need the pen?', 'No. The own-recorder plan works with your phone, WhatsApp voice notes, Plaud, Pocket, or any recorder that gives you an audio file or a transcript.'],
+      ['Do I need the pen?', 'No. Juno works with recordings from your phone or computer, WhatsApp voice notes, Plaud, Pocket, or any audio file or transcript you import. It is better with the pen: it is always with you, one click starts it, and it hears the whole room.'],
       ['Is it legal to record a conversation?', 'It depends where you are. Many places, Florida included, need everyone’s permission. Juno Pen asks you to confirm consent before it processes anything, so asking becomes part of the habit.'],
       ['What languages does it understand?', 'It transcribes English, Spanish, Portuguese and many other languages. The app, the emails and WhatsApp work in English, Spanish and Portuguese, and notes come back in the language you spoke unless you pick another.'],
       ['How long until the notes are ready?', 'Usually a few minutes after the recording arrives. They land in the app and your inbox, and back in WhatsApp if you sent it there.'],
       ['Who can hear my recordings?', 'Only you. Recordings are encrypted in transit and at rest, private to your account, and never sold. Delete one and it is gone, including the transcription service’s copy.'],
       ['Can I cancel?', 'Yes, any time, from Settings. Monthly plans can also be paused for 30, 60 or 90 days.'],
     ],
+  },
+  asst: {
+    h2: 'It speaks up first.',
+    sub: 'Juno heard the meeting, so it offers the next step before you think of it. It always asks before it does anything.',
+    points: [
+      'After a meeting: the date someone mentioned, ready for your calendar',
+      'The evening before a meeting: your last talk with that person, and what is still open',
+      'A morning brief of today’s meetings and to-dos, only when there is something',
+      'Reminders when you ask, and your to-dos on the day they are due',
+    ],
+    stop: 'Always asks before acting. Reply STOP anytime.',
+  },
+  does: {
+    h2: 'Ask, and it’s done.',
+    sub: 'What used to take a menu is one message.',
+    asks: [
+      'Merge Chris and Christopher, they’re the same person',
+      'Combine today’s recordings into one',
+      'Send the briefing to Sarah and Tom',
+      'Translate the transcript to Spanish',
+      'Move Thursday’s meeting to 3 and add a Meet link',
+      'Put my to-dos in a Google Sheet',
+    ],
+    connectsTitle: 'Works with what you use',
+    connects: [
+      { name: 'Google Calendar', what: 'Adds, moves and deletes events, with Meet links and invites. Apple Calendar and Outlook get a one-tap link.' },
+      { name: 'Google Docs & Sheets', what: 'Your notes as a Doc, your to-dos or contacts as a Sheet.' },
+      { name: 'Notion', what: 'A page for every meeting, in your own workspace.' },
+      { name: 'Imports', what: 'Bring in Granola and Notion meeting notes, audio files and transcripts.' },
+    ],
+    home: { h: 'Juno is waiting on you', p: 'The top of Home: every offer from your recordings that needs a yes, and what Juno did after one.' },
   },
 }
 
@@ -558,14 +603,14 @@ const ES_PLUS: Plus = {
     h2: 'Tres pasos. Nada que configurar.',
     steps: [
       { h: 'Graba', p: 'Con el celular, una nota de voz, cualquier grabadora o el lápiz. Lo que ya uses sirve.' },
-      { h: 'Envíalo', p: 'Mándalo por WhatsApp como cualquier audio, o súbelo en la web.' },
+      { h: 'Súbelo', p: 'Súbelo en la web, o mándalo por WhatsApp como cualquier audio.' },
       { h: 'Lee, y pregunta', p: 'Minutos después: las notas, tus pendientes y el correo de seguimiento. Después pregúntale lo que quieras.' },
     ],
     labels: { recording: 'grabando', decided: 'Decidido', missed: 'Casi se pasa' },
   },
   wa: {
     h2: 'Vive en tu WhatsApp.',
-    sub: 'Manda la grabación como cualquier audio. Después pregunta qué te falta, envía el seguimiento y deja un recordatorio, todo desde el chat. Sin apps nuevas.',
+    sub: 'La forma principal de usar Juno. Manda la grabación como cualquier audio y después pregunta qué te falta, envía el seguimiento y deja un recordatorio, todo desde el chat. También funciona por iMessage. Sin apps nuevas.',
     status: 'en línea',
   },
   today: {
@@ -605,13 +650,44 @@ const ES_PLUS: Plus = {
   faq: {
     h2: 'Preguntas',
     items: [
-      ['¿Necesito el lápiz?', 'No. El plan con tu propia grabadora funciona con el celular, notas de voz de WhatsApp, Plaud, Pocket o cualquier grabadora que te dé un audio o una transcripción.'],
+      ['¿Necesito el lápiz?', 'No. Juno funciona con grabaciones del celular o del computador, notas de voz de WhatsApp, Plaud, Pocket o cualquier audio o transcripción que importes. Con el lápiz es mejor: siempre va contigo, graba con un clic y escucha toda la sala. Llega pronto a Chile.'],
       ['¿Es legal grabar una conversación?', 'Depende de dónde estés. En muchos lugares se necesita el permiso de todos. Juno Pen te pide confirmar el consentimiento antes de procesar nada, para que preguntar se vuelva costumbre.'],
       ['¿Qué idiomas entiende?', 'Transcribe español, inglés, portugués y muchos otros idiomas. La app, los correos y WhatsApp funcionan en español, inglés y portugués, y las notas vuelven en el idioma en que hablaste, salvo que elijas otro.'],
       ['¿Cuánto se demoran las notas?', 'Normalmente unos minutos después de que llega la grabación. Te llegan a la app y al correo, y de vuelta a WhatsApp si la mandaste por ahí.'],
       ['¿Quién puede escuchar mis grabaciones?', 'Solo tú. Las grabaciones van cifradas en tránsito y en reposo, son privadas para tu cuenta y nunca se venden. Si borras una, desaparece, incluida la copia del servicio de transcripción.'],
       ['¿Puedo cancelar?', 'Sí, cuando quieras, desde Configuración. Los planes mensuales también se pueden pausar 30, 60 o 90 días.'],
     ],
+  },
+  asst: {
+    h2: 'Habla primero.',
+    sub: 'Juno escuchó la reunión, así que te ofrece el siguiente paso antes de que lo pienses. Siempre pregunta antes de hacer algo.',
+    points: [
+      'Después de una reunión: la fecha que alguien mencionó, lista para tu calendario',
+      'La tarde antes de una reunión: la última conversación con esa persona y lo que sigue pendiente',
+      'Un resumen en la mañana con las reuniones y pendientes del día, solo si hay algo',
+      'Recordatorios cuando los pides, y tus pendientes el día que vencen',
+    ],
+    stop: 'Siempre pregunta antes de actuar. Responde STOP cuando quieras.',
+  },
+  does: {
+    h2: 'Pídelo, y está hecho.',
+    sub: 'Lo que antes era un menú ahora es un mensaje.',
+    asks: [
+      'Junta a Tomás y Tomi, son la misma persona',
+      'Combina las grabaciones de hoy en una',
+      'Envíale el resumen a Sofía y Tomás',
+      'Traduce la transcripción al inglés',
+      'Mueve la reunión del jueves a las 3 y agrega link de Meet',
+      'Pon mis pendientes en una hoja de Google',
+    ],
+    connectsTitle: 'Funciona con lo que ya usas',
+    connects: [
+      { name: 'Google Calendar', what: 'Agrega, mueve y borra eventos, con link de Meet e invitaciones. Para Apple Calendar y Outlook, un link de un toque.' },
+      { name: 'Google Docs y Sheets', what: 'Tus notas como Doc, tus pendientes o contactos como hoja de cálculo.' },
+      { name: 'Notion', what: 'Una página por reunión, en tu propio espacio.' },
+      { name: 'Importa', what: 'Trae notas de Granola y Notion, archivos de audio y transcripciones.' },
+    ],
+    home: { h: 'Juno espera tu respuesta', p: 'Arriba en Inicio: cada sugerencia de tus grabaciones que espera un sí, y lo que Juno hizo después.' },
   },
 }
 
@@ -831,14 +907,14 @@ const PT_PLUS: Plus = {
     h2: 'Três passos. Nada para configurar.',
     steps: [
       { h: 'Grave', p: 'Com o celular, uma mensagem de voz, qualquer gravador ou a caneta. O que você já usa serve.' },
-      { h: 'Envie', p: 'Mande pelo WhatsApp como qualquer áudio, ou envie pelo site.' },
+      { h: 'Envie', p: 'Envie o arquivo pelo site, ou mande pelo WhatsApp como qualquer áudio.' },
       { h: 'Leia, e pergunte', p: 'Minutos depois: as notas, suas tarefas e o e-mail de follow-up. Depois pergunte o que quiser.' },
     ],
     labels: { recording: 'gravando', decided: 'Decidido', missed: 'Quase passou' },
   },
   wa: {
     h2: 'Mora no seu WhatsApp.',
-    sub: 'Mande a gravação como qualquer áudio. Depois pergunte o que falta, envie o follow-up e peça um lembrete, tudo pela conversa. Sem app novo para aprender.',
+    sub: 'O jeito principal de usar o Juno. Mande a gravação como qualquer áudio e depois pergunte o que falta, envie o follow-up e peça um lembrete, tudo pela conversa. Também funciona pelo iMessage. Sem app novo para aprender.',
     status: 'online',
   },
   today: {
@@ -878,7 +954,7 @@ const PT_PLUS: Plus = {
   faq: {
     h2: 'Perguntas',
     items: [
-      ['Preciso da caneta?', 'Não. O plano com seu próprio gravador funciona com o celular, mensagens de voz do WhatsApp, Plaud, Pocket ou qualquer gravador que gere um áudio ou uma transcrição.'],
+      ['Preciso da caneta?', 'Não. O Juno funciona com gravações do celular ou do computador, mensagens de voz do WhatsApp, Plaud, Pocket ou qualquer áudio ou transcrição que você importar. Com a caneta é melhor: está sempre com você, grava com um clique e ouve a sala inteira. Chega em breve ao Brasil.'],
       ['É legal gravar uma conversa?', 'Depende de onde você está. Em muitos lugares é preciso a permissão de todos. O Juno Pen pede para você confirmar o consentimento antes de processar qualquer coisa, para que perguntar vire hábito.'],
       ['Quais idiomas ele entende?', 'Transcreve português, inglês, espanhol e muitos outros idiomas. O app, os e-mails e o WhatsApp funcionam em português, inglês e espanhol, e as notas voltam no idioma em que você falou, a menos que escolha outro.'],
       ['Quanto tempo até as notas ficarem prontas?', 'Normalmente alguns minutos depois que a gravação chega. Elas aparecem no app e no seu e-mail, e voltam no WhatsApp se você mandou por lá.'],
@@ -886,7 +962,134 @@ const PT_PLUS: Plus = {
       ['Posso cancelar?', 'Sim, quando quiser, em Configurações. Os planos mensais também podem ser pausados por 30, 60 ou 90 dias.'],
     ],
   },
+  asst: {
+    h2: 'Ele fala primeiro.',
+    sub: 'O Juno ouviu a reunião, então oferece o próximo passo antes de você pensar nele. Sempre pergunta antes de fazer qualquer coisa.',
+    points: [
+      'Depois de uma reunião: a data que alguém mencionou, pronta para a sua agenda',
+      'Na véspera de uma reunião: a última conversa com a pessoa e o que ainda está em aberto',
+      'Um resumo de manhã com as reuniões e tarefas do dia, só quando há algo',
+      'Lembretes quando você pede, e as tarefas no dia em que vencem',
+    ],
+    stop: 'Sempre pergunta antes de agir. Responda STOP quando quiser.',
+  },
+  does: {
+    h2: 'Peça, e está feito.',
+    sub: 'O que antes era um menu agora é uma mensagem.',
+    asks: [
+      'Junta o Tomás e o Tomzinho, são a mesma pessoa',
+      'Combina as gravações de hoje em uma',
+      'Envia o resumo para a Sofia e o Tomás',
+      'Traduz a transcrição para o inglês',
+      'Muda a reunião de quinta para as 15h e põe link do Meet',
+      'Coloca minhas tarefas numa planilha do Google',
+    ],
+    connectsTitle: 'Funciona com o que você já usa',
+    connects: [
+      { name: 'Google Agenda', what: 'Cria, muda e apaga eventos, com link do Meet e convites. Para Apple Calendar e Outlook, um link de um toque.' },
+      { name: 'Google Docs e Planilhas', what: 'Suas notas como Doc, suas tarefas ou contatos como planilha.' },
+      { name: 'Notion', what: 'Uma página por reunião, no seu próprio espaço.' },
+      { name: 'Importe', what: 'Traga notas do Granola e do Notion, arquivos de áudio e transcrições.' },
+    ],
+    home: { h: 'Juno espera sua resposta', p: 'No topo do Início: cada sugestão das suas gravações que espera um sim, e o que o Juno fez depois.' },
+  },
 }
 
 export const KITS: Record<Lang, Kit[]> = { en: EN_KITS, es: ES_KITS, pt: PT_KITS }
 export const PLUS: Record<Lang, Plus> = { en: EN_PLUS, es: ES_PLUS, pt: PT_PLUS }
+
+/** The proactive thread beside "It speaks up first", per language and audience. Only what
+ *  lib/pen/proactive.ts and the calendar tools really send: an offer after the recording (a yes
+ *  is needed), the brief the evening before (18:00) or the morning brief (7:30 to 8:00). */
+export const PRO: Record<Lang, Record<AudKey, ProLine[]>> = {
+  en: {
+    sales: [
+      ['bot', 'From the Maple Avenue viewing: Tom mentioned a second viewing Saturday at 11. Add it to your calendar?'],
+      ['me', 'Yes, and invite Tom'],
+      ['bot', '📅 Added: Saturday, 11:00 am. Tom has the invite.'],
+      ['when', 'Friday, 6:00 pm'],
+      ['bot', '*Tomorrow: second viewing with the Hendersons*\nLast time Sarah loved the kitchen and Tom balked at the price. You still owe them comps for the street.'],
+    ],
+    students: [
+      ['bot', 'From lecture 6: Ana mentioned the study group Tuesday at 2. Add it to your calendar?'],
+      ['me', 'Yes'],
+      ['bot', '📅 Added: Tuesday, 2:00 pm, study group with Ana.'],
+      ['when', 'Monday, 6:00 pm'],
+      ['bot', '*Tomorrow: study group with Ana, 2:00 pm*\nYou said you would bring problem set 3. Ana is doing the slides.'],
+    ],
+    family: [
+      ['bot', 'From the visit with Dr. Patel: the blood test is Monday, Nov 3 at 9. Add it to your calendar?'],
+      ['me', 'Yes'],
+      ['bot', '📅 Added: Monday, Nov 3, 9:00 am.'],
+      ['when', 'Tomorrow, 7:45 am'],
+      ['bot', '*Good morning*\nToday: take the new dose with food, and call the pharmacy about the refill.'],
+    ],
+    founders: [
+      ['bot', 'From the Northbeam call: Priya mentioned meeting Tuesday at 2. Add it to your calendar?'],
+      ['me', 'Yes, with a Meet link, and invite her'],
+      ['bot', '📅 Added: Tuesday, 2:00 pm, with a Meet link. Priya has the invite.'],
+      ['when', 'Monday, 6:00 pm'],
+      ['bot', '*Tomorrow: Priya Shah, 2:00 pm*\nLast time you promised the month-6 retention numbers. That is still open.'],
+    ],
+  },
+  es: {
+    sales: [
+      ['bot', 'De la visita en Vitacura: Tomás mencionó una segunda visita el sábado a las 11. ¿La agrego a tu calendario?'],
+      ['me', 'Sí, e invita a Tomás'],
+      ['bot', '📅 Listo: sábado, 11:00. Tomás tiene la invitación.'],
+      ['when', 'Viernes, 18:00'],
+      ['bot', '*Mañana: segunda visita con los Rojas*\nLa última vez a Sofía le encantó la cocina y a Tomás le pareció caro. Aún les debes las tasaciones.'],
+    ],
+    students: [
+      ['bot', 'De la clase 6: Ana mencionó el grupo de estudio el martes a las 14:00. ¿Lo agrego a tu calendario?'],
+      ['me', 'Sí'],
+      ['bot', '📅 Listo: martes, 14:00, grupo de estudio con Ana.'],
+      ['when', 'Lunes, 18:00'],
+      ['bot', '*Mañana: grupo de estudio con Ana, 14:00*\nDijiste que llevarías la guía 3. Ana hace las diapositivas.'],
+    ],
+    family: [
+      ['bot', 'Del control con la Dra. Pérez: el examen de sangre es el lunes 3 de noviembre a las 9. ¿Lo agrego a tu calendario?'],
+      ['me', 'Sí'],
+      ['bot', '📅 Listo: lunes 3 de noviembre, 9:00.'],
+      ['when', 'Mañana, 7:45'],
+      ['bot', '*Buenos días*\nHoy: tomar la dosis nueva con comida y llamar a la farmacia por la receta.'],
+    ],
+    founders: [
+      ['bot', 'De la reunión con Norte Ventures: Priya mencionó juntarse el martes a las 14:00. ¿La agrego a tu calendario?'],
+      ['me', 'Sí, con link de Meet, e invítala'],
+      ['bot', '📅 Listo: martes, 14:00, con link de Meet. Priya tiene la invitación.'],
+      ['when', 'Lunes, 18:00'],
+      ['bot', '*Mañana: Priya Shah, 14:00*\nLa última vez prometiste los números de retención al mes 6. Sigue pendiente.'],
+    ],
+  },
+  pt: {
+    sales: [
+      ['bot', 'Da visita na Vila Madalena: o Tomás falou de uma segunda visita no sábado às 11h. Coloco na sua agenda?'],
+      ['me', 'Sim, e convida o Tomás'],
+      ['bot', '📅 Pronto: sábado, 11:00. O Tomás recebeu o convite.'],
+      ['when', 'Sexta, 18:00'],
+      ['bot', '*Amanhã: segunda visita com os Lima*\nDa última vez a Sofia amou a cozinha e o Tomás achou o preço alto. Você ainda deve as avaliações.'],
+    ],
+    students: [
+      ['bot', 'Da aula 6: a Ana falou do grupo de estudo na terça às 14h. Coloco na sua agenda?'],
+      ['me', 'Sim'],
+      ['bot', '📅 Pronto: terça, 14:00, grupo de estudo com a Ana.'],
+      ['when', 'Segunda, 18:00'],
+      ['bot', '*Amanhã: grupo de estudo com a Ana, 14:00*\nVocê disse que levaria a lista 3. A Ana faz os slides.'],
+    ],
+    family: [
+      ['bot', 'Do retorno com a Dra. Souza: o exame de sangue é segunda, 3 de novembro, às 9h. Coloco na sua agenda?'],
+      ['me', 'Sim'],
+      ['bot', '📅 Pronto: segunda, 3 de novembro, 9:00.'],
+      ['when', 'Amanhã, 7:45'],
+      ['bot', '*Bom dia*\nHoje: tomar a dose nova com comida e ligar para a farmácia sobre a receita.'],
+    ],
+    founders: [
+      ['bot', 'Da reunião com a Norte Ventures: a Priya falou de se reunir na terça às 14h. Coloco na sua agenda?'],
+      ['me', 'Sim, com link do Meet, e convida ela'],
+      ['bot', '📅 Pronto: terça, 14:00, com link do Meet. A Priya recebeu o convite.'],
+      ['when', 'Segunda, 18:00'],
+      ['bot', '*Amanhã: Priya Shah, 14:00*\nDa última vez você prometeu os números de retenção do mês 6. Ainda está em aberto.'],
+    ],
+  },
+}
