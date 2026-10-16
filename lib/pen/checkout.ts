@@ -9,7 +9,7 @@
 // the given-pen link is the monthly plan with 60 days of trial and a $5 one-time line, so the
 // card is charged $5 today and $9.99 a month from day 60.
 
-import { createCheckoutSession, ensureFriendCoupon, priceIdFor } from './stripe'
+import { createCheckoutSession, createCustomer, ensureFriendCoupon, priceIdFor } from './stripe'
 import { planPrice, trialDaysFor, buysPen, FREE_PEN_FEE_USD, FREE_PEN_MIN_DAYS, FREE_PEN_MIN_MONTHS, type Offer, type Plan } from './plan'
 import { PRICES, fmtUsd, priceKey } from './prices'
 import { LOCAL_PRICES, stripeLocale, type Currency, type Lang } from './currency'
@@ -40,6 +40,22 @@ export function penShipCountries(cur: Currency = 'usd'): string[] {
 
 export type PlanCheckout = { url: string } | { error: string }
 
+export type ShipAddress = { name: string; phone?: string | null; line1: string; line2?: string | null; city: string; state?: string | null; postcode: string; country?: string | null }
+
+/** A Stripe customer carrying the address from our form, so checkout opens with it filled in. An
+ *  address outside the countries we post to is left out (Stripe then asks for one it accepts). */
+async function customerWithAddress(email: string, a: ShipAddress, allowed: string[]): Promise<string> {
+  const country = (a.country ?? '').toUpperCase()
+  const ok = allowed.includes(country)
+  const c = await createCustomer({
+    email,
+    name: a.name,
+    phone: a.phone ?? undefined,
+    ...(ok ? { shipping: { name: a.name, phone: a.phone ?? undefined, address: { line1: a.line1, line2: a.line2 ?? undefined, city: a.city, state: a.state ?? undefined, postal_code: a.postcode, country } } } : {}),
+  })
+  return c.id
+}
+
 export async function startPlanCheckout(opts: {
   email: string
   plan: Plan
@@ -59,6 +75,8 @@ export async function startPlanCheckout(opts: {
   returning?: { customerId: string | null }
   /** A friend's referral code (lib/pen/referrals.ts), already checked as eligible. */
   referral?: string | null
+  /** Where to post the pen, from the signup form: prefilled on Stripe's page. */
+  shipping?: ShipAddress | null
 }): Promise<PlanCheckout> {
   // The 6-month plan is no longer sold. Someone coming back from one starts monthly.
   const plan: Plan = opts.plan === 'halfyear' ? 'monthly' : opts.plan
@@ -93,7 +111,8 @@ export async function startPlanCheckout(opts: {
     successUrl: opts.returning ? `${opts.origin}/pen/settings/billing?back=1` : `${opts.origin}/pen?welcome=1`,
     cancelUrl: opts.returning ? `${opts.origin}/pen/settings/billing` : `${opts.origin}/pen/signup?cancelled=1`,
     reference: opts.reference,
-    customerId: opts.returning?.customerId ?? null,
+    customerId: opts.returning?.customerId ?? (chargePen && opts.shipping ? await customerWithAddress(opts.email, opts.shipping, penShipCountries(cur)).catch(() => null) : null),
+    prefilled: Boolean(chargePen && opts.shipping),
     coupon,
     shipTo: chargePen ? penShipCountries(cur) : null,
     metadata: {

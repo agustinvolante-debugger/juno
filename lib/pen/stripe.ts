@@ -107,6 +107,8 @@ export async function createCheckoutSession(opts: {
   coupon?: string | null
   /** Countries a bought pen can be posted to: Stripe then requires a shipping address. */
   shipTo?: string[] | null
+  /** The customer already carries the address from our form: Stripe shows it, editable. */
+  prefilled?: boolean
 }): Promise<CheckoutSession> {
   return stripe<CheckoutSession>('checkout/sessions', {
     mode: 'subscription',
@@ -120,6 +122,8 @@ export async function createCheckoutSession(opts: {
     // required once enabled. The cardholder name comes with the card.
     phone_number_collection: { enabled: true },
     ...(opts.shipTo?.length ? { shipping_address_collection: { allowed_countries: opts.shipTo } } : {}),
+    // A customer made from our form: keep what they edit on Stripe's page as their record.
+    ...(opts.prefilled && opts.customerId ? { customer_update: { shipping: 'auto', name: 'auto' } } : {}),
     ...(opts.coupon ? { discounts: [{ coupon: opts.coupon }] } : { allow_promotion_codes: true }),
     ...(opts.locale ? { locale: opts.locale } : {}),
     ...(opts.submitMessage ? { custom_text: { submit: { message: opts.submitMessage.slice(0, 1200) } } } : {}),
@@ -393,4 +397,9 @@ export async function chargePenFee(opts: { customerId: string; subscriptionId: s
   } catch {
     return { invoice: inv.id, status: 'open' }
   }
+}
+
+/** A Stripe customer before checkout (the signup form's name, phone and the pen's address). */
+export async function createCustomer(c: { email: string; name?: string; phone?: string; shipping?: Record<string, unknown> }): Promise<{ id: string }> {
+  return stripe<{ id: string }>('customers', { email: c.email, ...(c.name ? { name: c.name } : {}), ...(c.phone ? { phone: c.phone } : {}), ...(c.shipping ? { shipping: c.shipping } : {}) })
 }

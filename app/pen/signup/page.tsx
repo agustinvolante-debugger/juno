@@ -376,8 +376,9 @@ export default function SignupPage() {
             </label>
           </div>
 
-          {/* Only the free pen is posted from this form. A bought pen's address is taken by Stripe. */}
-          {freePen && (
+          {/* Where the pen goes: asked here as soon as the pen is chosen (and for the free pen), then
+              handed to Stripe so its checkout opens with the address already filled in. */}
+          {(freePen || (pen && penSold && !offerCopy)) && (
           <div className="pen-su-ship">
               <div className="pen-label pen-su-ship-head">{T.ship}</div>
               <div className="pen-su-grid">
@@ -403,7 +404,10 @@ export default function SignupPage() {
                 </label>
                 <label className="pen-su-field">
                   <span className="pen-label">{T.country}</span>
-                  <input name="ship_country" autoComplete="country-name" defaultValue={T.ph.country} key={lang} />
+                  {/* Only where we post pens for this currency: Stripe needs the two-letter code. */}
+                  <select name="ship_country" autoComplete="country" defaultValue={cur === 'clp' ? 'CL' : cur === 'brl' ? 'BR' : 'US'} key={cur}>
+                    {cur === 'clp' ? <option value="CL">Chile</option> : cur === 'brl' ? <option value="BR">Brasil</option> : <option value="US">United States</option>}
+                  </select>
                 </label>
               </div>
           </div>

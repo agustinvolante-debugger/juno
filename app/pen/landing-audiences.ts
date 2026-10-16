@@ -344,7 +344,7 @@ const EN_PLUS: Plus = {
   },
   pen: { specs: ['360° microphone', 'USB-C built in', 'One touch, voice activated', 'A real ballpoint'], allSpecs: 'All the specs' },
   faq: {
-    h2: 'Questions',
+    h2: 'FAQ',
     items: [
       ['Do I need the pen?', 'No. Juno works with recordings from your phone or computer, WhatsApp voice notes, Plaud, Pocket, or any audio file or transcript you import. It is better with the pen: it is always with you, one click starts it, and it hears the whole room.'],
       ['Is it legal to record a conversation?', 'It depends where you are. Many places, Florida included, need everyone’s permission. Juno Pen asks you to confirm consent before it processes anything, so asking becomes part of the habit.'],
@@ -648,7 +648,7 @@ const ES_PLUS: Plus = {
   },
   pen: { specs: ['Micrófono 360°', 'USB-C integrado', 'Un toque, activado por voz', 'Un lápiz de verdad'], allSpecs: 'Todas las especificaciones' },
   faq: {
-    h2: 'Preguntas',
+    h2: 'Preguntas frecuentes',
     items: [
       ['¿Necesito el lápiz?', 'No. Juno funciona con grabaciones del celular o del computador, notas de voz de WhatsApp, Plaud, Pocket o cualquier audio o transcripción que importes. Con el lápiz es mejor: siempre va contigo, graba con un clic y escucha toda la sala. Puedes sumarlo a cualquier plan y te lo enviamos a tu dirección en Chile.'],
       ['¿Es legal grabar una conversación?', 'Depende de dónde estés. En muchos lugares se necesita el permiso de todos. Juno Pen te pide confirmar el consentimiento antes de procesar nada, para que preguntar se vuelva costumbre.'],
@@ -952,7 +952,7 @@ const PT_PLUS: Plus = {
   },
   pen: { specs: ['Microfone 360°', 'USB-C embutido', 'Um toque, ativado por voz', 'Uma caneta de verdade'], allSpecs: 'Todas as especificações' },
   faq: {
-    h2: 'Perguntas',
+    h2: 'Perguntas frequentes',
     items: [
       ['Preciso da caneta?', 'Não. O Juno funciona com gravações do celular ou do computador, mensagens de voz do WhatsApp, Plaud, Pocket ou qualquer áudio ou transcrição que você importar. Com a caneta é melhor: está sempre com você, grava com um clique e ouve a sala inteira. Dá para adicionar a qualquer plano, e enviamos para o seu endereço no Brasil.'],
       ['É legal gravar uma conversa?', 'Depende de onde você está. Em muitos lugares é preciso a permissão de todos. O Juno Pen pede para você confirmar o consentimento antes de processar qualquer coisa, para que perguntar vire hábito.'],

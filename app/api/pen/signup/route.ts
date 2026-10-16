@@ -91,7 +91,7 @@ export async function POST(req: Request) {
     linkOffer === 'free-pen' || linkOffer === 'given-pen' ? linkOffer : wantsPen ? 'posted-pen' : 'own-recorder'
   // The free pen is posted from the address on this form. A bought pen's address is taken by
   // Stripe at checkout (required there), so the form doesn't ask for it.
-  const v = validate(b, { needsAddress: offerIn === 'free-pen' && b.waitlist !== 'pen', needsPhone: b.waitlist !== 'pen', lang: parseLang(b.lang) })
+  const v = validate(b, { needsAddress: (offerIn === 'free-pen' || (offerIn === 'posted-pen' && b.pen !== '0')) && b.waitlist !== 'pen', needsPhone: b.waitlist !== 'pen', lang: parseLang(b.lang) })
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
 
   // The free-pen link is capped: a forwarded link must not post unlimited hardware.
@@ -142,6 +142,10 @@ export async function POST(req: Request) {
         origin: new URL(req.url).origin,
         currency: parseCurrency(b.cur),
         lang: parseLang(b.lang),
+        // The address from the form, so Stripe's page opens with it filled in.
+        shipping: v.value.ship_line1 && v.value.ship_city && v.value.ship_postcode
+          ? { name: v.value.name, phone: v.value.phone, line1: v.value.ship_line1, line2: v.value.ship_line2, city: v.value.ship_city, state: v.value.ship_state, postcode: v.value.ship_postcode, country: v.value.ship_country }
+          : null,
       })
       // Not configured yet: fall through to the confirmation email, as before.
       if ('url' in r) checkoutUrl = r.url
