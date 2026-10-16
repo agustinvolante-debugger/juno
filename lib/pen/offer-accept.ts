@@ -18,7 +18,8 @@
 //               (web); with plain, a to-do plan instead.
 //   other     → accepted.
 
-import { calendarLinks, type CalEvent } from './calendar'
+import { linksMessage, calendarPref } from './calendar-pref'
+import type { CalEvent } from './calendar'
 import { createEvent, driveConnected, gcalConfigured, gcalConnected } from './google-calendar'
 import { addReminder, maxAheadMs } from './reminders'
 import { createDocPage, notionConfigured, notionConnected } from './notion'
@@ -90,7 +91,7 @@ export async function acceptMeeting(ctx: AcceptCtx, s: Suggestion, tzIn: string,
     }
   }
   try {
-    const links = calendarLinks(ev)
+    const { links, message } = linksMessage(ev, await calendarPref(ctx.email))
     // starts_at = the confirmed start (a corrected time too): the scheduler's meeting briefs and
     // morning brief read it (proactive.ts acceptedMeetings).
     await decideSuggestion(ctx.email, s.id, 'done', { local, tz, calendar: links }, { starts_at: start.toISOString() })
@@ -101,9 +102,10 @@ export async function acceptMeeting(ctx: AcceptCtx, s: Suggestion, tzIn: string,
       calendar_ics: links.ics,
       calendar_google: links.google,
       calendar_outlook: links.outlook,
+      message,
       note:
-        'Give the three links as plain URLs, each labelled: Apple Calendar (iPhone: "tap, Add, then come back here"), Google ' +
-        `Calendar, Outlook. It has a 30-minute alert. Then offer in one line to email ${s.person ?? 'the other person'} an invite (needs their ` +
+        'Send the message exactly (translate the words, never the links): it carries the link for their calendar app. ' +
+        `It has a 30-minute alert. Then offer in one line to email ${s.person ?? 'the other person'} an invite (needs their ` +
         'email; use save_draft with the calendar link, never send without their yes).',
     }
   } catch (e) {

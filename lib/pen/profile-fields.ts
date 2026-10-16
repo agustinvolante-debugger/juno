@@ -182,6 +182,9 @@ export type AgentProfile = {
   timeZoneSaidAt?: string
   timeZoneUntil?: string
   timeZoneBefore?: string
+  /** Which calendar app they use, for add-to-calendar links (calendar-pref.ts): said, or guessed from the email domain. */
+  calendarApp?: 'apple' | 'google' | 'outlook'
+  calendarAppSource?: 'said' | 'guess'
   /** Answers to the role's own questions, keyed by Question.key. */
   answers?: Record<string, string | string[]>
   /** Messages Juno sends first on WhatsApp/iMessage (lib/pen/proactive.ts). Set by STOP/START in

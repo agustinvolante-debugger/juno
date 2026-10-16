@@ -13,7 +13,8 @@ import type { Ctx } from '../agent'
 import { askConfirm } from '../confirm'
 import { str, type ToolModule } from './types'
 import { zoneOf } from './timezone'
-import { calendarLinks, sendInvite, type CalEvent } from '../../calendar'
+import { sendInvite, type CalEvent } from '../../calendar'
+import { calendarPref, linksMessage, setCalendarPref, type CalendarApp } from '../../calendar-pref'
 import { addAttendee, addMeet, createEvent, deleteEvent, findEvents, gcalConnected, moveEvent, type UpcomingEvent } from '../../google-calendar'
 import { localToUtc, validZone, whenLabel } from '../../timezone'
 import { supabaseAdmin } from '@/lib/supabase'
@@ -65,6 +66,11 @@ const TOOLS: Anthropic.Tool[] = [
     name: 'add_meet_link',
     description: 'Put a Google Meet link on a Google Calendar event. Pass event_id if a tool gave it in this turn, else the event\'s title (it is looked up).',
     input_schema: { type: 'object', properties: { event_id: { type: 'string' }, title: { type: 'string' } }, additionalProperties: false },
+  },
+  {
+    name: 'set_calendar_app',
+    description: 'Remember which calendar app the user uses ("I use Outlook", "uso el calendario de Apple"), so add-to-calendar sends that link only.',
+    input_schema: { type: 'object', properties: { app: { type: 'string', enum: ['apple', 'google', 'outlook'] } }, required: ['app'], additionalProperties: false },
   },
   {
     name: 'find_events',
@@ -133,12 +139,12 @@ async function addToCalendar(ctx: Ctx, input: Record<string, unknown>): Promise<
   // The user asked for it: no "are you sure?" (that is for what Juno suggests, or what touches
   // other people).
   if (await gcalConnected(ctx.email)) return confirmGcalAdd(ctx, { ev: r.ev, meet: input.meet === true })
-  const links = calendarLinks(r.ev)
+  const { message } = linksMessage(r.ev, await calendarPref(ctx.email))
   return {
     ok: true,
     when: r.when,
-    message: `Tap to add it, then come back: ${links.ics}  (Google Calendar: ${links.google} · Outlook: ${links.outlook})`,
-    note: 'Say the event and when in one line, then the message exactly (translate the words, never the links): the first link is for iPhone/Apple Calendar, then Google Calendar, then Outlook. Nothing is in their calendar until they tap.',
+    message,
+    note: 'Say the event and when in one line, then the message exactly (translate the words, never the links): Nothing is in their calendar until they tap.',
   }
 }
 
@@ -150,11 +156,11 @@ async function confirmGcalAdd(ctx: Ctx, args: Record<string, unknown>): Promise<
   } catch (e) {
     // Google refused (access revoked, outage): the tap-to-add link still works.
     console.warn(`pen gcal add: ${(e as Error).message}`)
-    const links = calendarLinks(ev)
+    const { message } = linksMessage(ev, await calendarPref(ctx.email))
     return {
       ok: false,
       google_calendar_error: (e as Error).message.slice(0, 200),
-      message: `Tap to add it, then come back: ${links.ics}  (Google Calendar: ${links.google} · Outlook: ${links.outlook})`,
+      message,
       note: 'Say in one line it could not be added to Google Calendar directly, then give the message exactly.',
     }
   }
@@ -298,12 +304,12 @@ async function confirmInvite(ctx: Ctx, args: Record<string, unknown>): Promise<u
   const toName = typeof args.toName === 'string' ? args.toName : null
   const r = await sendInvite(ctx.email, { ev, toName, toEmail })
   if (!r.ok) return { error: r.error }
-  const links = calendarLinks(ev)
+  const { message: own } = linksMessage(ev, await calendarPref(ctx.email))
   return {
     ok: true,
     invited: toName ? `${toName} <${toEmail}>` : toEmail,
     when: whenLabel(Date.parse(ev.start), ev.tz ?? 'UTC'),
-    add_for_yourself: `Tap to add it, then come back: ${links.ics}  (Google Calendar: ${links.google} · Outlook: ${links.outlook})`,
+    add_for_yourself: own,
     note: 'Confirm who was invited and when, in one line; a copy went to the user by BCC and replies go to them. Then add_for_yourself exactly.',
   }
 }
@@ -338,6 +344,7 @@ export const calendarModule: ToolModule = {
     name === 'add_to_calendar' ? addToCalendar(ctx, input)
       : name === 'invite_to_meeting' ? inviteToMeeting(ctx, input)
         : name === 'add_meet_link' ? addMeetLink(ctx, input)
+          : name === 'set_calendar_app' ? setCalendarPref(ctx.email, str(input, 'app') as CalendarApp).then(() => ({ ok: true, note: 'Confirm in one line; their next calendar links will be for that app.' }))
           : name === 'find_events' ? findEventsTool(ctx, input)
             : name === 'delete_event' ? deleteEventTool(ctx, input)
               : name === 'move_event' ? moveEventTool(ctx, input)
@@ -349,5 +356,5 @@ export const calendarModule: ToolModule = {
     'add_meet_link with the event\'s title (or event_id from a tool result in this same turn); if several match, list them and ' +
     'ask which. "Delete it and make a new one at 3" is move_event. Inviting someone else -> invite_to_meeting with their email ' +
     '(give to_name: the saved email is looked up; ask only if none; meet true for a video link — one step creates the event, the Meet link and the invite). Never say you cannot delete or change events: you can, with Google Calendar connected. ' +
-    'Times are wall-clock where the user is; never compute UTC offsets yourself.',
+    '"I use Outlook / Apple / Google calendar" -> set_calendar_app. Times are wall-clock where the user is; never compute UTC offsets yourself.',
 }
