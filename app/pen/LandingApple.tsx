@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
-import { animate, motion, useInView, useMotionValue, useReducedMotion, useTransform, type MotionValue } from 'motion/react'
+import { motion, useInView, useMotionValue, useReducedMotion, useTransform, type MotionValue } from 'motion/react'
 import PenArt from './PenArt'
 import Icon, { type IconName } from './Icon'
 import HowToPlayer from './how-to/HowToPlayer'
@@ -12,7 +12,7 @@ import { PRICES, fmtUsd } from '@/lib/pen/prices'
 import { money } from '@/lib/pen/currency'
 import { BrandMark, type MarkKey } from './brand-marks'
 import { COPY, type Copy, type Market } from './landing-copy'
-import { AUD_PARAM, KITS, PLUS, PRO, type Kit, type ProLine } from './landing-audiences'
+import { AUD_PARAM, KITS, PLUS, PRO, type Kit } from './landing-audiences'
 import { INVITED, SIGN_IN, ownPlans, penPlans, signup, type PlanCard } from './Landing'
 import './landing-apple.css'
 
@@ -49,34 +49,69 @@ function jj(text: React.ReactNode): React.ReactNode {
  * `notion` is the English-only Notion section, word for word as the previous page had it.
  */
 const EXTRA = {
+  en: { skip: 'Skip to content' },
+  es: { skip: 'Saltar al contenido' },
+  pt: { skip: 'Pular para o conteúdo' },
+} as const
+
+/**
+ * The 16 Oct restructure (critique 2026-10-16): the hero badge, the price line under the hero, the
+ * "Get started" label, the merged WhatsApp section, the short pen section, the how-to link, the
+ * privacy strip under pricing and the "vs Plaud or Pocket" answer.
+ */
+const V2 = {
   en: {
-    skip: 'Skip to content',
-    how: 'How it works',
-    hours: 'hrs',
-    gb: 'GB',
-    film: 'The how-to',
+    badgeTag: 'New',
+    badge: 'Now on WhatsApp and iMessage',
+    start: 'Get started',
+    perMonth: '/mo',
+    priceLine: (m: string, pen: string) => `${m}/mo · pen ${pen} once · works on your phone today`,
+    waH2: 'Lives in your WhatsApp. Speaks up first.',
+    asksTitle: 'One message does it',
+    keySpecs: [['72 GB', 'Years of meetings'], ['35 hrs', 'A week per charge'], ['360°', 'Hears the whole table'], ['USB-C', 'Built into the pen']],
+    allSpecs: 'All the specs',
+    watch: 'Watch the 60-sec how-to',
+    close: 'Close',
+    privLine: 'It asks before it listens: nothing is processed until you confirm everyone agreed. Encrypted, private to you, never sold.',
+    vsQ: 'How is this different from Plaud or Pocket?',
+    vsA: 'Plaud and Pocket are recorders that give you notes. Juno is the assistant that was in the room: it texts you after on WhatsApp or iMessage, offers to add the meeting someone mentioned, reminds you of what you promised, briefs you before the next one, and does tasks when you ask in the chat. It works with your Plaud and Pocket recordings too.',
   },
   es: {
-    skip: 'Saltar al contenido',
-    how: 'Cómo funciona',
-    hours: 'h',
-    gb: 'GB',
-    film: 'Cómo se usa',
+    badgeTag: 'Nuevo',
+    badge: 'Ahora en WhatsApp e iMessage',
+    start: 'Empezar',
+    perMonth: '/mes',
+    priceLine: (m: string, pen: string) => `${m}/mes · lápiz ${pen} una vez · funciona hoy en tu celular`,
+    waH2: 'Vive en tu WhatsApp. Y habla primero.',
+    asksTitle: 'Basta un mensaje',
+    keySpecs: [['72 GB', 'Años de reuniones'], ['35 h', 'Una semana por carga'], ['360°', 'Escucha toda la mesa'], ['USB-C', 'Integrado en el lápiz']],
+    allSpecs: 'Todas las especificaciones',
+    watch: 'Mira cómo se usa en 60 segundos',
+    close: 'Cerrar',
+    privLine: 'Pregunta antes de escuchar: nada se procesa hasta que confirmas que todos aceptaron. Cifrado, privado para ti, nunca se vende.',
+    vsQ: '¿En qué se diferencia de Plaud o Pocket?',
+    vsA: 'Plaud y Pocket son grabadoras que te dan notas. Juno es el asistente que estuvo en la reunión: te escribe después por WhatsApp o iMessage, ofrece agendar la reunión que alguien mencionó, te recuerda lo que prometiste, te prepara antes de la siguiente y hace tareas cuando se las pides por chat. También funciona con tus grabaciones de Plaud y Pocket.',
   },
   pt: {
-    skip: 'Pular para o conteúdo',
-    how: 'Como funciona',
-    hours: 'h',
-    gb: 'GB',
-    film: 'Como usar',
+    badgeTag: 'Novo',
+    badge: 'Agora no WhatsApp e no iMessage',
+    start: 'Começar',
+    perMonth: '/mês',
+    priceLine: (m: string, pen: string) => `${m}/mês · caneta ${pen} uma vez · funciona hoje no seu celular`,
+    waH2: 'Mora no seu WhatsApp. E fala primeiro.',
+    asksTitle: 'Uma mensagem resolve',
+    keySpecs: [['72 GB', 'Anos de reuniões'], ['35 h', 'Uma semana por carga'], ['360°', 'Ouve a mesa toda'], ['USB-C', 'Embutido na caneta']],
+    allSpecs: 'Todas as especificações',
+    watch: 'Veja como usar em 60 segundos',
+    close: 'Fechar',
+    privLine: 'Pergunta antes de ouvir: nada é processado até você confirmar que todos concordaram. Criptografado, privado para você, nunca vendido.',
+    vsQ: 'Qual a diferença para o Plaud ou o Pocket?',
+    vsA: 'Plaud e Pocket são gravadores que te dão notas. O Juno é o assistente que estava na reunião: te manda mensagem depois no WhatsApp ou no iMessage, oferece agendar a reunião que alguém mencionou, lembra o que você prometeu, te prepara antes da próxima e faz tarefas quando você pede no chat. Também funciona com as suas gravações do Plaud e do Pocket.',
   },
 } as const
 
-/** The English-only hero badge (Notion shipped Oct 13); it now points at the Connectors section. */
-const NOTION_EN = {
-  badgeTag: 'New',
-  badge: 'Juno now writes your meetings into Notion',
-} as const
+/** Which of the "Ask, and it's done" lines the WhatsApp section shows (same order in every language). */
+const ASK_PICK = [4, 2, 5, 0]
 
 /**
  * The Connectors section (15 Oct): four groups that tell the whole story of where a meeting goes
@@ -95,8 +130,11 @@ const CONN_MARKS: Record<ConnGroup['key'], ConnMark[]> = {
 const CONNECT = {
   en: {
     nav: 'Connectors',
-    h2: 'Works with the tools you already use.',
+    h2: 'Said in the room. Done in your apps.',
     sub: 'The pen hears the meeting. Juno puts what was said where it belongs.',
+    hubLine: 'Hears the room. Texts you after.',
+    hubBot: 'Tom said Tuesday at 2. Add it to your calendar?',
+    hubMe: 'Yes',
     groups: [
       { key: 'cal', title: 'Calendar', line: 'Dates said out loud land on your calendar.', said: '“Tuesday at 2 works, Tom.”', did: 'On your calendar, Tom invited.', fine: 'Google Calendar: adds, moves and deletes events, with Meet links and invites. Apple Calendar and Outlook: one tap to add.' },
       { key: 'docs', title: 'Documents', line: 'The documents you would have written anyway.', said: 'The pricing call', did: 'A Doc and a price Sheet in your Drive.', fine: 'Google Docs and Sheets in your own Drive. Notion pages with the summary, to-dos as checkboxes and who was there.' },
@@ -106,8 +144,11 @@ const CONNECT = {
   },
   es: {
     nav: 'Conexiones',
-    h2: 'Funciona con lo que ya usas.',
+    h2: 'Se dijo en la reunión. Listo en tus apps.',
     sub: 'El lápiz escucha la reunión. Juno deja lo que se dijo donde corresponde.',
+    hubLine: 'Escucha la reunión. Te escribe después.',
+    hubBot: 'Tomás dijo martes a las 2. ¿Lo agrego a tu calendario?',
+    hubMe: 'Sí',
     groups: [
       { key: 'cal', title: 'Calendario', line: 'Las fechas que se dicen en voz alta llegan a tu calendario.', said: '“El martes a las 2 me sirve, Tomás.”', did: 'En tu calendario, con Tomás invitado.', fine: 'Google Calendar: crea, mueve y borra eventos, con enlace de Meet e invitaciones. Apple Calendar y Outlook: agregar con un toque.' },
       { key: 'docs', title: 'Documentos', line: 'Los documentos que igual ibas a escribir.', said: 'La llamada de precios', did: 'Un Doc y una planilla de precios en tu Drive.', fine: 'Google Docs y Sheets en tu propio Drive. Páginas de Notion con el resumen, las tareas como casillas y quién estuvo.' },
@@ -117,8 +158,11 @@ const CONNECT = {
   },
   pt: {
     nav: 'Conexões',
-    h2: 'Funciona com o que você já usa.',
+    h2: 'Dito na reunião. Feito nos seus apps.',
     sub: 'A caneta ouve a reunião. O Juno coloca o que foi dito no lugar certo.',
+    hubLine: 'Ouve a reunião. Depois, te manda mensagem.',
+    hubBot: 'O Tomás disse terça às 14h. Coloco na sua agenda?',
+    hubMe: 'Sim',
     groups: [
       { key: 'cal', title: 'Agenda', line: 'Datas ditas em voz alta vão para a sua agenda.', said: '“Terça às 14h funciona, Tomás.”', did: 'Na sua agenda, com o Tomás convidado.', fine: 'Google Calendar: cria, move e apaga eventos, com link do Meet e convites. Apple Calendar e Outlook: adicionar com um toque.' },
       { key: 'docs', title: 'Documentos', line: 'Os documentos que você escreveria de qualquer jeito.', said: 'A call de preços', did: 'Um Doc e uma planilha de preços no seu Drive.', fine: 'Google Docs e Sheets no seu próprio Drive. Páginas do Notion com o resumo, as tarefas como caixas de seleção e quem estava lá.' },
@@ -126,7 +170,7 @@ const CONNECT = {
       { key: 'ai', title: 'Um assistente que estava na reunião', line: 'Pergunte qualquer coisa sobre qualquer reunião no WhatsApp ou no iMessage.', said: '“O que a CTO disse sobre preços?”', did: 'A resposta, e o momento em que ela disse.', fine: 'Ele fala primeiro e faz tarefas pelo chat. As importações alimentam a memória dele: Granola, Plaud, Pocket, notas do Notion AI, qualquer áudio ou transcrição.' },
     ],
   },
-} as const satisfies Record<'en' | 'es' | 'pt', { nav: string; h2: string; sub: string; groups: readonly Omit<ConnGroup, 'marks'>[] }>
+} as const satisfies Record<'en' | 'es' | 'pt', { nav: string; h2: string; sub: string; hubLine: string; hubBot: string; hubMe: string; groups: readonly Omit<ConnGroup, 'marks'>[] }>
 
 const LANGS: { code: 'en' | 'es' | 'pt'; label: string }[] = [
   { code: 'en', label: 'English' },
@@ -202,25 +246,11 @@ function useSectionProgress(ref: React.RefObject<HTMLElement | null>, mode: 'pin
   return v
 }
 
-/** A number that counts up once it is seen. The server renders the final value. */
-function CountUp({ to }: { to: number }) {
-  const ref = useRef<HTMLSpanElement>(null)
-  const reduce = useReducedMotion()
-  const inView = useInView(ref, { once: true, margin: '0px 0px -15% 0px' })
-  useEffect(() => {
-    if (!inView || reduce || !ref.current) return
-    const el = ref.current
-    const c = animate(0, to, { duration: 1.6, ease: EASE, onUpdate: (v) => { el.textContent = String(Math.round(v)) } })
-    return () => c.stop()
-  }, [inView, reduce, to])
-  return <span ref={ref}>{to}</span>
-}
-
 /* ------------------------------------------------------------------ the market */
 
 /**
  * What the page needs to know about where the visitor is. `en` gates the English-only pieces
- * (Notion, the how-to film); the pen is sold in every market (US, Chile, Brazil since 15 Oct).
+ * (the how-to film); the pen is sold in every market (US, Chile, Brazil since 15 Oct).
  */
 type Lpa = {
   market: Market
@@ -231,6 +261,9 @@ type Lpa = {
   en: boolean
   /** The pen's one-time price in the visitor's currency: "$65", "$59.990", "R$ 360". */
   pen: string
+  /** The software's monthly price in the visitor's currency: "$9.99", "$9.990", "R$ 59,90". */
+  monthly: string
+  v: (typeof V2)['en' | 'es' | 'pt']
   /** The one "get it" label and where it goes: signup's own choice, in every market. */
   ctaLabel: string
   cta: (from: string) => string
@@ -252,6 +285,8 @@ function lpaFor(market: Market): Lpa {
     x: EXTRA[lang],
     en: lang === 'en',
     pen: penPrice(market),
+    monthly: market.currency === 'usd' ? fmtUsd(PRICES.monthly) : money(PRICES.local[market.currency].monthly, market.currency),
+    v: V2[lang],
     ctaLabel: t.cta.start,
     cta: (from) => signup(`from=${from}`, market),
   }
@@ -264,7 +299,7 @@ const useLpa = () => useContext(LpaCtx)
 
 export default function LandingApple({ market, audience = null, invitedBy = null }: { market: Market; audience?: string | null; invitedBy?: string | null }) {
   const lpa = lpaFor(market)
-  const { t, p, kits, x, en, ctaLabel, cta } = lpa
+  const { t, p, kits, x, ctaLabel, cta } = lpa
   const lang = market.lang
   const [aud, setAudState] = useState(() => {
     const key = AUD_PARAM[(audience ?? '').toLowerCase()]
@@ -304,9 +339,10 @@ export default function LandingApple({ market, audience = null, invitedBy = null
             <span><span className="lpa-j">J</span>uno Pen</span>
           </Link>
           <nav className="lpa-nav-links" aria-label="Juno Pen">
-            <a href="#pen" className="lpa-navlink lpa-hide-sm">{t.nav.pen}</a>
             <a href="#features" className="lpa-navlink lpa-hide-sm">{t.nav.features}</a>
+            <a href="#whatsapp" className="lpa-navlink lpa-hide-md">WhatsApp</a>
             <a href="#connectors" className="lpa-navlink lpa-hide-md">{CONNECT[lang].nav}</a>
+            <a href="#pen" className="lpa-navlink lpa-hide-sm">{t.nav.pen}</a>
             <a href="#pricing" className="lpa-navlink lpa-hide-sm">{t.nav.pricing}</a>
             <Link href={SIGN_IN} className="lpa-navlink">{t.nav.signIn}</Link>
             <Link href={cta('nav')} className="lpa-btn lpa-btn-sm">{ctaLabel}</Link>
@@ -315,108 +351,20 @@ export default function LandingApple({ market, audience = null, invitedBy = null
       </header>
 
       <main id="lpa-main">
-        <Hero ctaLabel={ctaLabel} ctaHref={cta('hero')} />
-        <PenOpens />
-        <Specs />
+        <Hero ctaLabel={lpa.v.start} ctaHref={cta('hero')} />
         <SoundToNotes kitIndex={aud} setAud={setAud} />
-
-        {/* ------------------------------------------------------ how it works */}
-        <section className="lpa-tile lpa-tile-parch">
-          <div className="lpa-wrap">
-            <Reveal>
-              <span className="lpa-eyebrow">{jj(x.how)}</span>
-              <h2 className="lpa-h2">{jj(p.how.h2)}</h2>
-            </Reveal>
-            <ol className="lpa-steps">
-              {p.how.steps.map((st, i) => (
-                <Reveal key={st.h} as="li" delay={i * 0.1} className="lpa-step">
-                  <span className="lpa-step-n" aria-hidden>{i + 1}</span>
-                  <h3 className="lpa-h4">{jj(st.h)}</h3>
-                  <p>{st.p}</p>
-                </Reveal>
-              ))}
-            </ol>
-          </div>
-        </section>
-
-        {en && <Film kit={kit} />}
-
-        <WhatsApp kitIndex={aud} ctaLabel={ctaLabel} ctaHref={cta('whatsapp')} />
-        <Assistant kitKey={kit.key} />
-        <ByChat />
-
-        {/* ---------------------------------------------------------- features */}
-        <section id="features" className="lpa-tile lpa-tile-white">
-          <div className="lpa-wrap">
-            <Reveal className="lpa-center">
-              <span className="lpa-eyebrow">{jj(t.nav.features)}</span>
-              <h2 className="lpa-h2">{jj(p.feat.noteTitle)}.</h2>
-              <p className="lpa-lead">{p.feat.noteCopy}</p>
-            </Reveal>
-            <div className="lpa-cards" key={kit.key}>
-              <Reveal className="lpa-card">
-                <span className="lpa-card-ic"><Icon name="sparkle" size={20} /></span>
-                <h3 className="lpa-h4">{jj(kit.note.title)}</h3>
-                <span className="lpa-label">{p.feat.summary}</span>
-                <p className="lpa-card-p">{kit.note.summary}</p>
-                <span className="lpa-label">{p.feat.actions}</span>
-                <ul className="lpa-todos">
-                  {kit.note.actions.map((a, i) => (
-                    <li key={a} data-done={i === 0}><span className="lpa-tick"><Icon name="check" size={12} /></span><span>{a}</span></li>
-                  ))}
-                </ul>
-                <span className="lpa-label">{p.feat.people}</span>
-                <div className="lpa-people">
-                  {kit.note.people.map(([name, role]) => <span key={name}>{name} · {role}</span>)}
-                </div>
-              </Reveal>
-              <Reveal className="lpa-card" delay={0.12}>
-                <span className="lpa-card-ic"><Icon name="mail" size={20} /></span>
-                <h3 className="lpa-h4">{jj(p.feat.emailTitle)}</h3>
-                <p className="lpa-card-p">{p.feat.emailCopy}</p>
-                <div className="lpa-mail">
-                  <div className="lpa-mail-row"><span>{p.feat.to}</span>{kit.email.to}</div>
-                  <div className="lpa-mail-row"><span>{p.feat.subject}</span>{kit.email.subject}</div>
-                  <p>{kit.email.body}</p>
-                  <div className="lpa-mail-btns" aria-hidden>
-                    <span className="lpa-mini lpa-mini-on">{p.feat.sendBtn}</span>
-                    <span className="lpa-mini">{p.feat.ownBtn}</span>
-                  </div>
-                </div>
-              </Reveal>
-            </div>
-          </div>
-        </section>
-
+        <WhatsApp kitIndex={aud} />
         <Connectors />
-
+        <ThePen />
+        <Steps kitKey={kit.key} />
         <Pricing market={market} />
 
-        {/* ----------------------------------------------------------- privacy */}
-        <section className="lpa-tile lpa-tile-parch">
-          <div className="lpa-wrap lpa-priv">
-            <Reveal>
-              <span className="lpa-eyebrow">{jj(t.footer.privacy)}</span>
-              <h2 className="lpa-h2">{jj(p.priv.h2)}</h2>
-              <p className="lpa-lead">{p.priv.sub}</p>
-              <ul className="lpa-checks">
-                {p.priv.items.map((it) => <li key={it}><Icon name="check" size={16} />{it}</li>)}
-              </ul>
-            </Reveal>
-            <Reveal delay={0.12} className="lpa-consent">
-              <span className="lpa-card-ic"><Icon name="lock" size={20} /></span>
-              <p>{p.priv.question}</p>
-              <span className="lpa-consent-btn" aria-hidden>{p.priv.agree}</span>
-            </Reveal>
-          </div>
-        </section>
-
         {/* --------------------------------------------------------------- faq */}
-        <section id="faq" className="lpa-tile lpa-tile-white">
+        <section id="faq" className="lpa-tile lpa-tile-parch">
           <div className="lpa-wrap lpa-narrow">
             <Reveal className="lpa-center"><h2 className="lpa-h2">{jj(p.faq.h2)}</h2></Reveal>
             <Reveal delay={0.08} className="lpa-faq">
-              {p.faq.items.map(([q, a]) => (
+              {faqItems(p.faq.items, lpa.v).map(([q, a]) => (
                 <details key={q} className="lpa-faq-item">
                   <summary><span>{q}</span><span className="lpa-faq-ic" aria-hidden><Icon name="plus" size={18} /></span></summary>
                   <p>{a}</p>
@@ -452,9 +400,10 @@ export default function LandingApple({ market, audience = null, invitedBy = null
           </div>
           <div className="lpa-foot-row">
             <nav className="lpa-foot-links" aria-label="Juno Pen">
-              <a href="#pen">{t.nav.pen}</a>
               <a href="#features">{t.nav.features}</a>
+              <a href="#whatsapp">WhatsApp</a>
               <a href="#connectors">{CONNECT[lang].nav}</a>
+              <a href="#pen">{t.nav.pen}</a>
               <a href="#pricing">{t.nav.pricing}</a>
               <Link href={`/privacy${legal}`}>{t.footer.privacy}</Link>
               <Link href={`/terms${legal}`}>{t.footer.terms}</Link>
@@ -474,7 +423,7 @@ export default function LandingApple({ market, audience = null, invitedBy = null
         </div>
       </footer>
 
-      <StickyCta href={cta('sticky')} label={ctaLabel} />
+      <StickyCta href={cta('sticky')} label={`${lpa.v.start} · ${lpa.monthly}${lpa.v.perMonth}`} />
     </div>
     </LpaCtx.Provider>
   )
@@ -483,7 +432,7 @@ export default function LandingApple({ market, audience = null, invitedBy = null
 /* ------------------------------------------------------------------------- hero */
 
 function Hero({ ctaLabel, ctaHref }: { ctaLabel: string; ctaHref: string }) {
-  const { p, en } = useLpa()
+  const { p, v, monthly, pen } = useLpa()
   const ref = useRef<HTMLElement>(null)
   const reduce = useReducedMotion()
   // As the hero scrolls away the words lift and fade, and the pen drifts up and grows a touch.
@@ -495,15 +444,11 @@ function Hero({ ctaLabel, ctaHref }: { ctaLabel: string; ctaHref: string }) {
   return (
     <section ref={ref} className="lpa-tile lpa-tile-black lpa-hero" data-hero>
       <motion.div className="lpa-wrap lpa-center lpa-hero-copy" style={{ y: copyY, opacity: copyO }}>
-        {en ? (
-          <a href="#connectors" className="lpa-newbadge lpa-in">
-            <span className="lpa-newbadge-tag">{NOTION_EN.badgeTag}</span>
-            <span>{NOTION_EN.badge}</span>
-            <Icon name="chevron" size={14} />
-          </a>
-        ) : (
-          <p className="lpa-eyebrow lpa-eyebrow-dark lpa-in"><span className="lpa-j">J</span>uno Pen</p>
-        )}
+        <a href="#whatsapp" className="lpa-newbadge lpa-in">
+          <span className="lpa-newbadge-tag">{v.badgeTag}</span>
+          <span>{v.badge}</span>
+          <Icon name="chevron" size={14} />
+        </a>
         <h1 className="lpa-hero-h1">
           <span className="lpa-in" style={{ animationDelay: '.08s' }}>{jj(p.hero.h1a)}</span>{' '}
           <span className="lpa-hero-h1b lpa-in" style={{ animationDelay: '.22s' }}>{jj(p.hero.h1b)}</span>
@@ -513,6 +458,7 @@ function Hero({ ctaLabel, ctaHref }: { ctaLabel: string; ctaHref: string }) {
           <Link href={ctaHref} className="lpa-btn lpa-btn-lg">{ctaLabel}</Link>
           <a href="#whatsapp" className="lpa-btn lpa-btn-lg lpa-btn-ghost-dark">{p.hero.seeWa}</a>
         </div>
+        <p className="lpa-hero-price lpa-in" style={{ animationDelay: '.54s' }}>{v.priceLine(monthly, pen)}</p>
       </motion.div>
 
       <motion.div className="lpa-hero-stage" style={{ y: penY, scale: penS }}>
@@ -546,111 +492,13 @@ function NoPenLine() {
 }
 
 /** What the pen costs where the visitor is, and the button. */
-function PenBuy({ dark = false }: { dark?: boolean }) {
+function PenBuy() {
   const { t, pen, ctaLabel, cta } = useLpa()
   return (
     <>
-      <p className={`lpa-soonline${dark ? ' lpa-soonline-dark' : ''}`}>{t.pricing.penLine(pen)}</p>
-      <Link href={cta(dark ? 'pen' : 'specs')} className={dark ? 'lpa-link-dark' : 'lpa-link'}>{ctaLabel}<Icon name="chevron" size={14} /></Link>
+      <p className="lpa-soonline">{t.pricing.penLine(pen)}</p>
+      <Link href={cta('pen')} className="lpa-link">{ctaLabel}<Icon name="chevron" size={14} /></Link>
     </>
-  )
-}
-
-/* ---------------------------------------------------------- the pen opens (scroll) */
-
-function PenOpens() {
-  const { t } = useLpa()
-  const ref = useRef<HTMLElement>(null)
-  const scrollYProgress = useSectionProgress(ref, 'pin')
-  // Phase 1 (0 to .4): the pen swings level and comes forward. Phase 2 (.45 to .65): it opens
-  // at the ring. Phase 3: the caption about the plug holds.
-  const rotate = useTransform(scrollYProgress, [0, 0.4], [-14, 0])
-  const scale = useTransform(scrollYProgress, [0, 0.4, 1], [0.78, 1, 1.04])
-  const closedO = useTransform(scrollYProgress, [0.5, 0.55], [1, 0])
-  const openO = useTransform(scrollYProgress, [0.5, 0.55], [0, 1])
-  // The closed drawing is 716 wide against the open one's 800, drawn to the same scale and
-  // left-aligned, so the upper halves coincide. The pair is nudged right by half the gap while
-  // closed (centred), and settles as it opens, so the lower half appears to slide away.
-  const shift = useTransform(scrollYProgress, [0.5, 0.6], ['5.25%', '0%'])
-  const cap1 = useTransform(scrollYProgress, [0.02, 0.12, 0.42, 0.5], [0, 1, 1, 0])
-  const cap1y = useTransform(scrollYProgress, [0.02, 0.12], [24, 0])
-  const cap2 = useTransform(scrollYProgress, [0.55, 0.66], [0, 1])
-  const cap2y = useTransform(scrollYProgress, [0.55, 0.66], [24, 0])
-  const glow = useTransform(scrollYProgress, [0.4, 0.7], [0.5, 1])
-  return (
-    <section ref={ref} id="pen" className="lpa-tile-black lpa-scene">
-      <div className="lpa-scene-sticky">
-        <div className="lpa-wrap lpa-scene-in">
-          <div className="lpa-scene-caps">
-            <motion.div className="lpa-scene-cap lpa-scene-cap1" style={{ opacity: cap1, y: cap1y }}>
-              <span className="lpa-eyebrow lpa-eyebrow-dark">{jj(t.nav.pen)}</span>
-              <h2 className="lpa-h2 lpa-on-dark">{jj(t.pen.h2)}</h2>
-              <p className="lpa-lead lpa-on-dark-soft">{t.pen.sub}</p>
-            </motion.div>
-            <motion.div className="lpa-scene-cap lpa-scene-cap2" style={{ opacity: cap2, y: cap2y }}>
-              <span className="lpa-eyebrow lpa-eyebrow-dark">USB-C</span>
-              <h2 className="lpa-h2 lpa-on-dark">{jj(t.pen.open)}</h2>
-              <p className="lpa-lead lpa-on-dark-soft">{t.pen.specs[1].v}</p>
-              <PenBuy dark />
-            </motion.div>
-          </div>
-          <motion.div className="lpa-scene-stage" style={{ rotate, scale }}>
-            <motion.div className="lpa-spot lpa-spot-scene" style={{ opacity: glow }} aria-hidden />
-            <motion.div className="lpa-scene-pens" style={{ x: shift }}>
-              <motion.div className="lpa-scene-closed" style={{ opacity: closedO }}>
-                <PenArt id="scene-closed" className="lpa-pen-svg" shadow={false} />
-              </motion.div>
-              <motion.div className="lpa-scene-open" style={{ opacity: openO }}>
-                <PenArt id="scene-open" variant="open" className="lpa-pen-svg" shadow={false} />
-              </motion.div>
-            </motion.div>
-          </motion.div>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-/* ------------------------------------------------------------------------ specs */
-
-function Specs() {
-  const { t, p, x } = useLpa()
-  return (
-    <section className="lpa-tile lpa-tile-parch">
-      <div className="lpa-wrap">
-        <Reveal className="lpa-center">
-          <span className="lpa-eyebrow">{jj(t.nav.pen)}</span>
-          <h2 className="lpa-h2">{jj(p.pen.allSpecs)}.</h2>
-        </Reveal>
-        <div className="lpa-stats">
-          <Reveal className="lpa-stat lpa-stat-dark">
-            <span className="lpa-stat-n"><CountUp to={72} /><small>{x.gb}</small></span>
-            <span className="lpa-stat-k">{t.pen.storageK}</span>
-            <span className="lpa-stat-v">{t.pen.storageV}</span>
-          </Reveal>
-          <Reveal className="lpa-stat" delay={0.1}>
-            <span className="lpa-stat-n"><CountUp to={35} /><small>{x.hours}</small></span>
-            <span className="lpa-stat-k">{t.pen.batteryK}</span>
-            <span className="lpa-stat-v">{t.pen.batteryV}</span>
-          </Reveal>
-        </div>
-        <ul className="lpa-specs" aria-label={p.pen.allSpecs}>
-          {t.pen.specs.map((sp, i) => (
-            <Reveal key={sp.k} as="li" delay={(i % 3) * 0.08} className="lpa-spec">
-              <span className="lpa-card-ic"><Icon name={SPEC_ICONS[i]} size={20} /></span>
-              <h3 className="lpa-h5">{jj(sp.k)}</h3>
-              <p>{sp.v}</p>
-            </Reveal>
-          ))}
-        </ul>
-        <Reveal className="lpa-box">
-          <p>{t.pen.inBox}</p>
-        </Reveal>
-        <Reveal className="lpa-center lpa-specs-soon">
-          <PenBuy />
-        </Reveal>
-      </div>
-    </section>
   )
 }
 
@@ -691,7 +539,7 @@ function SoundToNotes({ kitIndex, setAud }: { kitIndex: number; setAud: (i: numb
     transition: show ? { duration: 0.7, delay: 0.5 + i * 0.35, ease: EASE } : { duration: 0 },
   })
   return (
-    <section className="lpa-tile lpa-tile-white">
+    <section id="features" className="lpa-tile lpa-tile-white">
       <div className="lpa-wrap">
         <Reveal className="lpa-center">
           <h2 className="lpa-h2">{jj(p.feat.h2)}</h2>
@@ -761,22 +609,20 @@ function WaText({ text }: { text: string }) {
   )
 }
 
-function WhatsApp({ kitIndex, ctaLabel, ctaHref }: { kitIndex: number; ctaLabel: string; ctaHref: string }) {
-  const { p, kits } = useLpa()
+/**
+ * WhatsApp, merged with "It speaks up first" (16 Oct): the recap and the question after a
+ * recording, then the offer Juno makes on its own, in one thread; beside it, four things one
+ * message does. The thread follows the chosen audience.
+ */
+function WhatsApp({ kitIndex }: { kitIndex: number }) {
+  const { p, kits, v, market } = useLpa()
   const kit = kits[kitIndex]
-  const msgs = kit.wa.msgs.slice(0, 7)
+  const recap = kit.wa.msgs.slice(0, 3)
+  const offer = PRO[market.lang][kit.key].filter(([who]) => who !== 'when').slice(0, 3)
   return (
-    <section id="whatsapp" className="lpa-tile lpa-tile-black">
-      <div className="lpa-wrap lpa-wa">
-        <Reveal>
-          <span className="lpa-eyebrow lpa-eyebrow-dark">WhatsApp</span>
-          <h2 className="lpa-h2 lpa-on-dark">{jj(p.wa.h2)}</h2>
-          <p className="lpa-lead lpa-on-dark-soft">{p.wa.sub}</p>
-          <div className="lpa-ctas">
-            <Link href={ctaHref} className="lpa-btn lpa-btn-lg">{ctaLabel}</Link>
-          </div>
-        </Reveal>
-        <div className="lpa-chat" key={kit.key} role="img" aria-label={p.wa.h2}>
+    <section id="whatsapp" className="lpa-tile lpa-tile-parch">
+      <div className="lpa-wrap lpa-wa lpa-wa-flip">
+        <div className="lpa-chat lpa-chat-pro" key={kit.key} role="img" aria-label={v.waH2}>
           <div className="lpa-chat-head" aria-hidden>
             <Image src="/juno_mark.png" alt="" width={36} height={36} className="lpa-mark lpa-chat-av" />
             <span><strong>Juno Pen</strong><em>{p.wa.status}</em></span>
@@ -786,94 +632,22 @@ function WhatsApp({ kitIndex, ctaLabel, ctaHref }: { kitIndex: number; ctaLabel:
               <Icon name="wave" size={16} />
               <span><strong>{kit.wa.file}</strong><em>{kit.wa.fileMeta}</em></span>
             </Reveal>
-            {msgs.map(([who, text], i) => (
+            {[...recap, ...offer].map(([who, text], i) => (
               <Reveal key={i} delay={0.12 + i * 0.12} className={`lpa-bub ${who === 'me' ? 'lpa-bub-me' : 'lpa-bub-bot'}`}>
                 <WaText text={text} />
               </Reveal>
             ))}
           </div>
         </div>
-      </div>
-    </section>
-  )
-}
-
-/* -------------------------------------------------------------------- assistant */
-
-/** Juno speaking first: the offer after a meeting, then the brief before the next one. */
-function Assistant({ kitKey }: { kitKey: Kit['key'] }) {
-  const { p, market } = useLpa()
-  const A = p.asst
-  const lines: ProLine[] = PRO[market.lang][kitKey]
-  return (
-    <section id="assistant" className="lpa-tile lpa-tile-parch">
-      <div className="lpa-wrap lpa-wa lpa-wa-flip">
-        <div className="lpa-chat lpa-chat-pro" key={kitKey} role="img" aria-label={A.h2}>
-          <div className="lpa-chat-head" aria-hidden>
-            <Image src="/juno_mark.png" alt="" width={36} height={36} className="lpa-mark lpa-chat-av" />
-            <span><strong>Juno Pen</strong><em>{p.wa.status}</em></span>
-          </div>
-          <div className="lpa-chat-body" aria-hidden>
-            {lines.map(([who, text], i) =>
-              who === 'when' ? (
-                <Reveal key={i} delay={0.12 + i * 0.12} className="lpa-chat-when">{text}</Reveal>
-              ) : (
-                <Reveal key={i} delay={0.12 + i * 0.12} className={`lpa-bub ${who === 'me' ? 'lpa-bub-me' : 'lpa-bub-bot'}`}>
-                  <WaText text={text} />
-                </Reveal>
-              ),
-            )}
-          </div>
-        </div>
         <Reveal>
-          <h2 className="lpa-h2">{jj(A.h2)}</h2>
-          <p className="lpa-lead">{A.sub}</p>
-          <ul className="lpa-checks lpa-checks-1">
-            {A.points.map((it) => <li key={it}><Icon name="check" size={16} />{it}</li>)}
+          <h2 className="lpa-h2">{jj(v.waH2)}</h2>
+          <p className="lpa-lead">{p.wa.sub}</p>
+          <h3 className="lpa-wa-asks-h">{v.asksTitle}</h3>
+          <ul className="lpa-wa-asks">
+            {ASK_PICK.map((i) => <li key={i} className="lpa-bub lpa-bub-me">{p.does.asks[i]}</li>)}
           </ul>
-          <p className="lpa-stopline">{A.stop}</p>
+          <p className="lpa-stopline">{p.asst.stop}</p>
         </Reveal>
-      </div>
-    </section>
-  )
-}
-
-/* ---------------------------------------------------------------------- by chat */
-
-/** What you can ask for in one message, and what Juno connects to. Same in every audience. */
-function ByChat() {
-  const { p } = useLpa()
-  const D = p.does
-  return (
-    <section id="by-chat" className="lpa-tile lpa-tile-black">
-      <div className="lpa-wrap">
-        <Reveal className="lpa-center">
-          <h2 className="lpa-h2 lpa-on-dark">{jj(D.h2)}</h2>
-          <p className="lpa-lead lpa-on-dark-soft">{D.sub}</p>
-        </Reveal>
-        <div className="lpa-bc">
-          <Reveal className="lpa-bc-asks">
-            {D.asks.map((a) => <p key={a} className="lpa-bub lpa-bub-me">{a}</p>)}
-          </Reveal>
-          <Reveal delay={0.12} className="lpa-bc-side">
-            <h3 className="lpa-h5 lpa-on-dark">{D.connectsTitle}</h3>
-            <dl className="lpa-bc-list">
-              {D.connects.map((c) => (
-                <div key={c.name}>
-                  <dt>{c.name}</dt>
-                  <dd>{c.what}</dd>
-                </div>
-              ))}
-            </dl>
-            <div className="lpa-bc-home">
-              <span className="lpa-bc-dot" aria-hidden />
-              <div>
-                <p className="lpa-bc-home-h">{jj(D.home.h)}</p>
-                <p className="lpa-bc-home-p">{D.home.p}</p>
-              </div>
-            </div>
-          </Reveal>
-        </div>
       </div>
     </section>
   )
@@ -882,7 +656,7 @@ function ByChat() {
 /* ---------------------------------------------------------------------- pricing */
 
 function Pricing({ market }: { market: Market }) {
-  const { t } = useLpa()
+  const { t, v } = useLpa()
   const P = t.pricing
   // Two groups, one at a time: software + pen (leads) and software only, two cards each
   // (monthly, yearly). Every market, priced in its own currency.
@@ -909,7 +683,6 @@ function Pricing({ market }: { market: Market }) {
       <div className="lpa-pfield" aria-hidden><span /><span /><span /></div>
       <div className="lpa-wrap">
         <Reveal className="lpa-center">
-          <span className="lpa-eyebrow">{jj(t.nav.pricing)}</span>
           <h2 className="lpa-h2">{jj(P.h2)}</h2>
           <p className="lpa-lead">{P.sub}</p>
         </Reveal>
@@ -945,6 +718,7 @@ function Pricing({ market }: { market: Market }) {
             </ul>
           </GlassCard>
         </Reveal>
+        <p className="lpa-privline"><Icon name="lock" size={16} /><span>{v.privLine}</span></p>
       </div>
     </section>
   )
@@ -1017,38 +791,77 @@ function GlassCard({ className, tilt = false, children }: { className: string; t
   )
 }
 
-/* ------------------------------------------------------------------------- film */
-
-/** English only: the how-to for the chosen audience (film/HowToScene.tsx), from the pen plugged
- *  in through to WhatsApp, playing while it is on screen; another audience restarts its story. */
-function Film({ kit }: { kit: Kit }) {
-  const { p, x } = useLpa()
-  return (
-    <section id="film" className="lpa-tile lpa-tile-white">
-      <div className="lpa-wrap">
-        <Reveal className="lpa-center">
-          <span className="lpa-eyebrow">{jj(x.film)}</span>
-          <h2 className="lpa-h2">{jj(p.film.h2)}</h2>
-          <p className="lpa-lead">{p.film.sub}</p>
-        </Reveal>
-        <Reveal className="lpa-film">
-          <HowToPlayer autoplay="visible" loop kit={kit.key as HowToKitKey} key={kit.key} />
-        </Reveal>
-      </div>
-    </section>
-  )
-}
-
 /* ----------------------------------------------------------------------- notion */
 
 /**
- * Connectors: where a meeting goes after the pen hears it, in four groups. Each tile has its
- * marks, one benefit line, and a live example: what was said, then (rising in a beat later) what
- * Juno did with it. That second beat is the section's one moment of motion.
+ * Connectors: where a meeting goes after the pen hears it. The hub (the pen, with the WhatsApp
+ * message Juno sends afterwards) sits in the middle; the four groups sit around it, each joined
+ * to it by a dashed curve. The curves are measured from the laid-out grid (offset boxes, which
+ * ignore the tiles' reveal transforms) and redrawn on resize, so they hold at any width. They
+ * draw in once when the section arrives: the section's one authored motion. Each tile keeps its
+ * marks, one benefit line, and a live example: what was said, then what Juno did with it.
  */
+type HubPath = { d: string; x: number; y: number }
+function useHubLines(hubRef: React.RefObject<HTMLUListElement | null>) {
+  const [box, setBox] = useState<{ w: number; h: number; paths: HubPath[] } | null>(null)
+  useEffect(() => {
+    const hub = hubRef.current
+    if (!hub) return
+    const measure = () => {
+      const stage = hub.querySelector<HTMLElement>('[data-hub-stage]')
+      // The tile's own <li> (positioned, so its offsets are relative to the hub and ignore the
+      // reveal transform); the data attribute sits on its inner box.
+      const tiles = Array.from(hub.querySelectorAll<HTMLElement>('[data-hub-tile]')).map((t) => t.parentElement as HTMLElement)
+      // Stacked (phone): no curves; the CSS draws one short line under the hub instead.
+      if (!stage || tiles.length !== 4 || getComputedStyle(hub).display !== 'grid' || tiles[0].offsetLeft === tiles[2].offsetLeft) { setBox(null); return }
+      // The pen's drawing box and the chat card, in hub coordinates.
+      const art = stage.querySelector<HTMLElement>('.lpa-conn-stage')!
+      const chat = stage.querySelector<HTMLElement>('.lpa-conn-chat')!
+      const ax = stage.offsetLeft + art.offsetLeft, ay = stage.offsetTop + art.offsetTop, w = art.offsetWidth
+      // A point on the pen, t = 0 at the clicker to 1 at the tip, read from .lpa-conn-pen's own
+      // left/top (its centre), unrotated width (its length) and its 112deg turn.
+      const pen = stage.querySelector<HTMLElement>('.lpa-conn-pen')!
+      const cs = getComputedStyle(pen)
+      const cx = ax + parseFloat(cs.left), cy = ay + parseFloat(cs.top), half = pen.offsetWidth / 2
+      const onPen = (t: number) => ({ x: cx + half * (1 - 2 * t) * 0.375, y: cy - half * (1 - 2 * t) * 0.927 })
+      const gap = w * 0.1
+      const ends: Record<string, { x: number; y: number }> = {
+        'l-top': { x: onPen(0.32).x - gap, y: onPen(0.32).y },
+        'r-top': { x: onPen(0.18).x + gap, y: onPen(0.18).y },
+        'l-bot': { x: onPen(0.72).x - gap, y: onPen(0.72).y },
+        'r-bot': { x: ax + chat.offsetLeft + chat.offsetWidth + 6, y: ay + chat.offsetTop + chat.offsetHeight * 0.45 },
+      }
+      const paths = tiles.map((t) => {
+        const place = t.firstElementChild!.getAttribute('data-hub-tile')!
+        const left = place.startsWith('l')
+        // Start: the tile's inner edge, level with its title. End: just short of the hub.
+        const x1 = left ? t.offsetLeft + t.offsetWidth : t.offsetLeft
+        const y1 = t.offsetTop + Math.min(96, t.offsetHeight * 0.3)
+        const { x: x2, y: y2 } = ends[place]
+        const dx = (x2 - x1) * 0.55
+        return { d: `M${x1} ${y1} C${x1 + dx} ${y1} ${x2 - dx * 0.5} ${y2} ${x2} ${y2}`, x: x1, y: y1 }
+      })
+      setBox({ w: hub.offsetWidth, h: hub.offsetHeight, paths })
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(hub)
+    document.fonts?.ready.then(measure).catch(() => {})
+    return () => ro.disconnect()
+  }, [hubRef])
+  return box
+}
+
 function Connectors() {
   const { market } = useLpa()
   const C = CONNECT[market.lang]
+  const hubRef = useRef<HTMLUListElement>(null)
+  const lines = useHubLines(hubRef)
+  const reduce = useReducedMotion()
+  const inView = useInView(hubRef, { once: true, amount: 0.25 })
+  const drawn = reduce || inView
+  // Calendar and Documents on the left, Tasks and the assistant on the right.
+  const place: Record<ConnGroup['key'], string> = { cal: 'l-top', docs: 'l-bot', tasks: 'r-top', ai: 'r-bot' }
   return (
     <section id="connectors" className="lpa-tile lpa-tile-black">
       <div className="lpa-wrap">
@@ -1056,38 +869,173 @@ function Connectors() {
           <h2 className="lpa-h2 lpa-on-dark">{jj(C.h2)}</h2>
           <p className="lpa-lead lpa-on-dark-soft">{C.sub}</p>
         </Reveal>
-        <ul className="lpa-conn">
+        <ul ref={hubRef} className={`lpa-conn${drawn ? ' is-drawn' : ''}`}>
+          {lines && (
+            <li className="lpa-conn-lines" aria-hidden>
+              <svg width={lines.w} height={lines.h} viewBox={`0 0 ${lines.w} ${lines.h}`}>
+                <defs>
+                  <mask id="lpa-conn-mask" maskUnits="userSpaceOnUse" x="0" y="0" width={lines.w} height={lines.h}>
+                    {lines.paths.map((p, i) => (
+                      <path key={i} d={p.d} pathLength={1} className="lpa-conn-draw" style={{ transitionDelay: `${0.15 + i * 0.12}s` }} />
+                    ))}
+                  </mask>
+                </defs>
+                <g mask="url(#lpa-conn-mask)">
+                  {lines.paths.map((p, i) => <path key={i} d={p.d} className="lpa-conn-path" />)}
+                </g>
+                {lines.paths.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={3} className="lpa-conn-dot" />)}
+              </svg>
+            </li>
+          )}
+          <li className="lpa-conn-hub" data-hub-stage>
+            <div className="lpa-conn-stage">
+              <div className="lpa-spot lpa-conn-spot" aria-hidden />
+              <div className="lpa-conn-pen">
+                <PenArt id="conn-pen" className="lpa-pen-svg" shadow={false} />
+              </div>
+              <div className="lpa-conn-chat" aria-hidden>
+                <p className="lpa-conn-chathead">
+                  <Image src="/juno_mark.png" alt="" width={18} height={18} className="lpa-mark lpa-chat-av" />
+                  <span>WhatsApp</span>
+                </p>
+                <p className="lpa-bub lpa-bub-bot">{C.hubBot}</p>
+                <p className="lpa-bub lpa-bub-me">{C.hubMe}</p>
+              </div>
+            </div>
+            <p className="lpa-conn-name">{jj('Juno Pen')}</p>
+            <p className="lpa-conn-hubline">{C.hubLine}</p>
+          </li>
           {C.groups.map((g, i) => (
-            <Reveal key={g.key} as="li" delay={(i % 2) * 0.1} className="lpa-conn-tile">
-              <div className="lpa-conn-marks">
-                {CONN_MARKS[g.key].map((m) =>
-                  'img' in m ? (
-                    <span key={m.label} className="lpa-conn-mark" title={m.label}><img src={m.img} alt={m.label} width={22} height={22} className="lpa-conn-img" /></span>
-                  ) : 'badge' in m ? (
-                    <span key={m.badge} className="lpa-conn-mark lpa-conn-badge">{m.badge}</span>
-                  ) : 'mark' in m ? (
-                    <span key={m.mark} className="lpa-conn-mark" title={m.label}><BrandMark name={m.mark} /></span>
-                  ) : (
-                    <span key={m.icon} className="lpa-conn-mark lpa-conn-ic" title={m.label}><Icon name={m.icon} size={20} /></span>
-                  ),
-                )}
+            <Reveal key={g.key} as="li" delay={(i % 2) * 0.1} className={`lpa-conn-tile lpa-conn-${place[g.key]}`}>
+              <div data-hub-tile={place[g.key]} className="lpa-conn-tile-in">
+                <div className="lpa-conn-marks">
+                  {CONN_MARKS[g.key].map((m) =>
+                    'img' in m ? (
+                      <span key={m.label} className="lpa-conn-mark" title={m.label}><img src={m.img} alt={m.label} width={20} height={20} className="lpa-conn-img" /></span>
+                    ) : 'badge' in m ? (
+                      <span key={m.badge} className="lpa-conn-mark lpa-conn-badge">{m.badge}</span>
+                    ) : 'mark' in m ? (
+                      <span key={m.mark} className="lpa-conn-mark" title={m.label}><BrandMark name={m.mark} /></span>
+                    ) : (
+                      <span key={m.icon} className="lpa-conn-mark lpa-conn-ic" title={m.label}><Icon name={m.icon} size={18} /></span>
+                    ),
+                  )}
+                </div>
+                <h3 className="lpa-h4 lpa-on-dark">{jj(g.title)}</h3>
+                <p className="lpa-conn-line">{g.line}</p>
+                <div className="lpa-conn-ex">
+                  <p className="lpa-conn-said">{g.said}</p>
+                  <Reveal delay={0.45 + (i % 2) * 0.1} className="lpa-conn-did">
+                    <span className="lpa-conn-tick" aria-hidden><Icon name="check" size={12} /></span>
+                    <span>{g.did}</span>
+                  </Reveal>
+                </div>
+                <p className="lpa-conn-fine">{g.fine}</p>
               </div>
-              <h3 className="lpa-h4 lpa-on-dark">{jj(g.title)}</h3>
-              <p className="lpa-conn-line">{g.line}</p>
-              <div className="lpa-conn-ex">
-                <p className="lpa-conn-said">{g.said}</p>
-                <Reveal delay={0.45 + (i % 2) * 0.1} className="lpa-conn-did">
-                  <span className="lpa-conn-tick" aria-hidden><Icon name="check" size={12} /></span>
-                  <span>{g.did}</span>
-                </Reveal>
-              </div>
-              <p className="lpa-conn-fine">{g.fine}</p>
             </Reveal>
           ))}
         </ul>
       </div>
     </section>
   )
+}
+
+/* ---------------------------------------------------------------------- the pen */
+
+/** The pen in one screen (16 Oct, replacing the scroll scene and the specs tile): the open pen,
+ *  four numbers, and the full list behind "All the specs". */
+function ThePen() {
+  const { t, v } = useLpa()
+  const all = [...t.pen.specs.map((sp, i) => ({ k: sp.k, v: sp.v, ic: SPEC_ICONS[i] })), { k: `72 GB ${t.pen.storageK}`, v: t.pen.storageV, ic: 'folder' as IconName }, { k: `35 h ${t.pen.batteryK}`, v: t.pen.batteryV, ic: 'battery' as IconName }]
+  return (
+    <section id="pen" className="lpa-tile lpa-tile-white lpa-pen2">
+      <div className="lpa-wrap">
+        <Reveal className="lpa-center">
+          <h2 className="lpa-h2">{jj(t.pen.h2)}</h2>
+          <p className="lpa-lead">{t.pen.sub}</p>
+        </Reveal>
+        <Reveal className="lpa-pen2-stage">
+          <PenArt id="pen2" variant="open" className="lpa-pen-svg" shadow={false} />
+          <p className="lpa-pen2-cap">{t.pen.open}</p>
+        </Reveal>
+        <ul className="lpa-pen2-specs">
+          {v.keySpecs.map(([n, k]) => (
+            <li key={n}><span className="lpa-pen2-n">{n}</span><span className="lpa-pen2-k">{k}</span></li>
+          ))}
+        </ul>
+        <details className="lpa-pen2-all">
+          <summary><span>{v.allSpecs}</span><span className="lpa-faq-ic" aria-hidden><Icon name="plus" size={18} /></span></summary>
+          <ul className="lpa-pen2-list">
+            {all.map((sp) => (
+              <li key={sp.k}>
+                <span className="lpa-card-ic"><Icon name={sp.ic} size={18} /></span>
+                <div><h3 className="lpa-h5">{jj(sp.k)}</h3><p>{sp.v}</p></div>
+              </li>
+            ))}
+          </ul>
+          <p className="lpa-pen2-box">{t.pen.inBox}</p>
+        </details>
+        <div className="lpa-center lpa-pen2-buy"><PenBuy /></div>
+      </div>
+    </section>
+  )
+}
+
+/* ------------------------------------------------------------------- three steps */
+
+/** Three steps, and in English the 60-second how-to (film/HowToScene.tsx) in a dialog; it only
+ *  mounts while open, so the page does not run the film in the background. */
+function Steps({ kitKey }: { kitKey: Kit['key'] }) {
+  const { p, en, v } = useLpa()
+  const dlg = useRef<HTMLDialogElement>(null)
+  const [open, setOpen] = useState(false)
+  return (
+    <section id="how" className="lpa-tile lpa-tile-parch">
+      <div className="lpa-wrap">
+        <Reveal>
+          <h2 className="lpa-h2">{jj(p.how.h2)}</h2>
+        </Reveal>
+        <ol className="lpa-steps">
+          {p.how.steps.map((st, i) => (
+            <Reveal key={st.h} as="li" delay={i * 0.1} className="lpa-step">
+              <span className="lpa-step-n" aria-hidden>{i + 1}</span>
+              <h3 className="lpa-h4">{jj(st.h)}</h3>
+              <p>{st.p}</p>
+            </Reveal>
+          ))}
+        </ol>
+        {en && (
+          <>
+            <button type="button" className="lpa-watch" onClick={() => { setOpen(true); dlg.current?.showModal() }}>
+              <span className="lpa-watch-ic" aria-hidden><Icon name="play" size={14} /></span>
+              {v.watch}
+            </button>
+            <dialog
+              ref={dlg}
+              className="lpa-film-dlg"
+              aria-label={v.watch}
+              onClose={() => setOpen(false)}
+              onClick={(e) => { if (e.target === dlg.current) dlg.current?.close() }}
+            >
+              <button type="button" className="lpa-film-x" onClick={() => dlg.current?.close()} aria-label={v.close}>
+                <Icon name="plus" size={20} />
+              </button>
+              {open && <HowToPlayer autoplay="always" kit={kitKey as HowToKitKey} />}
+            </dialog>
+          </>
+        )}
+      </div>
+    </section>
+  )
+}
+
+/** The FAQ order (16 Oct): "Is it legal to record?" first, then how Juno differs from Plaud or
+ *  Pocket, then the rest as written. */
+function faqItems(items: readonly (readonly [string, string])[], v: (typeof V2)['en' | 'es' | 'pt']): [string, string][] {
+  const legal = items.findIndex(([q]) => /legal/i.test(q))
+  const list = items.map(([q, a]) => [q, a] as [string, string])
+  const first = legal >= 0 ? list.splice(legal, 1) : []
+  return [...first, [v.vsQ, v.vsA], ...list]
 }
 
 /* ------------------------------------------------------------------ sticky cta */

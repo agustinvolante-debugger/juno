@@ -289,7 +289,7 @@ const EN_PLUS: Plus = {
   hero: {
     h1a: 'Say it once.',
     h1b: 'Juno remembers it.',
-    lede: 'Record any conversation with the pen or your phone: a meeting, a lecture, a doctor’s visit. You get the notes, your to-dos and the follow-up, in the app or on WhatsApp.',
+    lede: 'Record any conversation with the pen or your phone: a meeting, a lecture, a doctor’s visit. Juno writes the notes and your to-dos, then texts you on WhatsApp what to do next.',
     seeWa: 'See it on WhatsApp',
     draft: 'Draft ready',
   },
@@ -363,7 +363,7 @@ const EN_PLUS: Plus = {
       'A morning brief of today’s meetings and to-dos, only when there is something',
       'Reminders when you ask, and your to-dos on the day they are due',
     ],
-    stop: 'Always asks before acting. Reply STOP anytime.',
+    stop: 'Asks before acting on what it heard. Reply STOP anytime.',
   },
   does: {
     h2: 'Ask, and it’s done.',
@@ -593,7 +593,7 @@ const ES_PLUS: Plus = {
   hero: {
     h1a: 'Dilo una vez.',
     h1b: 'Juno lo recuerda.',
-    lede: 'Graba cualquier conversación con el celular o con el lápiz: una reunión, una clase, un control médico. Recibe las notas, tus pendientes y el correo de seguimiento, en la app o por WhatsApp.',
+    lede: 'Graba cualquier conversación con el celular o con el lápiz: una reunión, una clase, un control médico. Juno escribe las notas y tus pendientes, y después te escribe por WhatsApp qué hacer.',
     seeWa: 'Míralo en WhatsApp',
     draft: 'Borrador listo',
   },
@@ -660,14 +660,14 @@ const ES_PLUS: Plus = {
   },
   asst: {
     h2: 'Habla primero.',
-    sub: 'Juno escuchó la reunión, así que te ofrece el siguiente paso antes de que lo pienses. Siempre pregunta antes de hacer algo.',
+    sub: 'Juno escuchó la reunión, así que te ofrece el siguiente paso antes de que lo pienses. Pregunta antes de actuar sobre lo que escuchó.',
     points: [
       'Después de una reunión: la fecha que alguien mencionó, lista para tu calendario',
       'La tarde antes de una reunión: la última conversación con esa persona y lo que sigue pendiente',
       'Un resumen en la mañana con las reuniones y pendientes del día, solo si hay algo',
       'Recordatorios cuando los pides, y tus pendientes el día que vencen',
     ],
-    stop: 'Siempre pregunta antes de actuar. Responde STOP cuando quieras.',
+    stop: 'Pregunta antes de actuar sobre lo que escuchó. Responde STOP cuando quieras.',
   },
   does: {
     h2: 'Pídelo, y está hecho.',
@@ -897,7 +897,7 @@ const PT_PLUS: Plus = {
   hero: {
     h1a: 'Diga uma vez.',
     h1b: 'O Juno lembra.',
-    lede: 'Grave qualquer conversa com o celular ou com a caneta: uma reunião, uma aula, uma consulta médica. Receba as notas, suas tarefas e o e-mail de follow-up, no app ou pelo WhatsApp.',
+    lede: 'Grave qualquer conversa com o celular ou com a caneta: uma reunião, uma aula, uma consulta médica. O Juno escreve as notas e suas tarefas, e depois te manda no WhatsApp o que fazer.',
     seeWa: 'Veja no WhatsApp',
     draft: 'Rascunho pronto',
   },
@@ -964,14 +964,14 @@ const PT_PLUS: Plus = {
   },
   asst: {
     h2: 'Ele fala primeiro.',
-    sub: 'O Juno ouviu a reunião, então oferece o próximo passo antes de você pensar nele. Sempre pergunta antes de fazer qualquer coisa.',
+    sub: 'O Juno ouviu a reunião, então oferece o próximo passo antes de você pensar nele. Pergunta antes de agir sobre o que ouviu.',
     points: [
       'Depois de uma reunião: a data que alguém mencionou, pronta para a sua agenda',
       'Na véspera de uma reunião: a última conversa com a pessoa e o que ainda está em aberto',
       'Um resumo de manhã com as reuniões e tarefas do dia, só quando há algo',
       'Lembretes quando você pede, e as tarefas no dia em que vencem',
     ],
-    stop: 'Sempre pergunta antes de agir. Responda STOP quando quiser.',
+    stop: 'Pergunta antes de agir sobre o que ouviu. Responda STOP quando quiser.',
   },
   does: {
     h2: 'Peça, e está feito.',
