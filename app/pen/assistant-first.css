@@ -188,7 +188,9 @@
     font-family: var(--ui); font-size: 14px; font-weight: 500; color: var(--ink); white-space: nowrap;
   }
   .pen-pstrip-p:hover { border-color: rgba(29, 29, 31, .18); }
-  .pen-pstrip-p .pen-avatar { width: 30px; height: 30px; font-size: 11.5px; }
+  /* display: grid again: a later .pen-avatar rule (photo avatars) sets display:block, which left the
+     initials in the top-left corner of the circle. */
+  .pen-pstrip-p .pen-avatar { width: 30px; height: 30px; font-size: 11.5px; display: grid; place-items: center; line-height: 1; padding: 0; flex: none; }
   .pen-pstrip-all {
     flex: none; display: inline-flex; align-items: center; gap: 4px; min-height: 40px; padding: 0 6px 0 10px;
     font-family: var(--ui); font-size: 14px; font-weight: 600; color: var(--accent-ink); white-space: nowrap;
