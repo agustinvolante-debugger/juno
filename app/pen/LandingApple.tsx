@@ -16,6 +16,9 @@ import { AUD_PARAM, KITS, PLUS, PRO, type Kit } from './landing-audiences'
 import { INVITED, SIGN_IN, ownPlans, penPlans, signup, type PlanCard } from './Landing'
 import './landing-apple.css'
 
+// The help center (Mintlify) and the blog, linked from the nav and the footer. English only for now.
+const DOCS = 'https://docs.tryjunoapp.com'
+
 /** The "J" of "Juno" in Lora italic (.lpa-j), wherever a heading or eyebrow says the name. */
 function jj(text: React.ReactNode): React.ReactNode {
   if (typeof text !== 'string' || !text.includes('Juno')) return text
@@ -344,6 +347,8 @@ export default function LandingApple({ market, audience = null, invitedBy = null
             <a href="#connectors" className="lpa-navlink lpa-hide-md">{CONNECT[lang].nav}</a>
             <a href="#pen" className="lpa-navlink lpa-hide-sm">{t.nav.pen}</a>
             <a href="#pricing" className="lpa-navlink lpa-hide-sm">{t.nav.pricing}</a>
+            <a href={DOCS} className="lpa-navlink lpa-hide-md">Docs</a>
+            <Link href="/blog" className="lpa-navlink lpa-hide-md">Blog</Link>
             <Link href={SIGN_IN} className="lpa-navlink">{t.nav.signIn}</Link>
             <Link href={cta('nav')} className="lpa-btn lpa-btn-sm">{ctaLabel}</Link>
           </nav>
@@ -405,6 +410,8 @@ export default function LandingApple({ market, audience = null, invitedBy = null
               <a href="#connectors">{CONNECT[lang].nav}</a>
               <a href="#pen">{t.nav.pen}</a>
               <a href="#pricing">{t.nav.pricing}</a>
+              <a href={DOCS}>Docs</a>
+              <Link href="/blog">Blog</Link>
               <Link href={`/privacy${legal}`}>{t.footer.privacy}</Link>
               <Link href={`/terms${legal}`}>{t.footer.terms}</Link>
               <Link href={SIGN_IN}>{t.nav.signIn}</Link>

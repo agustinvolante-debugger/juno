@@ -138,3 +138,11 @@ This is how we stay in sync. **Read the latest entries before you start work. Ap
 - Checks: `npx tsc --noEmit` ✅ · `npm run build` ✅ (11 pen routes). A real briefing email was sent to his address during testing.
 - ⚠ **HIPAA unchanged and it now matters more.** The briefing email is the one path that pushes note content to a third party (Resend) and into a mail server. Extraction already strips identifiers and keeps clinical detail out — that is exactly why. Still no BAAs: Supabase needs Team (~$599/mo), Anthropic is enterprise-sales only.
 - Known, not fixed: import dedupe keys on the COMPRESSED byte count, and the mono/16kHz conversion is not bit-identical between runs, so the same file imports twice (the archive palette noticed this on its own). Should key on original size. There is also still no way to delete a recording from the UI.
+
+### 2026-10-16 — Claude Code — branch: claude/blog (worktree ~/Downloads/juno-blog, off main d1c63e1)
+- **Claiming:** `lib/blog/*`, `app/blog/*`, `app/api/blog/*`, `app/sitemap.ts`, `app/robots.ts`; one small edit to `app/pen/LandingApple.tsx` (Docs + Blog links in nav and footer).
+- Built the Juno blog at /blog with Notion as the CMS (internal integration, env `NOTION_BLOG_TOKEN` + `NOTION_BLOG_DATABASE_ID`; schema in `lib/blog/notion.ts`). Without the env vars it shows sample fixtures with a "Preview" banner. ISR 120s, tag `blog`, on-demand `/api/blog/revalidate?secret=` (`BLOG_REVALIDATE_SECRET`).
+- Routes: `/blog`, `/blog/[slug]`, `/blog/whats-new` (Type=Update), `/blog/rss.xml`, generated OG images, `/sitemap.xml`, `/robots.txt`. Notion images go through `/api/blog/media/[id]` (fresh signed URL per request; ≤4 MB streamed w/ immutable cache, else short redirect).
+- Newsletter: `/api/blog/subscribe` → Resend contact in segment `RESEND_BLOG_AUDIENCE_ID` (dry run without it). Honeypot + per-instance rate limit.
+- Fonts for OG cards (OFL TTFs) in `lib/blog/fonts/`. No new dependencies.
+- Checks: `npx tsc --noEmit` ✅ · `npm run build` ✅. No eslint/test setup exists in the repo. NOT pushed, NOT deployed. Landing nav/footer change needs the founder's OK. How-to for Chris: juno_project/Notes/blog-for-chris.md.
