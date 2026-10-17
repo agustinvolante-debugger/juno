@@ -38,7 +38,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
         body: [
           {
             list: [
-              'Account: your name, email address and profile picture from Google sign-in.',
+              'Account: your email address, and your name and profile picture if you sign in with Google.',
               'Signup: your name, email, phone number (optional), your role, any note you write and, if we post you a pen, your shipping address.',
               'Profile: what you tell us in Settings, such as your role, your organisation, the languages you speak, words you use often and how you want your notes written.',
               'Recordings: the audio files you upload or send on WhatsApp, their name, date and length, and any transcripts you paste in.',
@@ -254,7 +254,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
         body: [
           {
             list: [
-              'Cuenta: tu nombre, correo y foto de perfil desde el inicio de sesión con Google.',
+              'Cuenta: tu correo, y tu nombre y foto de perfil si inicias sesión con Google.',
               'Registro: tu nombre, correo, teléfono (opcional), tu rol, la nota que escribas y, si te enviamos un lápiz, tu dirección de envío.',
               'Perfil: lo que nos cuentas en Ajustes, como tu rol, tu organización, los idiomas que hablas, palabras que usas seguido y cómo quieres tus notas.',
               'Grabaciones: los archivos de audio que subes o envías por WhatsApp, su nombre, fecha y duración, y las transcripciones que pegas.',
@@ -470,7 +470,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
         body: [
           {
             list: [
-              'Conta: seu nome, e-mail e foto de perfil do login com o Google.',
+              'Conta: seu e-mail, e seu nome e foto de perfil se você entrar com o Google.',
               'Cadastro: seu nome, e-mail, telefone (opcional), sua função, a observação que você escrever e, se enviarmos uma caneta, seu endereço de entrega.',
               'Perfil: o que você informa em Configurações, como sua função, sua organização, os idiomas que fala, palavras que usa com frequência e como quer suas notas.',
               'Gravações: os arquivos de áudio que você envia pelo site ou pelo WhatsApp, o nome, a data e a duração deles, e as transcrições que você cola.',

@@ -25,8 +25,8 @@ const IV_EN = {
   rulesTitle: 'How it works',
   rules: [
     'Your friend’s first month is free when they sign up through your link.',
-    'You get 1 free month for each friend who pays: 2 if they choose 6 months, 3 if they choose a year.',
-    'Bonus month on your 3rd and 5th friend. 10 friends in a year makes your year free, the most there is.',
+    'You get 1 free month for each friend who pays, whatever plan they choose.',
+    'Bonus month on your 3rd and 5th friend. Up to 12 free months in any 12 months.',
     'Your free months are added two weeks after your friend’s first payment and come off your next bills. They can’t be paid out.',
     'It doesn’t apply to the free-pen offer, to people who already had an account, or to your own other email addresses.',
   ],
@@ -55,8 +55,8 @@ const IV: Copy<typeof IV_EN> = {
     rulesTitle: 'Cómo funciona',
     rules: [
       'El primer mes de tu amigo es gratis si se registra con tu enlace.',
-      'Ganas 1 mes gratis por cada amigo que pague: 2 si elige 6 meses, 3 si elige un año.',
-      'Mes extra con tu 3.er y 5.º amigo. 10 amigos en un año te dan el año gratis, que es el máximo.',
+      'Ganas 1 mes gratis por cada amigo que pague, elija el plan que elija.',
+      'Mes extra con tu 3.er y 5.º amigo. Hasta 12 meses gratis en 12 meses.',
       'Tus meses gratis se abonan dos semanas después del primer pago de tu amigo y se descuentan de tus próximos cobros. No se pagan en dinero.',
       'No aplica a la oferta del lápiz gratis, a quienes ya tuvieron cuenta, ni a tus otros correos.',
     ],
@@ -82,8 +82,8 @@ const IV: Copy<typeof IV_EN> = {
     rulesTitle: 'Como funciona',
     rules: [
       'O primeiro mês do seu amigo é grátis se ele se cadastrar pelo seu link.',
-      'Você ganha 1 mês grátis por amigo que pagar: 2 se ele escolher 6 meses, 3 se escolher um ano.',
-      'Mês extra no seu 3º e 5º amigo. 10 amigos em um ano deixam seu ano grátis, que é o máximo.',
+      'Você ganha 1 mês grátis por amigo que pagar, qualquer que seja o plano.',
+      'Mês extra no seu 3º e 5º amigo. Até 12 meses grátis em 12 meses.',
       'Seus meses grátis entram duas semanas depois do primeiro pagamento do amigo e são descontados das próximas cobranças. Não viram dinheiro.',
       'Não vale para a oferta da caneta grátis, para quem já teve conta, nem para seus outros e-mails.',
     ],

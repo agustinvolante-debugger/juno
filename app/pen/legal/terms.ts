@@ -16,7 +16,7 @@ export const TERMS: Record<Lang, LegalDoc> = {
         h: 'The service',
         body: [
           'Juno Pen transcribes the recordings you give it and turns them into notes, to-dos, people, answers and drafts. You can upload files on the website, paste in transcripts or send recordings on WhatsApp. We may also post you a recording pen.',
-          'You sign in with a Google account, and you must be 18 or older.',
+          'You sign in with a Google account or a one-time link sent to your email, and you must be 18 or older.',
         ],
       },
       {
@@ -154,7 +154,7 @@ export const TERMS: Record<Lang, LegalDoc> = {
         h: 'El servicio',
         body: [
           'Juno Pen transcribe las grabaciones que le das y las convierte en notas, tareas, personas, respuestas y borradores. Puedes subir archivos en el sitio, pegar transcripciones o enviar grabaciones por WhatsApp. También podemos enviarte un lápiz grabador.',
-          'Inicias sesión con una cuenta de Google y debes tener 18 años o más.',
+          'Inicias sesión con una cuenta de Google o con un enlace de un solo uso que te enviamos por correo, y debes tener 18 años o más.',
         ],
       },
       {
@@ -292,7 +292,7 @@ export const TERMS: Record<Lang, LegalDoc> = {
         h: 'O serviço',
         body: [
           'O Juno Pen transcreve as gravações que você envia e as transforma em notas, tarefas, pessoas, respostas e rascunhos. Você pode enviar arquivos pelo site, colar transcrições ou mandar gravações pelo WhatsApp. Também podemos enviar a você uma caneta gravadora.',
-          'Você entra com uma conta do Google e precisa ter 18 anos ou mais.',
+          'Você entra com uma conta do Google ou com um link de uso único enviado ao seu e-mail, e precisa ter 18 anos ou mais.',
         ],
       },
       {
