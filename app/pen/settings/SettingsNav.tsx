@@ -7,10 +7,10 @@ import { useCopy } from '../LangContext'
 import type { Copy } from '@/lib/pen/i18n'
 import { SUPPORT_EMAIL } from '@/lib/support'
 
-const SN: Copy<{ profile: string; aria: string; billing: string; invite: string; help: string; calendar: string; hours: string }> = {
-  en: { profile: 'Profile', aria: 'Settings', billing: 'Billing', invite: 'Invite friends', help: 'Help', calendar: 'Google', hours: 'Recording hours' },
-  es: { profile: 'Perfil', aria: 'Ajustes', billing: 'Facturación', invite: 'Invitar amigos', help: 'Ayuda', calendar: 'Google', hours: 'Horas de grabación' },
-  pt: { profile: 'Perfil', aria: 'Configurações', billing: 'Cobrança', invite: 'Convidar amigos', help: 'Ajuda', calendar: 'Google', hours: 'Horas de gravação' },
+const SN: Copy<{ profile: string; aria: string; billing: string; invite: string; help: string; calendar: string }> = {
+  en: { profile: 'Profile', aria: 'Settings', billing: 'Billing', invite: 'Invite friends', help: 'Help', calendar: 'Google' },
+  es: { profile: 'Perfil', aria: 'Ajustes', billing: 'Facturación', invite: 'Invitar amigos', help: 'Ayuda', calendar: 'Google' },
+  pt: { profile: 'Perfil', aria: 'Configurações', billing: 'Cobrança', invite: 'Convidar amigos', help: 'Ajuda', calendar: 'Google' },
 }
 
 const ITEMS: { href: string; label: 'profile' | 'WhatsApp'; icon: IconName }[] = [
@@ -54,11 +54,6 @@ export default function SettingsNav({ whatsapp = false, billing = false, notion 
       <Link href="/pen/settings/invite" className="pen-cat" data-active={path === '/pen/settings/invite'} aria-current={path === '/pen/settings/invite' ? 'page' : undefined}>
         <Icon name="link" size={19} />
         <span className="pen-cat-label">{T.invite}</span>
-      </Link>
-      {/* The page WhatsApp's out-of-hours message points to: what's left this month, and buy more. */}
-      <Link href="/pen/settings/hours" className="pen-cat" data-active={path === '/pen/settings/hours'} aria-current={path === '/pen/settings/hours' ? 'page' : undefined}>
-        <Icon name="clock" size={19} />
-        <span className="pen-cat-label">{T.hours}</span>
       </Link>
       {billing && (
         <Link href="/pen/settings/billing" className="pen-cat" data-active={path === '/pen/settings/billing'} aria-current={path === '/pen/settings/billing' ? 'page' : undefined}>

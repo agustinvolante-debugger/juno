@@ -81,7 +81,7 @@ const EN = {
   replyYes: 'Reply YES to confirm.',
   consentNudge: (name: string) => `Still holding ${name}. I'll write it up as soon as you confirm everyone agreed to be recorded.`,
   consentExpired: (name: string) => `No confirmation came for ${name}, so I let it go and didn't write it up. Send it again anytime if you want the notes.`,
-  outOfHours: (hours: string) => `You're out of recording hours for this month. Buy more at ${hours} and send the file again.`,
+  outOfHours: () => `You've used this month's recording hours. They reset on the 1st: send the file again then. Questions? hello@tryjunoapp.com`,
   readOnly: (url: string) => `Your Juno Pen plan has ended, so your account is read-only: your recordings and notes are still on the website, but I can't take new ones or answer questions. Reactivate at ${url}.`,
   paused: (url: string) => `Your Juno Pen plan is paused, so this recording wasn't processed. Resume it at ${url} and send the file again.`,
   lost: 'I lost track of that file. Could you send it again?',
@@ -142,7 +142,7 @@ const BOT: Record<Lang, typeof EN> = {
     replyYes: 'Responde SÍ para confirmar.',
     consentNudge: (name) => `Sigo guardando ${name}. Escribo las notas apenas confirmes que todos aceptaron ser grabados.`,
     consentExpired: (name) => `No llegó la confirmación de ${name}, así que la descarté sin escribir notas. Mándamela otra vez cuando quieras las notas.`,
-    outOfHours: (hours) => `Se acabaron tus horas de grabación de este mes. Compra más en ${hours} y vuelve a mandar el archivo.`,
+    outOfHours: () => `Usaste las horas de grabación de este mes. Se renuevan el día 1: vuelve a mandar el archivo ese día. ¿Dudas? hello@tryjunoapp.com`,
     readOnly: (url) => `Tu plan de Juno Pen terminó, así que tu cuenta es solo de lectura: tus grabaciones y notas siguen en el sitio, pero no puedo recibir nuevas ni responder preguntas. Reactívala en ${url}.`,
     paused: (url) => `Tu plan de Juno Pen está en pausa, así que no procesamos esta grabación. Reactívalo en ${url} y vuelve a mandar el archivo.`,
     lost: 'Perdí la pista de ese archivo. ¿Me lo mandas otra vez?',
@@ -200,7 +200,7 @@ const BOT: Record<Lang, typeof EN> = {
     replyYes: 'Responda SIM para confirmar.',
     consentNudge: (name) => `Ainda estou com ${name}. Escrevo as notas assim que você confirmar que todos concordaram em ser gravados.`,
     consentExpired: (name) => `Não chegou a confirmação de ${name}, então descartei sem escrever notas. Mande de novo quando quiser as notas.`,
-    outOfHours: (hours) => `Suas horas de gravação deste mês acabaram. Compre mais em ${hours} e mande o arquivo de novo.`,
+    outOfHours: () => `Você usou as horas de gravação deste mês. Elas renovam no dia 1: mande o arquivo de novo nesse dia. Dúvidas? hello@tryjunoapp.com`,
     readOnly: (url) => `Seu plano do Juno Pen terminou, então sua conta é somente leitura: suas gravações e notas continuam no site, mas não posso receber novas nem responder perguntas. Reative em ${url}.`,
     paused: (url) => `Seu plano do Juno Pen está pausado, então esta gravação não foi processada. Retome em ${url} e mande o arquivo de novo.`,
     lost: 'Perdi esse arquivo de vista. Pode mandar de novo?',
@@ -417,7 +417,7 @@ async function askConsent(msg: Inbound, L: typeof EN): Promise<void> {
   const allowance = await getAllowance(link.email)
   if (!allowance.canProcess) {
     await moveMessage(msg.id, 'received', 'cancelled')
-    await sendText(msg.from, allowance.pausedUntil ? L.paused(appUrl('/settings/billing')) : L.outOfHours(appUrl('/settings/hours')))
+    await sendText(msg.from, allowance.pausedUntil ? L.paused(appUrl('/settings/billing')) : L.outOfHours())
     return
   }
 
@@ -480,7 +480,7 @@ async function transcribeFile(
   // Checked again: hours may have run out between the file and the tap.
   const allowance = await getAllowance(email)
   if (!allowance.canProcess) {
-    return { ok: false, message: allowance.pausedUntil ? L.paused(appUrl('/settings/billing')) : L.outOfHours(appUrl('/settings/hours')) }
+    return { ok: false, message: allowance.pausedUntil ? L.paused(appUrl('/settings/billing')) : L.outOfHours() }
   }
 
   const media = await openMedia(mediaUrl)
@@ -509,7 +509,7 @@ async function transcribeFile(
   const started = await startTranscription(email, session)
   if (!started.ok) {
     await updateSession(session.id, { status: 'error', error_text: 'Out of hours when sent over WhatsApp. Send it again once you have time.' })
-    return { ok: false, session, message: L.outOfHours(appUrl('/settings/hours')) }
+    return { ok: false, session, message: L.outOfHours() }
   }
   return { ok: true, session, minutes: seconds ? Math.max(1, Math.round(seconds / 60)) : null }
 }
