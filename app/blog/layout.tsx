@@ -6,6 +6,7 @@ import Image from 'next/image'
 import '../pen/landing-apple.css'
 import './blog.css'
 import { BLOG_DESCRIPTION, BLOG_TITLE, SITE } from '@/lib/blog'
+import { DOCS_URL as DOCS } from '@/lib/docs-url'
 
 // The landing page's faces (app/pen/layout.tsx): Newsreader italic for headings and the
 // wordmark "J", Lora for reading. Same configuration, so next/font serves the same files.
@@ -43,7 +44,6 @@ export const viewport: Viewport = {
 }
 
 const SIGN_IN = '/auth/signin?callbackUrl=/pen'
-const DOCS = 'https://docs.tryjunoapp.com'
 
 export default function BlogLayout({ children }: { children: React.ReactNode }) {
   return (

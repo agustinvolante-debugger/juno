@@ -15,9 +15,9 @@ import { COPY, type Copy, type Market } from './landing-copy'
 import { AUD_PARAM, KITS, PLUS, PRO, type Kit } from './landing-audiences'
 import { INVITED, SIGN_IN, ownPlans, penPlans, signup, type PlanCard } from './Landing'
 import './landing-apple.css'
+import { DOCS_URL as DOCS } from '@/lib/docs-url'
 
 // The help center (Mintlify) and the blog, linked from the nav and the footer. English only for now.
-const DOCS = 'https://docs.tryjunoapp.com'
 
 /** The "J" of "Juno" in Lora italic (.lpa-j), wherever a heading or eyebrow says the name. */
 function jj(text: React.ReactNode): React.ReactNode {
