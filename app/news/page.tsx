@@ -1,5 +1,5 @@
 import { getFeedCache, getSectionBriefs, getSectionInstructions, getStatsCache, getUserTopics, getUserMonitors, getPrefs, getProfile, getTranslations, setTranslations, feedCacheUpdatedAt, getSourceTiers, getCustomTickers, type VideoSection } from '@/lib/news/store'
-import { SECTIONS, ES_NATIVE, DEFAULT_STATS, STATS_CATALOG, COUNTRY_ORDER, interleaveBySource, type Item } from '@/lib/news/feeds'
+import { SECTIONS, ES_NATIVE, ES_LABELS, DEFAULT_STATS, STATS_CATALOG, COUNTRY_ORDER, interleaveBySource, type Item } from '@/lib/news/feeds'
 import { clusterItems, scoreClusters, pickTop, leadDek, isSportsLabel, youtubeId, dayKey, linkKey, type Pooled, type Cluster, type Profile } from '@/lib/news/rank'
 import { translateTitles } from '@/lib/news/ai'
 import { authedEmail } from '@/lib/news/auth'
@@ -45,11 +45,6 @@ type Block = { id: string; key: string; label: string; kind: Kind; items: Item[]
 const WATCH = (k: string) => k.startsWith('watch_') || k.startsWith('vt_')
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '_')
 const DAY = 86400000
-const ES_LABELS: Record<string, string> = {
-  ai: 'IA y Tecnología', funding: 'Financiamiento · VC · IPOs', markets: 'Mercados y Última Hora', geopolitics: 'Geopolítica',
-  longread: 'Análisis', chile: 'Chile / LatAm', founder: 'Fundadores · Lanzamientos',
-  reddit: 'Reddit / HN', watch_ai: 'IA/Tech — recién subido', watch_vc: 'VC y Startups — recién subido', watch_golf: 'Golf — recién subido',
-}
 const TABS: { id: Tab; en: string; es: string }[] = [
   { id: 'today', en: 'Today', es: 'Hoy' },
   { id: 'saved', en: 'Saved', es: 'Guardados' },

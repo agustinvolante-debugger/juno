@@ -46,6 +46,13 @@ export const SECTIONS: Section[] = [
 
 export const ES_NATIVE = new Set(['chile'])
 
+// Section names for readers who set Spanish (the page and the daily email).
+export const ES_LABELS: Record<string, string> = {
+  ai: 'IA y Tecnología', funding: 'Financiamiento · VC · IPOs', markets: 'Mercados y Última Hora', geopolitics: 'Geopolítica',
+  longread: 'Análisis', chile: 'Chile / LatAm', founder: 'Fundadores · Lanzamientos',
+  reddit: 'Reddit / HN', watch_ai: 'IA/Tech — recién subido', watch_vc: 'VC y Startups — recién subido', watch_golf: 'Golf — recién subido',
+}
+
 // Sections that ALSO pull from Google News search, not just the curated RSS feeds.
 // The query string IS the "instruction": broad enough to catch the story wherever it
 // breaks first (Bloomberg, Reuters, regional press), then AI curation dedupes + ranks.

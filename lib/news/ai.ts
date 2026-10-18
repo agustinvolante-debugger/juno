@@ -357,6 +357,23 @@ export async function translateTitles(titles: string[], target: 'en' | 'es' = 'e
   }
 }
 
+// Short paragraphs (the email's "What matters" summaries) into Spanish, keeping every fact and
+// number. Same contract as translateTitles: same order, [] on failure (caller falls back).
+export async function translateParagraphs(texts: string[]): Promise<string[]> {
+  if (!texts.length) return []
+  const prompt =
+    `Translate each of these news summaries into natural Spanish (español). Keep every name, number and fact; ` +
+    `don't shorten or add anything. If one is ALREADY in Spanish, return it unchanged. Return ONLY a JSON array ` +
+    `of strings — same order, exactly ${texts.length} items, no extra text:\n${JSON.stringify(texts)}`
+  try {
+    const m = (await claudeText(prompt, 4000)).match(/\[[\s\S]*\]/)
+    const arr = m ? JSON.parse(m[0]) : []
+    return Array.isArray(arr) && arr.length === texts.length ? arr : []
+  } catch {
+    return []
+  }
+}
+
 // "Today's briefing" — three one-sentence bullets over the ranked Top 7, each pointing at the
 // story it summarises. Called at most once per user per day (cached in prefs.layout.briefing).
 export async function dailyBriefing(items: { t: string; s: string }[], lang = 'en', about = ''): Promise<{ i: number; text: string }[]> {

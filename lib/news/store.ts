@@ -191,9 +191,9 @@ export async function getPushAlertUsers(): Promise<{ email: string; lang: string
 }
 
 // Emails of users who opted into the daily digest (prefs.layout.digest === true).
-export async function getDigestRecipients(): Promise<string[]> {
-  const { data } = await appsAdmin.from('news_prefs').select('user_email, layout')
-  return (data || []).filter((r) => (r.layout as any)?.digest).map((r) => r.user_email as string)
+export async function getDigestRecipients(): Promise<{ email: string; lang: string }[]> {
+  const { data } = await appsAdmin.from('news_prefs').select('user_email, lang, layout')
+  return (data || []).filter((r) => (r.layout as any)?.digest).map((r) => ({ email: r.user_email as string, lang: (r.lang as string) || 'en' }))
 }
 
 // ---- user suggestions ("what else would you like to see?") — macro row id=5, newest first ----
