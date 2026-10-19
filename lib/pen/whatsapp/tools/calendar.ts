@@ -3,19 +3,20 @@
 // builds the links and invites.
 //
 // With Google Calendar connected (plan F2, lib/pen/google-calendar.ts) the same tools write to it
-// instead. "Add X to my calendar" is the user's own request, so it is added at once; what touches
-// other people or removes something asks first: an invite (Google emails the guest), deleting an
-// event, moving one that has guests. Events are found by name (find_events), since the id from an
-// earlier turn is not in the chat history.
+// instead. "Add X to my calendar" is the user's own request, so it is added at once, and so are
+// deleting or moving an event with no guests (18 Oct). What reaches other people asks first: an
+// invite (Google emails the guest), deleting or moving an event that has guests (Google emails
+// them the change). Events are found by name (find_events), since the id from an earlier turn is
+// not in the chat history.
 
 import type Anthropic from '@anthropic-ai/sdk'
 import type { Ctx } from '../agent'
-import { askConfirm } from '../confirm'
+import { askConfirm, asksFirst } from '../confirm'
 import { str, type ToolModule } from './types'
 import { timeFields, zoneOf } from './timezone'
 import { sendInvite, type CalEvent } from '../../calendar'
 import { calendarPref, linksMessage, setCalendarPref, type CalendarApp } from '../../calendar-pref'
-import { addAttendee, addMeet, createEvent, deleteEvent, findEvents, gcalConnected, moveEvent, type UpcomingEvent } from '../../google-calendar'
+import { addAttendee, addMeet, createEvent, deleteEvent, findEvents, gcalConnected, getEvent, moveEvent, type UpcomingEvent } from '../../google-calendar'
 import { localIso, localToUtc, localWhen, validZone, whenLabel, zoneTimeLabel } from '../../timezone'
 import { supabaseAdmin } from '@/lib/supabase'
 import { foldName } from '../../speakers'
@@ -79,7 +80,7 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'delete_event',
-    description: 'Delete a Google Calendar event the user asked to delete. Asks the user first (guests, if any, get Google\'s cancellation).',
+    description: 'Delete a Google Calendar event the user asked to delete. Deleted at once when it has no guests; with guests it asks first (they get Google\'s cancellation).',
     input_schema: { type: 'object', properties: { event_id: { type: 'string' }, title: { type: 'string', description: 'If no event_id: the title, looked up.' } }, additionalProperties: false },
   },
   {
@@ -175,10 +176,14 @@ async function confirmGcalAdd(ctx: Ctx, args: Record<string, unknown>): Promise<
   }
 }
 
-/** The event the user means: by id, else the single title match (several → the model asks). */
-async function pickEvent(ctx: Ctx, input: Record<string, unknown>): Promise<{ event: UpcomingEvent } | { id: string } | { error: string; matches?: unknown }> {
+/** The event the user means: by id, else the single title match (several → the model asks).
+ *  Always the event itself, with its guests: whether a change asks first depends on them. */
+async function pickEvent(ctx: Ctx, input: Record<string, unknown>): Promise<{ event: UpcomingEvent } | { error: string; matches?: unknown }> {
   const id = str(input, 'event_id')
-  if (id) return { id }
+  if (id) {
+    const event = await getEvent(ctx.email, id)
+    return event ? { event } : { error: 'that event is not on their Google Calendar any more' }
+  }
   const title = str(input, 'title')
   if (!title) return { error: 'say which event: its title' }
   const hits = await findEvents(ctx.email, title)
@@ -206,7 +211,7 @@ async function addMeetLink(ctx: Ctx, input: Record<string, unknown>): Promise<un
   const p = await pickEvent(ctx, input)
   if ('error' in p) return p
   try {
-    const e = await addMeet(ctx.email, 'id' in p ? p.id : p.event.id)
+    const e = await addMeet(ctx.email, p.event.id)
     return e.meet ? { ok: true, meet_link: e.meet, note: 'Give the Meet link in one line; it is on the calendar event too.' } : { error: 'Google did not create a Meet link for that event' }
   } catch (e) {
     return { error: (e as Error).message.slice(0, 200) }
@@ -217,19 +222,26 @@ async function deleteEventTool(ctx: Ctx, input: Record<string, unknown>): Promis
   if (!(await gcalConnected(ctx.email))) return { error: 'Google Calendar is not connected' }
   const p = await pickEvent(ctx, input)
   if ('error' in p) return p
-  const line = 'event' in p ? eventLine(ctx)(p.event) : null
-  const guests = line?.guests.length ? ` ${line.guests.join(', ')} will get Google's cancellation.` : ''
+  const line = eventLine(ctx)(p.event)
+  const args = { eventId: p.event.id, title: line.title, when: line.when }
+  if (!asksFirst('delete_event', { guests: line.guests.length > 0 })) return confirmDelete(ctx, args)
   return askConfirm(ctx, {
     kind: 'gcal_delete',
-    args: { eventId: 'id' in p ? p.id : p.event.id },
-    summary: `Delete "${line?.title ?? 'that event'}"${line ? `, ${line.when}` : ''}, from your Google Calendar?${guests} Reply yes.`,
+    args,
+    summary: `Delete "${line.title}", ${line.when}, from your Google Calendar? ${line.guests.join(', ')} will get Google's cancellation. Reply yes.`,
   })
 }
 
 async function confirmDelete(ctx: Ctx, args: Record<string, unknown>): Promise<unknown> {
   try {
     await deleteEvent(ctx.email, String(args.eventId))
-    return { ok: true, deleted: true, note: 'Say in one line it is deleted from their Google Calendar.' }
+    // No "restore it from the trash": Google's API has no restore, and whether an API delete shows
+    // in Calendar's Bin isn't documented. So nothing is promised.
+    return {
+      ok: true,
+      deleted: typeof args.title === 'string' ? args.title : true,
+      note: 'Say exactly one line: Deleted "<title>" from your Google Calendar. (in the language of your reply). No date, nothing else.',
+    }
   } catch (e) {
     return { error: (e as Error).message.slice(0, 200) }
   }
@@ -246,9 +258,9 @@ async function moveEventTool(ctx: Ctx, input: Record<string, unknown>): Promise<
   if (!tz) return { error: 'time zone unknown; ask the user where they are (set_timezone)' }
   const start = localToUtc(local, tz)
   if (!start) return { error: 'that time does not exist in that zone' }
-  const line = 'event' in p ? eventLine(ctx)(p.event) : null
-  const args = { eventId: 'id' in p ? p.id : p.event.id, start: start.toISOString(), tz, duration: num(input, 'duration_min') ?? null, title: line?.title ?? null, guests: Boolean(line?.guests.length) }
-  if (line?.guests.length) {
+  const line = eventLine(ctx)(p.event)
+  const args = { eventId: p.event.id, start: start.toISOString(), tz, duration: num(input, 'duration_min') ?? null, title: line.title, guests: line.guests.length > 0 }
+  if (asksFirst('move_event', { guests: args.guests })) {
     return askConfirm(ctx, {
       kind: 'gcal_move',
       args,
@@ -366,7 +378,7 @@ export const calendarModule: ToolModule = {
     '- Calendar: "add X to my calendar" -> add_to_calendar (with Google Calendar connected it is added at once; otherwise send ' +
     'its message with the links as they are). "Delete / move / add a Meet link to <event>" -> delete_event / move_event / ' +
     'add_meet_link with the event\'s title (or event_id from a tool result in this same turn); if several match, list them and ' +
-    'ask which. "Delete it and make a new one at 3" is move_event. Inviting someone else -> invite_to_meeting with their email ' +
+    'ask which. With no guests a delete or move happens at once: never ask "are you sure?" yourself; the tool asks when guests would be emailed. "Delete it and make a new one at 3" is move_event. Inviting someone else -> invite_to_meeting with their email ' +
     '(give to_name: the saved email is looked up; ask only if none; meet true for a video link — one step creates the event, the Meet link and the invite). Never say you cannot delete or change events: you can, with Google Calendar connected. ' +
     '"I use Outlook / Apple / Google calendar" -> set_calendar_app. Times are wall-clock where the user is; never compute UTC offsets yourself.',
 }

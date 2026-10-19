@@ -431,6 +431,18 @@ export async function findEvents(email: string, query: string, now = new Date())
   return (j.items ?? []).filter((e) => e.status !== 'cancelled').map(toUpcoming)
 }
 
+/** One event by id (to see whether it has guests before changing it), or null if it is gone. */
+export async function getEvent(email: string, eventId: string): Promise<UpcomingEvent | null> {
+  const fields = 'id,status,summary,location,htmlLink,hangoutLink,start,end,attendees(email,displayName,self,resource,responseStatus),conferenceData(entryPoints(entryPointType,uri)),extendedProperties'
+  try {
+    const e = await gcal<GEvent>(email, `calendars/primary/events/${encodeURIComponent(eventId)}?fields=${encodeURIComponent(fields)}`)
+    return e.status === 'cancelled' ? null : toUpcoming(e)
+  } catch (err) {
+    if ((err as { status?: number }).status === 404 || (err as { status?: number }).status === 410) return null
+    throw err
+  }
+}
+
 /** Deletes an event the user asked to delete; guests, if any, get Google's cancellation. */
 export async function deleteEvent(email: string, eventId: string): Promise<void> {
   await gcal(email, `calendars/primary/events/${encodeURIComponent(eventId)}?sendUpdates=all`, { method: 'DELETE' })

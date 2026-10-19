@@ -1,7 +1,7 @@
 // "Import my Granola meetings from this week" from the chat (lib/pen/granola-import.ts). Lists the
-// meetings not yet in Juno, asks once (which also stands for "everyone agreed to be recorded",
-// the switch the website asks for), then imports them after the reply, two at a time, and says
-// what came in. Not connected: offer the connect link (connections.ts, connect_app 'granola').
+// meetings not yet in Juno and imports them after the reply, two at a time, and says what came in.
+// No "are you sure?" (18 Oct): the one question left is the consent the website asks for too
+// ("everyone agreed to be recorded"), and only when the request didn't already say so. Not connected: offer the connect link (connections.ts, connect_app 'granola').
 
 import type Anthropic from '@anthropic-ai/sdk'
 import type { Ctx } from '../agent'
@@ -18,7 +18,8 @@ const TOOLS: Anthropic.Tool[] = [
     name: 'import_granola',
     description:
       'Import meetings from the user\'s Granola into Juno as recordings (transcript → Juno notes; meetings without a transcript come in as notes only). ' +
-      'Lists the Granola meetings of the last `days` that are not in Juno yet, then asks the user to confirm before importing. ' +
+      'Imports the Granola meetings of the last `days` that are not in Juno yet. If the user already said everyone agreed to be ' +
+      'recorded, pass everyone_agreed true and it imports at once; otherwise it asks that one consent question. ' +
       'Use for "import my Granola meetings from this week", "trae mis reuniones de Granola", "what\'s in my Granola?" (list_only).',
     input_schema: {
       type: 'object',
@@ -26,6 +27,7 @@ const TOOLS: Anthropic.Tool[] = [
         days: { type: 'number', description: 'How far back, 1–30. Today = 1, this week = 7, this month / everything = 30. Default 7.' },
         match: { type: 'string', description: 'Only meetings whose title contains this (e.g. a person or company), if they named one.' },
         list_only: { type: 'boolean', description: 'true to just list what is there, without offering to import.' },
+        everyone_agreed: { type: 'boolean', description: 'true only if the user said in this request that everyone on these meetings agreed to be recorded.' },
       },
       additionalProperties: false,
     },
@@ -83,10 +85,12 @@ async function importGranola(ctx: Ctx, input: Record<string, unknown>): Promise<
   }
   const ids = fresh.slice(0, 30).map((m) => m.id)
   const titles = fresh.slice(0, 6).map((m) => `"${m.title}"`).join(', ') + (fresh.length > 6 ? ` and ${fresh.length - 6} more` : '')
+  if (input.everyone_agreed === true) return doImport(ctx, { ids })
+  // Consent, as on the website (all-party consent states): not an "are you sure?".
   return askConfirm(ctx, {
     kind: 'import_granola',
     args: { ids },
-    summary: `Import ${ids.length} Granola meeting${ids.length === 1 ? '' : 's'} from the last ${days} day${days === 1 ? '' : 's'} (${titles})? Juno writes its notes from each transcript (a few minutes; it uses recording hours). Reply yes if everyone on them agreed to be recorded.`,
+    summary: `Did everyone on these ${ids.length} Granola meeting${ids.length === 1 ? '' : 's'} (${titles}) agree to be recorded? Reply yes and I'll import them (a few minutes; it uses recording hours).`,
   })
 }
 
@@ -114,6 +118,7 @@ export const granolaModule: ToolModule = {
   confirm: { import_granola: doImport },
   prompt:
     '- Granola: "import my Granola meetings from this week" / "trae mis reuniones de Granola" → import_granola (days: today 1, this week 7, ' +
-    'this month 30; match for a name in the title). It asks before importing; their yes runs it via confirm_pending. "What\'s in my Granola?" → ' +
+    'this month 30; match for a name in the title). It imports at once when the user said everyone agreed to be recorded ' +
+    '(everyone_agreed true); otherwise it asks only that consent question, and their yes runs it via confirm_pending. "What\'s in my Granola?" → ' +
     'import_granola list_only. Not connected → offer connect_app granola.',
 }

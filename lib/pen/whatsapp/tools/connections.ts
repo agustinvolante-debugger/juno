@@ -3,11 +3,10 @@
 // one Google connection with two abilities (lib/pen/google-calendar.ts); each connects and
 // disconnects on its own. connect_app sends a personal one-tap link
 // (lib/pen/connect-link.ts) that opens Google's / Notion's consent screen directly; when it is
-// done Juno says "Connected ✓" in the chat on its own. Disconnecting asks first.
+// done Juno says "Connected ✓" in the chat on its own. Disconnecting happens at once.
 
 import type Anthropic from '@anthropic-ai/sdk'
 import type { Ctx } from '../agent'
-import { askConfirm } from '../confirm'
 import { str, type ToolModule } from './types'
 import { APP_NAME, COPY, connectLink, viaOf, type ConnectApp } from '../../connect-link'
 import { abilities, disconnectGoogle, gcalConfigured, getGcalConnection } from '../../google-calendar'
@@ -42,7 +41,7 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'disconnect_app',
-    description: 'Disconnect Google Calendar, Google Docs & Sheets, Notion or Granola from Juno. Asks the user to confirm first.',
+    description: 'Disconnect Google Calendar, Google Docs & Sheets, Notion or Granola from Juno, at once (the user asked; no need to confirm).',
     input_schema: { type: 'object', properties: { app: APP_ENUM }, required: ['app'], additionalProperties: false },
   },
 ]
@@ -95,14 +94,8 @@ async function disconnectApp(ctx: Ctx, input: Record<string, unknown>): Promise<
   if (!app) return { error: 'app must be google_calendar, google_docs, notion or granola' }
   const s = (await status(ctx.email))[KEY[app]]
   if (!s.connected && !('needs_reconnect' in s)) return { error: `${APP_NAME.en[app]} is not connected` }
-  const what = app === 'gcal'
-    ? 'Disconnect Google Calendar? Juno stops reading and adding events; events already on your calendar stay. Reply yes.'
-    : app === 'gdrive'
-      ? 'Disconnect Google Docs & Sheets? Juno stops making files in your Drive; the ones it made stay yours. Reply yes.'
-      : app === 'granola'
-        ? 'Disconnect Granola? Juno deletes its stored key or sign-in; meetings already imported stay. Reply yes.'
-        : 'Disconnect Notion? New notes stop going there; pages already in Notion stay. Reply yes.'
-  return askConfirm(ctx, { kind: 'disconnect_app', args: { app }, summary: what })
+  // The user asked: disconnected at once (18 Oct, confirm.ts). Connecting again is one link away.
+  return confirmDisconnect(ctx, { app })
 }
 
 async function confirmDisconnect(ctx: Ctx, args: Record<string, unknown>): Promise<unknown> {
@@ -145,12 +138,13 @@ export const connectionsModule: ToolModule = {
       default: return undefined
     }
   },
+  // Kept for a disconnect asked before 18 Oct and still waiting for its yes.
   confirm: { disconnect_app: confirmDisconnect },
   prompt:
     '- Connected apps: "connect my Google Calendar" / "conecta Notion" / "connect Google Docs" (or Sheets, Drive: app google_docs) / "connect Granola" → ' +
     'connect_app and send its message as is (a one-tap link; ' +
     'Juno confirms in the chat when it is done, so do not ask them to tell you). "What\'s connected?" → connection_status. ' +
-    'Disconnect → disconnect_app (asks first). When a calendar, Google Docs/Sheets or Notion action fails because it is not connected or needs ' +
+    'Disconnect → disconnect_app (runs at once; don\'t ask first). When a calendar, Google Docs/Sheets or Notion action fails because it is not connected or needs ' +
     'reconnecting, say so in one line and offer to send the link (on their yes: connect_app). Never send people to Settings for this, ' +
     'except a Granola API key: that is only ever pasted in Settings → Granola. When they mention a Granola API key, call connect_app (app granola, api_key true) and send its message. Never accept a key in the chat.',
 }

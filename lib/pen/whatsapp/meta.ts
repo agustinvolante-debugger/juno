@@ -10,7 +10,7 @@
 //   META_GRAPH_VERSION       optional, defaults below
 
 import crypto from 'node:crypto'
-import type { Button, Inbound } from './vonage'
+import type { Button, ContactCard, Inbound } from './vonage'
 
 const VERSION = () => process.env.META_GRAPH_VERSION || 'v23.0'
 const GRAPH = () => `https://graph.facebook.com/${VERSION()}`
@@ -41,14 +41,24 @@ async function post(body: Record<string, unknown>): Promise<Record<string, unkno
 
 const MAX_TEXT = 4096
 
-export async function sendText(to: string, text: string, split: (t: string, max: number) => string[]): Promise<void> {
-  for (const part of split(text, MAX_TEXT - 96)) {
-    await post({ recipient_type: 'individual', to, type: 'text', text: { body: part, preview_url: false } })
-  }
+/** The wamid Meta gives a sent message: a reaction to it comes back with this id (reaction.message_id). */
+function sentId(r: Record<string, unknown>): string | null {
+  const id = (r.messages as { id?: string }[] | undefined)?.[0]?.id
+  return typeof id === 'string' ? id : null
 }
 
-export async function sendButtons(to: string, body: string, buttons: Button[]): Promise<void> {
-  await post({
+/** Returns the wamid of each part sent. */
+export async function sendText(to: string, text: string, split: (t: string, max: number) => string[]): Promise<string[]> {
+  const ids: string[] = []
+  for (const part of split(text, MAX_TEXT - 96)) {
+    const id = sentId(await post({ recipient_type: 'individual', to, type: 'text', text: { body: part, preview_url: false } }))
+    if (id) ids.push(id)
+  }
+  return ids
+}
+
+export async function sendButtons(to: string, body: string, buttons: Button[]): Promise<string[]> {
+  const r = await post({
     recipient_type: 'individual',
     to,
     type: 'interactive',
@@ -58,6 +68,8 @@ export async function sendButtons(to: string, body: string, buttons: Button[]): 
       action: { buttons: buttons.slice(0, 3).map((b) => ({ type: 'reply', reply: { id: b.id.slice(0, 256), title: b.title.slice(0, 20) } })) },
     },
   })
+  const id = sentId(r)
+  return id ? [id] : []
 }
 
 /** Meta's code for each app language: the code a template was approved under (en, es, pt_BR). */
@@ -115,6 +127,26 @@ type RawMsg = {
   image?: Media
   interactive?: { type?: string; button_reply?: { id?: string; title?: string } }
   button?: { payload?: string; text?: string }
+  reaction?: { message_id?: string; emoji?: string }
+  location?: { latitude?: number; longitude?: number; name?: string; address?: string }
+  contacts?: RawContact[]
+  unsupported?: { type?: string }
+}
+type RawContact = {
+  name?: { formatted_name?: string; first_name?: string; last_name?: string }
+  phones?: { phone?: string; wa_id?: string }[]
+  emails?: { email?: string }[]
+  org?: { company?: string; title?: string }
+}
+
+/** A contact card as Meta sends it, in the shape the bot offers to save. Nameless cards are dropped. */
+export function contactCard(c: RawContact): ContactCard | null {
+  const n = c.name ?? {}
+  const name = (n.formatted_name || [n.first_name, n.last_name].filter(Boolean).join(' ')).trim()
+  if (!name) return null
+  const phones = (c.phones ?? []).map((p) => (p.phone || (p.wa_id ? `+${p.wa_id}` : '')).trim()).filter(Boolean)
+  const emails = (c.emails ?? []).map((e) => (e.email ?? '').trim()).filter(Boolean)
+  return { name: name.slice(0, 120), phones, emails, company: c.org?.company?.trim() || null, role: c.org?.title?.trim() || null }
 }
 type Payload = {
   object?: string
@@ -147,7 +179,18 @@ export function parseInboundAll(body: unknown): Inbound[] {
         } else if (m.type === 'image' && m.image?.id) out.push({ ...base, kind: 'image', mime: m.image.mime_type ?? null, mediaUrl: `meta:${m.image.id}`, text: m.image.caption ?? '' })
         else if (m.type === 'interactive' && m.interactive?.button_reply) out.push({ ...base, kind: 'reply', replyId: m.interactive.button_reply.id ?? null, text: m.interactive.button_reply.title ?? '' })
         else if (m.type === 'button') out.push({ ...base, kind: 'reply', replyId: m.button?.payload ?? null, text: m.button?.text ?? '' })
-        else out.push({ ...base, kind: 'other' })
+        // A reaction to one of Juno's messages; an empty emoji is a reaction taken back.
+        else if (m.type === 'reaction' && m.reaction) out.push({ ...base, kind: 'reaction', reaction: { emoji: m.reaction.emoji ?? '', to: m.reaction.message_id ?? null } })
+        else if (m.type === 'location' && typeof m.location?.latitude === 'number' && typeof m.location?.longitude === 'number') {
+          const l = m.location
+          out.push({ ...base, kind: 'location', location: { lat: l.latitude!, lng: l.longitude!, name: l.name?.trim() || null, address: l.address?.trim() || null } })
+        } else if (m.type === 'contacts' && m.contacts?.length) {
+          const cards = m.contacts.map(contactCard).filter((c): c is ContactCard => !!c)
+          out.push(cards.length ? { ...base, kind: 'contacts', contacts: cards } : { ...base, kind: 'other', otherType: 'contacts' })
+        }
+        // Stickers, system notices, edits, unsupported types (unsupported.type says which, on newer
+        // API versions), a media message that came without its id: the bot decides (inbound.ts).
+        else out.push({ ...base, kind: 'other', otherType: m.type === 'unsupported' && m.unsupported?.type ? `unsupported:${m.unsupported.type}` : m.type ?? 'unknown' })
       }
     }
   }

@@ -156,7 +156,7 @@ const TOOLS: Anthropic.Tool[] = [
   },
 ]
 
-async function setTimezone(ctx: Ctx, input: Record<string, unknown>): Promise<unknown> {
+export async function setTimezone(ctx: Ctx, input: Record<string, unknown>): Promise<unknown> {
   const tz = str(input, 'zone')
   if (!validZone(tz)) return { error: `"${tz}" is not an IANA time zone; use one like America/Los_Angeles` }
   const day = str(input, 'until')

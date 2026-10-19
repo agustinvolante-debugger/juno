@@ -6,6 +6,8 @@
 //                      comes back here (and by email) from the AssemblyAI webhook.
 //   any other text     the assistant (agent.ts): answers from the user's own recordings, lists and
 //                      ticks off to-dos, drafts follow-up emails and sends them on "send it".
+//   anything else      inbound.ts: reactions are silent (a 👍 on the question waiting for a yes is
+//                      the yes), a location sets the time zone, a contact card is offered to save.
 //
 // Meta bars general-purpose AI chatbots on the business platform, so the agent answers from
 // the recordings and nothing else. askArchive already refuses to go outside them.
@@ -26,6 +28,8 @@ import type { Lang } from '../currency'
 import { userLang } from '../user-lang'
 import { sendText, sendButtons, openMedia, markRead, type Inbound } from './provider'
 import { isImessage } from '../imessage/sendblue'
+import { getPending, notePendingOut, setPending } from './confirm'
+import { cardLine, route, zoneAt } from './inbound'
 import type { ProactiveKind } from '../suggestions-types'
 import {
   claimCode,
@@ -105,6 +109,12 @@ const EN = {
   splitFailed: (title: string) => `I couldn't split "${title}" into conversations. Try again in a minute, or on the website.`,
   writeFailed: (name: string, home: string) => `I couldn't write up ${name}. Nothing is lost: open it at ${home} and press "Write the notes" to try again.`,
   agentFailed: 'Sorry, something went wrong on my side and I couldn\'t answer that. Try again in a minute.',
+  zoneSet: (label: string) => `Got it — using ${label}.`,
+  zoneMoved: (what: string, when: string, label: string) => `Moved “${what}” to ${when}, ${label}.`,
+  zoneNotMoved: (what: string) => `I couldn't move “${what}”; it's still at its old time.`,
+  zoneUnknown: 'I couldn\'t tell the time zone from that location. Which city are you in?',
+  saveCard: (line: string) => `Save ${line} to your contacts?`,
+  saveCards: (n: number, lines: string) => `Save these ${n} contacts?\n${lines}`,
 }
 
 const BOT: Record<Lang, typeof EN> = {
@@ -166,6 +176,12 @@ const BOT: Record<Lang, typeof EN> = {
     splitFailed: (title) => `No pude separar "${title}" en conversaciones. Inténtalo en un minuto, o en el sitio web.`,
     writeFailed: (name, home) => `No pude escribir las notas de ${name}. No se perdió nada: ábrela en ${home} y presiona "Escribir las notas" para intentarlo otra vez.`,
     agentFailed: 'Perdón, algo falló de mi lado y no pude responder eso. Inténtalo de nuevo en un minuto.',
+    zoneSet: (label) => `Listo — uso la ${label}.`,
+    zoneMoved: (what, when, label) => `Moví “${what}” a ${when}, ${label}.`,
+    zoneNotMoved: (what) => `No pude mover “${what}”; sigue a la hora de antes.`,
+    zoneUnknown: 'No pude saber la zona horaria por esa ubicación. ¿En qué ciudad estás?',
+    saveCard: (line) => `¿Guardo a ${line} en tus contactos?`,
+    saveCards: (n, lines) => `¿Guardo estos ${n} contactos?\n${lines}`,
   },
   pt: {
     help:
@@ -224,6 +240,12 @@ const BOT: Record<Lang, typeof EN> = {
     splitFailed: (title) => `Não consegui separar "${title}" em conversas. Tente de novo em um minuto, ou no site.`,
     writeFailed: (name, home) => `Não consegui escrever as notas de ${name}. Nada se perdeu: abra em ${home} e aperte "Escrever as notas" para tentar de novo.`,
     agentFailed: 'Desculpe, algo deu errado do meu lado e não consegui responder. Tente de novo em um minuto.',
+    zoneSet: (label) => `Certo — vou usar o ${label}.`,
+    zoneMoved: (what, when, label) => `Mudei “${what}” para ${when}, ${label}.`,
+    zoneNotMoved: (what) => `Não consegui mudar “${what}”; continua no horário de antes.`,
+    zoneUnknown: 'Não consegui saber o fuso horário por essa localização. Em que cidade você está?',
+    saveCard: (line) => `Salvo ${line} nos seus contatos?`,
+    saveCards: (n, lines) => `Salvo estes ${n} contatos?\n${lines}`,
   },
 }
 
@@ -293,10 +315,25 @@ export async function handleInbound(msg: Inbound): Promise<void> {
   // iMessage is a test with a 10-contact cap: tell the owners the first time a number shows up.
   if (isImessage(msg.from)) await newImessageAlert(msg, link).catch((e) => console.warn(`pen imessage: alert failed: ${(e as Error).message}`))
 
+  // A reaction, a sticker, a system notice: nothing to say, whatever the account's state, so this
+  // comes before the link checks. A 👍 on the question waiting for a yes is the yes (inbound.ts).
+  if (msg.kind === 'reaction' || msg.kind === 'other') {
+    const pending = msg.kind === 'reaction' && link ? await getPending(link.email).catch(() => null) : null
+    const r = route(msg, pending)
+    if (r === 'yes' && link && (await allowed(link.email))) {
+      void markRead(msg.id, true, msg.from)
+      return onText({ ...msg, kind: 'text', text: '👍' }, link, BOT[await langFor(msg.from, link.email)])
+    }
+    if (r !== 'cant_read') {
+      await moveMessage(msg.id, 'received', 'done').catch(() => false)
+      return
+    }
+  }
+
   // Blue ticks the moment it lands, before the slow part, so the sender sees it was seen.
   // "typing…" too for a question or a file, which always get a reply; a button tap may not
   // (a second tap on "Everyone agreed" is ignored), so it gets the ticks only.
-  void markRead(msg.id, msg.kind === 'text' || msg.kind === 'media' || msg.kind === 'image', msg.from)
+  void markRead(msg.id, msg.kind === 'text' || msg.kind === 'media' || msg.kind === 'image' || msg.kind === 'location' || msg.kind === 'contacts', msg.from)
 
   const code = /^\s*link\s+(\d{6})\s*$/i.exec(msg.text)
   if (msg.kind === 'text' && code) return linkPhone(msg, code[1])
@@ -333,7 +370,79 @@ export async function handleInbound(msg: Inbound): Promise<void> {
     if (pending) return onReply({ ...msg, kind: 'reply', replyId: `consent:${pending}` }, link, L)
   }
   if (msg.kind === 'text') return onText(msg, link, L)
-  await sendText(msg.from, L.unsupported)
+  if (msg.kind === 'location') return onLocation(msg, link, L)
+  if (msg.kind === 'contacts') return onContacts(msg, link, L)
+  // What is left is media Juno can't read (route: 'cant_read').
+  return cantRead(msg, L)
+}
+
+/* --------------------------------------------- locations, cards, the rest */
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/** "I can read recordings, voice notes…": for media Juno can't read, at most once a day per sender. */
+async function cantRead(msg: Inbound, L: typeof EN): Promise<void> {
+  const { count } = await supabaseAdmin.from('pen_whatsapp_messages').select('id', { count: 'exact', head: true })
+    .eq('phone', msg.from).eq('payload->>told', 'unsupported').gt('created_at', new Date(Date.now() - DAY_MS).toISOString())
+  const raw = (await getMessage(msg.id))?.payload ?? {}
+  await supabaseAdmin.from('pen_whatsapp_messages').update({ state: 'done', ...(count ? {} : { payload: { ...raw, told: 'unsupported' } }) }).eq('id', msg.id)
+  if (!count) await sendText(msg.from, L.unsupported)
+}
+
+/** A turn the bot answered itself, in the chat history, so the assistant knows it happened. */
+async function remember(link: Link, user: string, assistant: string): Promise<void> {
+  const fresh = (await getLinkByEmail(link.email).catch(() => null)) ?? link
+  const now = Date.now()
+  await setChat(link.email, [...(fresh.chat ?? []), { role: 'user', content: user, ts: now }, { role: 'assistant', content: assistant, ts: now + 1 }]).catch(() => {})
+}
+
+/**
+ * A shared location: the time zone there, as if the user had said "I'm in …" (set_timezone, so it
+ * counts as confirmed). Right after "still in Santiago?", what was just set moves to the same local
+ * time there, as with a typed answer.
+ */
+async function onLocation(msg: Inbound, link: Link, L: typeof EN): Promise<void> {
+  const loc = msg.location!
+  const tz = zoneAt(loc.lat, loc.lng)
+  const said = `[shared a location${loc.name || loc.address ? `: ${[loc.name, loc.address].filter(Boolean).join(', ')}` : ''}]`
+  if (!tz) {
+    await sendText(msg.from, L.zoneUnknown)
+    await remember(link, said, L.zoneUnknown)
+    await moveMessage(msg.id, 'received', 'done').catch(() => false)
+    return
+  }
+  const lang = await userLang(link.email)
+  const { setTimezone } = await import('./tools/timezone')
+  const { zoneTimeLabel } = await import('../timezone')
+  const ctx = {
+    email: link.email, msgId: msg.id, question: said, history: [], recent: null, userName: null, phone: msg.from, lang,
+    citations: [], drafted: null, sent: false, enrich: new Set<string>(), later: [],
+  }
+  const r = (await setTimezone(ctx, { zone: tz })) as { moved?: Record<string, string>[]; error?: string }
+  const lines = [L.zoneSet(zoneTimeLabel(tz, lang))]
+  for (const m of r.moved ?? []) {
+    const what = m.reminder ?? m.event ?? m.what ?? ''
+    if (m.error || !m.local_time) lines.push(L.zoneNotMoved(what))
+    else lines.push(L.zoneMoved(what, m.local_time, m.zone_label) + (m.new_link_message ? `\n${m.new_link_message}` : ''))
+  }
+  const text = lines.join('\n')
+  await sendText(msg.from, text)
+  await remember(link, said, text)
+  await moveMessage(msg.id, 'received', 'done').catch(() => false)
+}
+
+/**
+ * A contact card (or several): Juno offers to save them, and one yes saves them all (it is Juno's
+ * suggestion, so it asks; confirm.ts save_contacts). A 👍 on the offer works too.
+ */
+async function onContacts(msg: Inbound, link: Link, L: typeof EN): Promise<void> {
+  const cards = (msg.contacts ?? []).slice(0, 10)
+  const text = cards.length === 1 ? L.saveCard(cardLine(cards[0])) : L.saveCards(cards.length, cards.map((c) => `• ${cardLine(c)}`).join('\n'))
+  await setPending(link.email, { kind: 'save_contacts', args: { cards }, summary: text, msgId: msg.id, createdAt: new Date().toISOString() })
+  const ids = await sendText(msg.from, text)
+  await remember(link, `[sent ${cards.length === 1 ? 'a contact card' : `${cards.length} contact cards`}: ${cards.map((c) => c.name).join(', ')}]`, text)
+  await notePendingOut(link.email, msg.id, ids, text).catch(() => {})
+  await moveMessage(msg.id, 'received', 'done').catch(() => false)
 }
 
 async function allowed(email: string): Promise<boolean> {
@@ -714,7 +823,10 @@ async function onText(
   const sources = byRecording.size
     ? '\n\n' + [...byRecording.values()].map((r) => `${r.markers.map((m) => `[${m}]`).join('')} ${r.title}`).join('\n')
     : ''
-  await sendText(msg.from, (extra.heard ? `${L.heard} _“${extra.heard}”_\n\n` : '') + answer + sources)
+  const out = (extra.heard ? `${L.heard} _“${extra.heard}”_\n\n` : '') + answer + sources
+  const outIds = await sendText(msg.from, out)
+  // If this reply asked something, a 👍 on it is the yes (inbound.ts).
+  await notePendingOut(link.email, msg.id, outIds, out).catch(() => {})
   await answered()
   // Work the reply promised but that is too slow to wait for: contact cards, rewritten notes.
   if (later?.after) await later.after().catch(() => {})

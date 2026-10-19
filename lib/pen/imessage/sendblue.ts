@@ -53,11 +53,17 @@ async function post(path: string, body: Record<string, unknown>): Promise<unknow
   return json
 }
 
-/** iMessage has no hard length limit, but a wall of text reads badly: split like WhatsApp. */
-export async function sendText(to: string, text: string, split: (t: string, max: number) => string[]): Promise<void> {
+/**
+ * iMessage has no hard length limit, but a wall of text reads badly: split like WhatsApp. Returns
+ * the message_handle of each part when Sendblue's response carries one (its docs don't promise it).
+ */
+export async function sendText(to: string, text: string, split: (t: string, max: number) => string[]): Promise<string[]> {
+  const ids: string[] = []
   for (const part of split(text, 3000)) {
-    await post('/api/send-message', { number: e164(to), from_number: process.env.SENDBLUE_NUMBER, content: part })
+    const r = (await post('/api/send-message', { number: e164(to), from_number: process.env.SENDBLUE_NUMBER, content: part })) as { message_handle?: unknown }
+    if (typeof r?.message_handle === 'string' && r.message_handle) ids.push(r.message_handle)
   }
+  return ids
 }
 
 /** The "…" bubble while the assistant thinks. Best effort: needs an existing chat. */
@@ -78,6 +84,44 @@ type SbMessage = {
   media_url?: string | null
   message_type?: string | null
   date_sent?: string | null
+  reply_to?: { message_handle?: string } | null
+  // Not in Sendblue's docs (checked 18 Oct: they document sending tapbacks, not receiving them).
+  // Read defensively in case a received tapback carries them.
+  reaction?: string | null
+  is_reaction?: boolean | null
+  associated_message_handle?: string | null
+}
+
+/**
+ * A received tapback. Sendblue documents no shape for one, so two ways in, both conservative:
+ *   - fields, if a payload ever has them (message_type 'reaction', reaction / is_reaction);
+ *   - the text Apple sends where a tapback can't be shown natively: 'Liked “…”', 'Loved “…”',
+ *     'Reacted 👍 to “…”', and their Spanish and Portuguese forms. The whole message must be
+ *     exactly that, quote marks included, or it is an ordinary message.
+ * Liked is 👍; a removed tapback ('Removed a like from “…”') has no emoji (silent anyway).
+ */
+const TAPBACK_VERBS: [RegExp, string][] = [
+  [/^(liked|le gust[óo]|le gusta|curtiu|gostou de)$/i, '👍'],
+  [/^(loved|le encant[óo]|amou|adorou)$/i, '❤️'],
+  [/^(disliked|no le gust[óo]|n[ãa]o curtiu|n[ãa]o gostou de)$/i, '👎'],
+  [/^(laughed at|se ri[óo] de|riu de)$/i, '😂'],
+  [/^(emphasi[sz]ed|enfatiz[óo]|destac[óo]|enfatizou|destacou)$/i, '‼️'],
+  [/^(questioned|cuestion[óo]|pregunt[óo] por|questionou)$/i, '❓'],
+]
+const QUOTED = /^(.{2,40}?)\s+[“"«]([\s\S]*)[”"»]\s*$/
+const REACTED = /^(?:reacted|reaccion[óo] con|reagiu com)\s+(\S+)\s+(?:to|a|al?|em)\s+[“"«]([\s\S]*)[”"»]\s*$/i
+const REMOVED = /^(?:removed an? .{1,20} from|quit[óo] (?:un|una|el|la) .{1,20} de|removeu (?:um|uma|o|a) .{1,20} de)\s+[“"«]([\s\S]*)[”"»]\s*$/i
+
+export function tapback(text: string): { emoji: string; quoted: string } | null {
+  const t = text.trim()
+  const removed = REMOVED.exec(t)
+  if (removed) return { emoji: '', quoted: removed[1] }
+  const r = REACTED.exec(t)
+  if (r) return { emoji: r[1], quoted: r[2] }
+  const q = QUOTED.exec(t)
+  if (!q) return null
+  const hit = TAPBACK_VERBS.find(([re]) => re.test(q[1].trim()))
+  return hit ? { emoji: hit[1], quoted: q[2] } : null
 }
 
 const VOICE_EXT = /\.caf(\?|$)/i
@@ -91,6 +135,14 @@ export function toInbound(m: SbMessage): Inbound | null {
   if (!who || who.includes('@')) return null
   const from = `${PREFIX}${who.replace(/\D/g, '')}`
   const base = { id: `im-${m.message_handle}`, from, name: null, text: (m.content ?? '').trim(), mediaUrl: null, fileName: null, replyId: null, raw: m }
+  if (m.message_type === 'reaction' || m.is_reaction || (typeof m.reaction === 'string' && m.reaction)) {
+    const emoji = String(m.reaction ?? '').trim()
+    // Sendblue's own names for tapbacks (love, like…), as in its send-reaction API.
+    const named = ({ like: '👍', love: '❤️', dislike: '👎', laugh: '😂', emphasize: '‼️', question: '❓' } as Record<string, string>)[emoji.toLowerCase()]
+    return { ...base, kind: 'reaction', reaction: { emoji: emoji.startsWith('-') ? '' : named ?? emoji, to: m.associated_message_handle ?? m.reply_to?.message_handle ?? null } }
+  }
+  const tb = m.media_url ? null : tapback(base.text)
+  if (tb) return { ...base, kind: 'reaction', reaction: { emoji: tb.emoji, to: null, quoted: tb.quoted } }
   const media = (m.media_url ?? '').trim()
   if (media) {
     const fileName = decodeURIComponent(media.split('?')[0].split('/').pop() ?? '') || null

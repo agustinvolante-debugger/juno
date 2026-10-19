@@ -69,16 +69,21 @@ async function send(to: string, message: Record<string, unknown>): Promise<strin
 /** WhatsApp's own ceiling for a text body. */
 const MAX_TEXT = 4096
 
-export async function sendText(to: string, text: string): Promise<void> {
+export async function sendText(to: string, text: string): Promise<string[]> {
   // A long answer goes as several messages rather than being cut off mid-sentence.
-  for (const part of splitText(text, MAX_TEXT - 96)) await send(to, { message_type: 'text', text: part })
+  const ids: string[] = []
+  for (const part of splitText(text, MAX_TEXT - 96)) {
+    const id = await send(to, { message_type: 'text', text: part })
+    if (id) ids.push(id)
+  }
+  return ids
 }
 
 export type Button = { id: string; title: string }
 
 /** Up to three reply buttons under a short body. WhatsApp caps a button title at 20 chars. */
-export async function sendButtons(to: string, body: string, buttons: Button[]): Promise<void> {
-  await send(to, {
+export async function sendButtons(to: string, body: string, buttons: Button[]): Promise<string[]> {
+  const id = await send(to, {
     message_type: 'custom',
     custom: {
       type: 'interactive',
@@ -91,6 +96,7 @@ export async function sendButtons(to: string, body: string, buttons: Button[]): 
       },
     },
   })
+  return id ? [id] : []
 }
 
 export function splitText(text: string, max: number): string[] {
@@ -145,7 +151,10 @@ export type Inbound = {
   /** The user's number, digits only. */
   from: string
   name: string | null
-  kind: 'text' | 'media' | 'image' | 'reply' | 'other'
+  /** reaction / location / contacts: Meta only so far (meta.ts); iMessage tapbacks are reactions
+   *  too (imessage/sendblue.ts). 'other' is everything Juno doesn't act on (inbound.ts says
+   *  which of those still get the "I can read…" line). */
+  kind: 'text' | 'media' | 'image' | 'reply' | 'reaction' | 'location' | 'contacts' | 'other'
   /** Recorded with WhatsApp's mic button (a voice note), as opposed to an attached audio file. */
   voice?: boolean
   mime?: string | null
@@ -154,7 +163,18 @@ export type Inbound = {
   fileName: string | null
   replyId: string | null
   raw: unknown
+  /** kind 'reaction': the emoji ('' = a reaction taken back) and the id of the message it is on
+   *  (Meta's wamid; for iMessage the quoted text when that is all there is). */
+  reaction?: { emoji: string; to: string | null; quoted?: string | null }
+  /** kind 'location': a shared pin or the user's current location. */
+  location?: { lat: number; lng: number; name: string | null; address: string | null }
+  /** kind 'contacts': the contact cards in the message. */
+  contacts?: ContactCard[]
+  /** kind 'other': the provider's own type ('sticker', 'unsupported', 'system'…), for inbound.ts. */
+  otherType?: string
 }
+
+export type ContactCard = { name: string; phones: string[]; emails: string[]; company: string | null; role: string | null }
 
 type Raw = {
   message_uuid?: string

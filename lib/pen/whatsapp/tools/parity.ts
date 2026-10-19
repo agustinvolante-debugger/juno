@@ -15,7 +15,9 @@
 //   set_client                                     the recording's client
 //   redo_notes_as                                  rewrite the notes as another kind of meeting
 //
-// Destructive and outward actions wait for the user's yes (../confirm.ts). Slow ones (notes,
+// What can't be undone or reaches other people waits for the user's yes (../confirm.ts): deleting
+// a recording or a contact, merging contacts, emailing a briefing. Combining and separating run at
+// once and leave an "undo" (../undo.ts). Slow ones (notes,
 // translation, drafting) run after the reply (ctx.later) and message the user when they are
 // done, or when they fail: the after-reply runner only logs errors, so each job reports its own.
 
@@ -36,6 +38,7 @@ import type { Lang } from '../../currency'
 import { sendText } from '../provider'
 import { getLinkByEmail, setChat } from '../store'
 import { askConfirm } from '../confirm'
+import { setUndo, undone } from '../undo'
 import type { Ctx } from '../agent'
 import { str, type ToolModule } from './types'
 
@@ -77,19 +80,19 @@ const TOOLS: Anthropic.Tool[] = [
     name: 'combine_recordings',
     description:
       'Join two or more recordings into one meeting (the pen split it, or it was one conversation in pieces) and rewrite ' +
-      'the notes over all of it. Asks first; the new briefing follows in a few minutes.',
+      'the notes over all of it. Runs at once (no need to ask); the new briefing follows in a few minutes, and "undo" separates them again.',
     input_schema: obj({ session_ids: { type: 'array', items: { type: 'string' }, description: 'At least two, from list_recordings.' } }, ['session_ids']),
   },
   {
     name: 'separate_recordings',
-    description: 'Undo a combine: a joined meeting or event goes back to its separate recordings. Asks first.',
+    description: 'A combined meeting or event goes back to its separate recordings. Runs at once; "undo" combines them again.',
     input_schema: obj(SID, ['session_id']),
   },
   {
     name: 'combine_day',
     description:
       '"Combine this day into one event": every recording from the same day as this one becomes one event recording ' +
-      '(a conference, an open house). Asks first, with how many recordings and hours; notes and conversations follow.',
+      '(a conference, an open house). Runs at once; notes and conversations follow, and "undo" separates them again.',
     input_schema: obj(SID, ['session_id']),
   },
   {
@@ -317,7 +320,7 @@ async function askDeleteRecording(ctx: Ctx, id: string): Promise<unknown> {
   })
 }
 
-async function askCombine(ctx: Ctx, ids: string[]): Promise<unknown> {
+async function combine(ctx: Ctx, ids: string[]): Promise<unknown> {
   const clean = [...new Set(ids.map((x) => x.trim()))]
   if (clean.length < 2) return { error: 'pick at least two recordings' }
   const rows = await Promise.all(clean.map((id) => own(ctx, id)))
@@ -325,12 +328,7 @@ async function askCombine(ctx: Ctx, ids: string[]): Promise<unknown> {
   const list = (rows as PenSession[]).sort((a, b) => startMs(a) - startMs(b))
   if (list.some((s) => !transcribed(s))) return { error: 'every recording has to finish transcribing first' }
   if (list.some((s) => s.merge_group)) return { error: 'one of these is already part of a combined meeting; separate it first' }
-  const tz = await tzOf(ctx)
-  return askConfirm(ctx, {
-    kind: 'combine_recordings',
-    args: { ids: list.map((s) => s.id) },
-    summary: `Combine ${list.map((s) => `"${titleOf(s)}" (${dayOf(s, tz)})`).join(', ')} into one meeting? The notes are rewritten over all of it (a few minutes); you can separate them again later. Reply yes.`,
-  })
+  return doCombine(ctx, { ids: list.map((s) => s.id) })
 }
 
 async function doCombine(ctx: Ctx, a: Record<string, unknown>): Promise<unknown> {
@@ -338,6 +336,7 @@ async function doCombine(ctx: Ctx, a: Record<string, unknown>): Promise<unknown>
   const rows = (await Promise.all(ids.map((id) => own(ctx, id)))).filter((s): s is PenSession => !!s)
   if (rows.length !== ids.length || rows.some((s) => s.merge_group)) return { error: 'those recordings changed since I asked; nothing was combined' }
   const title = titleOf(rows[0])
+  await setUndo(ctx.email, ctx.msgId, { kind: 'separate', ids, title })
   ctx.later.push(async () => {
     try {
       const { writeNotes } = await import('../../pipeline')
@@ -347,6 +346,8 @@ async function doCombine(ctx: Ctx, a: Record<string, unknown>): Promise<unknown>
         if (s.notes && Object.keys(s.notes).length) continue
         if ((await writeNotes({ email: ctx.email, session: s, claim: false })) === 'taken') throw new Error('notes busy')
       }
+      // "Undo" arrived while the parts were being written up: nothing is joined.
+      if (await undone(ctx.msgId)) return
       const group = await joinSegments(ctx.email, ids)
       const primary = (await groupSessions(ctx.email, group))[0]
       await updateSession(primary.id, { briefing_sent_at: null })
@@ -360,37 +361,40 @@ async function doCombine(ctx: Ctx, a: Record<string, unknown>): Promise<unknown>
       await tell(ctx, S[ctx.lang].combineFailed(title)).catch(() => {})
     }
   })
-  return { ok: true, queued: true, recordings: rows.length, note: 'Combining after your reply; the new briefing is sent here in a few minutes. Say so.' }
+  return {
+    ok: true,
+    combined: rows.map(titleOf),
+    note: 'Combined. Say in one line which recordings became one meeting and that the new briefing comes here in a few minutes, then ' +
+      'end with: "Say undo to separate them again." (in the language of your reply).',
+  }
 }
 
-async function askSeparate(ctx: Ctx, id: string): Promise<unknown> {
+async function separate(ctx: Ctx, id: string): Promise<unknown> {
   const s = await own(ctx, id)
   if (!s) return { error: 'no such recording' }
   if (!s.merge_group) return { error: 'this recording is not combined with anything' }
   const parts = await groupSessions(ctx.email, s.merge_group)
-  return askConfirm(ctx, {
-    kind: 'separate_recordings',
-    args: { group: s.merge_group },
-    summary: `Separate "${titleOf(parts[0] ?? s)}" back into its ${parts.length} recordings? Each keeps its own transcript. Reply yes.`,
-  })
+  await splitGroup(ctx.email, s.merge_group)
+  const title = titleOf(parts[0] ?? s)
+  await setUndo(ctx.email, ctx.msgId, { kind: 'combine', ids: parts.map((p) => p.id), title, event: parts.some((p) => p.event_mode) })
+  return {
+    ok: true,
+    separated: title,
+    recordings: parts.length,
+    note: 'Say in one line it is back to its separate recordings, each with its own transcript, then end with: "Say undo to combine them again." (in the language of your reply).',
+  }
 }
 
-async function askDay(ctx: Ctx, id: string): Promise<unknown> {
+async function combineDay(ctx: Ctx, id: string): Promise<unknown> {
   const s = await own(ctx, id)
   if (!s) return { error: 'no such recording' }
   const c = await dayCandidates(ctx.email, s.id)
   if (c.recordings < 2) return { error: 'there is nothing else from this day to combine' }
   if (!c.ready) return { error: 'some recordings from this day are still being transcribed; try again when they are done' }
   const tz = await tzOf(ctx)
-  // What each file was part of when asked: doDay checks nothing moved before it joins them.
   const groups = Object.fromEntries((await Promise.all(c.ids.map((id) => own(ctx, id)))).map((x, i) => [c.ids[i], x?.merge_group ?? null]))
-  return askConfirm(ctx, {
-    kind: 'combine_day',
-    args: { ids: c.ids, focus: s.id, groups },
-    summary:
-      `Combine the ${c.recordings} recordings from ${dayOf(s, tz)} (${fmtHours(c.totalSec)} of audio, ${hmOf(c.from, tz)}–${hmOf(c.to, tz)}) into one event? ` +
-      'The conversations and the event\'s notes follow in a few minutes; you can separate them again later. Reply yes.',
-  })
+  const r = (await doDay(ctx, { ids: c.ids, focus: s.id, groups })) as Record<string, unknown>
+  return r.ok ? { ...r, day: dayOf(s, tz), recordings: c.recordings, audio: fmtHours(c.totalSec), from_to: `${hmOf(c.from, tz)}–${hmOf(c.to, tz)}` } : r
 }
 
 async function doDay(ctx: Ctx, a: Record<string, unknown>): Promise<unknown> {
@@ -407,10 +411,13 @@ async function doDay(ctx: Ctx, a: Record<string, unknown>): Promise<unknown> {
   if (now.ids.length !== ids.length || now.ids.some((id) => !ids.includes(id))) return changed()
   const segments = await joinAsEvent(ctx.email, ids)
   const primary = segments[0]
+  await setUndo(ctx.email, ctx.msgId, { kind: 'separate', ids: segments.map((x) => x.id), title: titleOf(primary) })
   ctx.later.push(async () => {
     try {
       const { finishEvent } = await import('../../event-day')
       await finishEvent(ctx.email, primary.id)
+      // Undone while the event was being written up: no briefing for an event that is gone.
+      if (await undone(ctx.msgId)) return
       const fresh = await getSession(ctx.email, primary.id)
       if (!fresh?.notes || !Object.keys(fresh.notes).length) throw new Error('event notes not written')
       const { sendWhatsAppBriefing } = await import('../bot')
@@ -420,7 +427,14 @@ async function doDay(ctx: Ctx, a: Record<string, unknown>): Promise<unknown> {
       await tell(ctx, S[ctx.lang].dayFailed(titleOf(primary))).catch(() => {})
     }
   })
-  return { ok: true, combined: segments.length, event: titleOf(primary), session_id: primary.id, note: 'Combined now. The conversations and event notes are written after your reply; the briefing is sent here in a few minutes. Say so.' }
+  return {
+    ok: true,
+    combined: segments.length,
+    event: titleOf(primary),
+    session_id: primary.id,
+    note: 'Combined now. Say in one line how many recordings from which day became one event, that the conversations and event notes ' +
+      'come here in a few minutes, then end with: "Say undo to separate them again." (in the language of your reply).',
+  }
 }
 
 async function joinSuggestions(ctx: Ctx): Promise<unknown> {
@@ -593,9 +607,9 @@ function run(ctx: Ctx, name: string, input: Record<string, unknown>): Promise<un
     case 'edit_person': return editPerson(ctx, input)
     case 'delete_person': return askDeletePerson(ctx, str(input, 'name'))
     case 'delete_recording': return askDeleteRecording(ctx, sid)
-    case 'combine_recordings': return askCombine(ctx, Array.isArray(input.session_ids) ? (input.session_ids as unknown[]).map(String) : [])
-    case 'separate_recordings': return askSeparate(ctx, sid)
-    case 'combine_day': return askDay(ctx, sid)
+    case 'combine_recordings': return combine(ctx, Array.isArray(input.session_ids) ? (input.session_ids as unknown[]).map(String) : [])
+    case 'separate_recordings': return separate(ctx, sid)
+    case 'combine_day': return combineDay(ctx, sid)
     case 'join_suggestions': return joinSuggestions(ctx)
     case 'dismiss_join_suggestion': return dismissJoinSuggestion(ctx.email, str(input, 'a_id'), str(input, 'b_id')).then(() => ({ ok: true }))
     case 'missed_items': return missedItems(ctx, sid)
@@ -624,16 +638,18 @@ export const parityModule: ToolModule = {
     merge_people: doMerge,
     delete_person: async (ctx, a) => (await deletePerson(ctx.email, String(a.id)), { ok: true, deleted: a.name }),
     delete_recording: async (ctx, a) => ((await deleteSession(ctx.email, String(a.id))) ? { ok: true, deleted: true } : { error: 'that recording was already gone' }),
-    combine_recordings: doCombine,
-    separate_recordings: async (ctx, a) => (await splitGroup(ctx.email, String(a.group)), { ok: true, separated: true, note: 'Each part is its own recording again.' }),
-    combine_day: doDay,
     send_briefing: doSendBriefing,
+    // Asked before 18 Oct and still waiting (30 minutes at most): a yes still runs them.
+    combine_recordings: doCombine,
+    combine_day: doDay,
+    separate_recordings: async (ctx, a) => (await splitGroup(ctx.email, String(a.group)), { ok: true, separated: true }),
   },
   prompt:
     '- Contacts: two that are one person ("merge Titi and Titi Dyas") is merge_people (keep the fuller name unless the ' +
     'user said otherwise); rename, email, role, company or the user\'s note about someone is edit_person; delete_person removes one.\n' +
-    '- Recordings: delete_recording; combine_recordings joins recordings that are one meeting, separate_recordings undoes ' +
-    'it; combine_day makes a whole day (a conference) one event; join_suggestions lists pairs Juno thinks are one meeting.\n' +
+    '- Recordings: delete_recording (asks first: it can\'t be undone); combine_recordings joins recordings that are one meeting, ' +
+    'separate_recordings splits one again; combine_day makes a whole day (a conference) one event; these three run at once ' +
+    '(the user can say "undo"). join_suggestions lists pairs Juno thinks are one meeting.\n' +
     '- "You might have missed": missed_items, then mark_missed (handled, back, or make it a to-do).\n' +
     '- Also: translate_transcript / remove_translation, send_briefing (email the notes to other people), send_to_notion, ' +
     'draft_deliverable (memo, tracker entry, LinkedIn post), notes_settings (notes language and length), set_client, ' +

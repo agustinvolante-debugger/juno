@@ -6,7 +6,7 @@ import * as vonage from './vonage'
 import * as meta from './meta'
 import * as imessage from '../imessage/sendblue'
 
-export type { Inbound, Button } from './vonage'
+export type { Inbound, Button, ContactCard } from './vonage'
 export { splitText } from './vonage'
 
 export function provider(): 'meta' | 'vonage' {
@@ -54,17 +54,24 @@ function dry(what: string, to: string, body: string): true {
   console.log(`[pen dry-run] ${what} to …${to.replace(/\D/g, '').slice(-4)}:\n${body}\n`)
   return true
 }
+/** A dry-run send gets a made-up message id, so a test can react to it like to a real one. */
+const dryId = () => [`dry-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`]
 
-export async function sendText(to: string, text: string): Promise<void> {
-  if (dryRun() && dry('text', to, text)) return
+/**
+ * Returns the provider's id for each message sent (Meta's wamid, Sendblue's message_handle; none
+ * from Vonage's sandbox). A reaction to one of them comes back with that id (bot.ts: a 👍 on the
+ * question waiting for a yes is the yes).
+ */
+export async function sendText(to: string, text: string): Promise<string[]> {
+  if (dryRun() && dry('text', to, text)) return dryId()
   if (viaImessage(to)) return imessage.sendText(to, text, vonage.splitText)
   to = plain(to)
   return provider() === 'meta' ? meta.sendText(to, text, vonage.splitText) : vonage.sendText(to, text)
 }
 
 /** iMessage has no buttons: the body goes as text and the bot accepts a typed reply instead. */
-export async function sendButtons(to: string, body: string, buttons: vonage.Button[]): Promise<void> {
-  if (dryRun() && dry('buttons', to, `${body}\n[${buttons.map((b) => b.title).join('] [')}]`)) return
+export async function sendButtons(to: string, body: string, buttons: vonage.Button[]): Promise<string[]> {
+  if (dryRun() && dry('buttons', to, `${body}\n[${buttons.map((b) => b.title).join('] [')}]`)) return dryId()
   if (viaImessage(to)) return imessage.sendText(to, body, vonage.splitText)
   to = plain(to)
   return provider() === 'meta' ? meta.sendButtons(to, body, buttons) : vonage.sendButtons(to, body, buttons)

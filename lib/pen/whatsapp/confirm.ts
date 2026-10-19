@@ -18,7 +18,51 @@ import { supabaseAdmin } from '@/lib/supabase'
 import type { Ctx } from './agent'
 import type { ToolModule } from './tools/types'
 
-export type Pending = { kind: string; args: Record<string, unknown>; summary: string; msgId: string; createdAt: string }
+// "Ask once, only where it can't be undone or reaches other people" (18 Oct). Done at once, said
+// in one line: combining or separating recordings (undo: ./undo.ts), deleting or moving an event
+// with no guests, disconnecting an app, adding to the user's own calendar. Still one yes: deleting
+// a recording or a contact, merging contacts (mergePeople deletes the merged card: no undo),
+// anything that emails other people (briefings, invites, an event change Google sends to guests),
+// and what Juno suggests itself (a contact card it was sent, "Juno noticed…" offers).
+//
+// A 👍 reaction on the message that asked is the same as typing yes (bot.ts): outIds are the ids
+// of the message(s) that carried the question, stored once the reply has gone out.
+
+export type Pending = {
+  kind: string
+  args: Record<string, unknown>
+  summary: string
+  msgId: string
+  createdAt: string
+  /** Provider ids of the reply that asked (Meta wamid / Sendblue handle), and its text. */
+  outIds?: string[]
+  outText?: string
+}
+
+/** Whether an action waits for a yes. Anything not listed asks (the safe default). */
+const ASK: Record<string, boolean | 'if_guests'> = {
+  delete_recording: true,
+  delete_person: true,
+  merge_people: true,
+  send_briefing: true,
+  calendar_invite: true,
+  gcal_invite: true,
+  save_contacts: true,
+  delete_event: 'if_guests',
+  move_event: 'if_guests',
+  add_to_calendar: false,
+  combine_recordings: false,
+  combine_day: false,
+  separate_recordings: false,
+  disconnect_app: false,
+  import_granola: false,
+}
+
+export function asksFirst(action: string, facts: { guests?: boolean } = {}): boolean {
+  const rule = ASK[action]
+  if (rule === undefined) return true
+  return rule === 'if_guests' ? facts.guests !== false : rule
+}
 
 export const PENDING_TTL_MS = 30 * 60 * 1000
 
@@ -37,6 +81,22 @@ export async function getPending(email: string): Promise<Pending | null> {
   const after = ((data?.chat ?? []) as { role: string; ts?: number }[]).filter((t) => t.role === 'assistant' && typeof t.ts === 'number' && t.ts > since)
   if (after.length > 1) return null
   return p
+}
+
+/**
+ * After the reply went out: if this message asked something (a Pending with its msgId), remember
+ * which outgoing message(s) carried the question, so a 👍 on exactly that message is a yes.
+ */
+export async function notePendingOut(email: string, msgId: string, outIds: string[], outText: string): Promise<void> {
+  if (!outIds.length && !outText) return
+  const { data } = await supabaseAdmin.from('pen_whatsapp_links').select('pending').eq('email', email.toLowerCase()).maybeSingle()
+  const p = (data?.pending ?? null) as Pending | null
+  if (!p || p.msgId !== msgId) return
+  await supabaseAdmin
+    .from('pen_whatsapp_links')
+    .update({ pending: { ...p, outIds, outText: outText.slice(0, 2000) } })
+    .eq('email', email.toLowerCase())
+    .eq('pending->>createdAt', p.createdAt)
 }
 
 export async function setPending(email: string, p: Pending | null): Promise<void> {
@@ -90,11 +150,26 @@ export async function confirmPending(ctx: Ctx, decision: string): Promise<unknow
   return run(ctx, p.args)
 }
 
+/** A contact card the user sent, after Juno offered to save it (bot.ts onContacts): all of them. */
+async function saveCards(ctx: Ctx, args: Record<string, unknown>): Promise<unknown> {
+  const { saveContact } = await import('./agent')
+  const cards = (Array.isArray(args.cards) ? args.cards : []) as { name: string; phones: string[]; emails: string[]; company: string | null; role: string | null }[]
+  const saved: unknown[] = []
+  for (const c of cards) {
+    saved.push(await saveContact(ctx, { name: c.name, email: c.emails[0] ?? '', phone: c.phones[0] ?? '', company: c.company ?? '', role: c.role ?? '', session_id: '' }))
+  }
+  return { ok: true, saved, note: 'Say in one line who was saved to their contacts (names only).' }
+}
+
 export const confirmModule: ToolModule = {
   tools: TOOLS,
   run: (ctx, name, input) => (name === 'confirm_pending' ? confirmPending(ctx, String(input.decision ?? '')) : undefined),
+  confirm: { save_contacts: saveCards },
   prompt:
-    '- Destructive or outward actions (merge or delete a contact, delete a recording, combine or separate recordings, ' +
-    'email someone else) never run at once: the tool returns ask_user; send exactly that question and stop. On the user\'s ' +
-    'clear yes in their next message, call confirm_pending yes; on no, confirm_pending no.',
+    '- Ask once, only where the tools ask. A tool that returns ask_user (delete a recording, delete or merge a contact, ' +
+    'email or invite other people, change an event that has guests) has changed nothing: send exactly that question and ' +
+    'stop. On the user\'s clear yes in their next message, call confirm_pending yes; on no, confirm_pending no.\n' +
+    '- Everything else the user asks for runs at once (combine or separate recordings, delete or move an event with no ' +
+    'guests, disconnect an app, add to their calendar): never add your own "are you sure?" or "shall I?" first. Say in one ' +
+    'line exactly what was done, and pass on the undo line when the tool gives one.',
 }

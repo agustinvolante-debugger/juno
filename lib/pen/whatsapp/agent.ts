@@ -56,6 +56,7 @@ import { MODULES } from './tools'
 import { localDate, localIso, markZoneChecked, userZone, zonePromptLine, type Zone } from '../timezone'
 import { getPending, setPending, dropIfUnanswered, confirmPending, BARE_YES, BARE_NO, type Pending } from './confirm'
 import { finishZoneTurn, timeFields, zoneAskLine, type ZoneTurn } from './tools/timezone'
+import { UNDO, runUndo } from './undo'
 
 const anthropic = penAnthropic('whatsapp-agent')
 // Haiku 5.5 (14 Oct, was Sonnet 5.5): a twentieth of the price, and the search stage now reads
@@ -1183,7 +1184,7 @@ async function addNote(ctx: Ctx, i: { session_id: string; text: string }): Promi
 
 const digits = (v: string) => v.replace(/[^\d+]/g, '')
 
-async function saveContact(ctx: Ctx, i: { name: string; email: string; phone: string; company: string; role: string; session_id: string }): Promise<unknown> {
+export async function saveContact(ctx: Ctx, i: { name: string; email: string; phone: string; company: string; role: string; session_id: string }): Promise<unknown> {
   const name = cleanName(i.name)
   if (!name) return { error: 'a name is required' }
   const email = i.email.trim() ? cleanEmail(i.email) : null
@@ -1359,7 +1360,13 @@ export async function runAgent(opts: {
   // happened. The question is then answered, so it leaves the system prompt.
   let answered: string | null = null
   let stillAsked = asked
-  if (asked?.kind === 'zone_check' && asked.msgId !== opts.msgId) {
+  // "Undo": the last thing done without asking (combine / separate, undo.ts), run here in code.
+  if (UNDO.test(opts.question)) {
+    const result = await runUndo(opts.email).catch((e) => ({ error: (e as Error).message }))
+    answered =
+      `(My "${opts.question.slice(0, 40)}" asks to undo your last change, and it has been handled: ${JSON.stringify(result).slice(0, 800)}. ` +
+      'Tell me in one line what happened, following any note in it; don\'t ask anything.)'
+  } else if (asked?.kind === 'zone_check' && asked.msgId !== opts.msgId) {
     // "Still in Santiago?" Asking already counted as yes (tools/timezone.ts), so a yes only
     // closes it. The same reply may have offered something else too (a Meet link): a bare yes
     // or no goes to that as well, through the model, never to a stored action.
