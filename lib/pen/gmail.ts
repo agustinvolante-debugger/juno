@@ -18,6 +18,12 @@
 //
 // A send that fails (revoked, refused) is NOT retried through Juno's own sender: the user picked
 // this address, so they are told plainly and given the compose links instead (whatsapp/agent.ts).
+//
+// READING (19 Oct, team-only test, lib/pen/gmail-read.ts): gmail.readonly (restricted; never
+// modify/delete) for accounts in PEN_GMAIL_READ_USERS with PEN_GMAIL_READ=1, before the CASA
+// audit, under Google's 100-test-user cap. An allowed user upgrades one address at a time
+// (incremental consent asking send + readonly for that address); pen_gmail.scopes records what
+// each token carries. Without that column (SQL not run) reading stays off for everyone.
 
 import crypto from 'node:crypto'
 import { supabaseAdmin } from '@/lib/supabase'
@@ -25,8 +31,10 @@ import { isMissingSchema } from './allowance'
 import { gcalConfigured, open, redirectUri, seal } from './google-calendar'
 import { buildRfc2822, toRaw, type SendAccount } from './mail-compose'
 import { DAILY_SEND_CAP, sentToday } from './follow-up'
+import { readAllowedFor } from './mail-thread'
 
 export const GMAIL_SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send'
+export const GMAIL_READ_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly'
 const SCOPES = ['openid', 'email', GMAIL_SEND_SCOPE]
 const AUTH = 'https://accounts.google.com/o/oauth2/v2/auth'
 const TOKEN = 'https://oauth2.googleapis.com/token'
@@ -55,6 +63,26 @@ export async function gmailAvailable(): Promise<boolean> {
   return avail.ok
 }
 
+/** pen_gmail.scopes exists (checked at most once a minute; the SQL may run after a deploy). */
+let scopesCol: { ok: boolean; at: number } | null = null
+const isScopesMissing = (msg: string) => /scopes/i.test(msg) && isMissingSchema(msg)
+
+/** Reading is switched on (PEN_GMAIL_READ=1), Gmail is available and pen_gmail.scopes exists. */
+export async function gmailReadAvailable(): Promise<boolean> {
+  if (process.env.PEN_GMAIL_READ !== '1') return false
+  if (!(await gmailAvailable())) return false
+  if (scopesCol && Date.now() - scopesCol.at < 60_000) return scopesCol.ok
+  const { error } = await supabaseAdmin.from('pen_gmail').select('scopes').limit(1)
+  if (error && !isScopesMissing(error.message)) console.warn(`pen gmail: scopes check: ${error.message}`)
+  scopesCol = { ok: !error, at: Date.now() }
+  return scopesCol.ok
+}
+
+/** This Juno account may connect reading (the test allowlist) and reading is available. */
+export async function gmailReadAllowed(userEmail: string): Promise<boolean> {
+  return readAllowedFor(userEmail) && (await gmailReadAvailable())
+}
+
 /* ---------------------------------------------------------------- state */
 
 function secret(): string {
@@ -65,10 +93,20 @@ function secret(): string {
 const sign = (body: string) => crypto.createHmac('sha256', secret()).update(`gmail-state.${body}`).digest('base64url')
 export const GMAIL_STATE_PREFIX = 'm.'
 
-/** The website's state (Settings → Email → Connect): signed-in email + this browser's nonce. */
-export function gmailState(email: string, nonce: string, now = Date.now()): string {
-  const body = Buffer.from(JSON.stringify({ e: email.toLowerCase(), n: nonce, x: now + STATE_TTL_MS })).toString('base64url')
+/** The website's state (Settings → Email → Connect): signed-in email + this browser's nonce (+ r: reading asked). */
+export function gmailState(email: string, nonce: string, now = Date.now(), read = false): string {
+  const body = Buffer.from(JSON.stringify({ e: email.toLowerCase(), n: nonce, x: now + STATE_TTL_MS, ...(read ? { r: 1 } : {}) })).toString('base64url')
   return `${GMAIL_STATE_PREFIX}${body}.${sign(body)}`
+}
+
+/** Whether a (verified) website state asked for reading too. */
+export function gmailStateWantsRead(state: string | null | undefined): boolean {
+  try {
+    const body = (state ?? '').slice(GMAIL_STATE_PREFIX.length).split('.')[0]
+    return (JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as { r?: number }).r === 1
+  } catch {
+    return false
+  }
 }
 
 export function verifyGmailState(state: string | null | undefined, email: string, nonce: string | null | undefined, now = Date.now()): boolean {
@@ -85,36 +123,45 @@ export function verifyGmailState(state: string | null | undefined, email: string
   }
 }
 
-/** Google's consent screen for send-only Gmail. select_account: any Google account, not the Juno login. */
-export function gmailAuthorizeUrl(state: string, origin: string): string {
+/**
+ * Google's consent screen for send-only Gmail. select_account: any Google account, not the Juno login.
+ * `read` (allowed users only): send + readonly in one grant; `hint` preselects the address being
+ * upgraded. Both scopes are asked by name, so the new token carries exactly these.
+ */
+export function gmailAuthorizeUrl(state: string, origin: string, opts: { read?: boolean; hint?: string | null } = {}): string {
   const q = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID!,
     redirect_uri: redirectUri(origin),
     response_type: 'code',
-    scope: SCOPES.join(' '),
+    scope: [...SCOPES, ...(opts.read ? [GMAIL_READ_SCOPE] : [])].join(' '),
     access_type: 'offline',
     prompt: 'consent select_account',
     state,
+    ...(opts.hint ? { login_hint: opts.hint } : {}),
   })
   return `${AUTH}?${q}`
 }
 
 /* ------------------------------------------------------------------ rows */
 
-export type GmailAccount = SendAccount & { connected_at: string; last_used_at: string | null }
-type Row = GmailAccount & { id: string; user_email: string; refresh_token: string }
+/** `can_read`: this address's token carries gmail.readonly (pen_gmail.scopes; false without the column). */
+export type GmailAccount = SendAccount & { connected_at: string; last_used_at: string | null; can_read: boolean }
+type Row = Omit<GmailAccount, 'can_read'> & { id: string; user_email: string; refresh_token: string; scopes?: string[] | null }
+
+const ACCOUNT_COLS = 'address,is_default,last_error,connected_at,last_used_at'
 
 export async function listAccounts(userEmail: string): Promise<GmailAccount[]> {
-  const { data, error } = await supabaseAdmin
-    .from('pen_gmail')
-    .select('address,is_default,last_error,connected_at,last_used_at')
-    .eq('user_email', userEmail.toLowerCase())
-    .order('connected_at', { ascending: true })
-  if (error) {
-    if (isMissingSchema(error.message)) return []
-    throw new Error(error.message)
+  const q = (cols: string) => supabaseAdmin.from('pen_gmail').select(cols).eq('user_email', userEmail.toLowerCase()).order('connected_at', { ascending: true })
+  let res = await q(`${ACCOUNT_COLS},scopes`)
+  if (res.error && isScopesMissing(res.error.message)) res = await q(ACCOUNT_COLS)
+  if (res.error) {
+    if (isMissingSchema(res.error.message)) return []
+    throw new Error(res.error.message)
   }
-  return (data ?? []) as GmailAccount[]
+  return ((res.data ?? []) as unknown as (Omit<GmailAccount, 'can_read'> & { scopes?: string[] | null })[]).map(({ scopes, ...a }) => ({
+    ...a,
+    can_read: Array.isArray(scopes) && scopes.includes(GMAIL_READ_SCOPE),
+  }))
 }
 
 async function row(userEmail: string, address: string): Promise<Row | null> {
@@ -188,8 +235,11 @@ export class GmailError extends Error {
   }
 }
 
-/** The OAuth callback: swap the code, check gmail.send was granted, keep the token sealed. */
-export async function connectGmail(userEmail: string, code: string, origin: string): Promise<{ address: string; isDefault: boolean }> {
+/**
+ * The OAuth callback: swap the code, check gmail.send was granted, keep the token sealed, and record
+ * which Gmail scopes it carries (canRead: gmail.readonly was granted and could be recorded).
+ */
+export async function connectGmail(userEmail: string, code: string, origin: string): Promise<{ address: string; isDefault: boolean; canRead: boolean }> {
   const lower = userEmail.toLowerCase()
   const t = await tokenCall({ code, grant_type: 'authorization_code', redirect_uri: redirectUri(origin) })
   if (t.status >= 400 || !t.access_token) throw new GmailError('failed', t.error_description ?? t.error ?? 'Google didn’t accept the connection.')
@@ -206,19 +256,25 @@ export async function connectGmail(userEmail: string, code: string, origin: stri
   const refresh = t.refresh_token ?? (prior ? open((await row(lower, address))!.refresh_token) : null)
   if (!refresh) throw new GmailError('no_refresh', 'Google didn’t give Juno lasting access. Try connecting again.')
   const isDefault = prior ? prior.is_default : !existing.some((a) => a.is_default)
-  const { error } = await supabaseAdmin.from('pen_gmail').upsert(
-    { user_email: lower, address, refresh_token: seal(refresh), is_default: isDefault, last_error: null, connected_at: new Date().toISOString() },
-    { onConflict: 'user_email,address' },
-  )
+  // Reading only for the allowlist: a token that came back with readonly for anyone else is kept
+  // as send-only (the scope isn't recorded, so nothing reads with it).
+  const scopes = granted.filter((x) => x === GMAIL_SEND_SCOPE || (x === GMAIL_READ_SCOPE && readAllowedFor(lower)))
+  const base = { user_email: lower, address, refresh_token: seal(refresh), is_default: isDefault, last_error: null, connected_at: new Date().toISOString() }
+  let { error } = await supabaseAdmin.from('pen_gmail').upsert({ ...base, scopes }, { onConflict: 'user_email,address' })
+  let recorded = !error
+  if (error && isScopesMissing(error.message)) {
+    ;({ error } = await supabaseAdmin.from('pen_gmail').upsert(base, { onConflict: 'user_email,address' }))
+    recorded = false
+  }
   if (error) throw new GmailError('failed', error.message)
   cache.set(`${lower}|${address}`, { token: t.access_token, until: Date.now() + ((t.expires_in ?? 3600) - 120) * 1000 })
-  return { address, isDefault }
+  return { address, isDefault, canRead: recorded && scopes.includes(GMAIL_READ_SCOPE) }
 }
 
 const cache = new Map<string, { token: string; until: number }>()
 export const RECONNECT = 'revoked'
 
-async function accessToken(userEmail: string, address: string): Promise<string> {
+export async function accessToken(userEmail: string, address: string): Promise<string> {
   const k = `${userEmail.toLowerCase()}|${address.toLowerCase()}`
   const hit = cache.get(k)
   if (hit && hit.until > Date.now()) return hit.token
@@ -291,6 +347,8 @@ export async function sendViaGmail(o: {
   subject: string
   body: string
   sessionId: string | null
+  /** A reply in an existing thread (reply_in_thread): Gmail files it there; the headers thread it for everyone else. */
+  thread?: { id: string; inReplyTo: string | null; references: string | null } | null
 }): Promise<GmailSend> {
   const lower = o.userEmail.toLowerCase()
   if ((await sentToday(lower)) >= DAILY_SEND_CAP) return { ok: false, reason: 'cap', error: `daily limit of ${DAILY_SEND_CAP} emails reached` }
@@ -303,10 +361,10 @@ export async function sendViaGmail(o: {
     const revoked = Boolean((e as { revoked?: boolean }).revoked) || r.last_error === RECONNECT
     return { ok: false, reason: revoked ? 'revoked' : 'failed', error: (e as Error).message }
   }
-  const raw = toRaw(buildRfc2822({ from: r.address, fromName: o.fromName, to: o.to, toName: o.toName, subject: o.subject, body: o.body }))
+  const raw = toRaw(buildRfc2822({ from: r.address, fromName: o.fromName, to: o.to, toName: o.toName, subject: o.subject, body: o.body, inReplyTo: o.thread?.inReplyTo, references: o.thread?.references }))
   let res: Response
   try {
-    res = await fetch(SEND, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ raw }) })
+    res = await fetch(SEND, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ raw, ...(o.thread?.id ? { threadId: o.thread.id } : {}) }) })
   } catch (e) {
     return { ok: false, reason: 'failed', error: (e as Error).message }
   }

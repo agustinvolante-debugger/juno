@@ -71,7 +71,7 @@ async function status(email: string) {
       ? { connected: !(gr.kind === 'mcp' && gr.last_error?.includes('Connect again')), via: gr.kind === 'api' ? 'API key' : 'Granola sign-in', account: gr.account_email, last_import_at: gr.last_import_at, ...(gr.kind === 'mcp' && gr.last_error?.includes('Connect again') ? { needs_reconnect: true } : {}) }
       : { connected: false, available: grOk },
     gmail: gm.length
-      ? { connected: true, send_only: true, addresses: gm.map((a) => ({ address: a.address, default: a.is_default, ...(a.last_error ? { needs_reconnect: true } : {}) })) }
+      ? { connected: true, addresses: gm.map((a) => ({ address: a.address, default: a.is_default, ...(a.can_read ? { can_read: true } : { send_only: true }), ...(a.last_error ? { needs_reconnect: true } : {}) })) }
       : { connected: false, available: gmOk },
   }
 }

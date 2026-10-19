@@ -7,7 +7,7 @@ import { useCopy } from '../../LangContext'
 import { errMessage } from '@/lib/pen/http'
 import type { Copy } from '@/lib/pen/i18n'
 
-type Account = { address: string; isDefault: boolean; needsReconnect: boolean }
+type Account = { address: string; isDefault: boolean; needsReconnect: boolean; canRead: boolean }
 
 const EM_EN = {
   title: 'Send from your Gmail',
@@ -30,6 +30,13 @@ const EM_EN = {
   without: 'Without Gmail, “send it” sends from Juno as “your name via Juno”, with replies going to you. Every draft also has a link to open it in your own email.',
   disconnectNote: 'Disconnecting takes away Juno’s permission to send from that address. Emails already sent stay in your Sent folder.',
   justConnected: (a: string) => `${a} is connected. Drafts can go out from it now.`,
+  // Reading (team test, only shown to accounts on the allowlist)
+  letRead: 'Let Juno read this inbox',
+  readOn: 'Juno can read this inbox when you ask in the chat.',
+  readTest: 'Reading is a test for the team. Juno uses Google’s read-only permission (it can’t change, send from or delete anything with it), reads only when you ask in the chat, and keeps nothing from your inbox. To stop, disconnect the address and connect it again without reading.',
+  readsSome: 'Only when you ask in the chat (search, open a thread), read-only. Nothing from your inbox is kept.',
+  readFlash: (a: string) => `${a} is connected, and Juno can read it when you ask in the chat.`,
+  readDenied: 'Reading wasn’t allowed on Google’s screen, so Juno can still only send from that address.',
   errors: {
     cancelled: 'You cancelled on Google’s screen, so nothing was connected.',
     state: 'That connection attempt expired. Try again.',
@@ -64,6 +71,12 @@ const EM: Copy<typeof EM_EN> = {
     without: 'Sin Gmail, “envíalo” lo manda desde Juno como “tu nombre vía Juno”, y las respuestas te llegan a ti. Cada borrador trae además un link para abrirlo en tu propio correo.',
     disconnectNote: 'Al desconectar, Juno pierde el permiso para enviar desde esa dirección. Los correos ya enviados se quedan en tus Enviados.',
     justConnected: (a) => `${a} quedó conectada. Los borradores ya pueden salir desde ahí.`,
+    letRead: 'Dejar que Juno lea esta bandeja',
+    readOn: 'Juno puede leer esta bandeja cuando se lo pides en el chat.',
+    readTest: 'La lectura es una prueba para el equipo. Juno usa el permiso de solo lectura de Google (con él no puede cambiar, enviar ni borrar nada), lee solo cuando se lo pides en el chat y no guarda nada de tu bandeja. Para detenerlo, desconecta la dirección y conéctala de nuevo sin lectura.',
+    readsSome: 'Solo cuando se lo pides en el chat (buscar, abrir un hilo), en modo solo lectura. No se guarda nada de tu bandeja.',
+    readFlash: (a) => `${a} quedó conectada, y Juno puede leerla cuando se lo pides en el chat.`,
+    readDenied: 'No se permitió la lectura en la pantalla de Google, así que Juno solo puede enviar desde esa dirección.',
     errors: {
       cancelled: 'Cancelaste en la pantalla de Google, así que no se conectó nada.',
       state: 'Ese intento de conexión expiró. Inténtalo de nuevo.',
@@ -95,6 +108,12 @@ const EM: Copy<typeof EM_EN> = {
     without: 'Sem o Gmail, “enviar” manda pelo Juno como “seu nome via Juno”, e as respostas vão para você. Cada rascunho também traz um link para abrir no seu próprio e-mail.',
     disconnectNote: 'Ao desconectar, o Juno perde a permissão de enviar desse endereço. Os e-mails já enviados continuam nos seus Enviados.',
     justConnected: (a) => `${a} está conectado. Os rascunhos já podem sair dele.`,
+    letRead: 'Deixar o Juno ler esta caixa',
+    readOn: 'O Juno pode ler esta caixa quando você pede no chat.',
+    readTest: 'A leitura é um teste para a equipe. O Juno usa a permissão somente leitura do Google (com ela não consegue mudar, enviar nem apagar nada), lê só quando você pede no chat e não guarda nada da sua caixa. Para parar, desconecte o endereço e conecte de novo sem leitura.',
+    readsSome: 'Só quando você pede no chat (buscar, abrir uma conversa), somente leitura. Nada da sua caixa é guardado.',
+    readFlash: (a) => `${a} está conectado, e o Juno pode ler quando você pede no chat.`,
+    readDenied: 'A leitura não foi permitida na tela do Google, então o Juno só consegue enviar desse endereço.',
     errors: {
       cancelled: 'Você cancelou na tela do Google, então nada foi conectado.',
       state: 'Essa tentativa de conexão expirou. Tente de novo.',
@@ -112,7 +131,19 @@ const CONNECT = '/api/pen/gmail/connect'
 /** user@<wbr>domain, so a long work address breaks at the @ on a phone. */
 const Addr = ({ a }: { a: string }) => <>{a.split('@')[0]}@<wbr />{a.split('@').slice(1).join('@')}</>
 
-export default function EmailPanel({ accounts, justConnected, error }: { accounts: Account[]; justConnected: string | null; error: string | null }) {
+export default function EmailPanel({
+  accounts,
+  readAllowed = false,
+  justConnected,
+  readResult = null,
+  error,
+}: {
+  accounts: Account[]
+  readAllowed?: boolean
+  justConnected: string | null
+  readResult?: 'on' | 'denied' | null
+  error: string | null
+}) {
   const T = useCopy(EM)
   const router = useRouter()
   const [busy, setBusy] = useState<string | null>(null)
@@ -132,7 +163,9 @@ export default function EmailPanel({ accounts, justConnected, error }: { account
     }
   }
 
-  const flash = justConnected && accounts.some((a) => a.address === justConnected.toLowerCase()) ? T.justConnected(justConnected) : null
+  const connectedNow = justConnected && accounts.some((a) => a.address === justConnected.toLowerCase()) ? justConnected : null
+  const flash = connectedNow ? (readResult === 'on' ? T.readFlash(connectedNow) : readResult === 'denied' ? `${T.justConnected(connectedNow)} ${T.readDenied}` : T.justConnected(connectedNow)) : null
+  const anyReads = accounts.some((a) => a.canRead)
 
   return (
     <div className="pen-set-stack">
@@ -156,6 +189,9 @@ export default function EmailPanel({ accounts, justConnected, error }: { account
                     {a.isDefault && <em className="pen-mail-default">{T.isDefault}</em>}
                     {a.needsReconnect ? T.reconnectLine : a.isDefault ? T.defaultLine : T.otherLine}
                   </span>
+                  {readAllowed && !a.needsReconnect && (a.canRead
+                    ? <span>{T.readOn}</span>
+                    : <a className="pen-mail-read" href={`${CONNECT}?read=1&address=${encodeURIComponent(a.address)}`}>{T.letRead}</a>)}
                 </span>
                 <span className="pen-mail-acts">
                   {a.needsReconnect && <a className="pen-btn pen-btn-accent" href={CONNECT}>{T.reconnect}</a>}
@@ -185,10 +221,11 @@ export default function EmailPanel({ accounts, justConnected, error }: { account
           </a>
         </div>
         <p className="pen-set-fine">{accounts.length ? T.disconnectNote : T.how}</p>
+        {readAllowed && accounts.length > 0 && <p className="pen-set-fine">{T.readTest}</p>}
 
         <dl className="pen-gcal-terms">
           <div><dt>{T.sendsLabel}</dt><dd>{T.sends}</dd></div>
-          <div><dt>{T.readsLabel}</dt><dd>{T.reads}</dd></div>
+          <div><dt>{T.readsLabel}</dt><dd>{anyReads ? T.readsSome : T.reads}</dd></div>
         </dl>
       </div>
 

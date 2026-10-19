@@ -483,3 +483,6 @@ alter table public.pen_segments enable row level security;  -- service role only
 -- alter table public.pen_gmail enable row level security;  -- service role only
 -- create table if not exists public.pen_mail_from (user_email text not null, to_email text not null, from_address text not null, updated_at timestamptz not null default now(), primary key (user_email, to_email));
 -- alter table public.pen_mail_from enable row level security;  -- service role only
+
+-- 2026-10-19, Gmail READING for the team test (lib/pen/gmail-read.ts, PEN_GMAIL_READ=1 + PEN_GMAIL_READ_USERS). Which Google scopes each connected address's token carries; null = send only (every row from before). Until it runs, reading stays off for everyone and sending works as before. Run after the pen_gmail table above.
+-- alter table public.pen_gmail add column if not exists scopes text[];

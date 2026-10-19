@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { readOnlyRefusal } from '@/lib/pen/access'
 import { APP_NAME, COPY, chatState, claimNonce, isPreviewBot, verifyConnectToken, type ConnectApp } from '@/lib/pen/connect-link'
 import { STATE_COOKIE, authorizeUrl as gcalAuthorizeUrl, gcalConfigured } from '@/lib/pen/google-calendar'
-import { gmailAuthorizeUrl, gmailAvailable } from '@/lib/pen/gmail'
+import { gmailAuthorizeUrl, gmailAvailable, gmailReadAllowed } from '@/lib/pen/gmail'
 import { authorizeUrl as notionAuthorizeUrl, notionConfigured } from '@/lib/pen/notion'
 import { STATE_COOKIE as GRANOLA_COOKIE, authorizeUrl as granolaAuthorizeUrl, granolaAvailable, makeAttempt } from '@/lib/pen/granola'
 import type { Lang } from '@/lib/pen/i18n'
@@ -72,7 +72,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   const state = chatState(v.email, v.app, nonce, v.via)
   const google = v.app === 'gcal' || v.app === 'gdrive' || v.app === 'gmail'
   const res = NextResponse.redirect(
-    v.app === 'gmail' ? gmailAuthorizeUrl(state, origin) : google ? gcalAuthorizeUrl(v.email, state, origin, v.app === 'gdrive' ? 'drive' : 'gcal') : notionAuthorizeUrl(origin, state),
+    // Gmail for the reading allowlist (team test) asks to read too; everyone else, send only.
+    v.app === 'gmail' ? gmailAuthorizeUrl(state, origin, { read: await gmailReadAllowed(v.email) }) : google ? gcalAuthorizeUrl(v.email, state, origin, v.app === 'gdrive' ? 'drive' : 'gcal') : notionAuthorizeUrl(origin, state),
   )
   res.cookies.set(google ? STATE_COOKIE : 'juno_notion_state', nonce, { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 600, secure: origin.startsWith('https') })
   res.headers.set('Cache-Control', 'no-store')

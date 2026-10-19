@@ -4,7 +4,7 @@ import { authedEmail } from '@/lib/news/auth'
 import { readOnlyRefusal } from '@/lib/pen/access'
 import { announceConnected, connectedPage, readChatState } from '@/lib/pen/connect-link'
 import { STATE_COOKIE, connectGcal, stateWant, verifyState, type GoogleWant } from '@/lib/pen/google-calendar'
-import { GMAIL_STATE_PREFIX, GmailError, connectGmail, verifyGmailState } from '@/lib/pen/gmail'
+import { GMAIL_STATE_PREFIX, GmailError, connectGmail, gmailReadAllowed, gmailStateWantsRead, verifyGmailState } from '@/lib/pen/gmail'
 
 export const dynamic = 'force-dynamic'
 
@@ -68,8 +68,10 @@ async function gmailCallback(req: Request, u: URL, state: string | null, nonce: 
   if (await readOnlyRefusal(email)) return back({ error: 'readonly' })
   try {
     const r = await connectGmail(email, code, u.origin)
-    if (chat) await announceConnected(email, 'gmail', chat.via, r.address)
-    return back({ connected: r.address })
+    // Reading was asked (allowlisted users: always from the chat, "Let Juno read" in Settings): say whether Google gave it.
+    const wantRead = chat ? await gmailReadAllowed(email) : gmailStateWantsRead(state)
+    if (chat) await announceConnected(email, 'gmail', chat.via, r.address, { canRead: r.canRead })
+    return back({ connected: r.address, ...(wantRead ? { read: r.canRead ? 'on' : 'denied' } : {}) })
   } catch (e) {
     console.warn(`pen gmail connect: ${(e as Error).message}`)
     const codeOf = e instanceof GmailError && (e.code === 'not_granted' || e.code === 'too_many') ? e.code : null

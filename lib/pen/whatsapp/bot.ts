@@ -946,7 +946,8 @@ async function onText(
   await setChat(link.email, [
     ...chat,
     { role: 'user', content: extra.image ? `${q} [photo]` : extra.heard ? `${q} [voice note]` : q, ts: now },
-    { role: 'assistant', content: answer, citations, ts: now + 1 },
+    // memo: the email thread ids this turn looked at (agent.ts), for "reply to that" next; never sent.
+    { role: 'assistant', content: later?.memo ? `${answer}\n\n${later.memo}` : answer, citations, ts: now + 1 },
   ])
   // The model sometimes gives one recording two markers. One line per recording, all its
   // markers on it, so the list never shows the same title twice.

@@ -25,6 +25,7 @@
 //   add_note            the user's own note on a recording (voice notes: "they want a pool")
 //   save_contact        a contact from a business card photo, or details the user gives
 //   whatsapp_link       a wa.me link that opens the user's OWN WhatsApp with a message ready
+//   search_email / read_thread / reply_in_thread   their Gmail, read-only, team test (tools/mailread.ts)
 //
 // Voice notes arrive here already transcribed (bot.ts onVoice), photos as an image block.
 //
@@ -50,7 +51,7 @@ import { groupSessions } from '../merge'
 import { foldName, speakerName, resolve as resolveLabel, type SpeakerMap } from '../speakers'
 import { COMMON_TYPES } from '../categories'
 import { sendFollowUp } from '../follow-up'
-import { gmailAvailable, lastFromFor, listAccounts, sendViaGmail, type GmailAccount } from '../gmail'
+import { gmailAvailable, gmailReadAllowed, lastFromFor, listAccounts, sendViaGmail, type GmailAccount } from '../gmail'
 import { chooseFrom, PROVIDER_NAME, type MailApp } from '../mail-compose'
 import { mailProvider, setMailApp } from '../mail-pref'
 import { getProfile } from '../profile'
@@ -74,7 +75,7 @@ const MAX_ROUNDS = 8
 
 /** `redo`: a recording whose notes the user asked to rewrite. Too slow for the reply, so the
  *  caller does it after sending the text, and sends the new briefing when it is done. */
-export type AgentResult = { text: string; citations: Citation[]; redo?: { sessionId: string; type?: string }; split?: string; after?: () => Promise<void> }
+export type AgentResult = { text: string; citations: Citation[]; redo?: { sessionId: string; type?: string }; split?: string; after?: () => Promise<void>; memo?: string }
 
 export type Ctx = {
   email: string
@@ -92,6 +93,14 @@ export type Ctx = {
   drafted: Draft | null
   /** Gmail addresses connected for sending (empty when none, or before the table exists). */
   gmail?: GmailAccount[]
+  /** Addresses Juno may read this turn (allowlisted user, gmail.readonly granted): tools/mailread.ts. */
+  gmailRead?: string[]
+  /** On the reading allowlist (whether or not an address has reading yet). */
+  gmailReadOk?: boolean
+  /** Threads looked at this turn: their ids go in the chat history (never shown), for "reply to that". */
+  mailSeen?: { thread_id: string; account: string; from: string }[]
+  /** Email content entered this turn: from then on only read-only tools and drafts run (MAIL_SAFE). */
+  mailTainted?: boolean
   sent: boolean
   redo?: { sessionId: string; type?: string }
   /** A recording to split into conversations after the reply (split_conversations). */
@@ -583,7 +592,7 @@ function system(ctx: Ctx, pending: Draft | null, asked: Pending | null, askedUns
     (pending
       ? `\nPending draft (shown to the user earlier): to ${pending.toName}${pending.toEmail ? ` <${pending.toEmail}>` : ' (no email yet)'}, subject "${pending.subject}".\n`
       : '\nNo draft is pending.\n') +
-    MODULES.map((m) => (m.prompt ? `${m.prompt}\n` : '')).join('') +
+    MODULES.map((m) => (m.prompt && (!m.when || m.when(ctx)) ? `${m.prompt}\n` : '')).join('') +
     (askedUnseen && asked
       ? `\nJust asked the user (they have NOT seen it yet; nothing in their message answers it, so never call confirm_pending this turn): ${asked.summary}\n`
       : asked?.kind === 'zone_check' ? zoneAskLine(asked) : asked ? `\nWaiting for the user's yes (asked earlier): ${asked.summary}\n` : '')
@@ -797,6 +806,18 @@ async function setMailAppTool(ctx: Ctx, app: string): Promise<unknown> {
 
 function gmailLine(ctx: Ctx): string {
   const g = ctx.gmail ?? []
+  const reads = ctx.gmailRead ?? []
+  if (!reads.length && ctx.gmailReadOk) {
+    // On the team test, nothing readable yet: connecting asks for reading too.
+    return '- Email: ' + (g.length ? `Gmail connected for sending: ${g.map((a) => a.address).join(', ')}. ` : 'no Gmail connected yet. ') +
+      'This account can also let Juno READ Gmail (testing): "connect my Gmail" / "read my email" / "let Juno read my inbox" → connect_app app gmail ' +
+      '(reconnect true when that address is already connected); Google asks to send and read. Until then you cannot see their inbox: say so, never guess.\n'
+  }
+  if (reads.length) {
+    return `- Email: Gmail connected: ${g.map((a) => `${a.address}${a.is_default ? ' (default)' : ''}${a.last_error ? ' (needs reconnecting)' : ''}`).join(', ')}. ` +
+      `Juno can also READ ${reads.join(', ')} (read-only, when they ask). A draft goes out from the From address shown on it, into their Sent folder. ` +
+      '"Send it from my work email / from x@y" → set_draft_from. "Connect another Gmail" → connect_app app gmail.\n'
+  }
   if (!g.length) {
     return '- Email sending: no Gmail is connected, so "send it" sends from Juno\'s address as "<their name> via Juno", replies to them, ' +
       'a copy to them. If they want it from their own address, offer to connect Gmail (connect_app, app gmail; send-only, Juno never reads mail), ' +
@@ -817,7 +838,7 @@ async function sendDraft(ctx: Ctx): Promise<unknown> {
   if (ctx.sent) return { error: 'already sent in this turn' }
   if (d.from) {
     // Their Gmail. A failure is never retried through Juno's sender: they chose this address.
-    const g = await sendViaGmail({ userEmail: ctx.email, from: d.from, fromName: ctx.userName, to: d.toEmail, toName: d.toName, subject: d.subject, body: d.body, sessionId: d.sessionId })
+    const g = await sendViaGmail({ userEmail: ctx.email, from: d.from, fromName: ctx.userName, to: d.toEmail, toName: d.toName, subject: d.subject, body: d.body, sessionId: d.sessionId, thread: d.thread ?? null })
     if (!g.ok) {
       return {
         error: `not sent from ${d.from}: ${g.error}`,
@@ -827,7 +848,7 @@ async function sendDraft(ctx: Ctx): Promise<unknown> {
     }
     ctx.sent = true
     await setDraft(ctx.email, null)
-    return { ok: true, sent_from: d.from, sent_to: `${d.toName} <${d.toEmail}>`, subject: d.subject, note: 'It is in their Gmail Sent folder; replies come to that address.' }
+    return { ok: true, sent_from: d.from, sent_to: `${d.toName} <${d.toEmail}>`, subject: d.subject, ...(d.thread ? { in_thread: true } : {}), note: 'It is in their Gmail Sent folder; replies come to that address.' }
   }
   const r = await sendFollowUp({ userEmail: ctx.email, toEmail: d.toEmail, subject: d.subject, body: d.body, sessionId: d.sessionId })
   if (!r.ok) return { error: `not sent: ${r.error}` }
@@ -1418,10 +1439,10 @@ async function runTool(ctx: Ctx, name: string, input: Record<string, unknown>): 
 
 /* ------------------------------------------------------------------- loop */
 
-const HINT: Record<Lang, { from: string; to: string; subject: string; send: string; noEmail: string; openIn: (p: string) => string; app: string }> = {
-  en: { from: 'From', to: 'To', subject: 'Subject', send: 'Reply *send it* to send, or tell me what to change.', noEmail: 'Send me their email and I\'ll add it.', openIn: (p) => `Open in ${p}`, app: 'Open in your mail app' },
-  es: { from: 'De', to: 'Para', subject: 'Asunto', send: 'Responde *envíalo* para mandarlo, o dime qué cambiar.', noEmail: 'Mándame su email y lo agrego.', openIn: (p) => `Abrir en ${p}`, app: 'Abrir en tu app de correo' },
-  pt: { from: 'De', to: 'Para', subject: 'Assunto', send: 'Responda *enviar* para mandar, ou me diga o que mudar.', noEmail: 'Me mande o email e eu adiciono.', openIn: (p) => `Abrir no ${p}`, app: 'Abrir no seu app de e-mail' },
+const HINT: Record<Lang, { from: string; to: string; subject: string; send: string; noEmail: string; openIn: (p: string) => string; app: string; inThread: string }> = {
+  en: { from: 'From', to: 'To', subject: 'Subject', send: 'Reply *send it* to send, or tell me what to change.', noEmail: 'Send me their email and I\'ll add it.', openIn: (p) => `Open in ${p}`, app: 'Open in your mail app', inThread: '↩️ Reply in the same thread' },
+  es: { from: 'De', to: 'Para', subject: 'Asunto', send: 'Responde *envíalo* para mandarlo, o dime qué cambiar.', noEmail: 'Mándame su email y lo agrego.', openIn: (p) => `Abrir en ${p}`, app: 'Abrir en tu app de correo', inThread: '↩️ Respuesta en el mismo hilo' },
+  pt: { from: 'De', to: 'Para', subject: 'Assunto', send: 'Responda *enviar* para mandar, ou me diga o que mudar.', noEmail: 'Me mande o email e eu adiciono.', openIn: (p) => `Abrir no ${p}`, app: 'Abrir no seu app de e-mail', inThread: '↩️ Resposta na mesma conversa' },
 }
 
 const publicBase = () => (process.env.PEN_PUBLIC_URL || process.env.NEXTAUTH_URL || 'https://www.tryjunoapp.com').replace(/\/$/, '')
@@ -1442,7 +1463,7 @@ export function draftLinks(d: Draft, lang: Lang = 'en'): string {
 export function draftPreview(d: Draft, lang: Lang = 'en'): string {
   const h = HINT[lang]
   return (
-    `✉️ ${d.from ? `*${h.from}:* ${d.from}\n` : ''}*${h.to}:* ${d.toName}${d.toEmail ? ` <${d.toEmail}>` : ''}\n*${h.subject}:* ${d.subject}\n\n${d.body}\n\n` +
+    `✉️ ${d.thread ? `${h.inThread}\n` : ''}${d.from ? `*${h.from}:* ${d.from}\n` : ''}*${h.to}:* ${d.toName}${d.toEmail ? ` <${d.toEmail}>` : ''}\n*${h.subject}:* ${d.subject}\n\n${d.body}\n\n` +
     `_${d.toEmail ? h.send : h.noEmail}_\n` +
     draftLinks(d, lang)
   )
@@ -1474,6 +1495,19 @@ function gmailFailed(lang: Lang, d: Draft, reason: 'cap' | 'not_connected' | 're
   return `${L[reason]}\n${links}`
 }
 
+/**
+ * Tools that may still run after email content entered the turn (search_email / read_thread): reading,
+ * and drafts (shown, never sent without the user's later "send it"). Everything else (sending,
+ * confirming, deleting, connecting…) waits for the user's own next message. Prompt injection in an
+ * email can then at worst produce a draft the user sees.
+ */
+const MAIL_SAFE = new Set([
+  'search_email', 'read_thread', 'reply_in_thread', 'save_draft', 'set_draft_from', 'set_mail_app',
+  'search_recordings', 'open_todos', 'get_recording', 'find_person', 'list_recordings', 'recording_people',
+  'recording_conversations', 'read_conversation', 'person_brief', 'list_reminders', 'connection_status',
+  'list_suggestions', 'missed_items', 'find_events', 'set_reminder', 'add_todo', 'add_to_calendar',
+])
+
 /** A bare go-ahead. Handled in code, so a send never depends on the model choosing to call a tool. */
 export const SEND_IT = /^\s*(send( it| the email)?|yes,? send( it)?|env[ií]a(lo)?|m[aá]nd(a|alo)|s[ií],? (env[ií]alo|m[aá]ndalo)|pode enviar|envia(r)?|manda(r)?)\s*[.!👍]*\s*$/i
 
@@ -1481,6 +1515,12 @@ const SENT_GMAIL: Record<Lang, (from: string, to: string, subject: string) => st
   en: (f, to, s) => `Sent from ${f} to ${to}: "${s}". It's in your Sent folder, and replies will go to you.`,
   es: (f, to, s) => `Enviado desde ${f} a ${to}: "${s}". Está en tus Enviados y las respuestas te llegan a ti.`,
   pt: (f, to, s) => `Enviado de ${f} para ${to}: "${s}". Está nos seus Enviados e as respostas vão para você.`,
+}
+
+const SENT_REPLY: Record<Lang, (from: string, to: string, subject: string) => string> = {
+  en: (f, to, s) => `Replied from ${f} to ${to} in the same thread: "${s}". It's in your Sent folder.`,
+  es: (f, to, s) => `Respondí desde ${f} a ${to} en el mismo hilo: "${s}". Está en tus Enviados.`,
+  pt: (f, to, s) => `Respondi de ${f} para ${to} na mesma conversa: "${s}". Está nos seus Enviados.`,
 }
 
 const SENT: Record<Lang, (to: string, subject: string) => string> = {
@@ -1507,7 +1547,10 @@ export async function runAgent(opts: {
   const recentTitle = opts.recent ? ((await getSession(opts.email, opts.recent).catch(() => null))?.title ?? null) : null
   const zone = await userZone(opts.email, opts.phone).catch((): Zone => ({ tz: null, source: 'none', sure: false }))
   const gmail = (await gmailAvailable().catch(() => false)) ? await listAccounts(opts.email).catch((): GmailAccount[] => []) : []
-  const ctx: Ctx = { ...opts, userName, recentTitle, citations: [], drafted: null, sent: false, enrich: new Set(), later: [], zone, gmail }
+  // Reading (team test): the allowlist AND an address whose token carries gmail.readonly.
+  const gmailReadOk = await gmailReadAllowed(opts.email).catch(() => false)
+  const gmailRead = gmailReadOk ? gmail.filter((a) => a.can_read && !a.last_error).map((a) => a.address) : []
+  const ctx: Ctx = { ...opts, userName, recentTitle, citations: [], drafted: null, sent: false, enrich: new Set(), later: [], zone, gmail, gmailRead, gmailReadOk }
   const pending = await getDraft(opts.email).catch(() => null)
   const asked = await getPending(opts.email).catch(() => null)
   // Asked, or drafted, after this turn's last message arrived: the user hasn't seen it, so nothing
@@ -1564,7 +1607,7 @@ export async function runAgent(opts: {
     if (r.ok) {
       await dropIfUnanswered(ctx, asked).catch(() => {})
       const to = `${pending.toName} <${pending.toEmail}>`
-      return { text: r.sent_from ? SENT_GMAIL[opts.lang](r.sent_from, to, pending.subject) : SENT[opts.lang](to, pending.subject), citations: [] }
+      return { text: r.sent_from ? (pending.thread ? SENT_REPLY : SENT_GMAIL)[opts.lang](r.sent_from, to, pending.subject) : SENT[opts.lang](to, pending.subject), citations: [] }
     }
     // Their Gmail refused it: the plain words and the links, from code, not the model.
     if (r.plain) {
@@ -1601,7 +1644,7 @@ export async function runAgent(opts: {
       // Medium: a WhatsApp reply should arrive while "typing…" is still showing.
       output_config: { effort: 'medium' },
       system: system(ctx, pending, stillAsked, askedUnseen),
-      tools: [...TOOLS, ...MODULES.flatMap((m) => m.tools)],
+      tools: [...TOOLS, ...MODULES.flatMap((m) => (!m.when || m.when(ctx) ? m.tools : []))],
       messages,
     })
     text = res.content.filter((b): b is Anthropic.TextBlock => b.type === 'text').map((b) => b.text).join('\n').trim()
@@ -1613,6 +1656,11 @@ export async function runAgent(opts: {
     // One at a time: save_draft then send_draft in the same round must see each other.
     for (const c of calls) {
       try {
+        // Email content came in this turn: nothing but reading and drafts until the user writes again.
+        if (ctx.mailTainted && !MAIL_SAFE.has(c.name)) {
+          results.push({ type: 'tool_result', tool_use_id: c.id, content: JSON.stringify({ error: 'not done: email content was read in this turn, so this action has to be asked for by the user in a new message. Tell them what you would do and let them ask.' }), is_error: true })
+          continue
+        }
         const out = await runTool(ctx, c.name, (c.input ?? {}) as Record<string, unknown>)
         const isError = !!out && typeof out === 'object' && 'error' in out
         results.push({ type: 'tool_result', tool_use_id: c.id, content: JSON.stringify(out), ...(isError ? { is_error: true } : {}) })
@@ -1637,9 +1685,14 @@ export async function runAgent(opts: {
   const citations = ctx.citations.filter((c) => text.includes(`[${c.marker}]`))
   const enrich = [...ctx.enrich]
   const later = ctx.later
+  // Thread ids for the next message ("reply to that"), kept in the chat history only, never shown.
+  const memo = ctx.mailSeen?.length
+    ? `[Email threads (ids for read_thread / reply_in_thread; never shown to the user): ${ctx.mailSeen.slice(0, 10).map((t) => `${t.thread_id} in ${t.account}${t.from ? ` from ${t.from}` : ''}`).join('; ')}]`
+    : undefined
   return {
     text: text || '…',
     citations,
+    ...(memo ? { memo } : {}),
     ...(ctx.redo ? { redo: ctx.redo } : {}),
     ...(ctx.split ? { split: ctx.split } : {}),
     ...(enrich.length || later.length

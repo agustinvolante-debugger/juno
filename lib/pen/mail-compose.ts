@@ -127,13 +127,29 @@ export function addressHeader(addr: string, name?: string | null): string {
 const wrap76 = (b64: string) => b64.replace(/.{1,76}/g, (l) => `${l}\r\n`).trimEnd()
 
 /** The message users.messages.send takes (before base64url): plain text, UTF-8, base64 body. */
-export function buildRfc2822(m: { from: string; fromName?: string | null; to: string; toName?: string | null; subject: string; body: string; date?: Date }): string {
+export function buildRfc2822(m: {
+  from: string
+  fromName?: string | null
+  to: string
+  toName?: string | null
+  subject: string
+  body: string
+  date?: Date
+  /** A reply in a thread (lib/pen/mail-thread.ts replyHeaders): the Message-ID answered, and the chain. */
+  inReplyTo?: string | null
+  references?: string | null
+}): string {
   if (/[\r\n]/.test(m.from + m.to)) throw new Error('bad address')
+  const ids = (s: string | null | undefined) => (s ?? '').match(/<[^<>\s]+>/g)?.join(' ') ?? ''
+  const inReplyTo = ids(m.inReplyTo).split(' ')[0]
+  const references = ids(m.references)
   return [
     `From: ${addressHeader(m.from, m.fromName)}`,
     `To: ${addressHeader(m.to, m.toName)}`,
     `Subject: ${encodeHeader(m.subject)}`,
     ...(m.date ? [`Date: ${m.date.toUTCString().replace('GMT', '+0000')}`] : []),
+    ...(inReplyTo ? [`In-Reply-To: ${inReplyTo}`] : []),
+    ...(references ? [`References: ${references}`] : []),
     'MIME-Version: 1.0',
     'Content-Type: text/plain; charset="UTF-8"',
     'Content-Transfer-Encoding: base64',
