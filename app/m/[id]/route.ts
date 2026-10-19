@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getDraftById, type Draft } from '@/lib/pen/whatsapp/store'
-import { fitLink, PROVIDER_NAME, type ComposeParts } from '@/lib/pen/mail-compose'
+import { fitLink, PROVIDER_NAME, type ComposeParts, type MailProvider } from '@/lib/pen/mail-compose'
 import { isPreviewBot } from '@/lib/pen/connect-link'
 
 export const dynamic = 'force-dynamic'
@@ -20,11 +20,14 @@ export const dynamic = 'force-dynamic'
 // opens the compose with To and Subject only.
 
 type Lang = 'en' | 'es' | 'pt'
-const T: Record<Lang, { title: string; open: (p: string) => string; app: string; opening: string; copy: string; copied: string; to: string; subject: string; long: string; twice: string; gone: string }> = {
+const T: Record<Lang, { title: string; open: (p: string) => string; app: string; desk: string; or: string; appDesk: string; opening: string; copy: string; copied: string; to: string; subject: string; long: string; twice: string; gone: string }> = {
   en: {
     title: 'Your email draft',
     open: (p) => `Open in ${p}`,
     app: 'Open in my mail app',
+    desk: 'Opens in your web mail, ready to send.',
+    or: 'Or open it in',
+    appDesk: 'Use this computer\'s mail app instead',
     opening: 'Opening your mail app… If nothing happens, tap the button.',
     copy: 'Copy the text',
     copied: 'Copied',
@@ -38,6 +41,9 @@ const T: Record<Lang, { title: string; open: (p: string) => string; app: string;
     title: 'Tu borrador de correo',
     open: (p) => `Abrir en ${p}`,
     app: 'Abrir en mi app de correo',
+    desk: 'Se abre en tu correo web, listo para enviar.',
+    or: 'O ábrelo en',
+    appDesk: 'Usar la app de correo de este computador',
     opening: 'Abriendo tu app de correo… Si no pasa nada, toca el botón.',
     copy: 'Copiar el texto',
     copied: 'Copiado',
@@ -51,6 +57,9 @@ const T: Record<Lang, { title: string; open: (p: string) => string; app: string;
     title: 'Seu rascunho de e-mail',
     open: (p) => `Abrir no ${p}`,
     app: 'Abrir no meu app de e-mail',
+    desk: 'Abre no seu e-mail na web, pronto para enviar.',
+    or: 'Ou abra no',
+    appDesk: 'Usar o app de e-mail deste computador',
     opening: 'Abrindo seu app de e-mail… Se nada acontecer, toque no botão.',
     copy: 'Copiar o texto',
     copied: 'Copiado',
@@ -109,8 +118,33 @@ button.ok{color:#1b7a3b;border-color:#bfe3cb;background:#e7f5ec}
 .meta dd.subj{font-weight:600}
 .body{white-space:pre-wrap;word-break:break-word;font-size:16px;line-height:1.55;color:var(--ink)}
 .note{font-size:14px;color:var(--dim);margin:6px 4px 0;text-align:center}
+.alt{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:2px 0 6px;font-size:15px;color:var(--dim)}
+.alt a{display:inline-flex;align-items:center;min-height:40px;padding:8px 16px;border-radius:9999px;border:1px solid var(--line);background:var(--panel);color:var(--blue-ink);text-decoration:none;font-weight:500}
+.alt a:hover{border-color:#c2c2c8;background:#fafafc}
+.applink{display:block;text-align:center;margin:14px 0 0;font-size:14px;color:var(--blue-ink);text-underline-offset:3px}
 </style></style></head><body><main><a class="brand" href="https://www.tryjunoapp.com" aria-label="Juno Pen"><img src="/juno_mark.png" alt="" width="30" height="30"><b><span>J</span>uno Pen</b></a>${inner}</main></body></html>`
   return new Response(html, { status, headers: HEADERS })
+}
+
+/** Phones and tablets that say so. An iPad says "Macintosh": script() catches it by touch. */
+const isPhone = (ua: string | null) => /iPhone|iPod|Android|Mobile|Windows Phone/i.test(ua ?? '')
+
+const copyText = (d: Draft) => `${d.subject}\n\n${d.body}`
+
+function card(d: Draft, lang: Lang, t: (typeof T)[Lang]): string {
+  return `<div class="card"><dl class="meta">${d.from ? `<dt>${lang === 'en' ? 'From' : 'De'}</dt><dd>${esc(d.from)}</dd>` : ''}<dt>${esc(t.to)}</dt><dd>${esc(d.toName)}${d.toEmail ? ` &lt;${esc(d.toEmail)}&gt;` : ''}</dd><dt>${esc(t.subject)}</dt><dd class="subj">${esc(d.subject)}</dd></dl><div class="body">${esc(d.body)}</div></div>`
+}
+
+/** Copy button, plus: open `auto` at once (phone), or `ipad` only on a touch "Mac" (an iPad). */
+function script(text: string, t: (typeof T)[Lang], auto: string | null, ipad: string | null): string {
+  return `<script>
+(function(){var text=${js(text)},b=document.getElementById('c');
+function done(){b.textContent=${js(t.copied)};b.className='ok'}
+b.onclick=function(){if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done,fallback)}else fallback()};
+function fallback(){var ta=document.createElement('textarea');ta.value=text;ta.setAttribute('readonly','');ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');done()}catch(e){}document.body.removeChild(ta)}
+${auto ? `setTimeout(function(){location.href=${js(auto)}},150);` : ''}${ipad ? `if(navigator.maxTouchPoints>1)setTimeout(function(){location.href=${js(ipad)}},150);` : ''}
+})();
+</script>`
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -137,8 +171,33 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     return res
   }
 
+  // A computer (18 Oct, founder): mailto: there opens Apple Mail or nothing, so the page leads with
+  // the web mail Juno picked for them, offers the other two, and keeps the mail app as a small link.
+  // An iPad says "Macintosh"; the script below sends it to the mail app like a phone.
+  if (!web && !isPhone(req.headers.get('user-agent'))) {
+    const first: MailProvider = d.provider ?? 'gmail'
+    const fam = (p: MailProvider) => (p === 'outlook_live' ? 'outlook' : p)
+    const rest = (['gmail', 'outlook_live', 'yahoo'] as MailProvider[]).filter((p) => fam(p) !== fam(first))
+    const main = fitLink('web', parts, first, d.from)
+    const copyFirst = !main.full
+    const alt = rest.map((p) => `<a href="${esc(fitLink('web', parts, p, d.from).url)}" rel="noopener">${esc(PROVIDER_NAME[p])}</a>`).join('')
+    return page(
+      lang,
+      t.title,
+      `<h1>${esc(t.title)}</h1>
+<p class="lead">${esc(copyFirst ? t.long : t.desk)}</p>
+${copyFirst ? `<button id="c" type="button">${esc(t.copy)}</button>` : ''}
+<a class="btn" href="${esc(main.url)}" rel="noopener">${esc(t.open(PROVIDER_NAME[first]))}</a>
+<div class="alt"><span>${esc(t.or)}</span>${alt}</div>
+${card(d, lang, t)}
+${copyFirst ? '' : `<button id="c" type="button">${esc(t.copy)}</button>`}
+<a class="applink" href="${esc(link.url)}">${esc(t.appDesk)}</a>
+<p class="note">${esc(t.twice)}</p>
+${script(copyText(d), t, null, link.full && /Macintosh/.test(req.headers.get('user-agent') ?? '') ? link.url : null)}`,
+    )
+  }
+
   const label = web ? t.open(PROVIDER_NAME[web]) : t.app
-  const copyText = `${d.subject}\n\n${d.body}`
   // The mail app opens at once when the whole email fits; when it doesn't, they copy first.
   const auto = !web && link.full
   return page(
@@ -148,16 +207,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 ${auto ? `<p class="lead" role="status">${esc(t.opening)}</p>` : `<p class="lead">${esc(t.long)}</p>`}
 ${link.full ? '' : `<button id="c" type="button">${esc(t.copy)}</button>`}
 <a class="btn" id="o" href="${esc(link.url)}"${web ? ' rel="noopener"' : ''}>${esc(label)}</a>
-<div class="card"><dl class="meta">${d.from ? `<dt>${lang === 'en' ? 'From' : 'De'}</dt><dd>${esc(d.from)}</dd>` : ''}<dt>${esc(t.to)}</dt><dd>${esc(d.toName)}${d.toEmail ? ` &lt;${esc(d.toEmail)}&gt;` : ''}</dd><dt>${esc(t.subject)}</dt><dd class="subj">${esc(d.subject)}</dd></dl><div class="body">${esc(d.body)}</div></div>
+${card(d, lang, t)}
 ${link.full ? `<button id="c" type="button">${esc(t.copy)}</button>` : ''}
 <p class="note">${esc(t.twice)}</p>
-<script>
-(function(){var text=${js(copyText)},b=document.getElementById('c');
-function done(){b.textContent=${js(t.copied)};b.className='ok'}
-b.onclick=function(){if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done,fallback)}else fallback()};
-function fallback(){var ta=document.createElement('textarea');ta.value=text;ta.setAttribute('readonly','');ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');done()}catch(e){}document.body.removeChild(ta)}
-${auto ? `setTimeout(function(){location.href=${js(link.url)}},150);` : ''}
-})();
-</script>`,
+${script(copyText(d), t, auto ? link.url : null, null)}`,
   )
 }
