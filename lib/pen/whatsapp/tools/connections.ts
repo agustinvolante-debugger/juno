@@ -12,14 +12,16 @@ import { APP_NAME, COPY, connectLink, viaOf, type ConnectApp } from '../../conne
 import { abilities, disconnectGoogle, gcalConfigured, getGcalConnection } from '../../google-calendar'
 import { disconnect as disconnectNotion, getConnection, notionConfigured } from '../../notion'
 import { disconnect as disconnectGranola, getConnection as getGranola, granolaAvailable } from '../../granola'
+import { disconnectGmail, gmailAvailable, listAccounts as gmailAccounts } from '../../gmail'
+import { matchAccount } from '../../mail-compose'
 
-const APP_ENUM = { type: 'string', enum: ['google_calendar', 'google_docs', 'notion', 'granola'] } as const
+const APP_ENUM = { type: 'string', enum: ['google_calendar', 'google_docs', 'notion', 'granola', 'gmail'] } as const
 
 const TOOLS: Anthropic.Tool[] = [
   {
     name: 'connect_app',
     description:
-      'Send the user a personal link that connects Google Calendar, Google Docs & Sheets (google_docs), Notion or Granola to Juno in one tap ' +
+      'Send the user a personal link that connects Google Calendar, Google Docs & Sheets (google_docs), Notion, Granola or Gmail (send-only, for sending drafts from their own address; more than one Gmail can be connected) to Juno in one tap ' +
       '(it opens Google\'s / Notion\'s / Granola\'s own sign-in screen; no website sign-in). Use when they ask to connect one, or say yes to ' +
       'connecting it after an action needed it. Granola: the link is Granola\'s sign-in (any plan; free plans only reach the last 30 days and ' +
       'give notes without transcripts). If they say they have a Granola API key, set api_key: true instead of sending a link.',
@@ -36,22 +38,28 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'connection_status',
-    description: 'Which apps are connected to Juno (Google Calendar, Google Docs & Sheets, Notion, Granola) and with which account or workspace.',
+    description: 'Which apps are connected to Juno (Google Calendar, Google Docs & Sheets, Notion, Granola, Gmail for sending) and with which account or workspace.',
     input_schema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'disconnect_app',
-    description: 'Disconnect Google Calendar, Google Docs & Sheets, Notion or Granola from Juno, at once (the user asked; no need to confirm).',
-    input_schema: { type: 'object', properties: { app: APP_ENUM }, required: ['app'], additionalProperties: false },
+    description: 'Disconnect Google Calendar, Google Docs & Sheets, Notion, Granola or a Gmail address from Juno, at once (the user asked; no need to confirm).',
+    input_schema: {
+      type: 'object',
+      properties: { app: APP_ENUM, account: { type: 'string', description: 'Gmail only: which address, when more than one is connected.' } },
+      required: ['app'],
+      additionalProperties: false,
+    },
   },
 ]
 
-const APPS: Record<string, ConnectApp> = { notion: 'notion', google_calendar: 'gcal', google_docs: 'gdrive', granola: 'granola' }
+const APPS: Record<string, ConnectApp> = { notion: 'notion', google_calendar: 'gcal', google_docs: 'gdrive', granola: 'granola', gmail: 'gmail' }
 const appOf = (input: Record<string, unknown>): ConnectApp | null => APPS[str(input, 'app')] ?? null
-const KEY: Record<ConnectApp, 'google_calendar' | 'google_docs' | 'notion' | 'granola'> = { gcal: 'google_calendar', gdrive: 'google_docs', notion: 'notion', granola: 'granola' }
+const KEY: Record<ConnectApp, 'google_calendar' | 'google_docs' | 'notion' | 'granola' | 'gmail'> = { gcal: 'google_calendar', gdrive: 'google_docs', notion: 'notion', granola: 'granola', gmail: 'gmail' }
 
 async function status(email: string) {
-  const [g, n, gr, grOk] = await Promise.all([getGcalConnection(email).catch(() => null), getConnection(email).catch(() => null), getGranola(email).catch(() => null), granolaAvailable().catch(() => false)])
+  const [g, n, gr, grOk, gmOk] = await Promise.all([getGcalConnection(email).catch(() => null), getConnection(email).catch(() => null), getGranola(email).catch(() => null), granolaAvailable().catch(() => false), gmailAvailable().catch(() => false)])
+  const gm = gmOk ? await gmailAccounts(email).catch(() => []) : []
   const on = abilities(g)
   const google = (yes: boolean) =>
     g && yes ? { connected: !g.last_error, account: g.calendar_email, ...(g.last_error ? { needs_reconnect: true } : {}) } : { connected: false, available: gcalConfigured() }
@@ -62,13 +70,16 @@ async function status(email: string) {
     granola: gr
       ? { connected: !(gr.kind === 'mcp' && gr.last_error?.includes('Connect again')), via: gr.kind === 'api' ? 'API key' : 'Granola sign-in', account: gr.account_email, last_import_at: gr.last_import_at, ...(gr.kind === 'mcp' && gr.last_error?.includes('Connect again') ? { needs_reconnect: true } : {}) }
       : { connected: false, available: grOk },
+    gmail: gm.length
+      ? { connected: true, send_only: true, addresses: gm.map((a) => ({ address: a.address, default: a.is_default, ...(a.last_error ? { needs_reconnect: true } : {}) })) }
+      : { connected: false, available: gmOk },
   }
 }
 
 async function connectApp(ctx: Ctx, input: Record<string, unknown>): Promise<unknown> {
   const app = appOf(input)
-  if (!app) return { error: 'app must be google_calendar, google_docs, notion or granola' }
-  if (!(app === 'notion' ? notionConfigured() : app === 'granola' ? await granolaAvailable() : gcalConfigured())) return { error: `${APP_NAME.en[app]} connections are not available yet` }
+  if (!app) return { error: 'app must be google_calendar, google_docs, notion, granola or gmail' }
+  if (!(app === 'notion' ? notionConfigured() : app === 'granola' ? await granolaAvailable() : app === 'gmail' ? await gmailAvailable() : gcalConfigured())) return { error: `${APP_NAME.en[app]} connections are not available yet` }
   if (app === 'granola' && input.api_key === true) {
     return {
       ok: true,
@@ -78,7 +89,8 @@ async function connectApp(ctx: Ctx, input: Record<string, unknown>): Promise<unk
     }
   }
   const s = (await status(ctx.email))[KEY[app]]
-  if (s.connected && input.reconnect !== true) {
+  // Gmail: several addresses can be connected, so a link is always sent ("connect another").
+  if (s.connected && input.reconnect !== true && app !== 'gmail') {
     return { already_connected: true, ...s, note: 'Say it is already connected (with the account/workspace) in one line. Offer to connect again only if they want another account.' }
   }
   const url = connectLink(ctx.email, app, undefined, viaOf(ctx.phone))
@@ -91,7 +103,14 @@ async function connectApp(ctx: Ctx, input: Record<string, unknown>): Promise<unk
 
 async function disconnectApp(ctx: Ctx, input: Record<string, unknown>): Promise<unknown> {
   const app = appOf(input)
-  if (!app) return { error: 'app must be google_calendar, google_docs, notion or granola' }
+  if (!app) return { error: 'app must be google_calendar, google_docs, notion, granola or gmail' }
+  if (app === 'gmail') {
+    const accounts = await gmailAccounts(ctx.email).catch(() => [])
+    if (!accounts.length) return { error: 'no Gmail is connected' }
+    const hit = accounts.length === 1 && !str(input, 'account') ? accounts[0] : matchAccount(accounts, str(input, 'account'))
+    if (!hit) return { error: 'which address?', connected: accounts.map((a) => a.address), next: 'ask which one' }
+    return confirmDisconnect(ctx, { app, account: hit.address })
+  }
   const s = (await status(ctx.email))[KEY[app]]
   if (!s.connected && !('needs_reconnect' in s)) return { error: `${APP_NAME.en[app]} is not connected` }
   // The user asked: disconnected at once (18 Oct, confirm.ts). Connecting again is one link away.
@@ -109,6 +128,10 @@ async function confirmDisconnect(ctx: Ctx, args: Record<string, unknown>): Promi
       note: 'Confirm in one line. They can connect again any time by asking.' +
         (r.partial ? ' The other Google ability stays connected, so Google keeps the one permission until that is disconnected too.' : ''),
     }
+  }
+  if (args.app === 'gmail' && typeof args.account === 'string') {
+    const r = await disconnectGmail(ctx.email, args.account)
+    return { ok: r.removed, disconnected: `Gmail ${args.account}`, note: 'Confirm in one line. Drafts now go from their other connected address, or "via Juno" if none is left.' }
   }
   if (args.app === 'notion') {
     await disconnectNotion(ctx.email)
@@ -141,7 +164,7 @@ export const connectionsModule: ToolModule = {
   // Kept for a disconnect asked before 18 Oct and still waiting for its yes.
   confirm: { disconnect_app: confirmDisconnect },
   prompt:
-    '- Connected apps: "connect my Google Calendar" / "conecta Notion" / "connect Google Docs" (or Sheets, Drive: app google_docs) / "connect Granola" → ' +
+    '- Connected apps: "connect my Google Calendar" / "conecta Notion" / "connect Google Docs" (or Sheets, Drive: app google_docs) / "connect Granola" / "connect my Gmail" (or "another Gmail", "my work email": app gmail; send-only) → ' +
     'connect_app and send its message as is (a one-tap link; ' +
     'Juno confirms in the chat when it is done, so do not ask them to tell you). "What\'s connected?" → connection_status. ' +
     'Disconnect → disconnect_app (runs at once; don\'t ask first). When a calendar, Google Docs/Sheets or Notion action fails because it is not connected or needs ' +

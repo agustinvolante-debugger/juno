@@ -141,6 +141,12 @@ export type Draft = {
   body: string
   sessionId: string | null
   createdAt: string
+  /** The connected Gmail it goes out from (lib/pen/gmail.ts); null/absent = Juno's sender ("via Juno"). */
+  from?: string | null
+  /** Which web mail the "Open in …" link is for (lib/pen/mail-pref.ts); null = only the mail-app link. */
+  provider?: import('../mail-compose').MailProvider | null
+  /** The chat's language, for the /m/ pages. */
+  lang?: 'en' | 'es' | 'pt'
 }
 
 /** A draft older than this is gone: "send it" a day later is more likely a different email. */

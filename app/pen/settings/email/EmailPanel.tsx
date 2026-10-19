@@ -1,0 +1,198 @@
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import Icon from '../../Icon'
+import { useCopy } from '../../LangContext'
+import { errMessage } from '@/lib/pen/http'
+import type { Copy } from '@/lib/pen/i18n'
+
+type Account = { address: string; isDefault: boolean; needsReconnect: boolean }
+
+const EM_EN = {
+  title: 'Send from your Gmail',
+  lede: 'When you say “send it” to a draft in the chat, it goes from your own address and lands in your Sent folder.',
+  connect: 'Connect Gmail',
+  another: 'Connect another Gmail',
+  how: 'Google asks for one permission: to send email as you. Juno can’t read, search or delete your mail. Any Google account works, including a work one.',
+  isDefault: 'Default',
+  defaultLine: 'Drafts go from here unless you name another.',
+  otherLine: 'Used when you say “send it from this address”, or for people you last wrote to from it.',
+  reconnectLine: 'Google stopped accepting Juno’s access. Connect it again to send from it.',
+  makeDefault: 'Make default',
+  reconnect: 'Connect again',
+  disconnect: 'Disconnect',
+  working: 'One moment…',
+  sendsLabel: 'Sends',
+  sends: 'Only drafts you’ve seen and told Juno to send, one at a time.',
+  readsLabel: 'Reads',
+  reads: 'Nothing. Juno has no access to your inbox.',
+  without: 'Without Gmail, “send it” sends from Juno as “your name via Juno”, with replies going to you. Every draft also has a link to open it in your own email.',
+  disconnectNote: 'Disconnecting takes away Juno’s permission to send from that address. Emails already sent stay in your Sent folder.',
+  justConnected: (a: string) => `${a} is connected. Drafts can go out from it now.`,
+  errors: {
+    cancelled: 'You cancelled on Google’s screen, so nothing was connected.',
+    state: 'That connection attempt expired. Try again.',
+    setup: 'Gmail isn’t available yet. Try again soon.',
+    readonly: 'Your plan has ended, so your account is read-only. Reactivate it in Billing to connect Gmail.',
+    not_granted: 'Sending wasn’t allowed on Google’s screen, so nothing was connected. Try again and leave the box ticked.',
+    too_many: 'You can connect up to 5 addresses. Disconnect one first.',
+  } as Record<string, string>,
+  failed: 'That didn’t go through. Try again.',
+}
+
+const EM: Copy<typeof EM_EN> = {
+  en: EM_EN,
+  es: {
+    title: 'Enviar desde tu Gmail',
+    lede: 'Cuando dices “envíalo” a un borrador en el chat, sale desde tu propia dirección y queda en tus Enviados.',
+    connect: 'Conectar Gmail',
+    another: 'Conectar otro Gmail',
+    how: 'Google pide un solo permiso: enviar correos en tu nombre. Juno no puede leer, buscar ni borrar tu correo. Sirve cualquier cuenta de Google, también la del trabajo.',
+    isDefault: 'Predeterminada',
+    defaultLine: 'Los borradores salen desde aquí, salvo que nombres otra.',
+    otherLine: 'Se usa cuando dices “envíalo desde esta dirección”, o con quienes les escribiste la última vez desde ella.',
+    reconnectLine: 'Google dejó de aceptar el acceso de Juno. Conéctala de nuevo para enviar desde ella.',
+    makeDefault: 'Hacer predeterminada',
+    reconnect: 'Conectar de nuevo',
+    disconnect: 'Desconectar',
+    working: 'Un momento…',
+    sendsLabel: 'Envía',
+    sends: 'Solo los borradores que viste y le dijiste a Juno que envíe, uno a la vez.',
+    readsLabel: 'Lee',
+    reads: 'Nada. Juno no tiene acceso a tu bandeja de entrada.',
+    without: 'Sin Gmail, “envíalo” lo manda desde Juno como “tu nombre vía Juno”, y las respuestas te llegan a ti. Cada borrador trae además un link para abrirlo en tu propio correo.',
+    disconnectNote: 'Al desconectar, Juno pierde el permiso para enviar desde esa dirección. Los correos ya enviados se quedan en tus Enviados.',
+    justConnected: (a) => `${a} quedó conectada. Los borradores ya pueden salir desde ahí.`,
+    errors: {
+      cancelled: 'Cancelaste en la pantalla de Google, así que no se conectó nada.',
+      state: 'Ese intento de conexión expiró. Inténtalo de nuevo.',
+      setup: 'Gmail aún no está disponible. Inténtalo pronto.',
+      readonly: 'Tu plan terminó, así que tu cuenta es solo de lectura. Reactívala en Facturación para conectar Gmail.',
+      not_granted: 'No se permitió enviar en la pantalla de Google, así que no se conectó nada. Inténtalo de nuevo y deja la casilla marcada.',
+      too_many: 'Puedes conectar hasta 5 direcciones. Primero desconecta una.',
+    },
+    failed: 'No se pudo completar. Inténtalo de nuevo.',
+  },
+  pt: {
+    title: 'Enviar do seu Gmail',
+    lede: 'Quando você diz “enviar” a um rascunho no chat, ele sai do seu próprio endereço e fica nos seus Enviados.',
+    connect: 'Conectar o Gmail',
+    another: 'Conectar outro Gmail',
+    how: 'O Google pede uma única permissão: enviar e-mails em seu nome. O Juno não consegue ler, buscar nem apagar seus e-mails. Qualquer conta Google serve, inclusive a do trabalho.',
+    isDefault: 'Padrão',
+    defaultLine: 'Os rascunhos saem daqui, a menos que você indique outro.',
+    otherLine: 'Usado quando você diz “envie deste endereço”, ou para quem você escreveu por último a partir dele.',
+    reconnectLine: 'O Google parou de aceitar o acesso do Juno. Conecte de novo para enviar dele.',
+    makeDefault: 'Tornar padrão',
+    reconnect: 'Conectar de novo',
+    disconnect: 'Desconectar',
+    working: 'Um momento…',
+    sendsLabel: 'Envia',
+    sends: 'Só os rascunhos que você viu e mandou o Juno enviar, um de cada vez.',
+    readsLabel: 'Lê',
+    reads: 'Nada. O Juno não tem acesso à sua caixa de entrada.',
+    without: 'Sem o Gmail, “enviar” manda pelo Juno como “seu nome via Juno”, e as respostas vão para você. Cada rascunho também traz um link para abrir no seu próprio e-mail.',
+    disconnectNote: 'Ao desconectar, o Juno perde a permissão de enviar desse endereço. Os e-mails já enviados continuam nos seus Enviados.',
+    justConnected: (a) => `${a} está conectado. Os rascunhos já podem sair dele.`,
+    errors: {
+      cancelled: 'Você cancelou na tela do Google, então nada foi conectado.',
+      state: 'Essa tentativa de conexão expirou. Tente de novo.',
+      setup: 'O Gmail ainda não está disponível. Tente novamente em breve.',
+      readonly: 'Seu plano terminou, então sua conta é somente leitura. Reative em Cobrança para conectar o Gmail.',
+      not_granted: 'O envio não foi permitido na tela do Google, então nada foi conectado. Tente de novo e deixe a caixa marcada.',
+      too_many: 'Você pode conectar até 5 endereços. Desconecte um primeiro.',
+    },
+    failed: 'Não deu certo. Tente de novo.',
+  },
+}
+
+const CONNECT = '/api/pen/gmail/connect'
+
+/** user@<wbr>domain, so a long work address breaks at the @ on a phone. */
+const Addr = ({ a }: { a: string }) => <>{a.split('@')[0]}@<wbr />{a.split('@').slice(1).join('@')}</>
+
+export default function EmailPanel({ accounts, justConnected, error }: { accounts: Account[]; justConnected: string | null; error: string | null }) {
+  const T = useCopy(EM)
+  const router = useRouter()
+  const [busy, setBusy] = useState<string | null>(null)
+  const [err, setErr] = useState<string | null>(error ? T.errors[error] ?? decodeURIComponent(error) : null)
+
+  async function post(path: string, address: string) {
+    setBusy(address); setErr(null)
+    try {
+      const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address }) })
+      if (!r.ok) throw new Error(T.failed)
+      router.replace('/pen/settings/email')
+      router.refresh()
+    } catch (e) {
+      setErr(errMessage(e, T.failed))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const flash = justConnected && accounts.some((a) => a.address === justConnected.toLowerCase()) ? T.justConnected(justConnected) : null
+
+  return (
+    <div className="pen-set-stack">
+      {flash && <div className="pen-set-ok" role="status">{flash}</div>}
+      {err && <div className="pen-su-err" role="alert">{err}</div>}
+
+      <div className="pen-set-card">
+        <div className="pen-set-card-head">
+          <h2 className="pen-set-h2">{T.title}</h2>
+          <p className="pen-set-lede">{T.lede}</p>
+        </div>
+
+        {accounts.length > 0 && (
+          <ul className="pen-mail-list">
+            {accounts.map((a) => (
+              <li key={a.address} className="pen-mail-row" data-default={a.isDefault} data-broken={a.needsReconnect}>
+                <span className="pen-gcal-mark" aria-hidden="true"><Icon name="mail" size={20} /></span>
+                <span className="pen-mail-who">
+                  <strong><Addr a={a.address} /></strong>
+                  <span>
+                    {a.isDefault && <em className="pen-mail-default">{T.isDefault}</em>}
+                    {a.needsReconnect ? T.reconnectLine : a.isDefault ? T.defaultLine : T.otherLine}
+                  </span>
+                </span>
+                <span className="pen-mail-acts">
+                  {a.needsReconnect && <a className="pen-btn pen-btn-accent" href={CONNECT}>{T.reconnect}</a>}
+                  {!a.isDefault && !a.needsReconnect && (
+                    <button type="button" className="pen-btn" onClick={() => post('/api/pen/gmail/default', a.address)} disabled={busy !== null}>
+                      {busy === a.address ? T.working : T.makeDefault}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="pen-mail-off"
+                    onClick={() => post('/api/pen/gmail/disconnect', a.address)}
+                    disabled={busy !== null}
+                    aria-label={`${T.disconnect} ${a.address}`}
+                  >
+                    {T.disconnect}
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="pen-set-actions">
+          <a className={accounts.length ? 'pen-btn' : 'pen-btn pen-btn-accent pen-set-pay'} href={CONNECT}>
+            {accounts.length ? T.another : T.connect}
+          </a>
+        </div>
+        <p className="pen-set-fine">{accounts.length ? T.disconnectNote : T.how}</p>
+
+        <dl className="pen-gcal-terms">
+          <div><dt>{T.sendsLabel}</dt><dd>{T.sends}</dd></div>
+          <div><dt>{T.readsLabel}</dt><dd>{T.reads}</dd></div>
+        </dl>
+      </div>
+
+      {accounts.length === 0 && <p className="pen-set-fine pen-mail-without">{T.without}</p>}
+    </div>
+  )
+}

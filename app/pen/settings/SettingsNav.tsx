@@ -7,10 +7,10 @@ import { useCopy } from '../LangContext'
 import type { Copy } from '@/lib/pen/i18n'
 import { SUPPORT_EMAIL } from '@/lib/support'
 
-const SN: Copy<{ profile: string; aria: string; billing: string; invite: string; help: string; calendar: string }> = {
-  en: { profile: 'Profile', aria: 'Settings', billing: 'Billing', invite: 'Invite friends', help: 'Help', calendar: 'Google' },
-  es: { profile: 'Perfil', aria: 'Ajustes', billing: 'Facturación', invite: 'Invitar amigos', help: 'Ayuda', calendar: 'Google' },
-  pt: { profile: 'Perfil', aria: 'Configurações', billing: 'Cobrança', invite: 'Convidar amigos', help: 'Ajuda', calendar: 'Google' },
+const SN: Copy<{ profile: string; aria: string; billing: string; invite: string; help: string; calendar: string; email: string }> = {
+  en: { profile: 'Profile', aria: 'Settings', billing: 'Billing', invite: 'Invite friends', help: 'Help', calendar: 'Google', email: 'Email' },
+  es: { profile: 'Perfil', aria: 'Ajustes', billing: 'Facturación', invite: 'Invitar amigos', help: 'Ayuda', calendar: 'Google', email: 'Correo' },
+  pt: { profile: 'Perfil', aria: 'Configurações', billing: 'Cobrança', invite: 'Convidar amigos', help: 'Ajuda', calendar: 'Google', email: 'E-mail' },
 }
 
 const ITEMS: { href: string; label: 'profile' | 'WhatsApp'; icon: IconName }[] = [
@@ -22,7 +22,7 @@ const ITEMS: { href: string; label: 'profile' | 'WhatsApp'; icon: IconName }[] =
  * `whatsapp` is false until WhatsApp (Meta Cloud API) or iMessage is configured, so nobody finds a page that can't work.
  * `billing` is true for anyone Stripe knows: pause, and the way into Stripe's portal.
  */
-export default function SettingsNav({ whatsapp = false, billing = false, notion = false, calendar = false, imessage = false, granola = false }: { whatsapp?: boolean; billing?: boolean; notion?: boolean; calendar?: boolean; imessage?: boolean; granola?: boolean }) {
+export default function SettingsNav({ whatsapp = false, billing = false, notion = false, calendar = false, imessage = false, granola = false, email = false }: { whatsapp?: boolean; billing?: boolean; notion?: boolean; calendar?: boolean; imessage?: boolean; granola?: boolean; email?: boolean }) {
   const T = useCopy(SN)
   const path = usePathname()
   return (
@@ -49,6 +49,13 @@ export default function SettingsNav({ whatsapp = false, billing = false, notion 
         <Link href="/pen/settings/google" className="pen-cat" data-active={path === '/pen/settings/google'} aria-current={path === '/pen/settings/google' ? 'page' : undefined}>
           <Icon name="calendar" size={19} />
           <span className="pen-cat-label">{T.calendar}</span>
+        </Link>
+      )}
+      {/* Gmail send-only (lib/pen/gmail.ts): shown once its table exists. */}
+      {email && (
+        <Link href="/pen/settings/email" className="pen-cat" data-active={path === '/pen/settings/email'} aria-current={path === '/pen/settings/email' ? 'page' : undefined}>
+          <Icon name="mail" size={19} />
+          <span className="pen-cat-label">{T.email}</span>
         </Link>
       )}
       <Link href="/pen/settings/invite" className="pen-cat" data-active={path === '/pen/settings/invite'} aria-current={path === '/pen/settings/invite' ? 'page' : undefined}>

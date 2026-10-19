@@ -6,7 +6,10 @@
 //   get_recording       one recording's notes, to write an email from
 //   find_person         a contact and their saved email
 //   save_draft          writes the follow-up email; the code, not the model, shows it
-//   send_draft          sends the draft shown in an EARLIER message
+//   send_draft          sends the draft shown in an EARLIER message (from their Gmail when one is
+//                       connected, lib/pen/gmail.ts; else "Name via Juno", lib/pen/follow-up.ts)
+//   set_draft_from      "send it from my work email": another connected Gmail; shown again first
+//   set_mail_app        "I use Yahoo": which web mail the draft's "Open in …" link opens
 //   set_reminder        "remind me in 15 min to ..." (within 24 h: Meta's free-form window)
 //   list_reminders / cancel_reminder
 //   list_recordings     recent recordings with ids, so "the call with Carlos" can be acted on
@@ -47,6 +50,9 @@ import { groupSessions } from '../merge'
 import { foldName, speakerName, resolve as resolveLabel, type SpeakerMap } from '../speakers'
 import { COMMON_TYPES } from '../categories'
 import { sendFollowUp } from '../follow-up'
+import { gmailAvailable, lastFromFor, listAccounts, sendViaGmail, type GmailAccount } from '../gmail'
+import { chooseFrom, PROVIDER_NAME, type MailApp } from '../mail-compose'
+import { mailProvider, setMailApp } from '../mail-pref'
 import { getProfile } from '../profile'
 import { addReminder, cancelReminder, pendingReminders, MAX_AHEAD_MS, maxAheadMs } from '../reminders'
 import type { Lang } from '../currency'
@@ -83,6 +89,8 @@ export type Ctx = {
   citations: Citation[]
   /** Set by save_draft, so the preview is appended to the reply. */
   drafted: Draft | null
+  /** Gmail addresses connected for sending (empty when none, or before the table exists). */
+  gmail?: GmailAccount[]
   sent: boolean
   redo?: { sessionId: string; type?: string }
   /** A recording to split into conversations after the reply (split_conversations). */
@@ -179,6 +187,7 @@ const TOOLS: Anthropic.Tool[] = [
         subject: { type: 'string' },
         body: { type: 'string', description: 'Plain text, blank lines between paragraphs, signed with the user\'s first name.' },
         session_id: { type: 'string', description: 'The recording it follows up on, or "".' },
+        from: { type: 'string', description: 'Only when the user names which of their connected Gmail addresses to send from ("from my work email", "from ana@x.com"): that address or their words. Omit otherwise.' },
       },
       required: ['to_name', 'to_email', 'subject', 'body', 'session_id'],
       additionalProperties: false,
@@ -222,6 +231,25 @@ const TOOLS: Anthropic.Tool[] = [
       'Send the saved draft. Only when the user has seen the draft and clearly said to send it ("send it", "mándalo", ' +
       '"pode enviar"). Never in the same turn you saved or changed the draft.',
     input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'set_draft_from',
+    description:
+      'Change which connected Gmail address the pending draft goes out from ("send it from my work email", "from ana@x.com", ' +
+      '"use my personal one"). The draft is shown again with the new From; it is NOT sent: wait for their "send it".',
+    input_schema: {
+      type: 'object',
+      properties: { from: { type: 'string', description: 'The address, or the user\'s words for it ("work").' } },
+      required: ['from'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'set_mail_app',
+    description:
+      'Remember which email service the user uses ("I use Outlook", "uso Yahoo", "I use Apple Mail" = other), so each draft\'s ' +
+      '"Open in …" link opens that one. A pending draft is shown again with the new link.',
+    input_schema: { type: 'object', properties: { app: { type: 'string', enum: ['gmail', 'outlook', 'yahoo', 'other'] } }, required: ['app'], additionalProperties: false },
   },
   {
     name: 'list_recordings',
@@ -544,6 +572,7 @@ function system(ctx: Ctx, pending: Draft | null, asked: Pending | null): string 
     '- After save_draft, write at most one short intro line (or ask for the missing email), and do not tell them how to send it. The draft and a ' +
     '"reply send it" hint are shown below your reply automatically.\n' +
     '- send_draft only on a clear go-ahead for a draft the user has already seen.\n' +
+    gmailLine(ctx) +
     (ctx.userName ? `\nThe user is ${ctx.userName}. In to-dos, an owner with their name (or "me", "I") is them.\n` : '') +
     (ctx.agentBrief ? `\nAbout the user:\n${ctx.agentBrief}\n` : '') +
     (pending
@@ -679,7 +708,7 @@ async function findPerson(ctx: Ctx, name: string): Promise<unknown> {
 
 async function saveDraft(
   ctx: Ctx,
-  i: { to_name: string; to_email: string; subject: string; body: string; session_id: string },
+  i: { to_name: string; to_email: string; subject: string; body: string; session_id: string; from?: string },
 ): Promise<unknown> {
   const toName = i.to_name.trim().slice(0, 120)
   if (!toName || !i.subject.trim() || !i.body.trim()) return { error: 'to_name, subject and body are required' }
@@ -699,6 +728,8 @@ async function saveDraft(
   }
 
   const sessionId = /^[0-9a-f-]{36}$/i.test(i.session_id) && (await getSession(ctx.email, i.session_id)) ? i.session_id : null
+  const picked = await pickFrom(ctx, toEmail, i.from)
+  if ('error' in picked) return picked
   const draft: Draft = {
     id: crypto.randomBytes(12).toString('base64url'),
     msgId: ctx.msgId,
@@ -708,12 +739,65 @@ async function saveDraft(
     body: i.body.trim().slice(0, 8000),
     sessionId,
     createdAt: new Date().toISOString(),
+    from: picked.from,
+    provider: await mailProvider(ctx.email, picked.from).catch(() => null),
+    lang: ctx.lang,
   }
   await setDraft(ctx.email, draft)
   ctx.drafted = draft
+  const from = draft.from
+    ? { will_send_from: draft.from, from_why: picked.why, from_note: 'Not sent: it goes from this address only when they say send.' }
+    : { will_send_from: 'Juno (no Gmail connected): as "Name via Juno", replies go to the user' }
   return toEmail
-    ? { ok: true, shown_to_user: true, to: `${toName} <${toEmail}>` }
-    : { ok: true, shown_to_user: true, to: toName, missing: `No email saved for ${toName}. Ask the user for it.` }
+    ? { ok: true, shown_to_user: true, to: `${toName} <${toEmail}>`, ...from }
+    : { ok: true, shown_to_user: true, to: toName, ...from, missing: `No email saved for ${toName}. Ask the user for it.` }
+}
+
+/** Which connected Gmail a draft goes out from: named > last used for this recipient > default. */
+async function pickFrom(ctx: Ctx, toEmail: string | null, said?: string): Promise<{ from: string | null; why: string } | { error: string; connected?: string[]; next: string }> {
+  const accounts = ctx.gmail ?? []
+  if (!accounts.length) {
+    return said?.trim()
+      ? { error: 'no Gmail is connected for sending', next: 'say so in one line and offer to connect it (connect_app app gmail); the draft can still go "via Juno"' }
+      : { from: null, why: 'none' }
+  }
+  const c = chooseFrom(accounts, { override: said, lastForRecipient: await lastFromFor(ctx.email, toEmail) })
+  if (c.why === 'no_match') return { error: `no connected Gmail matches "${c.asked}"`, connected: accounts.map((a) => a.address), next: 'ask which of these, or offer to connect another (connect_app app gmail)' }
+  return { from: c.address, why: c.why }
+}
+
+async function setDraftFrom(ctx: Ctx, said: string): Promise<unknown> {
+  const d = await getDraft(ctx.email)
+  if (!d) return { error: 'no draft is pending' }
+  const picked = await pickFrom(ctx, d.toEmail, said || ' ')
+  if ('error' in picked) return picked
+  const draft: Draft = { ...d, id: crypto.randomBytes(12).toString('base64url'), msgId: ctx.msgId, createdAt: new Date().toISOString(), from: picked.from, provider: await mailProvider(ctx.email, picked.from).catch(() => null), lang: ctx.lang }
+  await setDraft(ctx.email, draft)
+  ctx.drafted = draft
+  return { ok: true, shown_to_user: true, from: picked.from, note: 'Say in one line that it will go from this address; the draft is shown below. Not sent: wait for "send it".' }
+}
+
+async function setMailAppTool(ctx: Ctx, app: string): Promise<unknown> {
+  if (!['gmail', 'outlook', 'yahoo', 'other'].includes(app)) return { error: 'app must be gmail, outlook, yahoo or other' }
+  await setMailApp(ctx.email, app as MailApp)
+  const d = ctx.drafted ?? (await getDraft(ctx.email).catch(() => null))
+  if (!d) return { ok: true, note: 'Confirm in one line; their next drafts will open in it.' }
+  const draft: Draft = { ...d, id: crypto.randomBytes(12).toString('base64url'), msgId: ctx.msgId, createdAt: new Date().toISOString(), provider: await mailProvider(ctx.email, d.from).catch(() => null) }
+  await setDraft(ctx.email, draft)
+  ctx.drafted = draft
+  return { ok: true, shown_to_user: true, note: 'Confirm in one line; the draft is shown again below with the new link.' }
+}
+
+function gmailLine(ctx: Ctx): string {
+  const g = ctx.gmail ?? []
+  if (!g.length) {
+    return '- Email sending: no Gmail is connected, so "send it" sends from Juno\'s address as "<their name> via Juno", replies to them, ' +
+      'a copy to them. If they want it from their own address, offer to connect Gmail (connect_app, app gmail; send-only, Juno never reads mail), ' +
+      'or they can use the "Open in …" link under the draft.\n'
+  }
+  return `- Email sending: Gmail connected for sending: ${g.map((a) => `${a.address}${a.is_default ? ' (default)' : ''}${a.last_error ? ' (needs reconnecting)' : ''}`).join(', ')}. ` +
+    'A draft goes out from the From address shown on it, into their Sent folder. "Send it from my work email / from x@y" → set_draft_from ' +
+    '(it shows the draft again; it is not sent until they say send). "Connect another Gmail" → connect_app app gmail.\n'
 }
 
 async function sendDraft(ctx: Ctx): Promise<unknown> {
@@ -724,6 +808,20 @@ async function sendDraft(ctx: Ctx): Promise<unknown> {
   }
   if (!d.toEmail) return { error: `no email address for ${d.toName}; ask the user for it` }
   if (ctx.sent) return { error: 'already sent in this turn' }
+  if (d.from) {
+    // Their Gmail. A failure is never retried through Juno's sender: they chose this address.
+    const g = await sendViaGmail({ userEmail: ctx.email, from: d.from, fromName: ctx.userName, to: d.toEmail, toName: d.toName, subject: d.subject, body: d.body, sessionId: d.sessionId })
+    if (!g.ok) {
+      return {
+        error: `not sent from ${d.from}: ${g.error}`,
+        plain: gmailFailed(ctx.lang, d, g.reason),
+        note: 'Reply with `plain` word for word (translate the words only if the chat is in another language; never change the links).',
+      }
+    }
+    ctx.sent = true
+    await setDraft(ctx.email, null)
+    return { ok: true, sent_from: d.from, sent_to: `${d.toName} <${d.toEmail}>`, subject: d.subject, note: 'It is in their Gmail Sent folder; replies come to that address.' }
+  }
   const r = await sendFollowUp({ userEmail: ctx.email, toEmail: d.toEmail, subject: d.subject, body: d.body, sessionId: d.sessionId })
   if (!r.ok) return { error: `not sent: ${r.error}` }
   ctx.sent = true
@@ -1253,9 +1351,14 @@ async function runTool(ctx: Ctx, name: string, input: Record<string, unknown>): 
         subject: str('subject'),
         body: str('body'),
         session_id: str('session_id'),
+        from: str('from'),
       })
     case 'send_draft':
       return sendDraft(ctx)
+    case 'set_draft_from':
+      return setDraftFrom(ctx, str('from'))
+    case 'set_mail_app':
+      return setMailAppTool(ctx, str('app'))
     case 'set_reminder':
       return setReminder(ctx, { text: str('text'), in_minutes: Number(input.in_minutes) || 0, at: str('at') })
     case 'list_reminders':
@@ -1308,28 +1411,70 @@ async function runTool(ctx: Ctx, name: string, input: Record<string, unknown>): 
 
 /* ------------------------------------------------------------------- loop */
 
-const HINT: Record<Lang, { to: string; subject: string; send: string; noEmail: string; own: string }> = {
-  en: { to: 'To', subject: 'Subject', send: 'Reply *send it* to send, or tell me what to change.', noEmail: 'Send me their email and I\'ll add it.', own: 'Or send it from your own email:' },
-  es: { to: 'Para', subject: 'Asunto', send: 'Responde *envíalo* para mandarlo, o dime qué cambiar.', noEmail: 'Mándame su email y lo agrego.', own: 'O mándalo desde tu propio correo:' },
-  pt: { to: 'Para', subject: 'Assunto', send: 'Responda *enviar* para mandar, ou me diga o que mudar.', noEmail: 'Me mande o email e eu adiciono.', own: 'Ou envie do seu próprio email:' },
+const HINT: Record<Lang, { from: string; to: string; subject: string; send: string; noEmail: string; openIn: (p: string) => string; app: string }> = {
+  en: { from: 'From', to: 'To', subject: 'Subject', send: 'Reply *send it* to send, or tell me what to change.', noEmail: 'Send me their email and I\'ll add it.', openIn: (p) => `Open in ${p}`, app: 'Open in your mail app' },
+  es: { from: 'De', to: 'Para', subject: 'Asunto', send: 'Responde *envíalo* para mandarlo, o dime qué cambiar.', noEmail: 'Mándame su email y lo agrego.', openIn: (p) => `Abrir en ${p}`, app: 'Abrir en tu app de correo' },
+  pt: { from: 'De', to: 'Para', subject: 'Assunto', send: 'Responda *enviar* para mandar, ou me diga o que mudar.', noEmail: 'Me mande o email e eu adiciono.', openIn: (p) => `Abrir no ${p}`, app: 'Abrir no seu app de e-mail' },
 }
 
-function openLink(id: string): string {
-  const base = (process.env.PEN_PUBLIC_URL || process.env.NEXTAUTH_URL || 'https://www.tryjunoapp.com').replace(/\/$/, '')
-  return `${base}/api/pen/open/${id}`
+const publicBase = () => (process.env.PEN_PUBLIC_URL || process.env.NEXTAUTH_URL || 'https://www.tryjunoapp.com').replace(/\/$/, '')
+
+/** Short https links (app/m/[id]): WhatsApp doesn't linkify mailto:, and compose URLs are long.
+ *  'w' + draft id = the web mail's compose, 'a' + draft id = the phone's mail app. They die with
+ *  the draft (24 h, or when it is sent or replaced), so an edit always gets new links. */
+export function mailLink(d: Pick<Draft, 'id'>, kind: 'w' | 'a'): string {
+  return `${publicBase()}/m/${kind}${d.id}`
+}
+
+/** The web-compose link first (when the provider is known), the mail-app link second. */
+export function draftLinks(d: Draft, lang: Lang = 'en'): string {
+  const h = HINT[lang]
+  return [d.provider ? `${h.openIn(PROVIDER_NAME[d.provider])}: ${mailLink(d, 'w')}` : null, `${h.app}: ${mailLink(d, 'a')}`].filter(Boolean).join('\n')
 }
 
 export function draftPreview(d: Draft, lang: Lang = 'en'): string {
   const h = HINT[lang]
   return (
-    `✉️ *${h.to}:* ${d.toName}${d.toEmail ? ` <${d.toEmail}>` : ''}\n*${h.subject}:* ${d.subject}\n\n${d.body}\n\n` +
-    `_${d.toEmail ? h.send : h.noEmail}_` +
-    (d.toEmail ? `\n${h.own} ${openLink(d.id)}` : '')
+    `✉️ ${d.from ? `*${h.from}:* ${d.from}\n` : ''}*${h.to}:* ${d.toName}${d.toEmail ? ` <${d.toEmail}>` : ''}\n*${h.subject}:* ${d.subject}\n\n${d.body}\n\n` +
+    `_${d.toEmail ? h.send : h.noEmail}_\n` +
+    draftLinks(d, lang)
   )
+}
+
+/** Gmail didn't send it: say so plainly, and hand them the draft to send themselves. */
+function gmailFailed(lang: Lang, d: Draft, reason: 'cap' | 'not_connected' | 'revoked' | 'failed'): string {
+  const links = draftLinks(d, lang)
+  const L = {
+    en: {
+      revoked: `I couldn't send it from ${d.from}: Google no longer lets Juno send from that address. Say "connect my Gmail" to connect it again, or send it yourself:`,
+      not_connected: `I couldn't send it: ${d.from} isn't connected anymore. Say "connect my Gmail" to connect it again, or send it yourself:`,
+      cap: 'I couldn\'t send it: that\'s the daily limit of emails from Juno. Send it yourself:',
+      failed: `Gmail didn't accept it, so nothing was sent from ${d.from}. Try "send it" again in a minute, or send it yourself:`,
+    },
+    es: {
+      revoked: `No pude enviarlo desde ${d.from}: Google ya no deja que Juno envíe desde esa dirección. Di "conecta mi Gmail" para conectarla de nuevo, o envíalo tú:`,
+      not_connected: `No pude enviarlo: ${d.from} ya no está conectada. Di "conecta mi Gmail" para conectarla de nuevo, o envíalo tú:`,
+      cap: 'No pude enviarlo: llegaste al límite diario de correos desde Juno. Envíalo tú:',
+      failed: `Gmail no lo aceptó, así que no salió nada desde ${d.from}. Intenta "envíalo" de nuevo en un minuto, o envíalo tú:`,
+    },
+    pt: {
+      revoked: `Não consegui enviar de ${d.from}: o Google não deixa mais o Juno enviar desse endereço. Diga "conectar meu Gmail" para conectar de novo, ou envie você mesmo:`,
+      not_connected: `Não consegui enviar: ${d.from} não está mais conectado. Diga "conectar meu Gmail" para conectar de novo, ou envie você mesmo:`,
+      cap: 'Não consegui enviar: é o limite diário de e-mails pelo Juno. Envie você mesmo:',
+      failed: `O Gmail não aceitou, então nada saiu de ${d.from}. Tente "enviar" de novo daqui a um minuto, ou envie você mesmo:`,
+    },
+  }[lang]
+  return `${L[reason]}\n${links}`
 }
 
 /** A bare go-ahead. Handled in code, so a send never depends on the model choosing to call a tool. */
 const SEND_IT = /^\s*(send( it| the email)?|yes,? send( it)?|env[ií]a(lo)?|m[aá]nd(a|alo)|s[ií],? (env[ií]alo|m[aá]ndalo)|pode enviar|envia(r)?|manda(r)?)\s*[.!👍]*\s*$/i
+
+const SENT_GMAIL: Record<Lang, (from: string, to: string, subject: string) => string> = {
+  en: (f, to, s) => `Sent from ${f} to ${to}: "${s}". It's in your Sent folder, and replies will go to you.`,
+  es: (f, to, s) => `Enviado desde ${f} a ${to}: "${s}". Está en tus Enviados y las respuestas te llegan a ti.`,
+  pt: (f, to, s) => `Enviado de ${f} para ${to}: "${s}". Está nos seus Enviados e as respostas vão para você.`,
+}
 
 const SENT: Record<Lang, (to: string, subject: string) => string> = {
   en: (to, s) => `Sent to ${to}: "${s}". A copy is in your inbox, and replies will go to you.`,
@@ -1352,7 +1497,8 @@ export async function runAgent(opts: {
   const userName = (await getProfile(opts.email).catch(() => null))?.name?.trim() || null
   const recentTitle = opts.recent ? ((await getSession(opts.email, opts.recent).catch(() => null))?.title ?? null) : null
   const zone = await userZone(opts.email, opts.phone).catch((): Zone => ({ tz: null, source: 'none', sure: false }))
-  const ctx: Ctx = { ...opts, userName, recentTitle, citations: [], drafted: null, sent: false, enrich: new Set(), later: [], zone }
+  const gmail = (await gmailAvailable().catch(() => false)) ? await listAccounts(opts.email).catch((): GmailAccount[] => []) : []
+  const ctx: Ctx = { ...opts, userName, recentTitle, citations: [], drafted: null, sent: false, enrich: new Set(), later: [], zone, gmail }
   const pending = await getDraft(opts.email).catch(() => null)
   const asked = await getPending(opts.email).catch(() => null)
 
@@ -1399,10 +1545,16 @@ export async function runAgent(opts: {
   }
 
   if (pending?.toEmail && SEND_IT.test(opts.question)) {
-    const r = (await sendDraft(ctx)) as { ok?: boolean; error?: string }
+    const r = (await sendDraft(ctx)) as { ok?: boolean; error?: string; plain?: string; sent_from?: string }
     if (r.ok) {
       await dropIfUnanswered(ctx, asked).catch(() => {})
-      return { text: SENT[opts.lang](`${pending.toName} <${pending.toEmail}>`, pending.subject), citations: [] }
+      const to = `${pending.toName} <${pending.toEmail}>`
+      return { text: r.sent_from ? SENT_GMAIL[opts.lang](r.sent_from, to, pending.subject) : SENT[opts.lang](to, pending.subject), citations: [] }
+    }
+    // Their Gmail refused it: the plain words and the links, from code, not the model.
+    if (r.plain) {
+      await dropIfUnanswered(ctx, asked).catch(() => {})
+      return { text: r.plain, citations: [] }
     }
     // Not sent (daily cap, provider error): let the model explain it in context.
   }

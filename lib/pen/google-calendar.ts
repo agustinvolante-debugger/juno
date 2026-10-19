@@ -503,7 +503,12 @@ export async function disconnectGoogle(email: string, what: 'gcal' | 'drive' | '
     return { revoked: false, partial: true }
   }
   let revoked = false
-  if (r) {
+  // The same Google account also connected for sending (lib/pen/gmail.ts): Google's revoke would
+  // take that grant too, so only the row goes. Unknown (no pen_gmail table) = not shared.
+  const sharedWithGmail = r?.calendar_email
+    ? await supabaseAdmin.from('pen_gmail').select('id', { count: 'exact', head: true }).eq('address', r.calendar_email).then((x) => !x.error && (x.count ?? 0) > 0, () => false)
+    : false
+  if (r && !sharedWithGmail) {
     try {
       revoked = await revokeToken(open(r.refresh_token))
     } catch {

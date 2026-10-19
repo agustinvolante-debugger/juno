@@ -477,3 +477,9 @@ alter table public.pen_segments enable row level security;  -- service role only
 -- 2026-10-15, 90-day audio retention (lib/pen/audio-retention.ts). Until these run the cron stays a dry run and refuses to delete.
 -- alter table public.pen_sessions add column if not exists audio_deleted_at timestamptz;
 -- alter table public.pen_sessions add column if not exists keep_audio boolean not null default false;
+-- 2026-10-19, Gmail send-only (lib/pen/gmail.ts) + the From remembered per recipient. Until these run, gmailAvailable() is false and the feature is hidden (Settings → Email, the chat's From line and "connect my Gmail"). Draft links (/m/<id>) need NO DDL: they read the draft in pen_whatsapp_links.draft.
+-- create table if not exists public.pen_gmail (id uuid primary key default gen_random_uuid(), user_email text not null, address text not null, refresh_token text not null, is_default boolean not null default false, last_error text, connected_at timestamptz not null default now(), last_used_at timestamptz, unique (user_email, address));
+-- create index if not exists pen_gmail_address on public.pen_gmail(address);
+-- alter table public.pen_gmail enable row level security;  -- service role only
+-- create table if not exists public.pen_mail_from (user_email text not null, to_email text not null, from_address text not null, updated_at timestamptz not null default now(), primary key (user_email, to_email));
+-- alter table public.pen_mail_from enable row level security;  -- service role only

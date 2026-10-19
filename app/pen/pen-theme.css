@@ -4236,3 +4236,31 @@ html.pen-m-lock, html.pen-m-lock body { height: 100%; overflow: hidden; overscro
 .pen-order-btn[aria-pressed='true'] { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px rgba(22, 21, 15, .12); }
 .pen-order-btn:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 2px; }
 @media (hover: none) { .pen-order-btn { min-height: 44px; padding: 8px 14px; } }
+
+/* Settings → Email: the Gmail addresses drafts go out from, one default. Rows share the
+   calendar card's mark and hairlines; actions sit right, and drop under the address on a phone. */
+.pen-mail-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.pen-mail-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.pen-mail-row[data-default='false'] .pen-gcal-mark { background: var(--sunk); border-color: var(--line); color: var(--soft); }
+.pen-mail-row[data-broken='true'] .pen-gcal-mark { background: var(--warn-wash); border-color: #EFE2C4; color: var(--warn); }
+.pen-mail-who { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: var(--t-small); line-height: var(--t-small-lh); color: var(--soft); }
+.pen-mail-who strong { color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
+.pen-mail-default {
+  display: inline-block; margin-right: 8px; padding: 1px 8px; border-radius: 999px; vertical-align: 1px;
+  font-style: normal; font-size: var(--t-label); font-weight: 600; letter-spacing: .01em;
+  background: var(--accent-wash); border: 1px solid var(--accent-line); color: var(--accent-ink);
+}
+.pen-mail-acts { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
+.pen-mail-off {
+  background: none; border: 0; padding: 8px 0; min-height: 40px; cursor: pointer;
+  font: inherit; font-size: var(--t-small); color: var(--soft); text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px;
+  transition: color .14s ease, text-decoration-color .14s ease;
+}
+.pen-mail-off:hover:not(:disabled) { color: var(--ink); text-decoration-color: currentColor; }
+.pen-mail-off:disabled { opacity: .42; cursor: not-allowed; }
+.pen-mail-off:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.pen-mail-without { margin: 0; max-width: 60ch; }
+@media (max-width: 560px) {
+  .pen-mail-row { grid-template-columns: auto 1fr; }
+  .pen-mail-acts { grid-column: 2; justify-content: flex-start; }
+}
