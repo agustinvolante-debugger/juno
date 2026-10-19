@@ -76,18 +76,40 @@ const HEADERS = { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': '
 
 function page(lang: Lang, title: string, inner: string, status = 200): Response {
   const html = `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>${esc(title)}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Lora:wght@600&family=Newsreader:ital,opsz,wght@1,6..72,600&display=swap">
 <style>
-:root{--paper:#F2EFE5;--panel:#FFFFFF;--line:#DCD5C4;--ink:#16150F;--soft:#514E45;--accent:#0B6B44;--accent-ink:#08482E}
-*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
-main{max-width:560px;margin:0 auto;padding:28px 16px 40px}h1{font:400 26px/1.2 Georgia,serif;margin:0 0 16px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
-.meta{font-size:14px;color:var(--soft);margin-bottom:10px;word-break:break-word}.meta b{color:var(--ink);font-weight:600}
-.body{white-space:pre-wrap;word-break:break-word;font-size:15px}
-a.btn,button{display:block;width:100%;text-align:center;border-radius:12px;padding:14px;font-family:inherit;font-weight:600;font-size:16px;line-height:1.2;text-decoration:none;cursor:pointer;margin-bottom:10px;min-height:48px}
-a.btn{background:var(--accent);color:#fff;border:0}button{background:var(--panel);color:var(--accent-ink);border:1px solid var(--line)}
-a.btn:focus-visible,button:focus-visible{outline:3px solid var(--accent-ink);outline-offset:2px}
-.note{font-size:13px;color:var(--soft);margin:0 0 12px}.lead{margin:0 0 14px;color:var(--soft)}
-</style></head><body><main>${inner}</main></body></html>`
+/* The Pen app's skin (app/pen/app-skin.css): light grey canvas, white cards, one blue, Inter. */
+:root{--paper:#f5f5f7;--panel:#fff;--line:#d2d2d7;--hair:#e8e8ed;--ink:#1d1d1f;--soft:#424245;--dim:#6e6e73;--blue:#0066cc;--blue-hi:#0071e3;--blue-ink:#0055aa;--wash:#e8f1fc}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.5 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+::selection{background:var(--wash);color:var(--ink)}
+main{max-width:520px;margin:0 auto;padding:20px 16px 40px}
+.brand{display:flex;align-items:center;gap:8px;margin:0 0 28px;color:var(--ink);text-decoration:none}
+.brand img{width:30px;height:30px;border-radius:8px;display:block}
+.brand b{font:600 17px/1 Lora,Georgia,serif;letter-spacing:-.02em}
+.brand b span{font-family:Newsreader,Georgia,serif;font-style:italic}
+h1{font-weight:600;font-size:30px;line-height:1.1;letter-spacing:-.035em;margin:0 0 8px;text-wrap:balance}
+.lead{margin:0 0 22px;color:var(--soft);font-size:16px}
+.lead[role=status]::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--blue);margin:0 8px 1px 0;vertical-align:middle;animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.lead[role=status]::before{animation:none}}
+a.btn,button{display:flex;align-items:center;justify-content:center;width:100%;min-height:50px;padding:13px 20px;border-radius:9999px;font-family:inherit;font-size:17px;font-weight:500;line-height:1.2;letter-spacing:-.01em;text-decoration:none;cursor:pointer;margin:0 0 10px;transition:background .18s ease,box-shadow .18s ease,translate .18s ease}
+a.btn{color:#fff;border:1px solid #0062c4;background:linear-gradient(180deg,#1b7be3,#0066cc);box-shadow:inset 0 1px 0 rgba(255,255,255,.32),0 1px 2px rgba(0,51,122,.22),0 8px 18px -8px rgba(0,102,204,.55)}
+a.btn:hover{background:linear-gradient(180deg,#2385ec,#0071e3)}
+a.btn:active{translate:0 1px;box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 1px 2px rgba(0,51,122,.22)}
+button{background:var(--panel);color:var(--blue-ink);border:1px solid var(--line);box-shadow:0 1px 2px rgba(29,29,31,.04)}
+button:hover{background:#fafafc;border-color:#c2c2c8}
+button.ok{color:#1b7a3b;border-color:#bfe3cb;background:#e7f5ec}
+:focus-visible{outline:2px solid var(--blue-hi);outline-offset:3px}
+.card{background:var(--panel);border:1px solid var(--hair);border-radius:18px;padding:18px 18px 20px;margin:14px 0 16px;box-shadow:0 1px 2px rgba(29,29,31,.04),0 12px 24px -12px rgba(29,29,31,.12)}
+.meta{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:15px;padding:0 0 14px;margin:0 0 14px;border-bottom:1px solid var(--hair);word-break:break-word}
+.meta dt{color:var(--dim)}.meta dd{margin:0;color:var(--ink)}
+.meta dd.subj{font-weight:600}
+.body{white-space:pre-wrap;word-break:break-word;font-size:16px;line-height:1.55;color:var(--ink)}
+.note{font-size:14px;color:var(--dim);margin:6px 4px 0;text-align:center}
+</style></style></head><body><main><a class="brand" href="https://www.tryjunoapp.com" aria-label="Juno Pen"><img src="/juno_mark.png" alt="" width="30" height="30"><b><span>J</span>uno Pen</b></a>${inner}</main></body></html>`
   return new Response(html, { status, headers: HEADERS })
 }
 
@@ -126,12 +148,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 ${auto ? `<p class="lead" role="status">${esc(t.opening)}</p>` : `<p class="lead">${esc(t.long)}</p>`}
 ${link.full ? '' : `<button id="c" type="button">${esc(t.copy)}</button>`}
 <a class="btn" id="o" href="${esc(link.url)}"${web ? ' rel="noopener"' : ''}>${esc(label)}</a>
-<div class="card"><div class="meta">${d.from ? `<b>${lang === 'en' ? 'From' : 'De'}:</b> ${esc(d.from)}<br>` : ''}<b>${esc(t.to)}:</b> ${esc(d.toName)}${d.toEmail ? ` &lt;${esc(d.toEmail)}&gt;` : ''}<br><b>${esc(t.subject)}:</b> ${esc(d.subject)}</div><div class="body">${esc(d.body)}</div></div>
+<div class="card"><dl class="meta">${d.from ? `<dt>${lang === 'en' ? 'From' : 'De'}</dt><dd>${esc(d.from)}</dd>` : ''}<dt>${esc(t.to)}</dt><dd>${esc(d.toName)}${d.toEmail ? ` &lt;${esc(d.toEmail)}&gt;` : ''}</dd><dt>${esc(t.subject)}</dt><dd class="subj">${esc(d.subject)}</dd></dl><div class="body">${esc(d.body)}</div></div>
 ${link.full ? `<button id="c" type="button">${esc(t.copy)}</button>` : ''}
 <p class="note">${esc(t.twice)}</p>
 <script>
 (function(){var text=${js(copyText)},b=document.getElementById('c');
-function done(){b.textContent=${js(t.copied)}}
+function done(){b.textContent=${js(t.copied)};b.className='ok'}
 b.onclick=function(){if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done,fallback)}else fallback()};
 function fallback(){var ta=document.createElement('textarea');ta.value=text;ta.setAttribute('readonly','');ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');done()}catch(e){}document.body.removeChild(ta)}
 ${auto ? `setTimeout(function(){location.href=${js(link.url)}},150);` : ''}
