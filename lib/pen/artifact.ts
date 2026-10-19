@@ -5,6 +5,7 @@
 // quick-action button appears, the chat has already selected and read the relevant
 // recordings and cited them. Re-running that selection would cost a second retrieval pass
 // and risk drifting away from the answer the user just read and accepted.
+import { localDate } from './timezone'
 import Anthropic from '@anthropic-ai/sdk'
 import { penAnthropic } from './anthropic'
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
@@ -59,10 +60,12 @@ export const ACTIONS: Record<DocKind, { label: string; hint: string; brief: stri
 
 export async function writeArtifact(opts: {
   kind: DocKind
+  /** The user's time zone, so the page is dated with their today. UTC when not given. */
+  tz?: string | null
   messages: ArchiveTurn[]
 }): Promise<{ title: string; body: string }> {
   const action = ACTIONS[opts.kind] ?? ACTIONS.summary
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDate(opts.tz)
 
   // Only the transcript. If it isn't in the thread it doesn't belong in the document — the
   // user is about to walk into a room holding this.

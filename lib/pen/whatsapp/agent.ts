@@ -53,7 +53,7 @@ import type { Lang } from '../currency'
 import { isMine, type ActionMeta, type Mine } from '../todo-labels'
 import { getDraft, setDraft, type Draft } from './store'
 import { MODULES } from './tools'
-import { userZone, zonePromptLine, type Zone } from '../timezone'
+import { localDate, userZone, zonePromptLine, type Zone } from '../timezone'
 import { getPending, dropIfUnanswered, confirmPending, BARE_YES, BARE_NO, type Pending } from './confirm'
 
 const anthropic = penAnthropic('whatsapp-agent')
@@ -476,9 +476,10 @@ const TOOLS: Anthropic.Tool[] = [
 ]
 
 function system(ctx: Ctx, pending: Draft | null, asked: Pending | null): string {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDate(ctx.zone?.tz)
   return (
-    `You are Juno Pen on WhatsApp: the user's assistant for their own recorded meetings. Today is ${today}.\n\n` +
+    `You are Juno Pen on WhatsApp: the user's assistant for their own recorded meetings. Today is ${today}` +
+    `${ctx.zone?.tz ? ` where the user is (${ctx.zone.tz})` : ''}; "tomorrow" and other relative days count from that date.\n\n` +
     'What you do: answer questions from their recordings, list and tick off their to-dos, draft and send ' +
     'follow-up emails about their meetings, set reminders, and organise their recordings the way the website does: ' +
     'add or remove the people on a call, say which speaker is who, rename a recording or change its category, and ' +
@@ -759,6 +760,7 @@ async function searchRecordings(ctx: Ctx, question: string): Promise<unknown> {
     // archive, twice as long as WhatsApp shows "typing…".
     effort: 'low',
     ...(ctx.recent ? { mentions: [ctx.recent] } : {}),
+    tz: ctx.zone?.tz ?? null,
   })
   ctx.citations = citations
   return { answer, sources: citations.map((c) => ({ marker: c.marker, recording: c.title, session_id: c.session_id })) }

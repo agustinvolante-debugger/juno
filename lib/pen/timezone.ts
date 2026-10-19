@@ -199,6 +199,20 @@ export function whenLabel(at: Date | number, tz: string, locale = 'en-US'): stri
 }
 
 /** One line for the agent's system prompt: where the user is and what time it is there. */
+/**
+ * The user's calendar date (YYYY-MM-DD) in their zone, UTC when unknown. Prompts say "today" with
+ * this: at 23:08 in Santiago it is already tomorrow in UTC, and a UTC "today" made "remind me
+ * tomorrow" land a day late (18 Oct).
+ */
+export function localDate(tz?: string | null, now = new Date()): string {
+  if (!tz) return now.toISOString().slice(0, 10)
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
+  } catch {
+    return now.toISOString().slice(0, 10)
+  }
+}
+
 export function zonePromptLine(z: Zone | null | undefined): string {
   const now = new Date()
   const utc = `${now.toISOString().slice(0, 16)}Z (UTC).`

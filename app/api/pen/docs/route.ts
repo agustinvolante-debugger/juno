@@ -1,3 +1,4 @@
+import { userZone } from '@/lib/pen/timezone'
 import { NextResponse } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
 import { readOnlyRefusal } from '@/lib/pen/access'
@@ -39,7 +40,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Ask something first — there is nothing to write up yet.' }, { status: 400 })
     }
 
-    const { title, body } = await writeArtifact({ kind, messages })
+    const { title, body } = await writeArtifact({ kind, messages, tz: (await userZone(email).catch(() => null))?.tz })
 
     // Sources come from what the thread already cited, so a page can be traced back to
     // recordings without a second retrieval pass.

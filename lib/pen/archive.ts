@@ -11,6 +11,7 @@
 // The model emits [1]-style markers and a parallel citation list. The client turns those into
 // interactive pills, which is why the marker/citation split matters: an answer with an
 // untraceable claim is worse than no answer.
+import { localDate, userZone } from './timezone'
 import Anthropic from '@anthropic-ai/sdk'
 import { penAnthropic } from './anthropic'
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
@@ -316,6 +317,8 @@ function dialogueOf(
 
 export async function askArchive(opts: {
   userEmail: string
+  /** The user's time zone, for "today"/"last week". Looked up from their profile when not given. */
+  tz?: string | null
   question: string
   history: ArchiveTurn[]
   /** The user's own profile as a prompt paragraph. See lib/pen/profile.ts. */
@@ -377,7 +380,7 @@ export async function askArchive(opts: {
   }
   const withMentions = { ...opts, mentioned, personTags, allMentions: [...mentioned, ...personMentions] }
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDate(opts.tz !== undefined ? opts.tz : (await userZone(opts.userEmail).catch(() => null))?.tz)
 
   /* ------------------------------------------------------- stage 1: select */
   //
