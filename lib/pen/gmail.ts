@@ -39,8 +39,13 @@ export const MAX_ACCOUNTS = 5
 
 let avail: { ok: boolean; at: number } | null = null
 
-/** Google configured AND the pen_gmail table exists (checked at most once a minute). */
+/**
+ * Switched on (PEN_GMAIL=1), Google configured AND the pen_gmail table exists (checked at most
+ * once a minute). The switch exists because the tables went in before the Privacy wording and the
+ * gmail.send scope in Google Console (19 Oct): off until both are live.
+ */
 export async function gmailAvailable(): Promise<boolean> {
+  if (process.env.PEN_GMAIL !== '1') return false
   if (!gcalConfigured()) return false
   if (avail && Date.now() - avail.at < 60_000) return avail.ok
   // Not a HEAD request: PostgREST answers HEAD on a missing table with 204 and no error.
