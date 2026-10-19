@@ -47,6 +47,7 @@ export async function setPending(email: string, p: Pending | null): Promise<void
 /** Store the action and tell the model what to ask. `summary` is shown to the user as-is. */
 export async function askConfirm(ctx: Ctx, p: { kind: string; args: Record<string, unknown>; summary: string }): Promise<unknown> {
   ctx.pendingTouched = true
+  ctx.askedNow = true
   await setPending(ctx.email, { ...p, msgId: ctx.msgId, createdAt: new Date().toISOString() })
   return { needs_yes: true, ask_user: p.summary, note: 'Nothing has changed yet. Ask the user exactly this and stop; their yes in the next message runs it (confirm_pending).' }
 }

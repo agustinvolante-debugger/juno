@@ -10,10 +10,17 @@
 // three days who opens the app on a hotel laptop has not moved there.
 //
 // Pen clocks can be hours off, so recording timestamps are never used as a signal.
+//
+// How sure Juno is (zoneFreshness, 18 Oct): a zone is confirmed when the user said it or Juno
+// asked "still in Santiago?" (silence counts as yes). It goes stale after CHECK_EVERY_MS with no
+// sign of them there: no confirmation, no browser visit in that zone. Unconfirmed or stale, Juno
+// still does the time-based thing in the zone it has and adds the one-line question to the same
+// reply (whatsapp/tools/timezone.ts timeFields), at most once a day.
 
 import { supabaseAdmin } from '@/lib/supabase'
 import { cleanProfile, getProfileRaw } from './profile'
 import type { AgentProfile } from './profile-fields'
+import type { Lang } from './currency'
 
 export type Zone = { tz: string | null; source: 'chat' | 'web' | 'phone' | 'none'; sure: boolean; until?: string }
 
@@ -130,6 +137,133 @@ export async function noteBrowserZone(email: string, tz: string): Promise<boolea
   return true
 }
 
+/* ------------------------------------------------------------ how sure */
+
+/** With no sign of the user in their zone for this long, Juno asks once whether they still are. */
+export const CHECK_EVERY_MS = 7 * 24 * 60 * 60 * 1000
+
+export type Freshness = {
+  zone: Zone
+  /** Juno should add "still in Santiago?" to a reply that sets a time. */
+  needsCheck: boolean
+  /** none: no zone (the agent asks the city first, as before). fresh: confirmed and seen
+   *  lately. never_confirmed / phone_only / stale: worth a check. asked_today: worth one, but
+   *  Juno already asked within the day. */
+  reason: 'none' | 'fresh' | 'never_confirmed' | 'phone_only' | 'stale' | 'asked_today'
+  /** The newest sign the user is in that zone (said, checked, browser), or null. */
+  lastSign: string | null
+}
+
+const ms = (v?: string) => (v ? Date.parse(v) || 0 : 0)
+
+/**
+ * The pure check, for tests. Only signals for the zone in use count: a browser in New York says
+ * nothing about Santiago, and a confirmed Santiago says nothing about a newer New York browser
+ * (that is the case worth asking about). A browser visit keeps a confirmed zone fresh but never
+ * confirms one alone: laptops keep the zone they were set to. The browser writes at most once a
+ * day (noteBrowserZone), so a visit is never more than a day behind timeZoneSeenAt.
+ */
+export function zoneFreshness(p: AgentProfile, phone?: string | null, now = Date.now()): Freshness {
+  const zone = resolveZone(p, phone, now)
+  if (!zone.tz) return { zone, needsCheck: false, reason: 'none', lastSign: null }
+  const tz = zone.tz
+  const said = p.timeZoneSaid === tz && (!p.timeZoneUntil || ms(p.timeZoneUntil) > now) ? ms(p.timeZoneSaidAt) : 0
+  const checked = p.timeZoneChecked === tz ? ms(p.timeZoneCheckedAt) : 0
+  const seen = p.timeZone === tz ? ms(p.timeZoneSeenAt) : 0
+  const confirmed = Math.max(said, checked)
+  const last = Math.max(confirmed, seen)
+  const lastSign = last ? new Date(last).toISOString() : null
+  const reason: Freshness['reason'] = !confirmed ? (zone.source === 'phone' ? 'phone_only' : 'never_confirmed') : now - last >= CHECK_EVERY_MS ? 'stale' : 'fresh'
+  if (reason === 'fresh') return { zone, needsCheck: false, reason, lastSign }
+  // Never twice in a day, whatever the answer was ("no" clears the zone, not the time).
+  if (now - ms(p.timeZoneCheckedAt) < SEEN_EVERY_MS) return { zone, needsCheck: false, reason: 'asked_today', lastSign }
+  return { zone, needsCheck: true, reason, lastSign }
+}
+
+/**
+ * Juno asked "still in <tz>?" (tz), or the user said no (null). Asking is the confirmation:
+ * silence means they are still there, so the 7-day clock starts again either way.
+ */
+export async function markZoneChecked(email: string, tz: string | null): Promise<void> {
+  const cur = (await getProfileRaw(email)) ?? {}
+  await writeProfile(email, { ...cur, timeZoneChecked: tz ?? undefined, timeZoneCheckedAt: new Date().toISOString() })
+}
+
+/* ------------------------------------------------------------ place names */
+
+// Said back to the user as a place, never as an IANA id or "GMT-3": "Santiago time", "hora de
+// Santiago", "horário de São Paulo". The US zones go by their region ("Pacific time"), since
+// someone in San Francisco does not live on "Los Angeles time".
+const US_ZONES: Record<string, [string, string, string]> = {
+  'America/Los_Angeles': ['Pacific', 'del Pacífico', 'do Pacífico'],
+  'America/Denver': ['Mountain', 'de la Montaña', 'das Montanhas'],
+  'America/Phoenix': ['Arizona', 'de Arizona', 'do Arizona'],
+  'America/Chicago': ['Central', 'del Centro', 'do Centro'],
+  'America/New_York': ['Eastern', 'del Este', 'do Leste'],
+  'America/Detroit': ['Eastern', 'del Este', 'do Leste'],
+  'America/Anchorage': ['Alaska', 'de Alaska', 'do Alasca'],
+  'Pacific/Honolulu': ['Hawaii', 'de Hawái', 'do Havaí'],
+}
+/** Cities whose zone id is not how people write them. Others: the last segment, "_" as spaces. */
+const CITY: Record<string, [string, string, string]> = {
+  'America/Sao_Paulo': ['São Paulo', 'São Paulo', 'São Paulo'],
+  'America/Mexico_City': ['Mexico City', 'Ciudad de México', 'Cidade do México'],
+  'America/Bogota': ['Bogotá', 'Bogotá', 'Bogotá'],
+  'America/Asuncion': ['Asunción', 'Asunción', 'Assunção'],
+  'America/Argentina/Buenos_Aires': ['Buenos Aires', 'Buenos Aires', 'Buenos Aires'],
+  'Europe/London': ['London', 'Londres', 'Londres'],
+  'Europe/Lisbon': ['Lisbon', 'Lisboa', 'Lisboa'],
+  'Europe/Rome': ['Rome', 'Roma', 'Roma'],
+  'Europe/Zurich': ['Zurich', 'Zúrich', 'Zurique'],
+  'Asia/Kolkata': ['India', 'India', 'Índia'],
+  'Asia/Tokyo': ['Tokyo', 'Tokio', 'Tóquio'],
+  'Asia/Singapore': ['Singapore', 'Singapur', 'Singapura'],
+}
+const L = { en: 0, es: 1, pt: 2 } as const
+
+/** The place itself: "Santiago", "São Paulo", "Pacific" (US zones), "UTC". */
+export function zonePlace(tz: string, lang: Lang = 'en'): string {
+  const us = US_ZONES[tz]
+  if (us) return lang === 'en' ? us[0] : us[L[lang]].replace(/^(de la|del|de|das|do) /, '')
+  const city = CITY[tz]
+  if (city) return city[L[lang]]
+  if (/^(Etc\/)?(UTC|GMT|Universal|Zulu)$/i.test(tz)) return 'UTC'
+  return (tz.split('/').pop() ?? tz).replace(/_/g, ' ')
+}
+
+/** "Santiago time" / "hora de Santiago" / "horário de São Paulo"; "Pacific time" for US zones. */
+export function zoneTimeLabel(tz: string, lang: Lang = 'en'): string {
+  const us = US_ZONES[tz]
+  if (us) return lang === 'en' ? `${us[0]} time` : lang === 'es' ? `hora ${us[1]}` : `horário ${us[2]}`
+  const place = zonePlace(tz, lang)
+  if (place === 'UTC') return 'UTC'
+  return lang === 'en' ? `${place} time` : lang === 'es' ? `hora de ${place}` : `horário de ${place}`
+}
+
+/** The one-line check added to a reply: "still in Santiago?", "¿sigues en Santiago?". */
+export function zoneCheckQuestion(tz: string, lang: Lang = 'en'): string {
+  if (US_ZONES[tz]) {
+    const label = zoneTimeLabel(tz, lang)
+    return lang === 'en' ? `still on ${label}?` : lang === 'es' ? `¿sigues en ${label}?` : `ainda no ${label}?`
+  }
+  const place = zonePlace(tz, lang)
+  return lang === 'en' ? `still in ${place}?` : lang === 'es' ? `¿sigues en ${place}?` : `ainda em ${place}?`
+}
+
+const LOCALE: Record<Lang, string> = { en: 'en-US', es: 'es-CL', pt: 'pt-BR' }
+
+/** "Mon, Oct 19, 10:00 AM" in the user's language, with no zone abbreviation (the place says it). */
+export function localWhen(at: Date | number | string, tz: string, lang: Lang = 'en'): string {
+  return new Date(at).toLocaleString(LOCALE[lang], { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+}
+
+/** An instant as wall-clock "YYYY-MM-DDTHH:MM" in tz: what to keep when the zone changes. */
+export function localIso(at: Date | number | string, tz: string): string {
+  const w = wallIn(tz, new Date(at))
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${w.y}-${p(w.mo)}-${p(w.d)}T${p(w.h)}:${p(w.mi)}`
+}
+
 /* ------------------------------------------------------------ zone math */
 
 /** Minutes the zone is ahead of UTC at that instant (-420 for Los Angeles in summer). */
@@ -227,7 +361,9 @@ export function zonePromptLine(z: Zone | null | undefined): string {
         ? 'from their browser'
         : 'from their phone number'
   return (
-    `${utc} The user's timezone is ${z.tz} (${how}), where it is ${local}.` +
-    (z.sure ? '' : ' Not confirmed: when a clock time matters, ask once which city they are in and call set_timezone.')
+    `${utc} The user's timezone is ${z.tz} (${how}), where it is ${local}. "Today" and "tomorrow" count from that local date, not UTC.` +
+    // Unsure (phone guess, not confirmed, stale): use it anyway. The time tools add a zone_check
+    // to their result when a check is due, and the reply carries the question.
+    ' Use it for clock times; say times with the place name the tools give (zone_label).'
   )
 }

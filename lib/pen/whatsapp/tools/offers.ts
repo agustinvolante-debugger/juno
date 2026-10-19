@@ -24,6 +24,8 @@ import { decideSuggestion, listSuggestions, resolveSuggestion, whenText } from '
 import type { Suggestion } from '../../suggestions-types'
 import type { Ctx } from '../agent'
 import { str, type ToolModule } from './types'
+import { timeFields, type ZoneItem } from './timezone'
+import { localIso } from '../../timezone'
 
 const TOOLS: Anthropic.Tool[] = [
   {
@@ -108,14 +110,31 @@ async function dismiss(ctx: Ctx, ref: string): Promise<unknown> {
   return { ok: true, dismissed: s.detail.offer ?? s.title, note: 'Confirm in a few words; no need to explain.' }
 }
 
+/** The place with the time ("Santiago time"), and the zone check when one is due (timezone.ts). */
+async function withPlace(ctx: Ctx, r: unknown, title: string): Promise<unknown> {
+  const o = r as Record<string, unknown>
+  if (!o || o.ok !== true || typeof o.tz !== 'string' || typeof o.start_utc !== 'string') return r
+  // The place replaces "PDT" and the zone id: the reply says local_time + zone_label.
+  const tz = o.tz, at = o.start_utc
+  const rest: Record<string, unknown> = { ...o }
+  for (const k of ['tz', 'start_utc', 'when', 'time_zone']) delete rest[k]
+  if (typeof rest.reminder_set === 'string') rest.reminder_set = true
+  const local = localIso(at, tz)
+  const item: ZoneItem | undefined =
+    typeof rest.reminder_id === 'string' ? { kind: 'reminder', id: rest.reminder_id, local, text: String(rest.text ?? title) }
+      : typeof rest.event_id === 'string' ? { kind: 'event', id: rest.event_id, local, title: String(rest.title ?? title) }
+        : undefined
+  return { ...rest, ...(await timeFields(ctx, tz, at, item)) }
+}
+
 async function accept(ctx: Ctx, i: { ref: string; time_zone: string; start_local: string; plain: boolean; destination: string }): Promise<unknown> {
   const s = await find(ctx, i.ref)
   if ('error' in s) return s
   switch (s.kind) {
     case 'meeting':
-      return acceptMeeting(ctx, s, i.time_zone, i.start_local)
+      return withPlace(ctx, await acceptMeeting(ctx, s, i.time_zone, i.start_local), s.title)
     case 'followup':
-      return acceptFollowup(ctx, s, i.time_zone)
+      return withPlace(ctx, await acceptFollowup(ctx, s, i.time_zone), s.title)
     case 'notion':
       return acceptNotion(ctx, s, i.plain, asDest(i.destination))
     default:
@@ -143,5 +162,5 @@ export const offersModule: ToolModule = {
     'A reply to that ("yes to 1", "sure", "add it", "sí", "no thanks", "1 yes 2 no") is accept_suggestion / dismiss_suggestion ' +
     'for each number (a single unnumbered offer is 1), not confirm_pending and not set_reminder. Not sure which offer they mean: ' +
     'list_suggestions. The offer was the question, so act at once; only an email to someone else (an invite) still needs ' +
-    'save_draft and their "send it". After accepting, confirm in one or two lines with the time and any link, exactly as the tool gives it.\n',
+    'save_draft and their "send it". After accepting, confirm in one or two lines with the time (local_time, zone_label) and any link, exactly as the tool gives it.\n',
 }

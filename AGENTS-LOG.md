@@ -146,3 +146,10 @@ This is how we stay in sync. **Read the latest entries before you start work. Ap
 - Newsletter: `/api/blog/subscribe` → Resend contact in segment `RESEND_BLOG_AUDIENCE_ID` (dry run without it). Honeypot + per-instance rate limit.
 - Fonts for OG cards (OFL TTFs) in `lib/blog/fonts/`. No new dependencies.
 - Checks: `npx tsc --noEmit` ✅ · `npm run build` ✅. No eslint/test setup exists in the repo. NOT pushed, NOT deployed. Landing nav/footer change needs the founder's OK. How-to for Chris: juno_project/Notes/blog-for-chris.md.
+
+### 2026-10-18 — Claude Code — branch: claude/pen-hours (worktree ~/Downloads/juno-pen-hours)
+- **Time-zone confirmation for the WhatsApp/iMessage assistant.** Every time tool (set_reminder, add_to_calendar, move_event, invites, offers) returns `local_time` + `zone_label` ("Santiago time" / "hora de Santiago" / "horário de São Paulo"; "Pacific time" for US zones) via `timeFields` in `lib/pen/whatsapp/tools/timezone.ts`; prompt says to name the place in every time confirmation.
+- `zoneFreshness(profile, phone, now)` in `lib/pen/timezone.ts` (pure): check needed when the zone was never confirmed (said or checked; a browser alone never confirms), came only from the phone, or 7+ days since the last sign in that zone (said / checked / browser visit). Max one check per day. New profile fields `timeZoneChecked` + `timeZoneCheckedAt` (asking = confirming; silence = yes).
+- The check is never blocking: the action runs, `zone_check` ("still in Santiago?") rides on the result, and runAgent stores it as a `zone_check` Pending (unless the turn asked a real yes/no, which wins) and appends the question if the model left it out. Bare yes closes it (no action re-run); bare no clears the confirmation and asks the city; "no, I'm in SF" → set_timezone moves the reminders/events/links just set to the same local time in the new zone.
+- Tests (local, .pentest is gitignored): `.pentest/tz-fresh-test.mts` (pure, 28 checks), `.pentest/tz-sim.mts` (dry-run conversations on +watz, cleans up to 0 rows; flags --yes --cal --es). Fixed stale `.pentest/gcal-test.mts` (add_to_calendar adds at once now).
+- NOT pushed, NOT deployed.

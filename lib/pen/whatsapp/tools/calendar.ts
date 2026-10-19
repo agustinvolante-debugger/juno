@@ -12,11 +12,11 @@ import type Anthropic from '@anthropic-ai/sdk'
 import type { Ctx } from '../agent'
 import { askConfirm } from '../confirm'
 import { str, type ToolModule } from './types'
-import { zoneOf } from './timezone'
+import { timeFields, zoneOf } from './timezone'
 import { sendInvite, type CalEvent } from '../../calendar'
 import { calendarPref, linksMessage, setCalendarPref, type CalendarApp } from '../../calendar-pref'
 import { addAttendee, addMeet, createEvent, deleteEvent, findEvents, gcalConnected, moveEvent, type UpcomingEvent } from '../../google-calendar'
-import { localToUtc, validZone, whenLabel } from '../../timezone'
+import { localIso, localToUtc, localWhen, validZone, whenLabel, zoneTimeLabel } from '../../timezone'
 import { supabaseAdmin } from '@/lib/supabase'
 import { foldName } from '../../speakers'
 
@@ -120,11 +120,12 @@ async function eventFrom(ctx: Ctx, input: Record<string, unknown>): Promise<{ ev
     description: str(input, 'description') || undefined,
     alarmMin: num(input, 'alarm_min'),
   }
-  return { ev, when: whenLabel(at, tz) }
+  // `when` goes into yes/no questions shown as they are: the place, not "PDT".
+  return { ev, when: `${localWhen(at, tz)}, ${zoneTimeLabel(tz)}` }
 }
 
 const ADDED_NOTE =
-  'Say "Added to your Google Calendar:" with the title and when, in one line. Then, unless it already has a Meet link, offer one ' +
+  'Say "Added to your Google Calendar:" with the title and when (local_time, zone_label), in one line. Then, unless it already has a Meet link, offer one ' +
   'in a few words (on their yes: add_meet_link with event_id). Never add or change anything else without a yes.'
 
 /** Writes the confirmed event to Google Calendar; shared by add_to_calendar and offers. */
@@ -142,9 +143,9 @@ async function addToCalendar(ctx: Ctx, input: Record<string, unknown>): Promise<
   const { message } = linksMessage(r.ev, await calendarPref(ctx.email))
   return {
     ok: true,
-    when: r.when,
+    ...(await timeFields(ctx, r.ev.tz!, r.ev.start, { kind: 'link', local: localIso(r.ev.start, r.ev.tz!), ev: r.ev })),
     message,
-    note: 'Say the event and when in one line, then the message exactly (translate the words, never the links): Nothing is in their calendar until they tap.',
+    note: 'Say the event and when (local_time, zone_label) in one line, then the message exactly (translate the words, never the links): Nothing is in their calendar until they tap.',
   }
 }
 
@@ -152,7 +153,15 @@ async function confirmGcalAdd(ctx: Ctx, args: Record<string, unknown>): Promise<
   const ev = args.ev as CalEvent
   try {
     const added = await addToGoogle(ctx, ev, { meet: args.meet === true })
-    return { ok: true, added_to: 'Google Calendar', title: ev.title, when: whenLabel(Date.parse(ev.start), ev.tz ?? 'UTC'), ...added, note: ADDED_NOTE }
+    const tz = ev.tz ?? 'UTC'
+    return {
+      ok: true,
+      added_to: 'Google Calendar',
+      title: ev.title,
+      ...(await timeFields(ctx, tz, ev.start, { kind: 'event', id: added.event_id, local: localIso(ev.start, tz), title: ev.title })),
+      ...added,
+      note: ADDED_NOTE,
+    }
   } catch (e) {
     // Google refused (access revoked, outage): the tap-to-add link still works.
     console.warn(`pen gcal add: ${(e as Error).message}`)
@@ -237,13 +246,13 @@ async function moveEventTool(ctx: Ctx, input: Record<string, unknown>): Promise<
   if (!tz) return { error: 'time zone unknown; ask the user where they are (set_timezone)' }
   const start = localToUtc(local, tz)
   if (!start) return { error: 'that time does not exist in that zone' }
-  const args = { eventId: 'id' in p ? p.id : p.event.id, start: start.toISOString(), tz, duration: num(input, 'duration_min') ?? null }
   const line = 'event' in p ? eventLine(ctx)(p.event) : null
+  const args = { eventId: 'id' in p ? p.id : p.event.id, start: start.toISOString(), tz, duration: num(input, 'duration_min') ?? null, title: line?.title ?? null, guests: Boolean(line?.guests.length) }
   if (line?.guests.length) {
     return askConfirm(ctx, {
       kind: 'gcal_move',
       args,
-      summary: `Move "${line.title}" to ${whenLabel(start.getTime(), tz)}? ${line.guests.join(', ')} will get Google's update. Reply yes.`,
+      summary: `Move "${line.title}" to ${localWhen(start, tz)}, ${zoneTimeLabel(tz)}? ${line.guests.join(', ')} will get Google's update. Reply yes.`,
     })
   }
   return confirmMove(ctx, args)
@@ -251,8 +260,11 @@ async function moveEventTool(ctx: Ctx, input: Record<string, unknown>): Promise<
 
 async function confirmMove(ctx: Ctx, args: Record<string, unknown>): Promise<unknown> {
   try {
-    const e = await moveEvent(ctx.email, String(args.eventId), String(args.start), String(args.tz), typeof args.duration === 'number' ? args.duration : undefined)
-    return { ok: true, moved_to: whenLabel(Date.parse(String(args.start)), String(args.tz)), event_id: e.id, note: 'Say in one line where it moved to.' }
+    const tz = String(args.tz)
+    const e = await moveEvent(ctx.email, String(args.eventId), String(args.start), tz, typeof args.duration === 'number' ? args.duration : undefined)
+    // With guests it is not kept for a zone change: moving it again would email them again.
+    const item = args.guests ? undefined : { kind: 'event' as const, id: e.id, local: localIso(String(args.start), tz), title: String(args.title ?? 'event') }
+    return { ok: true, moved: true, ...(await timeFields(ctx, tz, String(args.start), item)), event_id: e.id, note: 'Say in one line where it moved to (local_time, zone_label).' }
   } catch (e) {
     return { error: (e as Error).message.slice(0, 200) }
   }
@@ -308,9 +320,9 @@ async function confirmInvite(ctx: Ctx, args: Record<string, unknown>): Promise<u
   return {
     ok: true,
     invited: toName ? `${toName} <${toEmail}>` : toEmail,
-    when: whenLabel(Date.parse(ev.start), ev.tz ?? 'UTC'),
+    ...(await timeFields(ctx, ev.tz ?? 'UTC', ev.start)),
     add_for_yourself: own,
-    note: 'Confirm who was invited and when, in one line; a copy went to the user by BCC and replies go to them. Then add_for_yourself exactly.',
+    note: 'Confirm who was invited and when (local_time, zone_label), in one line; a copy went to the user by BCC and replies go to them. Then add_for_yourself exactly.',
   }
 }
 
@@ -327,10 +339,10 @@ async function confirmGcalInvite(ctx: Ctx, args: Record<string, unknown>): Promi
     return {
       ok: true,
       invited,
-      when: whenLabel(Date.parse(ev.start), ev.tz ?? 'UTC'),
+      ...(await timeFields(ctx, ev.tz ?? 'UTC', ev.start)),
       event_id: e.id,
       ...(e.meet ? { meet_link: e.meet } : {}),
-      note: 'Confirm in one line: the event is on their Google Calendar and Google emailed the invite. Unless it has a Meet link, offer one (on yes: add_meet_link).',
+      note: 'Confirm in one line with when (local_time, zone_label): the event is on their Google Calendar and Google emailed the invite. Unless it has a Meet link, offer one (on yes: add_meet_link).',
     }
   } catch (err) {
     console.warn(`pen gcal invite: ${(err as Error).message}`)

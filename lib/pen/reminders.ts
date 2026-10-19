@@ -59,6 +59,13 @@ export async function cancelReminder(email: string, id: string): Promise<boolean
   return Boolean(data?.length)
 }
 
+/** A new time for a reminder that has not fired (the user turned out to be in another zone). */
+export async function moveReminder(email: string, id: string, dueAt: Date): Promise<boolean> {
+  const { data, error } = await supabaseAdmin.from('pen_reminders').update({ due_at: dueAt.toISOString() }).eq('user_email', email).eq('id', id).is('sent_at', null).select('id')
+  if (error) throw new Error(error.message)
+  return Boolean(data?.length)
+}
+
 const PREFIX: Record<Lang, string> = { en: '⏰ Reminder', es: '⏰ Recordatorio', pt: '⏰ Lembrete' }
 
 /** Sends every due reminder once. The claim (sent_at set where null) makes overlapping runs safe. */

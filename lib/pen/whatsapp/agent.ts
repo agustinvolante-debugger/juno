@@ -53,8 +53,9 @@ import type { Lang } from '../currency'
 import { isMine, type ActionMeta, type Mine } from '../todo-labels'
 import { getDraft, setDraft, type Draft } from './store'
 import { MODULES } from './tools'
-import { localDate, userZone, zonePromptLine, type Zone } from '../timezone'
-import { getPending, dropIfUnanswered, confirmPending, BARE_YES, BARE_NO, type Pending } from './confirm'
+import { localDate, localIso, markZoneChecked, userZone, zonePromptLine, type Zone } from '../timezone'
+import { getPending, setPending, dropIfUnanswered, confirmPending, BARE_YES, BARE_NO, type Pending } from './confirm'
+import { finishZoneTurn, timeFields, zoneAskLine, type ZoneTurn } from './tools/timezone'
 
 const anthropic = penAnthropic('whatsapp-agent')
 // Haiku 5.5 (14 Oct, was Sonnet 5.5): a twentieth of the price, and the search stage now reads
@@ -94,6 +95,11 @@ export type Ctx = {
   zone?: Zone
   /** confirm_pending or a new ask ran this turn (confirm.ts); else an earlier ask is dropped. */
   pendingTouched?: boolean
+  /** A new yes/no question was asked this turn (askConfirm): it is the latest question, so a
+   *  zone check in the same reply doesn't become the one waiting for the yes. */
+  askedNow?: boolean
+  /** Times set this turn and the "still in Santiago?" check, if one is due (tools/timezone.ts). */
+  zoneTurn?: ZoneTurn
 }
 
 const TOOLS: Anthropic.Tool[] = [
@@ -543,7 +549,7 @@ function system(ctx: Ctx, pending: Draft | null, asked: Pending | null): string 
       ? `\nPending draft (shown to the user earlier): to ${pending.toName}${pending.toEmail ? ` <${pending.toEmail}>` : ' (no email yet)'}, subject "${pending.subject}".\n`
       : '\nNo draft is pending.\n') +
     MODULES.map((m) => (m.prompt ? `${m.prompt}\n` : '')).join('') +
-    (asked ? `\nWaiting for the user's yes (asked earlier): ${asked.summary}\n` : '')
+    (asked?.kind === 'zone_check' ? zoneAskLine(asked) : asked ? `\nWaiting for the user's yes (asked earlier): ${asked.summary}\n` : '')
   )
 }
 
@@ -741,11 +747,13 @@ async function setReminder(ctx: Ctx, i: { text: string; in_minutes: number; at: 
   }
   const r = await addReminder({ email: ctx.email, phone: ctx.phone, text, dueAt: due, lang: ctx.lang })
   const zone = ctx.zone?.tz
+  // A clock time is kept for a "no, I'm in SF" (same local time there); "in 20 minutes" is not.
+  const item = zone && i.at.trim() ? { kind: 'reminder' as const, id: r.id, local: localIso(r.due_at, zone), text } : undefined
   return {
     ok: true,
     id: r.id,
     due_utc: r.due_at,
-    ...(zone ? { due_local: new Date(r.due_at).toLocaleString('sv-SE', { timeZone: zone, hour12: false }).slice(0, 16) + ` ${zone}` } : {}),
+    ...(zone ? await timeFields(ctx, zone, r.due_at, item, { check: Boolean(item) }) : {}),
   }
 }
 
@@ -1351,7 +1359,28 @@ export async function runAgent(opts: {
   // happened. The question is then answered, so it leaves the system prompt.
   let answered: string | null = null
   let stillAsked = asked
-  if (asked && asked.msgId !== opts.msgId && !(pending?.toEmail && SEND_IT.test(opts.question))) {
+  if (asked?.kind === 'zone_check' && asked.msgId !== opts.msgId) {
+    // "Still in Santiago?" Asking already counted as yes (tools/timezone.ts), so a yes only
+    // closes it. The same reply may have offered something else too (a Meet link): a bare yes
+    // or no goes to that as well, through the model, never to a stored action.
+    if (BARE_YES.test(opts.question)) {
+      await setPending(opts.email, null).catch(() => {})
+      ctx.pendingTouched = true
+      stillAsked = null
+      answered =
+        `(My "${opts.question.slice(0, 40)}" answers your "${asked.summary}": the time zone is confirmed. Everything in your last ` +
+        'message is already saved: set or change nothing again. Reply in a few words ("Great, thanks!"). Only if your last ' +
+        'message also offered something new (a Meet link, a draft) is my reply about that too: then do it.)'
+    } else if (BARE_NO.test(opts.question)) {
+      await markZoneChecked(opts.email, null).catch(() => {})
+      // Still open for the city they name next, which moves what was set (set_timezone).
+      await setPending(opts.email, { ...asked, msgId: opts.msgId, createdAt: new Date().toISOString() }).catch(() => {})
+      ctx.pendingTouched = true
+      answered =
+        `(My "${opts.question.slice(0, 40)}" answers your "${asked.summary}": I'm not there now. Ask in one short line which city ` +
+        `I'm in; nothing has moved yet. If your last message also offered something else, I'm saying no to that too.)`
+    }
+  } else if (asked && asked.msgId !== opts.msgId && !(pending?.toEmail && SEND_IT.test(opts.question))) {
     const decision = BARE_YES.test(opts.question) ? 'yes' : BARE_NO.test(opts.question) ? 'no' : null
     if (decision) {
       const result = await confirmPending(ctx, decision).catch((e) => ({ error: (e as Error).message }))
@@ -1425,6 +1454,8 @@ export async function runAgent(opts: {
     })
   }
 
+  // A "still in Santiago?" added this turn waits for the answer (and is in the reply).
+  text = await finishZoneTurn(ctx, text)
   // This message wasn't the yes to an earlier ask: that ask is over (confirm.ts).
   await dropIfUnanswered(ctx, asked).catch((e) => console.warn(`pen whatsapp: drop pending: ${(e as Error).message}`))
   if (ctx.drafted) text = `${text ? `${text}\n\n` : ''}${draftPreview(ctx.drafted, opts.lang)}`

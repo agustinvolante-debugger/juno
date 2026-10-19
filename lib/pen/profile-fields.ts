@@ -182,6 +182,11 @@ export type AgentProfile = {
   timeZoneSaidAt?: string
   timeZoneUntil?: string
   timeZoneBefore?: string
+  /** The zone Juno last checked ("still in Santiago?") and when it asked. Silence counts as yes,
+   *  so asking is the confirmation; a "no" clears the zone and keeps the time (no second ask
+   *  that day). */
+  timeZoneChecked?: string
+  timeZoneCheckedAt?: string
   /** Which calendar app they use, for add-to-calendar links (calendar-pref.ts): said, or guessed from the email domain. */
   calendarApp?: 'apple' | 'google' | 'outlook'
   calendarAppSource?: 'said' | 'guess'

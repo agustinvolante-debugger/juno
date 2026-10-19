@@ -36,7 +36,7 @@ export type AcceptCtx = { email: string; lang: Lang; phone: string | null }
 
 const base = () => (process.env.PEN_PUBLIC_URL || 'https://www.tryjunoapp.com').replace(/\/$/, '')
 
-const ZONE_NOTE = 'said on the call, given by the user, or saved for them; use it, no need to mention or question it'
+const ZONE_NOTE = 'said on the call, given by the user, or saved for them; use it, don\'t question it'
 
 export const TZ_ASK = {
   en: 'What time zone is that in? (e.g. Pacific, Eastern, Chile)',
@@ -79,6 +79,8 @@ export async function acceptMeeting(ctx: AcceptCtx, s: Suggestion, tzIn: string,
         title,
         when,
         time_zone: `${tz} (${ZONE_NOTE})`,
+        tz,
+        start_utc: start.toISOString(),
         event_id: e.id,
         note:
           'Say "Added to your Google Calendar:" with the title and when, in one line (it has a 30-minute alert). Then offer in one ' +
@@ -99,6 +101,8 @@ export async function acceptMeeting(ctx: AcceptCtx, s: Suggestion, tzIn: string,
       ok: true,
       when,
       time_zone: `${tz} (${ZONE_NOTE})`,
+      tz,
+      start_utc: start.toISOString(),
       calendar_ics: links.ics,
       calendar_google: links.google,
       calendar_outlook: links.outlook,
@@ -136,7 +140,7 @@ export async function acceptFollowup(ctx: AcceptCtx, s: Suggestion, tzIn: string
   if (at && ctx.phone && ahead > 30_000 && ahead <= maxAheadMs(ctx.lang)) {
     const r = await addReminder({ email: ctx.email, phone: ctx.phone, text, dueAt: at, lang: ctx.lang })
     await decideSuggestion(ctx.email, s.id, 'done', { tz, reminder_id: r.id, remind_at: r.due_at })
-    return { ok: true, reminder_set: whenText({ starts_at: r.due_at, detail: { tz } }, ctx.lang), time_zone: `${tz} (${ZONE_NOTE})`, text }
+    return { ok: true, reminder_set: whenText({ starts_at: r.due_at, detail: { tz } }, ctx.lang), time_zone: `${tz} (${ZONE_NOTE})`, tz, reminder_id: r.id, start_utc: r.due_at, text }
   }
   // Further out than a reminder can be sent (or no time): the dated to-do is all there is.
   await decideSuggestion(ctx.email, s.id, 'accepted', { tz, to_do_only: true })
