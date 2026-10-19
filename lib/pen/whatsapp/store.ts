@@ -11,6 +11,7 @@
 import crypto from 'node:crypto'
 import { supabaseAdmin } from '@/lib/supabase'
 import type { ArchiveTurn } from '../store'
+import { ordered, WINDOW_MS, type BurstRow } from './burst'
 
 export type Link = {
   email: string
@@ -91,7 +92,8 @@ export async function setChat(email: string, chat: ArchiveTurn[]): Promise<void>
 
 /* --------------------------------------------------------------- messages */
 
-export type MessageState = 'received' | 'consent' | 'accepted' | 'cancelled' | 'done' | 'failed'
+/** 'answering': a text claimed by the turn writing its reply (burst.ts), until 'done'/'failed'. */
+export type MessageState = 'received' | 'consent' | 'accepted' | 'cancelled' | 'done' | 'failed' | 'answering'
 
 export type MessageRow = {
   id: string
@@ -99,13 +101,14 @@ export type MessageRow = {
   email: string | null
   kind: string
   state: MessageState
-  payload: { mediaUrl?: string | null; fileName?: string | null; raw?: unknown }
+  /** `text`: a text message's words, read back when several are answered as one turn (burst.ts). */
+  payload: { mediaUrl?: string | null; fileName?: string | null; raw?: unknown; text?: string }
   session_id: string | null
   created_at: string
 }
 
 /** Records an inbound message. False means it was seen before: a Vonage retry, do nothing. */
-export async function recordInbound(row: { id: string; phone: string; email: string | null; kind: string; state: MessageState; payload: MessageRow['payload'] }): Promise<boolean> {
+export async function recordInbound(row: { id: string; phone: string; email: string | null; kind: string; state: MessageState; payload: MessageRow['payload']; created_at?: string }): Promise<boolean> {
   const { error } = await supabaseAdmin.from('pen_whatsapp_messages').insert(row)
   if (!error) return true
   if (error.code === '23505') return false
@@ -122,6 +125,69 @@ export async function moveMessage(id: string, from: MessageState, to: MessageSta
   const { data, error } = await supabaseAdmin.from('pen_whatsapp_messages').update({ state: to, ...patch }).eq('id', id).eq('state', from).select('id')
   if (error) throw new Error(error.message)
   return Boolean(data?.length)
+}
+
+/* ------------------------------------------------------- turns (burst.ts) */
+
+/** The sender's texts not answered yet, oldest first (the last WINDOW_MS only). */
+export async function unansweredTexts(phone: string): Promise<BurstRow[]> {
+  const { data, error } = await supabaseAdmin
+    .from('pen_whatsapp_messages')
+    .select('id,created_at,payload')
+    .eq('phone', phone)
+    .eq('kind', 'text')
+    .eq('state', 'received')
+    .gt('created_at', new Date(Date.now() - WINDOW_MS).toISOString())
+    .order('created_at', { ascending: true })
+  if (error) throw new Error(error.message)
+  return ordered(((data ?? []) as { id: string; created_at: string; payload: MessageRow['payload'] | null }[]).map((r) => ({ id: r.id, created_at: r.created_at, text: r.payload?.text ?? '' })))
+}
+
+/** received → answering, for the rows still received. What it returns is this turn's, and only this turn's. */
+export async function claimTexts(ids: string[]): Promise<BurstRow[]> {
+  if (!ids.length) return []
+  const { data, error } = await supabaseAdmin.from('pen_whatsapp_messages').update({ state: 'answering' }).in('id', ids).eq('state', 'received').select('id,created_at,payload')
+  if (error) throw new Error(error.message)
+  return ordered(((data ?? []) as { id: string; created_at: string; payload: MessageRow['payload'] | null }[]).map((r) => ({ id: r.id, created_at: r.created_at, text: r.payload?.text ?? '' })))
+}
+
+/** The end of a turn: its messages are done (or failed). */
+export async function finishTexts(ids: string[], to: 'done' | 'failed'): Promise<void> {
+  if (!ids.length) return
+  await supabaseAdmin.from('pen_whatsapp_messages').update({ state: to }).in('id', ids).eq('state', 'answering')
+}
+
+/**
+ * One turn at a time per person (both channels: the digits of the number). The lock is a row in
+ * pen_whatsapp_messages with id `lock:<digits>` (no email, kind/state 'lock', so nothing that
+ * reads messages sees it): inserting it is atomic, the primary key refuses a second one. It is a
+ * lease: a turn that crashed is taken over after LOCK_LEASE_MS, and the texts it had claimed go
+ * back in the queue. Null = held by a live turn; try again shortly.
+ */
+export const LOCK_LEASE_MS = 3 * 60 * 1000
+
+export async function takeLock(phone: string, now = Date.now()): Promise<string | null> {
+  const digits = phone.replace(/\D/g, '')
+  const key = `lock:${digits}`
+  const token = crypto.randomBytes(9).toString('base64url')
+  const payload = { token, until: new Date(now + LOCK_LEASE_MS).toISOString() }
+  const { error } = await supabaseAdmin.from('pen_whatsapp_messages').insert({ id: key, phone: key, email: null, kind: 'lock', state: 'lock', payload })
+  if (!error) return token
+  if (error.code !== '23505') throw new Error(error.message)
+  const { data } = await supabaseAdmin.from('pen_whatsapp_messages').select('payload').eq('id', key).maybeSingle()
+  const held = (data?.payload ?? null) as { token?: string; until?: string } | null
+  if (!held?.token || Date.parse(held.until ?? '') > now) return null
+  // Expired: the turn that held it died. Taken over by compare-and-set on its token.
+  const { data: took } = await supabaseAdmin.from('pen_whatsapp_messages').update({ payload }).eq('id', key).eq('payload->>token', held.token).select('id')
+  if (!took?.length) return null
+  console.warn(`pen whatsapp: took over a stale turn lock for …${digits.slice(-4)}`)
+  await supabaseAdmin.from('pen_whatsapp_messages').update({ state: 'received' }).in('phone', [digits, `im:${digits}`]).eq('state', 'answering')
+  return token
+}
+
+export async function releaseLock(phone: string, token: string): Promise<void> {
+  const key = `lock:${phone.replace(/\D/g, '')}`
+  await supabaseAdmin.from('pen_whatsapp_messages').delete().eq('id', key).eq('payload->>token', token)
 }
 
 /* ----------------------------------------------------------------- drafts */

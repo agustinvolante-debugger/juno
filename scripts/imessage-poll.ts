@@ -25,8 +25,10 @@ async function main() {
         if (m.date_sent && m.date_sent > since) since = m.date_sent
         if (!inbound) continue
         console.log(`imessage-poll: ${inbound.kind}${inbound.voice ? ' (voice)' : ''} from …${inbound.from.slice(-4)}`)
-        // Handled one at a time, so a reply always follows the message it answers.
-        await handleInbound(inbound).catch((e) => console.warn(`imessage-poll: ${inbound.id} failed: ${(e as Error).message}`))
+        // Not awaited: texts in a row are one burst, answered once (bot.ts burst wait + turn lock
+        // keep replies in order). Each is recorded with its own arrival time.
+        void handleInbound(inbound, { at: Date.now() }).catch((e) => console.warn(`imessage-poll: ${inbound.id} failed: ${(e as Error).message}`))
+        await new Promise((r) => setTimeout(r, 5))
       }
     } catch (e) {
       console.warn(`imessage-poll: ${(e as Error).message}`)

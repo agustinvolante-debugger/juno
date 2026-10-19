@@ -9,7 +9,8 @@ import { configured, toInbound } from '@/lib/pen/imessage/sendblue'
 // Sendblue waits 45 s and retries on silence, and the bot ignores a message it has already seen.
 
 export const dynamic = 'force-dynamic'
-// A recording sent this way is streamed to AssemblyAI inside after(); give it room.
+// A recording sent this way is streamed to AssemblyAI inside after(), and a text waits there for
+// the rest of its burst and for the turn before it (bot.ts, up to 270 s); give it room.
 export const maxDuration = 300
 
 function keyOk(given: string | null): boolean {

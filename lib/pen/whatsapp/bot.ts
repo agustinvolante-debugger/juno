@@ -6,6 +6,8 @@
 //                      comes back here (and by email) from the AssemblyAI webhook.
 //   any other text     the assistant (agent.ts): answers from the user's own recordings, lists and
 //                      ticks off to-dos, drafts follow-up emails and sends them on "send it".
+//                      Texts sent in a row are one turn, answered once (burst.ts), and one turn
+//                      runs at a time per person (store.ts takeLock).
 //   anything else      inbound.ts: reactions are silent (a 👍 on the question waiting for a yes is
 //                      the yes), a location sets the time zone, a contact card is offered to save.
 //
@@ -16,7 +18,7 @@ import { ALLOWED_EMAILS } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getAccount, isActive } from '../accounts'
 import { getAllowance } from '../allowance'
-import { runAgent, type AgentResult } from './agent'
+import { runAgent, SEND_IT, type AgentResult } from './agent'
 import { isMine } from '../todo-labels'
 import { askArchive } from '../archive'
 import { uploadStream, submit, fetchTranscript, deleteTranscript } from '../aai'
@@ -28,11 +30,18 @@ import type { Lang } from '../currency'
 import { userLang } from '../user-lang'
 import { sendText, sendButtons, openMedia, markRead, type Inbound } from './provider'
 import { isImessage } from '../imessage/sendblue'
-import { getPending, notePendingOut, setPending } from './confirm'
+import { getPending, notePendingOut, setPending, BARE_NO, BARE_YES } from './confirm'
+import { decide, isConfirmation, joinTexts, nextBatch, type BurstRow } from './burst'
 import { cardLine, route, zoneAt } from './inbound'
 import type { ProactiveKind } from '../suggestions-types'
 import {
   claimCode,
+  claimTexts,
+  finishTexts,
+  getDraft,
+  releaseLock,
+  takeLock,
+  unansweredTexts,
   getLinkByEmail,
   getLinkByPhone,
   getMessage,
@@ -297,8 +306,17 @@ async function pendingConsent(phone: string): Promise<string | null> {
   return (data?.[0]?.id as string | undefined) ?? null
 }
 
-/** Everything that arrives at the inbound webhook ends up here, after the 200 has gone back. */
-export async function handleInbound(msg: Inbound): Promise<void> {
+/** What one webhook call may spend in after() (maxDuration 300 on both routes), with room to spare. */
+const TURN_BUDGET_MS = 270 * 1000
+
+/**
+ * Everything that arrives at the inbound webhook ends up here, after the 200 has gone back.
+ * `at`: when it arrived (ms), stored as created_at; a webhook carrying several messages passes
+ * t0 + index so their order is kept while they run side by side.
+ */
+export async function handleInbound(msg: Inbound, opts: { at?: number } = {}): Promise<void> {
+  const at = opts.at ?? Date.now()
+  const deadline = Date.now() + TURN_BUDGET_MS
   const link = await getLinkByPhone(msg.from)
 
   // Recorded before anything else so a Vonage retry of the same message is a no-op.
@@ -308,9 +326,11 @@ export async function handleInbound(msg: Inbound): Promise<void> {
     email: link?.email ?? null,
     kind: msg.kind,
     state: 'received',
-    payload: { mediaUrl: msg.mediaUrl, fileName: msg.fileName, raw: msg.raw },
+    payload: { mediaUrl: msg.mediaUrl, fileName: msg.fileName, raw: msg.raw, ...(msg.kind === 'text' ? { text: msg.text } : {}) },
+    created_at: new Date(at).toISOString(),
   })
   if (!fresh) return
+  const turn = { at, deadline }
 
   // iMessage is a test with a 10-contact cap: tell the owners the first time a number shows up.
   if (isImessage(msg.from)) await newImessageAlert(msg, link).catch((e) => console.warn(`pen imessage: alert failed: ${(e as Error).message}`))
@@ -322,7 +342,8 @@ export async function handleInbound(msg: Inbound): Promise<void> {
     const r = route(msg, pending)
     if (r === 'yes' && link && (await allowed(link.email))) {
       void markRead(msg.id, true, msg.from)
-      return onText({ ...msg, kind: 'text', text: '👍' }, link, BOT[await langFor(msg.from, link.email)])
+      const L = BOT[await langFor(msg.from, link.email)]
+      return inTurn(msg.from, deadline, () => onText({ ...msg, kind: 'text', text: '👍' }, link, L, { sentAt: at }))
     }
     if (r !== 'cant_read') {
       await moveMessage(msg.id, 'received', 'done').catch(() => false)
@@ -356,20 +377,20 @@ export async function handleInbound(msg: Inbound): Promise<void> {
     return
   }
 
-  if (msg.kind === 'media' && msg.voice) return onVoice(msg, link, L)
+  if (msg.kind === 'media' && msg.voice) return onVoice(msg, link, L, turn)
   if (msg.kind === 'media') return askConsent(msg, L)
-  if (msg.kind === 'image') return onImage(msg, link, L)
+  if (msg.kind === 'image') return onImage(msg, link, L, turn)
   // A tap on a proactive template's quick reply ("Yes, brief me", "Remind me later") carries a
   // proactive:/reminder: payload, not a file id: it is the user answering, so the agent reads
   // the button text with the chat history (where the proactive message was written).
-  if (msg.kind === 'reply' && /^(proactive|reminder):/.test(msg.replyId ?? '') && msg.text.trim()) return onText({ ...msg, kind: 'text' }, link, L)
+  if (msg.kind === 'reply' && /^(proactive|reminder):/.test(msg.replyId ?? '') && msg.text.trim()) return inTurn(msg.from, deadline, () => onText({ ...msg, kind: 'text' }, link, L, { sentAt: at }))
   if (msg.kind === 'reply') return onReply(msg, link, L)
   // iMessage has no buttons: a "yes" right after a recording is the consent tap.
   if (msg.kind === 'text' && isImessage(msg.from) && YES.test(msg.text)) {
     const pending = await pendingConsent(msg.from)
     if (pending) return onReply({ ...msg, kind: 'reply', replyId: `consent:${pending}` }, link, L)
   }
-  if (msg.kind === 'text') return onText(msg, link, L)
+  if (msg.kind === 'text') return onTextBurst(msg, link, L, turn)
   if (msg.kind === 'location') return onLocation(msg, link, L)
   if (msg.kind === 'contacts') return onContacts(msg, link, L)
   // What is left is media Juno can't read (route: 'cant_read').
@@ -689,7 +710,7 @@ const VOICE_NOTE_MAX_SEC = 120
  * first so a mishearing is visible. Longer than two minutes, it is probably a meeting someone
  * recorded with the mic button, and goes the usual way (consent, then notes).
  */
-async function onVoice(msg: Inbound, link: Link, L: typeof EN): Promise<void> {
+async function onVoice(msg: Inbound, link: Link, L: typeof EN, turn: Turn): Promise<void> {
   let text = ''
   let aaiId: string | null = null
   try {
@@ -722,11 +743,11 @@ async function onVoice(msg: Inbound, link: Link, L: typeof EN): Promise<void> {
     await sendText(msg.from, L.voiceFailed)
     return
   }
-  return onText({ ...msg, kind: 'text', text }, link, L, { heard: text })
+  return inTurn(msg.from, turn.deadline, () => onText({ ...msg, kind: 'text', text }, link, L, { heard: text, sentAt: turn.at }))
 }
 
 /** A photo (a business card, a listing sheet): the assistant reads it, with the caption if any. */
-async function onImage(msg: Inbound, link: Link, L: typeof EN): Promise<void> {
+async function onImage(msg: Inbound, link: Link, L: typeof EN, turn: Turn): Promise<void> {
   let image: { data: string; mime: string } | null = null
   try {
     const res = await openMedia(msg.mediaUrl!)
@@ -744,25 +765,137 @@ async function onImage(msg: Inbound, link: Link, L: typeof EN): Promise<void> {
     await sendText(msg.from, L.photoFailed)
     return
   }
-  return onText({ ...msg, kind: 'text', text: msg.text.trim() || L.photo }, link, L, { image })
+  return inTurn(msg.from, turn.deadline, () => onText({ ...msg, kind: 'text', text: msg.text.trim() || L.photo }, link, L, { image, sentAt: turn.at }))
 }
 
+type Turn = { at: number; deadline: number }
+/** Slow work a reply promised (contact cards, rewritten notes, a split): run after the turn lets go. */
+type Later = () => Promise<void>
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+const LOCK_POLL_MS = 700
+
+/**
+ * One assistant turn at a time per person. Waits for the turn before (lock in store.ts) until the
+ * deadline; past it, answers anyway (a reply in parallel beats a message never answered). The
+ * reply's slow follow-up work runs after the lock is let go, so the next message isn't held up.
+ */
+async function inTurn(from: string, deadline: number, run: () => Promise<Later | void>): Promise<void> {
+  let token: string | null = null
+  for (;;) {
+    token = await takeLock(from).catch((e) => {
+      console.warn(`pen whatsapp: turn lock: ${(e as Error).message}`)
+      return 'none'
+    })
+    if (token || Date.now() + LOCK_POLL_MS > deadline) break
+    await sleep(LOCK_POLL_MS)
+  }
+  if (!token) console.warn(`pen whatsapp: answering …${from.slice(-4)} without the turn lock (still held at the deadline)`)
+  let later: Later | void = undefined
+  try {
+    later = await run()
+  } finally {
+    if (token && token !== 'none') await releaseLock(from, token).catch(() => {})
+  }
+  if (later) await later().catch((e) => console.warn(`pen whatsapp: after-reply work failed: ${(e as Error).message}`))
+}
+
+/** Whether a text answers what is already on screen (burst.ts isConfirmation), from the stored ask/draft. */
+async function confirmationTest(email: string): Promise<(r: BurstRow) => boolean> {
+  const [p, d] = await Promise.all([getPending(email).catch(() => null), getDraft(email).catch(() => null)])
+  return (r) =>
+    isConfirmation(r, {
+      yesNo: BARE_YES.test(r.text) || BARE_NO.test(r.text),
+      sendIt: SEND_IT.test(r.text),
+      pendingAt: p?.createdAt ?? null,
+      draftAt: d?.toEmail ? d.createdAt : null,
+    })
+}
+
+/**
+ * A text: waits for the burst to end (burst.ts decide), steps aside if a newer text came in, then
+ * takes the turn and answers everything still unanswered as one message. A bare yes / "send it"
+ * to what is already on screen, with no unanswered text before it, skips the wait.
+ */
+async function onTextBurst(msg: Inbound, link: Link, L: typeof EN, turn: Turn): Promise<void> {
+  const me = (rows: BurstRow[]) => rows.find((r) => r.id === msg.id)
+  let rows = await unansweredTexts(msg.from)
+  const mine = me(rows)
+  if (!mine) return
+  const earlier = rows.filter((r) => r.id !== msg.id && Date.parse(r.created_at) <= Date.parse(mine.created_at))
+  const immediate = !earlier.length && (await confirmationTest(link.email))(mine)
+  if (!immediate) {
+    for (;;) {
+      const d = decide(rows, msg.id, Date.now())
+      if (d.act === 'gone' || d.act === 'yield') return
+      if (d.act === 'answer' || Date.now() + d.ms > turn.deadline) break
+      await sleep(d.ms)
+      rows = await unansweredTexts(msg.from)
+    }
+  }
+  await inTurn(msg.from, turn.deadline, async () => {
+    const jobs: Later[] = []
+    // Under the lock: answer, in order, until this message has been answered. Usually one turn;
+    // two when a bare yes is waiting at the front (it goes alone, then the rest).
+    for (let i = 0; i < 4 && Date.now() < turn.deadline; i++) {
+      let queue = await unansweredTexts(msg.from)
+      if (!me(queue)) break
+      // Got the turn after waiting for the one before: let a burst that is still coming finish.
+      const test = await confirmationTest(link.email)
+      while (!test(queue[0])) {
+        const newest = queue[queue.length - 1]
+        const d = decide(queue, newest.id, Date.now())
+        if (d.act !== 'wait' || Date.now() + d.ms > turn.deadline) break
+        await sleep(d.ms)
+        queue = await unansweredTexts(msg.from)
+        if (!me(queue)) break
+      }
+      const batch = await claimTexts(nextBatch(queue, test).map((r) => r.id))
+      if (!batch.length) break
+      const last = batch[batch.length - 1]
+      if (!joinTexts(batch)) {
+        await finishTexts(batch.map((r) => r.id), 'done')
+        continue
+      }
+      void markRead(last.id, true, msg.from)
+      const ids = batch.map((r) => r.id)
+      try {
+        const later = await onText({ ...msg, id: last.id, text: joinTexts(batch) }, link, L, { sentAt: Date.parse(last.created_at), batch: ids })
+        if (later) jobs.push(later)
+      } catch (e) {
+        // Not left 'answering': failed, so the health check reports it.
+        await finishTexts(ids, 'failed').catch(() => {})
+        throw e
+      }
+    }
+    return jobs.length ? async () => { for (const j of jobs) await j() } : undefined
+  })
+}
+
+/**
+ * One assistant turn. `batch`: the text messages it answers (claimed 'answering' by onTextBurst),
+ * marked done together; without it, msg alone ('received' → 'done'). Returns the reply's slow
+ * follow-up work for inTurn to run once the turn is over.
+ */
 async function onText(
   msg: Inbound,
   link: Link,
   L: typeof EN,
-  extra: { heard?: string; image?: { data: string; mime: string } } = {},
-): Promise<void> {
+  extra: { heard?: string; image?: { data: string; mime: string }; sentAt?: number; batch?: string[] } = {},
+): Promise<Later | void> {
   const q = msg.text.trim()
   if (!q) return
   // Answered text moves to 'done', so the health check can tell a question that never got a
   // reply (still 'received' minutes later) from one that did.
-  const answered = () => moveMessage(msg.id, 'received', 'done').catch(() => false)
+  const answered = () => (extra.batch ? finishTexts(extra.batch, 'done').catch(() => {}) : moveMessage(msg.id, 'received', 'done').catch(() => false))
+  const failed = () => (extra.batch ? finishTexts(extra.batch, 'failed').catch(() => {}) : moveMessage(msg.id, 'received', 'failed').catch(() => {}))
   if (/^(help|ayuda|ajuda|\?|hi|hello|hola|oi|olá)$/i.test(q)) {
     await sendText(msg.from, L.help)
     await answered()
     return
   }
+  // The turn before may have just finished: its chat history is read now, not when this arrived.
+  link = (await getLinkByEmail(link.email).catch(() => null)) ?? link
   if (/^(new|reset|nuevo|novo)$/i.test(q)) {
     await setChat(link.email, [])
     await sendText(msg.from, L.fresh)
@@ -789,6 +922,7 @@ async function onText(
           lang: await userLang(link.email),
           phone: msg.from,
           ...(extra.image ? { image: extra.image } : {}),
+          ...(extra.sentAt ? { sentAt: extra.sentAt } : {}),
         })
       : await askArchive({
           userEmail: link.email,
@@ -802,13 +936,15 @@ async function onText(
     citations = r.citations
   } catch (e) {
     console.warn(`pen whatsapp: answer failed for ${msg.id}: ${(e as Error).message}`)
-    await moveMessage(msg.id, 'received', 'failed').catch(() => {})
+    await failed()
     await sendText(msg.from, L.agentFailed)
     return
   }
   const now = Date.now()
+  // Read again: a briefing or reminder may have been added to the chat while the agent worked.
+  const chat = (await getLinkByEmail(link.email).catch(() => null))?.chat ?? link.chat ?? []
   await setChat(link.email, [
-    ...(link.chat ?? []),
+    ...chat,
     { role: 'user', content: extra.image ? `${q} [photo]` : extra.heard ? `${q} [voice note]` : q, ts: now },
     { role: 'assistant', content: answer, citations, ts: now + 1 },
   ])
@@ -829,9 +965,13 @@ async function onText(
   await notePendingOut(link.email, msg.id, outIds, out).catch(() => {})
   await answered()
   // Work the reply promised but that is too slow to wait for: contact cards, rewritten notes.
-  if (later?.after) await later.after().catch(() => {})
-  if (later?.redo) await redoNotes(link.email, later.redo.sessionId, later.redo.type, L)
-  if (later?.split) await splitAndList(link.email, later.split, msg.from, L)
+  const done = later
+  if (!done?.after && !done?.redo && !done?.split) return
+  return async () => {
+    if (done.after) await done.after().catch(() => {})
+    if (done.redo) await redoNotes(link.email, done.redo.sessionId, done.redo.type, L)
+    if (done.split) await splitAndList(link.email, done.split, msg.from, L)
+  }
 }
 
 /** Splits an event recording (asked for in the chat) and sends the conversations back, numbered. */

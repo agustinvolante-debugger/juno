@@ -17,6 +17,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { supabaseAdmin } from '@/lib/supabase'
 import type { Ctx } from './agent'
 import type { ToolModule } from './tools/types'
+import { unseen } from './burst'
 
 // "Ask once, only where it can't be undone or reaches other people" (18 Oct). Done at once, said
 // in one line: combining or separating recordings (undo: ./undo.ts), deleting or moving an event
@@ -133,7 +134,7 @@ const TOOLS: Anthropic.Tool[] = [
  * conditional on its createdAt, so one set meanwhile survives.
  */
 export async function dropIfUnanswered(ctx: Ctx, asked: Pending | null): Promise<void> {
-  if (!asked || asked.msgId === ctx.msgId || ctx.pendingTouched) return
+  if (!asked || asked.msgId === ctx.msgId || ctx.pendingTouched || unseen(asked.createdAt, ctx.sentAt)) return
   await supabaseAdmin.from('pen_whatsapp_links').update({ pending: null }).eq('email', ctx.email.toLowerCase()).eq('pending->>createdAt', asked.createdAt)
 }
 
@@ -141,7 +142,7 @@ export async function confirmPending(ctx: Ctx, decision: string): Promise<unknow
   ctx.pendingTouched = true
   const p = await getPending(ctx.email)
   if (!p) return { error: 'nothing is waiting for a yes (it may have expired after 30 minutes); ask again' }
-  if (p.msgId === ctx.msgId) return { error: 'the user has not seen this question yet; ask it and wait for their reply' }
+  if (p.msgId === ctx.msgId || unseen(p.createdAt, ctx.sentAt)) return { error: 'the user has not seen this question yet; ask it and wait for their reply' }
   await setPending(ctx.email, null)
   if (decision !== 'yes') return { ok: true, cancelled: p.summary }
   const { MODULES } = await import('./tools')

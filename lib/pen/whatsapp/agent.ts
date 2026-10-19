@@ -63,6 +63,7 @@ import { localDate, localIso, markZoneChecked, userZone, zonePromptLine, type Zo
 import { getPending, setPending, dropIfUnanswered, confirmPending, BARE_YES, BARE_NO, type Pending } from './confirm'
 import { finishZoneTurn, timeFields, zoneAskLine, type ZoneTurn } from './tools/timezone'
 import { UNDO, runUndo } from './undo'
+import { unseen } from './burst'
 
 const anthropic = penAnthropic('whatsapp-agent')
 // Haiku 5.5 (14 Oct, was Sonnet 5.5): a twentieth of the price, and the search stage now reads
@@ -109,6 +110,10 @@ export type Ctx = {
   askedNow?: boolean
   /** Times set this turn and the "still in Santiago?" check, if one is due (tools/timezone.ts). */
   zoneTurn?: ZoneTurn
+  /** When the user's latest message in this turn arrived (ms). A question or draft made after it
+   *  (while this turn waited for the one before: burst.ts) hasn't been seen, so this turn can't
+   *  confirm or send it. Unset = no check (proactive turns). */
+  sentAt?: number
 }
 
 const TOOLS: Anthropic.Tool[] = [
@@ -510,7 +515,7 @@ const TOOLS: Anthropic.Tool[] = [
   },
 ]
 
-function system(ctx: Ctx, pending: Draft | null, asked: Pending | null): string {
+function system(ctx: Ctx, pending: Draft | null, asked: Pending | null, askedUnseen = false): string {
   const today = localDate(ctx.zone?.tz)
   return (
     `You are Juno Pen on WhatsApp: the user's assistant for their own recorded meetings. Today is ${today}` +
@@ -579,7 +584,9 @@ function system(ctx: Ctx, pending: Draft | null, asked: Pending | null): string 
       ? `\nPending draft (shown to the user earlier): to ${pending.toName}${pending.toEmail ? ` <${pending.toEmail}>` : ' (no email yet)'}, subject "${pending.subject}".\n`
       : '\nNo draft is pending.\n') +
     MODULES.map((m) => (m.prompt ? `${m.prompt}\n` : '')).join('') +
-    (asked?.kind === 'zone_check' ? zoneAskLine(asked) : asked ? `\nWaiting for the user's yes (asked earlier): ${asked.summary}\n` : '')
+    (askedUnseen && asked
+      ? `\nJust asked the user (they have NOT seen it yet; nothing in their message answers it, so never call confirm_pending this turn): ${asked.summary}\n`
+      : asked?.kind === 'zone_check' ? zoneAskLine(asked) : asked ? `\nWaiting for the user's yes (asked earlier): ${asked.summary}\n` : '')
   )
 }
 
@@ -803,7 +810,7 @@ function gmailLine(ctx: Ctx): string {
 async function sendDraft(ctx: Ctx): Promise<unknown> {
   const d = await getDraft(ctx.email)
   if (!d) return { error: 'no draft to send (none saved, or it is over a day old)' }
-  if (d.msgId === ctx.msgId || ctx.drafted) {
+  if (d.msgId === ctx.msgId || ctx.drafted || unseen(d.createdAt, ctx.sentAt)) {
     return { error: 'the user has not seen this version yet; show it and wait for them to say send' }
   }
   if (!d.toEmail) return { error: `no email address for ${d.toName}; ask the user for it` }
@@ -1468,7 +1475,7 @@ function gmailFailed(lang: Lang, d: Draft, reason: 'cap' | 'not_connected' | 're
 }
 
 /** A bare go-ahead. Handled in code, so a send never depends on the model choosing to call a tool. */
-const SEND_IT = /^\s*(send( it| the email)?|yes,? send( it)?|env[ií]a(lo)?|m[aá]nd(a|alo)|s[ií],? (env[ií]alo|m[aá]ndalo)|pode enviar|envia(r)?|manda(r)?)\s*[.!👍]*\s*$/i
+export const SEND_IT = /^\s*(send( it| the email)?|yes,? send( it)?|env[ií]a(lo)?|m[aá]nd(a|alo)|s[ií],? (env[ií]alo|m[aá]ndalo)|pode enviar|envia(r)?|manda(r)?)\s*[.!👍]*\s*$/i
 
 const SENT_GMAIL: Record<Lang, (from: string, to: string, subject: string) => string> = {
   en: (f, to, s) => `Sent from ${f} to ${to}: "${s}". It's in your Sent folder, and replies will go to you.`,
@@ -1493,6 +1500,8 @@ export async function runAgent(opts: {
   phone: string
   /** A photo the user sent (base64), read alongside the question. */
   image?: { data: string; mime: string }
+  /** When the latest message of this turn arrived (Ctx.sentAt). */
+  sentAt?: number
 }): Promise<AgentResult> {
   const userName = (await getProfile(opts.email).catch(() => null))?.name?.trim() || null
   const recentTitle = opts.recent ? ((await getSession(opts.email, opts.recent).catch(() => null))?.title ?? null) : null
@@ -1501,6 +1510,10 @@ export async function runAgent(opts: {
   const ctx: Ctx = { ...opts, userName, recentTitle, citations: [], drafted: null, sent: false, enrich: new Set(), later: [], zone, gmail }
   const pending = await getDraft(opts.email).catch(() => null)
   const asked = await getPending(opts.email).catch(() => null)
+  // Asked, or drafted, after this turn's last message arrived: the user hasn't seen it, so nothing
+  // in this message answers it (burst.ts). It stays waiting, untouched.
+  const askedUnseen = unseen(asked?.createdAt, opts.sentAt)
+  const draftSeen = !unseen(pending?.createdAt, opts.sentAt)
 
   // A bare yes / no to the question Juno asked last: run it here, then let the model say what
   // happened. The question is then answered, so it leaves the system prompt.
@@ -1512,6 +1525,8 @@ export async function runAgent(opts: {
     answered =
       `(My "${opts.question.slice(0, 40)}" asks to undo your last change, and it has been handled: ${JSON.stringify(result).slice(0, 800)}. ` +
       'Tell me in one line what happened, following any note in it; don\'t ask anything.)'
+  } else if (askedUnseen) {
+    // Nothing: see above.
   } else if (asked?.kind === 'zone_check' && asked.msgId !== opts.msgId) {
     // "Still in Santiago?" Asking already counted as yes (tools/timezone.ts), so a yes only
     // closes it. The same reply may have offered something else too (a Meet link): a bare yes
@@ -1533,7 +1548,7 @@ export async function runAgent(opts: {
         `(My "${opts.question.slice(0, 40)}" answers your "${asked.summary}": I'm not there now. Ask in one short line which city ` +
         `I'm in; nothing has moved yet. If your last message also offered something else, I'm saying no to that too.)`
     }
-  } else if (asked && asked.msgId !== opts.msgId && !(pending?.toEmail && SEND_IT.test(opts.question))) {
+  } else if (asked && asked.msgId !== opts.msgId && !(pending?.toEmail && draftSeen && SEND_IT.test(opts.question))) {
     const decision = BARE_YES.test(opts.question) ? 'yes' : BARE_NO.test(opts.question) ? 'no' : null
     if (decision) {
       const result = await confirmPending(ctx, decision).catch((e) => ({ error: (e as Error).message }))
@@ -1544,7 +1559,7 @@ export async function runAgent(opts: {
     }
   }
 
-  if (pending?.toEmail && SEND_IT.test(opts.question)) {
+  if (pending?.toEmail && draftSeen && SEND_IT.test(opts.question)) {
     const r = (await sendDraft(ctx)) as { ok?: boolean; error?: string; plain?: string; sent_from?: string }
     if (r.ok) {
       await dropIfUnanswered(ctx, asked).catch(() => {})
@@ -1585,7 +1600,7 @@ export async function runAgent(opts: {
       max_tokens: 16000,
       // Medium: a WhatsApp reply should arrive while "typing…" is still showing.
       output_config: { effort: 'medium' },
-      system: system(ctx, pending, stillAsked),
+      system: system(ctx, pending, stillAsked, askedUnseen),
       tools: [...TOOLS, ...MODULES.flatMap((m) => m.tools)],
       messages,
     })

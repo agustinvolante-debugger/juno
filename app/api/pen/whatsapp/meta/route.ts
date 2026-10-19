@@ -5,7 +5,8 @@ import { notifyUnreachable } from '@/lib/pen/whatsapp/unreachable'
 import { handleInbound } from '@/lib/pen/whatsapp/bot'
 
 export const dynamic = 'force-dynamic'
-// Streaming a 100 MB file from Meta to AssemblyAI happens inside after(); give it room.
+// Streaming a 100 MB file from Meta to AssemblyAI happens inside after(), and a text waits there
+// for the rest of its burst and for the turn before it (bot.ts, up to 270 s); give it room.
 export const maxDuration = 300
 
 // Meta's WhatsApp webhook. GET is the one-time handshake when the URL is registered in the app
@@ -47,16 +48,17 @@ export async function POST(req: Request) {
     })
   }
 
+  // Side by side, not one after the other: two texts in one webhook call are one burst (bot.ts
+  // waits a few seconds for the rest of a burst, then answers once). t0 + index keeps their order.
   const msgs = parseInboundAll(body)
   if (msgs.length) {
     after(async () => {
-      for (const m of msgs) {
-        try {
-          await handleInbound(m)
-        } catch (e) {
-          console.warn(`pen whatsapp (meta): inbound ${m.id} failed: ${(e as Error).message}`)
-        }
-      }
+      const t0 = Date.now()
+      await Promise.all(
+        msgs.map((m, i) =>
+          handleInbound(m, { at: t0 + i }).catch((e) => console.warn(`pen whatsapp (meta): inbound ${m.id} failed: ${(e as Error).message}`)),
+        ),
+      )
     })
   }
   return NextResponse.json({ ok: true })

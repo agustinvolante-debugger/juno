@@ -84,11 +84,11 @@ async function anthropic(): Promise<CheckResult> {
 
 async function whatsappReplies(): Promise<CheckResult> {
   const name = 'WhatsApp replies'
-  // A linked user's text still 'received' 5 minutes on never got its reply (bot.ts marks
-  // answered ones 'done'). Two hours back only: older rows predate that marking.
+  // A linked user's text still 'received' (or 'answering', claimed by a turn: burst.ts) 5 minutes
+  // on never got its reply (bot.ts marks answered ones 'done'). Two hours back only: older rows predate that marking.
   const [unanswered, failed, stuckFiles, undelivered] = await Promise.all([
     supabaseAdmin.from('pen_whatsapp_messages').select('id', { count: 'exact', head: true })
-      .eq('kind', 'text').eq('state', 'received').not('email', 'is', null).lt('created_at', ago(5 * MIN)).gt('created_at', ago(120 * MIN)),
+      .eq('kind', 'text').in('state', ['received', 'answering']).not('email', 'is', null).lt('created_at', ago(5 * MIN)).gt('created_at', ago(120 * MIN)),
     supabaseAdmin.from('pen_whatsapp_messages').select('id', { count: 'exact', head: true })
       .eq('state', 'failed').gt('created_at', ago(60 * MIN)),
     supabaseAdmin.from('pen_whatsapp_messages').select('id', { count: 'exact', head: true })
