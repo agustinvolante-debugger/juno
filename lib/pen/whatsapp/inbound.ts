@@ -2,7 +2,7 @@
 // one of Juno's messages got "I can read recordings, voice notes, photos and text messages…").
 // Pure, for tests (.pentest/inbound-test.mts); bot.ts does the talking.
 //
-//   reaction     silent. Except 👍 (any skin tone), ✅, ☑️, ✔️ or 👌 on the very message that asked
+//   reaction     silent. Except 👍 (any skin tone), ❤️ (any colour, founder 19 Oct), ✅, ☑️, ✔️ or 👌 on the very message that asked
 //                the question waiting for a yes (confirm.ts Pending: an askConfirm question or
 //                "still in Santiago?"): that is the yes, and runs exactly like typing "yes".
 //   location     the time zone where the pin is (tz-lookup, offline), as if the user had said it.
@@ -19,7 +19,7 @@ import { validZone } from '../timezone'
 export type Route = 'yes' | 'silent' | 'location' | 'contacts' | 'cant_read' | 'normal'
 
 /** A reaction that means yes. Skin tones and the text-style variation selector are allowed. */
-const YES_EMOJI = /^(?:👍|👌)[\u{1F3FB}-\u{1F3FF}]?️?$|^(?:✅|☑️?|✔️?)$/u
+const YES_EMOJI = /^(?:👍|👌)[\u{1F3FB}-\u{1F3FF}]?️?$|^(?:✅|☑️?|✔️?)$|^(?:❤|♥|🧡|💛|💚|💙|💜|🖤|🤍|🤎|🩷|🩵|🩶)️?$/u
 
 export function isYesEmoji(emoji: string): boolean {
   return YES_EMOJI.test(emoji.trim())
