@@ -25,7 +25,7 @@
 
 import crypto from 'node:crypto'
 import { supabaseAdmin } from '@/lib/supabase'
-import type { CalEvent } from './calendar'
+import { daySpan, isDay, plainNotes, timedLen, type EventPatch, type NewEvent } from './calendar-edit'
 
 export const GCAL_SCOPE = process.env.GCAL_SCOPE || 'https://www.googleapis.com/auth/calendar.events.owned'
 export const GCAL_FALLBACK_SCOPE = 'https://www.googleapis.com/auth/calendar.events'
@@ -336,21 +336,27 @@ const cleanAttendees = (list: Attendee[] = []) =>
     .filter((a) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a.email))
 
 /** The request body for events.insert (exported for tests). */
-export function eventBody(ev: CalEvent, o: { attendees?: Attendee[]; meet?: boolean; ref?: string } = {}): Record<string, unknown> {
-  const startMs = Date.parse(ev.start)
-  if (Number.isNaN(startMs)) throw new Error('calendar event needs a valid start')
-  const dur = Math.min(24 * 60, Math.max(5, Math.round(ev.durationMin ?? 30)))
+export function eventBody(ev: NewEvent, o: { attendees?: Attendee[]; meet?: boolean; ref?: string } = {}): Record<string, unknown> {
   const tz = ev.tz || 'UTC'
   const alarm = ev.alarmMin ?? 30
   const attendees = cleanAttendees(o.attendees)
+  let when: Record<string, unknown>
+  if (ev.allDay) {
+    const d = daySpan(ev.start, ev.end)
+    when = { start: { date: d.start }, end: { date: d.end } }
+  } else {
+    const startMs = Date.parse(ev.start)
+    if (Number.isNaN(startMs)) throw new Error('calendar event needs a valid start')
+    when = { start: { dateTime: new Date(startMs).toISOString(), timeZone: tz }, end: { dateTime: new Date(startMs + timedLen(startMs, ev)).toISOString(), timeZone: tz } }
+  }
   return {
     summary: (ev.title ?? '').trim().slice(0, 200) || 'Meeting',
     ...(ev.description?.trim() ? { description: ev.description.trim().slice(0, 1000) } : {}),
     ...(ev.location?.trim() ? { location: ev.location.trim().slice(0, 200) } : {}),
-    start: { dateTime: new Date(startMs).toISOString(), timeZone: tz },
-    end: { dateTime: new Date(startMs + dur * 60000).toISOString(), timeZone: tz },
+    ...when,
     ...(attendees.length ? { attendees } : {}),
-    reminders: alarm > 0 ? { useDefault: false, overrides: [{ method: 'popup', minutes: Math.min(40320, Math.round(alarm)) }] } : { useDefault: true },
+    // An all-day event keeps the calendar's own default alerts (a popup "30 min before" midnight is noise).
+    reminders: alarm > 0 && !ev.allDay ? { useDefault: false, overrides: [{ method: 'popup', minutes: Math.min(40320, Math.round(alarm)) }] } : { useDefault: true },
     ...(o.meet ? { conferenceData: meetRequest() } : {}),
     // Marks Juno's own events, so a brief isn't sent twice for an offer the user accepted.
     extendedProperties: { private: { juno: '1', ...(o.ref ? { juno_ref: o.ref } : {}) } },
@@ -358,7 +364,7 @@ export function eventBody(ev: CalEvent, o: { attendees?: Attendee[]; meet?: bool
 }
 
 /** Adds one event the user said yes to. With attendees, Google emails them the invite. */
-export async function createEvent(email: string, ev: CalEvent, o: { attendees?: Attendee[]; meet?: boolean; ref?: string } = {}, src?: CalSrc): Promise<CreatedEvent> {
+export async function createEvent(email: string, ev: NewEvent, o: { attendees?: Attendee[]; meet?: boolean; ref?: string } = {}, src?: CalSrc): Promise<CreatedEvent> {
   const body = eventBody(ev, o)
   const invite = Boolean((body.attendees as unknown[] | undefined)?.length)
   const q = new URLSearchParams({ conferenceDataVersion: '1', sendUpdates: invite ? 'all' : 'none' })
@@ -409,10 +415,13 @@ export type UpcomingEvent = {
   cal?: string
   /** Every connected calendar it is on, when the same meeting is on more than one. */
   cals?: string[]
+  /** Its notes, as plain text (≤ 1000 chars; Google's description, Outlook's bodyPreview). Absent when empty. */
+  description?: string
 }
 
 export function toUpcoming(e: GEvent): UpcomingEvent {
   const self = (e.attendees ?? []).find((a) => a.self)
+  const notes = plainNotes(e.description)
   return {
     id: e.id,
     title: (e.summary ?? '').trim() || '(no title)',
@@ -429,10 +438,11 @@ export function toUpcoming(e: GEvent): UpcomingEvent {
     uid: e.iCalUID ?? null,
     organizerSelf: e.organizer?.self === true,
     organizer: e.organizer?.email ? { email: e.organizer.email.toLowerCase(), name: e.organizer.displayName?.trim() || null } : null,
+    ...(notes ? { description: notes } : {}),
   }
 }
 
-const EVENT_FIELDS = 'id,status,summary,location,htmlLink,hangoutLink,start,end,iCalUID,organizer(email,displayName,self),attendees(email,displayName,self,resource,responseStatus),conferenceData(entryPoints(entryPointType,uri)),extendedProperties'
+const EVENT_FIELDS = 'id,status,summary,description,location,htmlLink,hangoutLink,start,end,iCalUID,organizer(email,displayName,self),attendees(email,displayName,self,resource,responseStatus),conferenceData(entryPoints(entryPointType,uri)),extendedProperties'
 
 /** The user's events from now to `days` ahead (at most READ_DAYS), soonest first. Never stored. */
 export async function upcomingEvents(email: string, days = READ_DAYS, now = new Date(), src?: CalSrc): Promise<UpcomingEvent[]> {
@@ -511,6 +521,46 @@ export async function moveEvent(email: string, eventId: string, startIso: string
     method: 'PATCH',
     body: { start: { dateTime: new Date(start).toISOString(), timeZone: tz }, end: { dateTime: new Date(start + len).toISOString(), timeZone: tz } },
   }, src)
+  return { id: e.id, link: e.htmlLink ?? null, meet: meetOf(e) }
+}
+
+/** The body of events.patch for an EventPatch (exported for tests). Switching timed ↔ all-day nulls the other form. */
+export function patchBody(p: EventPatch): Record<string, unknown> {
+  const b: Record<string, unknown> = {}
+  if (p.title !== undefined) b.summary = p.title.trim().slice(0, 200) || 'Meeting'
+  if (p.location !== undefined) b.location = (p.location ?? '').trim().slice(0, 200)
+  if (p.description !== undefined) b.description = (p.description ?? '').trim().slice(0, 1000)
+  if (p.start !== undefined || p.end !== undefined) {
+    if (!p.start || !p.end) throw new Error('a new time needs a start and an end')
+    if (isDay(p.start)) {
+      const d = daySpan(p.start, p.end)
+      b.start = { date: d.start, dateTime: null }
+      b.end = { date: d.end, dateTime: null }
+    } else {
+      const s = Date.parse(p.start)
+      if (Number.isNaN(s)) throw new Error('needs a valid start')
+      const len = timedLen(s, { end: p.end })
+      const tz = p.tz || 'UTC'
+      b.start = { dateTime: new Date(s).toISOString(), timeZone: tz, date: null }
+      b.end = { dateTime: new Date(s + len).toISOString(), timeZone: tz, date: null }
+    }
+  }
+  return b
+}
+
+/**
+ * Changes an event's title, time, place or notes. Guests are emailed Google's update only when the
+ * event has some (`notify`; unknown = read its guest list first), never for the user's own events.
+ */
+export async function updateEvent(email: string, eventId: string, p: EventPatch, src?: CalSrc, notify?: boolean): Promise<CreatedEvent> {
+  const path = `calendars/primary/events/${encodeURIComponent(eventId)}`
+  const body = patchBody(p)
+  let send = notify
+  if (send === undefined) {
+    const cur = await gcal<GEvent>(email, `${path}?fields=attendees(self,resource,email)`, {}, src)
+    send = (cur.attendees ?? []).some((a) => !a.self && !a.resource && a.email)
+  }
+  const e = await gcal<GEvent>(email, `${path}?sendUpdates=${send ? 'all' : 'none'}`, { method: 'PATCH', body }, src)
   return { id: e.id, link: e.htmlLink ?? null, meet: meetOf(e) }
 }
 

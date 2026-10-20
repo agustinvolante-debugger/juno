@@ -11,10 +11,10 @@
 //     whenever an event with attendees is created, moved or deleted. Juno's confirm policy (ask first
 //     when guests would be emailed) is in the chat tools, the same as Google.
 
-import type { CalEvent } from './calendar'
+import type { EventPatch, NewEvent } from './calendar-edit'
 import type { Attendee, CreatedEvent, UpcomingEvent } from './google-calendar'
 import { graph, type GraphError } from './outlook'
-import { EVENT_EXPAND, EVENT_SELECT, fromGraph, graphEventBody, graphMoveBody, pickMeetingProvider, providerLabel, textHit, withAttendee, type GraphEvent, type MeetingProvider } from './outlook-graph'
+import { EVENT_EXPAND, EVENT_SELECT, fromGraph, graphEventBody, graphMoveBody, graphPatchBody, pickMeetingProvider, providerLabel, textHit, withAttendee, type GraphEvent, type MeetingProvider } from './outlook-graph'
 
 const READ_DAYS = 7
 const enc = encodeURIComponent
@@ -79,7 +79,7 @@ export async function outlookGet(email: string, address: string, id: string): Pr
 }
 
 /** A new event (the user's yes, or their own request). With attendees, Outlook emails the invitations. */
-export async function outlookCreate(email: string, address: string, ev: CalEvent, o: { attendees?: Attendee[]; meet?: boolean; ref?: string } = {}): Promise<OutlookCreated> {
+export async function outlookCreate(email: string, address: string, ev: NewEvent, o: { attendees?: Attendee[]; meet?: boolean; ref?: string } = {}): Promise<OutlookCreated> {
   const video = o.meet ? await videoFor(email, address) : null
   const body = graphEventBody(ev, { attendees: o.attendees, video, ref: o.ref })
   let e: GraphEvent
@@ -133,5 +133,11 @@ export async function outlookMove(email: string, address: string, id: string, st
   const a = cur?.start ? fromGraph({ ...cur, id }, address) : null
   const oldLen = a && !a.allDay && a.end ? Date.parse(a.end) - Date.parse(a.start) : 30 * 60000
   const e = await graph<GraphEvent>(email, address, `me/events/${enc(id)}`, { method: 'PATCH', body: { ...graphMoveBody(startIso, durationMin ? durationMin * 60000 : oldLen), ...(a?.allDay ? { isAllDay: false } : {}) } })
+  return created(e, false)
+}
+
+/** Changes an event's title, time, place or notes (Calendar page); guests, if any, get Outlook's update. */
+export async function outlookUpdate(email: string, address: string, id: string, p: EventPatch): Promise<OutlookCreated> {
+  const e = await graph<GraphEvent>(email, address, `me/events/${enc(id)}`, { method: 'PATCH', body: graphPatchBody(p) })
   return created(e, false)
 }

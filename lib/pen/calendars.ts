@@ -20,11 +20,11 @@
 // an Outlook calendar is Teams (or none on personal calendars that can't: videoUnavailable).
 
 import { supabaseAdmin } from '@/lib/supabase'
-import type { CalEvent } from './calendar'
-import { addAttendee, addMeet, createEvent, deleteEvent, eventsInRange, getEvent, getGcalConnection, hasCalendar, moveEvent, upcomingEvents, READ_DAYS, type Attendee, type CalSrc, type CreatedEvent, type UpcomingEvent } from './google-calendar'
+import type { EventPatch, NewEvent } from './calendar-edit'
+import { addAttendee, addMeet, createEvent, deleteEvent, eventsInRange, getEvent, getGcalConnection, hasCalendar, moveEvent, updateEvent, upcomingEvents, READ_DAYS, type Attendee, type CalSrc, type CreatedEvent, type UpcomingEvent } from './google-calendar'
 import { chooseDefault, eventRef, mergeEvents, parseEventRef, pickCalendar, type CalInfo } from './calendar-merge'
 import { cleanProfile, getProfileRaw } from './profile'
-import { outlookAddAttendee, outlookAddVideo, outlookCreate, outlookDelete, outlookGet, outlookMove, outlookRange, outlookUpcoming } from './outlook-calendar'
+import { outlookAddAttendee, outlookAddVideo, outlookCreate, outlookDelete, outlookGet, outlookMove, outlookRange, outlookUpcoming, outlookUpdate } from './outlook-calendar'
 
 export { eventRef, parseEventRef, pickCalendar, type CalInfo } from './calendar-merge'
 
@@ -117,9 +117,14 @@ export async function upcomingAll(email: string, days = READ_DAYS, now = new Dat
   return (await readAll(email, (src) => (src.kind === 'outlook' ? outlookUpcoming(email, src.address, days, now) : upcomingEvents(email, days, now, src)))).events
 }
 
-/** Every calendar's events in [from, to), merged (optionally Google's free-text q on each). */
-export async function eventsBetween(email: string, from: Date, to: Date, q?: string): Promise<{ events: UpcomingEvent[]; read: string[]; failed: string[] }> {
-  return readAll(email, (src) => (src.kind === 'outlook' ? outlookRange(email, src.address, from, to, { q }) : eventsInRange(email, from, to, { q }, src)))
+/**
+ * Every calendar's events in [from, to), merged (optionally Google's free-text q on each).
+ * o.max = events per calendar (default 100, at most 250: the Calendar page reads up to six weeks);
+ * o.cals = the list already read, to skip reading it again.
+ */
+export async function eventsBetween(email: string, from: Date, to: Date, q?: string, o: { max?: number; cals?: Calendar[] } = {}): Promise<{ events: UpcomingEvent[]; read: string[]; failed: string[] }> {
+  const max = o.max
+  return readAll(email, (src) => (src.kind === 'outlook' ? outlookRange(email, src.address, from, to, { q, max }) : eventsInRange(email, from, to, { q, max }, src)), o.cals)
 }
 
 /** One event by ref, from the calendar the ref names (bare id: the default). */
@@ -147,6 +152,18 @@ export async function moveByRef(email: string, ref: string, startIso: string, tz
   return { ...e, ref: eventRef(e.id, r.cal.key) }
 }
 
+/**
+ * Changes an event's title, time, place or notes (the Calendar page). `notify`: the event has guests
+ * (Google emails them the update only then; Outlook decides itself); unknown = Google checks.
+ */
+export async function updateByRef(email: string, ref: string, patch: EventPatch, notify?: boolean): Promise<CreatedEvent & { ref: string }> {
+  const r = await resolveCalendar(email, { ref })
+  if (!r.cal || !r.id) throw new Error(r.error ?? 'no calendar is connected')
+  const src = r.cal.src
+  const e = src.kind === 'outlook' ? await outlookUpdate(email, src.address, r.id, patch) : await updateEvent(email, r.id, patch, src, notify)
+  return { ...e, ref: eventRef(e.id, r.cal.key) }
+}
+
 export async function addMeetByRef(email: string, ref: string): Promise<CreatedEvent> {
   const r = await resolveCalendar(email, { ref })
   if (!r.cal || !r.id) throw new Error(r.error ?? 'no calendar is connected')
@@ -163,7 +180,7 @@ export async function addAttendeeByRef(email: string, ref: string, who: Attendee
 }
 
 /** A new event on the calendar the user named (`said`), else the default. Throws when none is connected. */
-export async function createOn(email: string, ev: CalEvent, o: { attendees?: Attendee[]; meet?: boolean; ref?: string } = {}, said?: string | null): Promise<CreatedEvent & { ref: string; calendar: string; calendarAddress: string | null; provider: CalProvider }> {
+export async function createOn(email: string, ev: NewEvent, o: { attendees?: Attendee[]; meet?: boolean; ref?: string } = {}, said?: string | null): Promise<CreatedEvent & { ref: string; calendar: string; calendarAddress: string | null; provider: CalProvider }> {
   const r = await resolveCalendar(email, { said })
   if (!r.cal) throw new Error(r.error ?? 'no calendar is connected')
   const src = r.cal.src

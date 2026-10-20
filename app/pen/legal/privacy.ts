@@ -106,12 +106,13 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
       {
         h: 'Google Calendar',
         body: [
-          'If you connect Google Calendar, Juno Pen asks Google for permission to see, add and change events on the calendars you own. We use it for three things only:',
+          'If you connect Google Calendar, Juno Pen asks Google for permission to see, add and change events on the calendars you own. We use it for four things only:',
           {
             list: [
               'To add events you approve. When a recording mentions a meeting, Juno Pen asks you first, on WhatsApp, iMessage or the website. It adds the event only after you say yes, and it never changes or deletes an event you didn’t ask it to.',
               'To prepare you for meetings. We read your events for the next 7 days (title, time, place, attendees and description) so we can send you a short brief before a meeting, using your notes from past conversations with the same people.',
               'To change or delete an event when you ask. If you ask Juno Pen to move or delete an event, or add a video link to it, it looks that event up by name (from yesterday to 60 days ahead).',
+              'When you open the Calendar in Juno Pen, we read the events for the weeks shown so you can see and edit them there. They\'re read live and not stored.',
             ],
           },
           'To write a brief or a reminder, the details of that event are sent to Anthropic, which writes the text for us and does not train its models on data sent through its API. We don’t sell calendar data, use it for advertising, or use it to train AI models, ours or anyone else’s. Nobody at Juno Pen reads it unless you ask us to, it’s needed for security, or the law requires it.',
@@ -149,7 +150,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
           'If you connect an Outlook or Microsoft 365 account (work, school or personal, such as outlook.com or Hotmail), you sign in on Microsoft\'s own page and choose what Juno Pen may do. Juno Pen asks Microsoft for two permissions:',
           {
             list: [
-              'Your calendar (Calendars.ReadWrite). Juno Pen reads your upcoming events when it needs them (meeting briefs, your morning brief, "what\'s on tomorrow?", finding a meeting you ask about), together with any Google calendars you connected. It adds, moves or deletes an event only when you ask in the chat or say yes to a suggestion, and it asks first whenever a change would email other people (an invitation, an update or a cancellation). If you ask for a video link on an Outlook calendar, Microsoft creates a Teams link. Nothing from your calendar is stored by Juno Pen; events are read when needed and discarded.',
+              'Your calendar (Calendars.ReadWrite). Juno Pen reads your upcoming events when it needs them (meeting briefs, your morning brief, "what\'s on tomorrow?", finding a meeting you ask about), together with any Google calendars you connected. When you open the Calendar in Juno Pen, we read the events for the weeks shown so you can see and edit them there. They\'re read live and not stored. It adds, moves or deletes an event only when you ask in the chat, say yes to a suggestion or change it yourself in the Calendar, and it asks first whenever a change would email other people (an invitation, an update or a cancellation). If you ask for a video link on an Outlook calendar, Microsoft creates a Teams link. Nothing from your calendar is stored by Juno Pen; events are read when needed and discarded.',
               'Sending email as you (Mail.Send). When you tell Juno Pen to send a draft you have seen, it sends that one email from your Microsoft address, and a copy stays in your Sent Items. Juno Pen cannot read, search or delete your Outlook mail.',
             ],
           },
@@ -192,7 +193,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
               'When you delete a recording, we remove it and its notes from our database, its audio from our storage, and the transcript AssemblyAI made of it. Copies can remain in our providers’ backups for a limited time.',
               'Otherwise, AssemblyAI’s standard policy is to delete audio within about 48 hours and the transcripts it keeps within about 30 days. Recordings sent on WhatsApp are not kept in our own file storage; we keep their transcript and notes.',
               'WhatsApp messages you send us: kept with your account until you ask us to delete them.',
-              'Google Calendar: we read upcoming events when a brief or suggestion needs them. We keep only the events Juno Pen added for you and the briefs it wrote. When you disconnect Google Calendar or ask us to delete your account, we revoke our access and delete your Google tokens and the calendar data we hold.',
+              'Google Calendar: we read upcoming events when a brief or suggestion needs them, and the weeks you look at when you open the Calendar. We keep only the events Juno Pen added for you and the briefs it wrote. When you disconnect Google Calendar or ask us to delete your account, we revoke our access and delete your Google tokens and the calendar data we hold.',
               'Gmail: we keep a sealed token per connected address until you disconnect it, plus the recipient, time and sending address of each email you sent. Emails read to answer you are not stored; Juno Pen\'s replies stay in your chat history until you start a new conversation or unlink your phone. When you disconnect or ask us to delete your account, we revoke our access and delete these.',
               'Outlook / Microsoft 365: we keep one encrypted refresh token per connected address until you disconnect it, plus the recipient, time and sending address of each email you sent. Calendar events and emails read to answer you are not stored; Juno Pen\'s replies stay in your chat history until you start a new conversation or unlink your phone. When you disconnect or ask us to delete your account, we delete these.',
               'Payment and billing records: as long as tax and accounting law requires.',
@@ -364,12 +365,13 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
       {
         h: 'Google Calendar',
         body: [
-          'Si conectas Google Calendar, Juno Pen le pide permiso a Google para ver, agregar y cambiar eventos en los calendarios que son tuyos. Lo usamos solo para tres cosas:',
+          'Si conectas Google Calendar, Juno Pen le pide permiso a Google para ver, agregar y cambiar eventos en los calendarios que son tuyos. Lo usamos solo para cuatro cosas:',
           {
             list: [
               'Agregar los eventos que apruebas. Cuando una grabación menciona una reunión, Juno Pen te pregunta primero, por WhatsApp, iMessage o en el sitio. Agrega el evento solo después de que digas que sí, y nunca cambia ni borra un evento que no le pediste.',
               'Prepararte para tus reuniones. Leemos tus eventos de los próximos 7 días (título, hora, lugar, invitados y descripción) para enviarte un resumen breve antes de una reunión, con tus notas de conversaciones anteriores con las mismas personas.',
               'Cambiar o borrar un evento cuando lo pides. Si le pides a Juno Pen mover o borrar un evento, o agregarle un enlace de videollamada, lo busca por su nombre (desde ayer hasta 60 días adelante).',
+              'Cuando abres el Calendario en Juno Pen, leemos los eventos de las semanas que se muestran para que puedas verlos y editarlos ahí. Se leen en el momento y no se guardan.',
             ],
           },
           'Para escribir un resumen o un recordatorio, los datos de ese evento se envían a Anthropic, que escribe el texto por nosotros y no entrena sus modelos con datos enviados por su API. No vendemos los datos de tu calendario, no los usamos para publicidad ni para entrenar modelos de IA, propios ni de terceros. Nadie en Juno Pen los lee salvo que tú nos lo pidas, sea necesario por seguridad o lo exija la ley.',
@@ -407,7 +409,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
           'Si conectas una cuenta de Outlook o Microsoft 365 (del trabajo, de la universidad o personal, como outlook.com o Hotmail), inicias sesión en la propia página de Microsoft y eliges qué puede hacer Juno Pen. Juno Pen le pide a Microsoft dos permisos:',
           {
             list: [
-              'Tu calendario (Calendars.ReadWrite). Juno Pen lee tus próximos eventos cuando los necesita (resúmenes antes de reuniones, tu resumen de la mañana, "¿qué tengo mañana?", buscar una reunión por la que preguntes), junto con los calendarios de Google que hayas conectado. Agrega, mueve o borra un evento solo cuando lo pides en el chat o aceptas una sugerencia, y pregunta antes cada vez que un cambio enviaría un correo a otras personas (una invitación, una actualización o una cancelación). Si pides un link de video en un calendario de Outlook, Microsoft crea un link de Teams. Juno Pen no guarda nada de tu calendario; los eventos se leen cuando hacen falta y se descartan.',
+              'Tu calendario (Calendars.ReadWrite). Juno Pen lee tus próximos eventos cuando los necesita (resúmenes antes de reuniones, tu resumen de la mañana, "¿qué tengo mañana?", buscar una reunión por la que preguntes), junto con los calendarios de Google que hayas conectado. Cuando abres el Calendario en Juno Pen, leemos los eventos de las semanas que se muestran para que puedas verlos y editarlos ahí. Se leen en el momento y no se guardan. Agrega, mueve o borra un evento solo cuando lo pides en el chat, aceptas una sugerencia o lo cambias tú en el Calendario, y pregunta antes cada vez que un cambio enviaría un correo a otras personas (una invitación, una actualización o una cancelación). Si pides un link de video en un calendario de Outlook, Microsoft crea un link de Teams. Juno Pen no guarda nada de tu calendario; los eventos se leen cuando hacen falta y se descartan.',
               'Enviar correos en tu nombre (Mail.Send). Cuando le dices a Juno Pen que envíe un borrador que ya viste, envía ese correo desde tu dirección de Microsoft, y queda una copia en tus Elementos enviados. Juno Pen no puede leer, buscar ni borrar tu correo de Outlook.',
             ],
           },
@@ -450,7 +452,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
               'Cuando borras una grabación, la eliminamos junto con sus notas de nuestra base de datos, su audio de nuestro almacenamiento y la transcripción que hizo AssemblyAI. Pueden quedar copias en los respaldos de nuestros proveedores por un tiempo limitado.',
               'Si no la borras, la política estándar de AssemblyAI es borrar el audio en unas 48 horas y las transcripciones que guarda en unos 30 días. Las grabaciones enviadas por WhatsApp no se guardan en nuestro almacenamiento de archivos; guardamos su transcripción y sus notas.',
               'Mensajes de WhatsApp que nos envías: se guardan con tu cuenta hasta que nos pidas borrarlos.',
-              'Google Calendar: leemos los próximos eventos cuando un resumen o una sugerencia los necesita. Solo guardamos los eventos que Juno Pen agregó por ti y los resúmenes que escribió. Cuando desconectas Google Calendar o nos pides borrar tu cuenta, revocamos nuestro acceso y borramos tus tokens de Google y los datos de calendario que tengamos.',
+              'Google Calendar: leemos los próximos eventos cuando un resumen o una sugerencia los necesita, y las semanas que miras cuando abres el Calendario. Solo guardamos los eventos que Juno Pen agregó por ti y los resúmenes que escribió. Cuando desconectas Google Calendar o nos pides borrar tu cuenta, revocamos nuestro acceso y borramos tus tokens de Google y los datos de calendario que tengamos.',
               'Gmail: guardamos un token sellado por dirección conectada hasta que la desconectes, más el destinatario, la hora y la dirección de envío de cada correo que mandaste. Los correos leídos para responderte no se guardan; las respuestas de Juno Pen quedan en tu historial del chat hasta que empieces una conversación nueva o desvincules tu teléfono. Cuando desconectas o nos pides borrar tu cuenta, revocamos nuestro acceso y borramos todo eso.',
               'Outlook / Microsoft 365: guardamos un token de actualización cifrado por dirección conectada hasta que la desconectes, más el destinatario, la hora y la dirección de envío de cada correo que enviaste. Los eventos del calendario y los correos leídos para responderte no se guardan; las respuestas de Juno Pen quedan en tu historial del chat hasta que empieces una conversación nueva o desvincules tu teléfono. Cuando desconectas o nos pides borrar tu cuenta, borramos todo esto.',
               'Registros de pagos y facturación: el tiempo que exija la ley tributaria y contable.',
@@ -622,12 +624,13 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
       {
         h: 'Google Agenda',
         body: [
-          'Se você conectar o Google Agenda, o Juno Pen pede permissão ao Google para ver, adicionar e alterar eventos nas agendas que são suas. Usamos isso só para três coisas:',
+          'Se você conectar o Google Agenda, o Juno Pen pede permissão ao Google para ver, adicionar e alterar eventos nas agendas que são suas. Usamos isso só para quatro coisas:',
           {
             list: [
               'Adicionar os eventos que você aprova. Quando uma gravação menciona uma reunião, o Juno Pen pergunta primeiro, pelo WhatsApp, iMessage ou pelo site. Ele só adiciona o evento depois que você disser sim, e nunca altera nem apaga um evento que você não pediu.',
               'Te preparar para reuniões. Lemos seus eventos dos próximos 7 dias (título, horário, local, convidados e descrição) para te mandar um resumo curto antes de uma reunião, com suas notas de conversas anteriores com as mesmas pessoas.',
               'Alterar ou apagar um evento quando você pede. Se você pedir ao Juno Pen para mover ou apagar um evento, ou adicionar um link de videochamada, ele procura esse evento pelo nome (de ontem até 60 dias à frente).',
+              'Quando você abre o Calendário no Juno Pen, lemos os eventos das semanas mostradas para que você possa vê-los e editá-los ali. Eles são lidos na hora e não são guardados.',
             ],
           },
           'Para escrever um resumo ou um lembrete, os dados desse evento são enviados à Anthropic, que escreve o texto para nós e não treina seus modelos com dados enviados pela sua API. Não vendemos os dados da sua agenda, não os usamos para publicidade nem para treinar modelos de IA, nossos ou de terceiros. Ninguém no Juno Pen os lê, a não ser que você peça, que seja necessário por segurança ou que a lei exija.',
@@ -665,7 +668,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
           'Se você conectar uma conta do Outlook ou do Microsoft 365 (do trabalho, da faculdade ou pessoal, como outlook.com ou Hotmail), você entra na própria página da Microsoft e escolhe o que o Juno Pen pode fazer. O Juno Pen pede à Microsoft duas permissões:',
           {
             list: [
-              'Sua agenda (Calendars.ReadWrite). O Juno Pen lê seus próximos eventos quando precisa deles (resumos antes de reuniões, seu resumo da manhã, "o que tenho amanhã?", encontrar uma reunião sobre a qual você perguntar), junto com as agendas do Google que você conectou. Ele adiciona, move ou apaga um evento só quando você pede no chat ou aceita uma sugestão, e pergunta antes sempre que uma mudança enviaria e-mail para outras pessoas (um convite, uma atualização ou um cancelamento). Se você pedir um link de vídeo numa agenda do Outlook, a Microsoft cria um link do Teams. O Juno Pen não guarda nada da sua agenda; os eventos são lidos quando necessário e descartados.',
+              'Sua agenda (Calendars.ReadWrite). O Juno Pen lê seus próximos eventos quando precisa deles (resumos antes de reuniões, seu resumo da manhã, "o que tenho amanhã?", encontrar uma reunião sobre a qual você perguntar), junto com as agendas do Google que você conectou. Quando você abre o Calendário no Juno Pen, lemos os eventos das semanas mostradas para que você possa vê-los e editá-los ali. Eles são lidos na hora e não são guardados. Ele adiciona, move ou apaga um evento só quando você pede no chat, aceita uma sugestão ou muda você mesmo no Calendário, e pergunta antes sempre que uma mudança enviaria e-mail para outras pessoas (um convite, uma atualização ou um cancelamento). Se você pedir um link de vídeo numa agenda do Outlook, a Microsoft cria um link do Teams. O Juno Pen não guarda nada da sua agenda; os eventos são lidos quando necessário e descartados.',
               'Enviar e-mails em seu nome (Mail.Send). Quando você manda o Juno Pen enviar um rascunho que já viu, ele envia esse e-mail do seu endereço da Microsoft, e uma cópia fica nos seus Itens enviados. O Juno Pen não consegue ler, buscar nem apagar seus e-mails do Outlook.',
             ],
           },
@@ -708,7 +711,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
               'Quando você apaga uma gravação, removemos a gravação e as notas do nosso banco de dados, o áudio do nosso armazenamento e a transcrição feita pela AssemblyAI. Podem restar cópias nos backups dos nossos fornecedores por um tempo limitado.',
               'Se você não apagar, a política padrão da AssemblyAI é apagar o áudio em cerca de 48 horas e as transcrições que ela guarda em cerca de 30 dias. As gravações enviadas pelo WhatsApp não ficam no nosso armazenamento de arquivos; guardamos a transcrição e as notas.',
               'Mensagens de WhatsApp que você nos envia: ficam com a sua conta até você pedir para apagá-las.',
-              'Google Agenda: lemos os próximos eventos quando um resumo ou uma sugestão precisa deles. Guardamos só os eventos que o Juno Pen adicionou para você e os resumos que escreveu. Quando você desconecta o Google Agenda ou nos pede para apagar sua conta, revogamos nosso acesso e apagamos seus tokens do Google e os dados de agenda que tivermos.',
+              'Google Agenda: lemos os próximos eventos quando um resumo ou uma sugestão precisa deles, e as semanas que você olha quando abre o Calendário. Guardamos só os eventos que o Juno Pen adicionou para você e os resumos que escreveu. Quando você desconecta o Google Agenda ou nos pede para apagar sua conta, revogamos nosso acesso e apagamos seus tokens do Google e os dados de agenda que tivermos.',
               'Gmail: guardamos um token selado por endereço conectado até você desconectar, mais o destinatário, o horário e o endereço de envio de cada e-mail que você mandou. Os e-mails lidos para responder não são guardados; as respostas do Juno Pen ficam no seu histórico do chat até você começar uma conversa nova ou desvincular seu telefone. Quando você desconecta ou pede para apagarmos sua conta, revogamos nosso acesso e apagamos tudo isso.',
               'Outlook / Microsoft 365: guardamos um token de atualização criptografado por endereço conectado até você desconectá-lo, mais o destinatário, o horário e o endereço de envio de cada e-mail que você mandou. Os eventos da agenda e os e-mails lidos para responder não são guardados; as respostas do Juno Pen ficam no seu histórico do chat até você começar uma conversa nova ou desvincular seu telefone. Quando você desconecta ou nos pede para apagar sua conta, apagamos tudo isso.',
               'Registros de pagamento e faturamento: pelo tempo que a legislação fiscal e contábil exigir.',

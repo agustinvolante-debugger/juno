@@ -1,0 +1,262 @@
+// The Calendar page's reads and writes (22 Oct), behind app/api/pen/calendar/*. Events are read
+// live from every connected Google and Outlook calendar (lib/pen/calendars.ts) for the range on
+// screen and never stored; the Juno extras are computed on each read: the recording of a past
+// meeting (calendar-match.ts), dated to-dos, WhatsApp reminders, and on demand a guest brief from
+// what Pen already knows (personBriefFor, no model call). The decisions (who may change what,
+// when guests must be confirmed) are pure, in calendar-page.ts.
+
+import { supabaseAdmin } from '@/lib/supabase'
+import type { CalAccount, CalBrief, CalCreate, CalPatch, CalRange, CalReminder, CalTodo, CalViewEvent } from './calendar-view'
+import { createOn, defaultCalendar, deleteByRef, eventsBetween, getEventByRef, listCalendars, moveByRef, providerOf, updateByRef, type Calendar } from './calendars'
+import { matchRecordings, type MatchRecording } from './calendar-match'
+import { briefPerson, changeGate, datedTodos, localDay, ownAddresses, toViewEvent, type BriefSource, type Gate, type TodoSession } from './calendar-page'
+import { isDay, type EventPatch } from './calendar-edit'
+import type { UpcomingEvent } from './google-calendar'
+import { userZone } from './timezone'
+
+const DAY = 86_400_000
+/** How far back a recording's to-dos can still be due on the days shown. */
+const TODO_LOOKBACK_DAYS = 180
+
+const validTz = (tz: unknown): tz is string => {
+  if (typeof tz !== 'string' || !tz.includes('/')) return tz === 'UTC'
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/* ---------------------------------------------------------------- reads */
+
+async function todosIn(email: string, from: Date, to: Date, tz: string): Promise<CalTodo[]> {
+  const { data, error } = await supabaseAdmin
+    .from('pen_sessions')
+    .select('id,source_channel,storage_path,merge_index,notes,action_meta,action_done')
+    .eq('user_email', email)
+    .or('merge_index.is.null,merge_index.eq.0')
+    .gte('created_at', new Date(from.getTime() - TODO_LOOKBACK_DAYS * DAY).toISOString())
+    .lt('created_at', to.toISOString())
+    .order('created_at', { ascending: false })
+    .limit(500)
+  if (error) throw new Error(error.message)
+  return datedTodos((data ?? []) as unknown as TodoSession[], localDay(from.getTime(), tz), localDay(to.getTime() - 1, tz))
+}
+
+async function remindersIn(email: string, from: Date, to: Date): Promise<CalReminder[]> {
+  const { data, error } = await supabaseAdmin
+    .from('pen_reminders')
+    .select('id,text,due_at,sent_at')
+    .eq('user_email', email)
+    .gte('due_at', from.toISOString())
+    .lt('due_at', to.toISOString())
+    .order('due_at', { ascending: true })
+    .limit(200)
+  if (error) throw new Error(error.message)
+  return ((data ?? []) as { id: string; text: string; due_at: string; sent_at: string | null }[]).map((r) => ({ id: r.id, text: r.text, dueAt: r.due_at, sent: Boolean(r.sent_at) }))
+}
+
+type RecRow = { id: string; title: string | null; source_name: string | null; source_channel: string | null; storage_path: string | null; recorded_at: string | null; duration_sec: number | null }
+
+/** Recordings that ended in the range (+6 h: a meeting at the range's end finishes after it), with their people's emails. */
+async function recordingsIn(email: string, from: Date, to: Date): Promise<MatchRecording[]> {
+  const { data, error } = await supabaseAdmin
+    .from('pen_sessions')
+    .select('id,title,source_name,source_channel,storage_path,recorded_at,duration_sec')
+    .eq('user_email', email)
+    .or('merge_index.is.null,merge_index.eq.0')
+    .not('recorded_at', 'is', null)
+    .gte('recorded_at', from.toISOString())
+    .lt('recorded_at', new Date(Math.min(Date.now(), to.getTime()) + 6 * 3_600_000).toISOString())
+    // 200: six weeks of recordings, and the session-id list below stays a short URL.
+    .limit(200)
+  if (error) throw new Error(error.message)
+  const rows = ((data ?? []) as RecRow[]).filter((r) => r.recorded_at && r.source_channel !== 'sample' && !String(r.storage_path ?? '').startsWith('sample'))
+  if (!rows.length) return []
+  const emails = new Map<string, string[]>()
+  const { data: links } = await supabaseAdmin.from('pen_session_people').select('session_id,person_id').eq('user_email', email).in('session_id', rows.map((r) => r.id))
+  const ids = [...new Set(((links ?? []) as { person_id: string }[]).map((l) => l.person_id))]
+  if (ids.length) {
+    const { data: people } = await supabaseAdmin.from('pen_people').select('id,email').eq('user_email', email).in('id', ids)
+    const byId = new Map(((people ?? []) as { id: string; email: string | null }[]).filter((p) => p.email).map((p) => [p.id, p.email!.toLowerCase()]))
+    for (const l of (links ?? []) as { session_id: string; person_id: string }[]) {
+      const m = byId.get(l.person_id)
+      if (m) emails.set(l.session_id, [...(emails.get(l.session_id) ?? []), m])
+    }
+  }
+  return rows.map((r) => ({ id: r.id, title: r.title ?? r.source_name ?? 'Recording', recordedAt: r.recorded_at!, durationSec: r.duration_sec, emails: emails.get(r.id) ?? [] }))
+}
+
+const soft = <T>(what: string, p: Promise<T>, empty: T): Promise<T> =>
+  p.catch((e) => {
+    console.warn(`pen calendar page: ${what}: ${(e as Error).message}`)
+    return empty
+  })
+
+/** GET /api/pen/calendar: everything on screen for [from, to). `tzHint` = the browser's zone, used when the profile has none. */
+export async function readRange(email: string, from: Date, to: Date, tzHint?: string | null, now = new Date()): Promise<CalRange> {
+  const [cals, zone] = await Promise.all([listCalendars(email).catch((): Calendar[] => []), userZone(email).catch(() => null)])
+  const tz = zone?.tz ?? (validTz(tzHint) ? tzHint : 'UTC')
+  const pastEnd = from < now
+  const [def, read, todos, reminders, recordings] = await Promise.all([
+    defaultCalendar(email, cals),
+    eventsBetween(email, from, to, undefined, { max: 250, cals }),
+    soft('to-dos', todosIn(email, from, to, tz), [] as CalTodo[]),
+    soft('reminders', remindersIn(email, from, to), [] as CalReminder[]),
+    pastEnd ? soft('recordings', recordingsIn(email, from, to), [] as MatchRecording[]) : Promise.resolve([] as MatchRecording[]),
+  ])
+  const own = ownAddresses(email, cals)
+  const keyed = read.events.map((e) => ({ e, key: viewRef(e) }))
+  const match = matchRecordings(keyed.map(({ e, key }) => ({ key, title: e.title, start: e.start, end: e.end, allDay: e.allDay, declined: e.declined, others: e.others })), recordings, now)
+  const calendars: CalAccount[] = cals.map((c) => ({ key: c.key, address: c.address, provider: providerOf(c), broken: c.broken, isDefault: c.key === def?.key }))
+  return {
+    calendars,
+    events: keyed.map(({ e, key }) => toViewEvent(e, { own, now, recording: match.get(key) ?? null })),
+    todos,
+    reminders,
+    failed: read.failed,
+    tz,
+  }
+}
+
+const viewRef = (e: UpcomingEvent) => `${e.id}|${e.cal ?? ''}`
+
+/** GET /api/pen/calendar/brief: up to four guests, each by their email in Contacts first, else by name. */
+export async function readBrief(email: string, ref: string): Promise<CalBrief | null> {
+  const got = await getEventByRef(email, ref)
+  if (!got) return null
+  const guests = got.event.others.slice(0, 4)
+  if (!guests.length) return { people: [] }
+  const { data } = await supabaseAdmin.from('pen_people').select('name,email').eq('user_email', email).not('email', 'is', null)
+  const byEmail = new Map(((data ?? []) as { name: string; email: string | null }[]).filter((p) => p.email && p.name).map((p) => [p.email!.toLowerCase(), p.name]))
+  const { personBriefFor } = await import('./whatsapp/agent')
+  const people = await Promise.all(
+    guests.map(async (g) => {
+      const contact = byEmail.get(g.email.toLowerCase()) ?? null
+      const lookup = contact ?? g.name?.trim() ?? null
+      const b: BriefSource | null = lookup ? await personBriefFor(email, lookup).catch(() => null) : null
+      return briefPerson({ email: g.email, name: contact ?? g.name }, b)
+    }),
+  )
+  return { people }
+}
+
+/* --------------------------------------------------------------- writes */
+
+export type Outcome<T> = { ok: true; value: T } | { ok: false; status: number; body: Record<string, unknown> }
+const refuse = (g: NonNullable<Gate>): Outcome<never> => ({ ok: false, status: g.status, body: g.body })
+const bad = (error: string, status = 400): Outcome<never> => ({ ok: false, status, body: { error } })
+
+async function fresh(email: string, ref: string, cals?: Calendar[]): Promise<CalViewEvent | null> {
+  const got = await getEventByRef(email, ref).catch(() => null)
+  if (!got) return null
+  const list = cals ?? (await listCalendars(email).catch((): Calendar[] => []))
+  return toViewEvent(got.event, { own: ownAddresses(email, list) })
+}
+
+const cleanGuests = (g: unknown): { email: string; name: string | null }[] =>
+  (Array.isArray(g) ? g : [])
+    .map((x) => ({ email: String((x as { email?: unknown })?.email ?? '').trim().toLowerCase(), name: typeof (x as { name?: unknown })?.name === 'string' ? ((x as { name: string }).name.trim() || null) : null }))
+    .filter((x, i, all) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x.email) && all.findIndex((y) => y.email === x.email) === i)
+    .slice(0, 50)
+
+/** POST /api/pen/calendar/events. */
+export async function createFromPage(email: string, b: Partial<CalCreate>): Promise<Outcome<CalViewEvent>> {
+  const title = typeof b.title === 'string' ? b.title.trim() : ''
+  const allDay = b.allDay === true
+  const start = typeof b.start === 'string' ? b.start : ''
+  const end = typeof b.end === 'string' ? b.end : ''
+  if (allDay ? !isDay(start) || (end && !isDay(end)) : Number.isNaN(Date.parse(start)) || Number.isNaN(Date.parse(end))) return bad(allDay ? 'an all-day event needs dates (YYYY-MM-DD)' : 'start and end must be dates')
+  if (allDay ? end && end <= start : Date.parse(end) <= Date.parse(start)) return bad('the end must be after the start')
+  const tz = validTz(b.tz) ? b.tz : 'UTC'
+  const guests = cleanGuests(b.guests)
+  const cals = await listCalendars(email).catch((): Calendar[] => [])
+  const key = typeof b.cal === 'string' && b.cal.trim() ? b.cal.trim().toLowerCase() : null
+  if (key && !cals.some((c) => c.key === key && !c.broken)) return bad('that calendar is not connected (or needs reconnecting)')
+  if (!cals.length) return bad('no calendar is connected')
+  const gate = changeGate('create', { guests: guests.length, confirm: b.confirm === true })
+  if (gate) return refuse(gate)
+  const made = await createOn(
+    email,
+    { title: title || 'Meeting', start, end: end || undefined, allDay, tz, ...(typeof b.location === 'string' && b.location.trim() ? { location: b.location } : {}), ...(typeof b.description === 'string' && b.description.trim() ? { description: b.description } : {}) },
+    { attendees: guests, meet: b.video === true },
+    key,
+  )
+  const view = await fresh(email, made.ref, cals)
+  return {
+    ok: true,
+    // Re-read failed (rare: Google not yet consistent): what was asked, with what came back.
+    value: view ?? toViewEvent({ id: made.id, cal: made.calendar, title: title || 'Meeting', start, end: end || null, allDay, others: guests, declined: false, location: b.location?.trim() || null, meet: made.meet, link: made.link, junoRef: null, juno: true, organizerSelf: true, ...(b.description?.trim() ? { description: b.description.trim().slice(0, 1000) } : {}) }, { own: ownAddresses(email, cals) }),
+  }
+}
+
+/**
+ * PATCH /api/pen/calendar/events. Start and end travel together: the missing one comes from the
+ * event (same length when only the start moves). A time-only change to a timed event is a move
+ * (moveByRef, the chat's path); anything else is an update.
+ */
+export async function patchFromPage(email: string, b: Partial<CalPatch>): Promise<Outcome<CalViewEvent>> {
+  if (typeof b.ref !== 'string' || !b.ref) return bad('ref required')
+  const tz = validTz(b.tz) ? b.tz : 'UTC'
+  const cals = await listCalendars(email).catch((): Calendar[] => [])
+  const got = await getEventByRef(email, b.ref)
+  if (!got) return bad('that event is gone', 404)
+  const e = got.event
+  const gate = changeGate('patch', { guests: e.others.length, editable: toViewEvent(e, { own: ownAddresses(email, cals) }).editable, confirm: b.confirm === true })
+  if (gate) return refuse(gate)
+
+  const patch: EventPatch = { tz }
+  if (typeof b.title === 'string') patch.title = b.title
+  if (b.location === null || typeof b.location === 'string') patch.location = b.location
+  if (b.description === null || typeof b.description === 'string') patch.description = b.description
+  const timeChange = typeof b.start === 'string' || typeof b.end === 'string'
+  if (timeChange) {
+    const t = fillTimes(e, typeof b.start === 'string' ? b.start : undefined, typeof b.end === 'string' ? b.end : undefined)
+    if ('error' in t) return bad(t.error)
+    patch.start = t.start
+    patch.end = t.end
+  }
+  if (!timeChange && patch.title === undefined && patch.location === undefined && patch.description === undefined) return bad('nothing to change')
+
+  const onlyTime = timeChange && patch.title === undefined && patch.location === undefined && patch.description === undefined
+  const res = onlyTime && !e.allDay && !isDay(patch.start)
+    ? await moveByRef(email, b.ref, patch.start!, tz, Math.max(5, Math.round((Date.parse(patch.end!) - Date.parse(patch.start!)) / 60000)))
+    : await updateByRef(email, b.ref, patch, e.others.length > 0)
+  const view = await fresh(email, res.ref, cals)
+  return view ? { ok: true, value: view } : bad('changed, but the calendar did not send it back', 502)
+}
+
+/** The new [start, end] for a change that gives one or both; all-day dates or ISO instants, never mixed. */
+export function fillTimes(e: Pick<UpcomingEvent, 'start' | 'end' | 'allDay'>, start?: string, end?: string): { start: string; end: string } | { error: string } {
+  const day = isDay(start ?? end ?? '')
+  if (start && end && isDay(start) !== isDay(end)) return { error: 'start and end must both be dates or both be times' }
+  if (day) {
+    const s = start ?? (e.allDay ? e.start : e.start.slice(0, 10))
+    const days = e.allDay && e.end ? Math.max(1, Math.round((Date.parse(e.end) - Date.parse(e.start)) / DAY)) : 1
+    const en = end ?? new Date(Date.parse(`${s}T00:00:00Z`) + days * DAY).toISOString().slice(0, 10)
+    if (!isDay(s) || !isDay(en)) return { error: 'an all-day event needs dates (YYYY-MM-DD)' }
+    if (en <= s) return { error: 'the end must be after the start' }
+    return { start: s, end: en }
+  }
+  // Timed. From an all-day event, a new start without an end gets an hour.
+  const oldLen = !e.allDay && e.end ? Date.parse(e.end) - Date.parse(e.start) : 3_600_000
+  const s = start ?? (e.allDay ? null : e.start)
+  if (!s) return { error: 'a new start is needed' }
+  const sMs = Date.parse(s)
+  const eMs = end ? Date.parse(end) : sMs + (oldLen > 0 ? oldLen : 1_800_000)
+  if (Number.isNaN(sMs) || Number.isNaN(eMs)) return { error: 'start and end must be dates' }
+  if (eMs <= sMs) return { error: 'the end must be after the start' }
+  return { start: new Date(sMs).toISOString(), end: new Date(eMs).toISOString() }
+}
+
+/** DELETE /api/pen/calendar/events?ref=&confirm=1. */
+export async function deleteFromPage(email: string, ref: string, confirm: boolean): Promise<Outcome<true>> {
+  const cals = await listCalendars(email).catch((): Calendar[] => [])
+  const got = await getEventByRef(email, ref)
+  if (!got) return bad('that event is gone', 404)
+  const gate = changeGate('delete', { guests: got.event.others.length, editable: toViewEvent(got.event, { own: ownAddresses(email, cals) }).editable, confirm })
+  if (gate) return refuse(gate)
+  await deleteByRef(email, ref)
+  return { ok: true, value: true }
+}

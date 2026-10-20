@@ -5,7 +5,7 @@
 // lib/pen/outlook-calendar.ts (the calendar calls) use it.
 
 import type { UpcomingEvent } from './google-calendar'
-import type { CalEvent } from './calendar'
+import { daySpan, isDay, plainNotes, timedLen, type EventPatch, type NewEvent } from './calendar-edit'
 
 export const MS_LOGIN = 'https://login.microsoftonline.com'
 export const GRAPH = 'https://graph.microsoft.com/v1.0'
@@ -124,6 +124,7 @@ type DT = { dateTime?: string; timeZone?: string }
 export type GraphEvent = {
   id: string
   subject?: string | null
+  bodyPreview?: string | null
   isCancelled?: boolean
   isAllDay?: boolean
   start?: DT
@@ -147,7 +148,7 @@ export type GraphEvent = {
  * Outlook's public-strings set, value = the pen_suggestions id it came from, or "1".
  */
 export const JUNO_PROP = 'String {00020329-0000-0000-C000-000000000046} Name junoRef'
-export const EVENT_SELECT = 'id,subject,isCancelled,isAllDay,start,end,location,webLink,isOnlineMeeting,onlineMeetingProvider,onlineMeeting,onlineMeetingUrl,attendees,organizer,isOrganizer,iCalUId,responseStatus'
+export const EVENT_SELECT = 'id,subject,bodyPreview,isCancelled,isAllDay,start,end,location,webLink,isOnlineMeeting,onlineMeetingProvider,onlineMeeting,onlineMeetingUrl,attendees,organizer,isOrganizer,iCalUId,responseStatus'
 export const EVENT_EXPAND = `singleValueExtendedProperties($filter=id eq '${JUNO_PROP}')`
 
 /** Minutes east of UTC for a zone at an instant. */
@@ -226,6 +227,7 @@ export function fromGraph(e: GraphEvent, self?: string | null): UpcomingEvent {
   const allDay = e.isAllDay === true
   const org = e.organizer?.emailAddress?.address?.toLowerCase() ?? null
   const prop = e.singleValueExtendedProperties?.find((p) => p.id.toLowerCase() === JUNO_PROP.toLowerCase())?.value ?? null
+  const notes = plainNotes(e.bodyPreview)
   return {
     id: e.id,
     title: (e.subject ?? '').trim() || '(no title)',
@@ -244,6 +246,7 @@ export function fromGraph(e: GraphEvent, self?: string | null): UpcomingEvent {
     uid: outlookUid(e.iCalUId),
     organizerSelf: e.isOrganizer === true,
     organizer: org ? { email: org, name: e.organizer?.emailAddress?.name?.trim() || null } : null,
+    ...(notes ? { description: notes } : {}),
   }
 }
 
@@ -279,24 +282,55 @@ const cleanAttendees = (list: MsAttendee[] = []) =>
  * The body of POST /me/events (exported for tests). Times in UTC (Outlook shows them in each
  * person's own zone). With attendees, Outlook emails the invitations from the user's mailbox.
  */
-export function graphEventBody(ev: CalEvent, o: { attendees?: MsAttendee[]; video?: MeetingProvider | null; ref?: string } = {}): Record<string, unknown> {
-  const startMs = Date.parse(ev.start)
-  if (Number.isNaN(startMs)) throw new Error('calendar event needs a valid start')
-  const dur = Math.min(24 * 60, Math.max(5, Math.round(ev.durationMin ?? 30)))
+export function graphEventBody(ev: NewEvent, o: { attendees?: MsAttendee[]; video?: MeetingProvider | null; ref?: string } = {}): Record<string, unknown> {
   const alarm = ev.alarmMin ?? 30
   const attendees = cleanAttendees(o.attendees)
   return {
     subject: (ev.title ?? '').trim().slice(0, 200) || 'Meeting',
     ...(ev.description?.trim() ? { body: { contentType: 'text', content: ev.description.trim().slice(0, 1000) } } : {}),
     ...(ev.location?.trim() ? { location: { displayName: ev.location.trim().slice(0, 200) } } : {}),
-    start: graphDT(startMs),
-    end: graphDT(startMs + dur * 60000),
+    ...graphWhen(ev),
     ...(attendees.length ? { attendees } : {}),
-    isReminderOn: alarm > 0,
-    ...(alarm > 0 ? { reminderMinutesBeforeStart: Math.min(40320, Math.round(alarm)) } : {}),
+    // All-day: Outlook's own default alert (the calendar's setting), not "30 min before midnight".
+    ...(ev.allDay ? {} : { isReminderOn: alarm > 0, ...(alarm > 0 ? { reminderMinutesBeforeStart: Math.min(40320, Math.round(alarm)) } : {}) }),
     ...(o.video ? { isOnlineMeeting: true, onlineMeetingProvider: o.video } : {}),
     singleValueExtendedProperties: [{ id: JUNO_PROP, value: o.ref || '1' }],
   }
+}
+
+/** A zone Graph accepts for an all-day event's midnight: the user's IANA zone, else UTC. */
+const dayZone = (tz: string | null | undefined) => (tz && tz.includes('/') && validTz(tz) ? tz : 'UTC')
+
+/**
+ * Start/end for a new event: timed in UTC; all-day = midnight to midnight in the user's zone with
+ * isAllDay (Graph rejects an all-day event whose times aren't midnights). allDayDate reads them back.
+ */
+function graphWhen(ev: NewEvent): Record<string, unknown> {
+  if (ev.allDay) {
+    const d = daySpan(ev.start, ev.end)
+    const tz = dayZone(ev.tz)
+    return { isAllDay: true, start: { dateTime: `${d.start}T00:00:00`, timeZone: tz }, end: { dateTime: `${d.end}T00:00:00`, timeZone: tz } }
+  }
+  const startMs = Date.parse(ev.start)
+  if (Number.isNaN(startMs)) throw new Error('calendar event needs a valid start')
+  return { start: graphDT(startMs), end: graphDT(startMs + timedLen(startMs, ev)) }
+}
+
+/**
+ * The body of PATCH /me/events/{id} for a change from the Calendar page (22 Oct; same EventPatch as
+ * Google's patchBody). Only the fields given; start and end together; '' / null clears the place or
+ * notes. Outlook emails guests the update itself when the event has any.
+ */
+export function graphPatchBody(p: EventPatch): Record<string, unknown> {
+  const b: Record<string, unknown> = {}
+  if (p.title !== undefined) b.subject = p.title.trim().slice(0, 200) || 'Meeting'
+  if (p.location !== undefined) b.location = { displayName: (p.location ?? '').trim().slice(0, 200) }
+  if (p.description !== undefined) b.body = { contentType: 'text', content: (p.description ?? '').trim().slice(0, 1000) }
+  if (p.start !== undefined || p.end !== undefined) {
+    if (!p.start || !p.end) throw new Error('a new time needs a start and an end')
+    Object.assign(b, isDay(p.start) ? graphWhen({ title: '', start: p.start, end: p.end, allDay: true, tz: p.tz }) : { ...graphWhen({ title: '', start: p.start, end: p.end }), isAllDay: false })
+  }
+  return b
 }
 
 /** A new start for PATCH /me/events/{id}, keeping the length. */
