@@ -150,8 +150,9 @@ const TOOLS: Anthropic.Tool[] = [
     name: 'notes_settings',
     description:
       'The user\'s notes settings: the language notes are written in (a language code, or "recording" for the language of each ' +
-      'recording) and their length (short or detailed). Leave both "" to read the current ones. Applies to new notes.',
-    input_schema: obj({ notes_language: { type: 'string' }, note_style: { type: 'string' } }, ['notes_language', 'note_style']),
+      'recording) and their length (short or detailed). Leave both "" to read the current ones. Applies to new notes. ' +
+      'your_name: the user\'s own name when they tell you it ("sign as Chris", "my name is Chris Dyas"); it signs their emails. Omit otherwise.',
+    input_schema: obj({ notes_language: { type: 'string' }, note_style: { type: 'string' }, your_name: { type: 'string' } }, ['notes_language', 'note_style']),
   },
   {
     name: 'set_client',
@@ -470,9 +471,12 @@ async function notesSettings(ctx: Ctx, input: Record<string, unknown>): Promise<
   const p = await getProfile(ctx.email)
   const lang = str(input, 'notes_language').toLowerCase()
   const style = str(input, 'note_style').toLowerCase()
-  const show = (x: typeof p) => ({ notes_language: x.notesLanguage ?? 'the language of each recording', note_style: x.noteStyle ?? 'standard' })
-  if (!lang && !style) return show(p)
+  // Drafts are signed with this (22 Oct: with no name saved, Chris's draft was signed "Agustin").
+  const name = str(input, 'your_name').replace(/\s+/g, ' ').trim().slice(0, 80)
+  const show = (x: typeof p) => ({ name: x.name ?? null, notes_language: x.notesLanguage ?? 'the language of each recording', note_style: x.noteStyle ?? 'standard' })
+  if (!lang && !style && !name) return show(p)
   const next = { ...p }
+  if (name) next.name = name
   if (lang) {
     if (lang === 'recording') delete next.notesLanguage
     else if (LANGUAGES.some((l) => l.code === lang)) next.notesLanguage = lang

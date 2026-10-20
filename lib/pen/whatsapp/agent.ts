@@ -591,6 +591,10 @@ function system(ctx: Ctx, pending: Draft | null, asked: Pending | null, askedUns
     'recording_people which speaker each one is, name the speakers too; then offer to rewrite the notes with the names.\n' +
     '- Emails: write like a busy professional to someone they know. Four to eight sentences, a concrete next step. ' +
     'Leave a visible gap like [date] rather than guessing a missing detail. Sign with the user\'s first name.\n' +
+    (ctx.userName
+      ? ''
+      : '- You do NOT know the user\'s name. Never sign with a name taken from recordings, contacts or emails (that is someone else). ' +
+        'Sign drafts "[Your name]" and, once, ask what name to sign with; when they tell you, save it with notes_settings (your_name) and redo the draft with it.\n') +
     '- After save_draft, write at most one short intro line (or ask for the missing email), and do not tell them how to send it. The draft and a ' +
     '"reply send it" hint are shown below your reply automatically.\n' +
     '- send_draft only on a clear go-ahead for a draft the user has already seen.\n' +
