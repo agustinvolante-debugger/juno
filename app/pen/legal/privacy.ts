@@ -142,6 +142,22 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
         ],
       },
       {
+        h: 'Outlook and Microsoft 365',
+        body: [
+          'If you connect an Outlook or Microsoft 365 account (work, school or personal, such as outlook.com or Hotmail), you sign in on Microsoft\'s own page and choose what Juno Pen may do. Juno Pen asks Microsoft for two permissions:',
+          {
+            list: [
+              'Your calendar (Calendars.ReadWrite). Juno Pen reads your upcoming events when it needs them (meeting briefs, your morning brief, "what\'s on tomorrow?", finding a meeting you ask about), together with any Google calendars you connected. It adds, moves or deletes an event only when you ask in the chat or say yes to a suggestion, and it asks first whenever a change would email other people (an invitation, an update or a cancellation). If you ask for a video link on an Outlook calendar, Microsoft creates a Teams link. Nothing from your calendar is stored by Juno Pen; events are read when needed and discarded.',
+              'Sending email as you (Mail.Send). When you tell Juno Pen to send a draft you have seen, it sends that one email from your Microsoft address, and a copy stays in your Sent Items. Juno Pen cannot read, search or delete your Outlook mail.',
+            ],
+          },
+          'What we store: your Microsoft address, your organization\'s directory ID (only to build the approval link an IT admin may need), which of the two permissions you turned on, and a refresh token that lets Juno Pen act for you without signing in each time. The token is encrypted (AES-256-GCM) before it is saved, and Microsoft replaces it regularly; we keep only the newest one. For each email sent we log who it went to and when (never the subject or the body), to enforce a daily sending limit.',
+          'Organizations: some workplaces only let their IT admin approve new apps. In that case nothing is connected, and Juno Pen gives you a Microsoft approval link to send to your IT admin.',
+          'How to remove it: disconnect the account in Settings → Connections, or tell Juno in the chat ("disconnect my Outlook"). Juno Pen deletes its token at once and can no longer use the account. Microsoft does not let apps revoke this access themselves, so to remove Juno Pen from your Microsoft account too, go to https://account.live.com/consent/Manage (personal accounts) or https://myapps.microsoft.com (work or school accounts). Deleting your Juno Pen account also deletes these tokens. Events already added and emails already sent stay in your Microsoft account.',
+          'Juno Pen\'s use of information received from Microsoft APIs is limited to providing these features to you. We do not sell it, use it for advertising, or use it to train AI models.',
+        ],
+      },
+      {
         h: 'Granola',
         body: [
           'If you connect Granola, Juno Pen stores your Granola API key or sign-in token encrypted and uses it only to read the meetings you choose to import (title, date, attendees, transcript, summary and your own notes). Disconnect in Settings → Granola to delete it.',
@@ -377,6 +393,22 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
         ],
       },
       {
+        h: 'Outlook y Microsoft 365',
+        body: [
+          'Si conectas una cuenta de Outlook o Microsoft 365 (del trabajo, de la universidad o personal, como outlook.com o Hotmail), inicias sesión en la propia página de Microsoft y eliges qué puede hacer Juno Pen. Juno Pen le pide a Microsoft dos permisos:',
+          {
+            list: [
+              'Tu calendario (Calendars.ReadWrite). Juno Pen lee tus próximos eventos cuando los necesita (resúmenes antes de reuniones, tu resumen de la mañana, "¿qué tengo mañana?", buscar una reunión por la que preguntes), junto con los calendarios de Google que hayas conectado. Agrega, mueve o borra un evento solo cuando lo pides en el chat o aceptas una sugerencia, y pregunta antes cada vez que un cambio enviaría un correo a otras personas (una invitación, una actualización o una cancelación). Si pides un link de video en un calendario de Outlook, Microsoft crea un link de Teams. Juno Pen no guarda nada de tu calendario; los eventos se leen cuando hacen falta y se descartan.',
+              'Enviar correos en tu nombre (Mail.Send). Cuando le dices a Juno Pen que envíe un borrador que ya viste, envía ese correo desde tu dirección de Microsoft, y queda una copia en tus Elementos enviados. Juno Pen no puede leer, buscar ni borrar tu correo de Outlook.',
+            ],
+          },
+          'Qué guardamos: tu dirección de Microsoft, el identificador del directorio de tu organización (solo para armar el link de aprobación que podría necesitar tu administrador de TI), cuál de los dos permisos activaste y un token de actualización que permite a Juno Pen actuar por ti sin que inicies sesión cada vez. El token se cifra (AES-256-GCM) antes de guardarse, y Microsoft lo reemplaza con frecuencia; guardamos solo el más reciente. Por cada correo enviado registramos a quién fue y cuándo (nunca el asunto ni el cuerpo), para aplicar un límite diario de envíos.',
+          'Organizaciones: algunos trabajos solo dejan que su administrador de TI apruebe apps nuevas. En ese caso no se conecta nada, y Juno Pen te da un link de aprobación de Microsoft para enviárselo a tu administrador.',
+          'Cómo quitarlo: desconecta la cuenta en Ajustes → Conexiones, o díselo a Juno en el chat ("desconecta mi Outlook"). Juno Pen borra su token de inmediato y ya no puede usar la cuenta. Microsoft no deja que las apps revoquen este acceso por su cuenta, así que para quitar también Juno Pen de tu cuenta de Microsoft entra a https://account.live.com/consent/Manage (cuentas personales) o https://myapps.microsoft.com (cuentas del trabajo o la universidad). Al borrar tu cuenta de Juno Pen también se borran estos tokens. Los eventos ya agregados y los correos ya enviados se quedan en tu cuenta de Microsoft.',
+          'El uso que Juno Pen hace de la información recibida de las APIs de Microsoft se limita a darte estas funciones. No la vendemos, no la usamos para publicidad ni para entrenar modelos de IA.',
+        ],
+      },
+      {
         h: 'Granola',
         body: [
           'Si conectas Granola, Juno Pen guarda cifrada tu clave API o tu sesión de Granola y la usa solo para leer las reuniones que elijas importar (título, fecha, asistentes, transcripción, resumen y tus notas). Desconéctalo en Ajustes → Granola para borrarla.',
@@ -609,6 +641,22 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
           'Não vendemos esses dados, não os usamos para publicidade nem para treinar modelos de IA, nossos ou de terceiros. Ninguém no Juno Pen os lê, a menos que você peça, seja necessário por segurança ou a lei exija.',
           'Você pode desconectar um endereço em Configurações → E-mail ou em myaccount.google.com/permissions. Nesse momento revogamos nosso acesso (a menos que a mesma conta Google continue conectada ao Juno Pen para Agenda ou Docs; nesse caso deixamos de usá-la para e-mail e apagamos o token) e apagamos o que guardamos sobre ele. Quando você nos pede para apagar sua conta, fazemos o mesmo.',
           'O uso e a transferência para qualquer outro app, pelo Juno Pen, de informações recebidas das APIs do Google seguirão a Política de Dados do Usuário dos Serviços de API do Google (https://developers.google.com/terms/api-services-user-data-policy), incluindo os requisitos de Uso Limitado.',
+        ],
+      },
+      {
+        h: 'Outlook e Microsoft 365',
+        body: [
+          'Se você conectar uma conta do Outlook ou do Microsoft 365 (do trabalho, da faculdade ou pessoal, como outlook.com ou Hotmail), você entra na própria página da Microsoft e escolhe o que o Juno Pen pode fazer. O Juno Pen pede à Microsoft duas permissões:',
+          {
+            list: [
+              'Sua agenda (Calendars.ReadWrite). O Juno Pen lê seus próximos eventos quando precisa deles (resumos antes de reuniões, seu resumo da manhã, "o que tenho amanhã?", encontrar uma reunião sobre a qual você perguntar), junto com as agendas do Google que você conectou. Ele adiciona, move ou apaga um evento só quando você pede no chat ou aceita uma sugestão, e pergunta antes sempre que uma mudança enviaria e-mail para outras pessoas (um convite, uma atualização ou um cancelamento). Se você pedir um link de vídeo numa agenda do Outlook, a Microsoft cria um link do Teams. O Juno Pen não guarda nada da sua agenda; os eventos são lidos quando necessário e descartados.',
+              'Enviar e-mails em seu nome (Mail.Send). Quando você manda o Juno Pen enviar um rascunho que já viu, ele envia esse e-mail do seu endereço da Microsoft, e uma cópia fica nos seus Itens enviados. O Juno Pen não consegue ler, buscar nem apagar seus e-mails do Outlook.',
+            ],
+          },
+          'O que guardamos: seu endereço da Microsoft, o identificador do diretório da sua organização (só para montar o link de aprovação que o seu administrador de TI pode precisar), quais das duas permissões você ativou e um token de atualização que permite ao Juno Pen agir por você sem que você entre toda vez. O token é criptografado (AES-256-GCM) antes de ser salvo, e a Microsoft o substitui com frequência; guardamos só o mais recente. Para cada e-mail enviado registramos para quem foi e quando (nunca o assunto nem o corpo), para aplicar um limite diário de envios.',
+          'Organizações: alguns trabalhos só deixam o administrador de TI aprovar apps novos. Nesse caso nada é conectado, e o Juno Pen dá a você um link de aprovação da Microsoft para enviar ao seu administrador.',
+          'Como remover: desconecte a conta em Configurações → Conexões, ou peça ao Juno no chat ("desconectar meu Outlook"). O Juno Pen apaga o token na hora e não consegue mais usar a conta. A Microsoft não deixa os apps revogarem esse acesso sozinhos, então para remover também o Juno Pen da sua conta Microsoft acesse https://account.live.com/consent/Manage (contas pessoais) ou https://myapps.microsoft.com (contas do trabalho ou da faculdade). Ao apagar sua conta do Juno Pen, esses tokens também são apagados. Os eventos já adicionados e os e-mails já enviados continuam na sua conta Microsoft.',
+          'O uso que o Juno Pen faz das informações recebidas das APIs da Microsoft se limita a oferecer estes recursos a você. Não vendemos, não usamos para publicidade nem para treinar modelos de IA.',
         ],
       },
       {
