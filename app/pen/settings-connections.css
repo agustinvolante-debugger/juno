@@ -40,7 +40,7 @@
 }
 .pen-root .pen-conn-status {
   margin: 0; max-width: 62ch; font-size: 14.5px; line-height: 1.45; color: var(--dim);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 /* Connected: the line says so in green, with a dot, so a scan down the page finds what's on. */
 .pen-root .pen-conn-item[data-state='on'] > .pen-conn-row .pen-conn-status { color: var(--good); }
@@ -164,8 +164,12 @@
 
 /* ---------------------------------------------------------------- phone */
 @media (max-width: 640px) {
-  .pen-root .pen-conn-sec { padding: 22px 18px; }
-  .pen-root .pen-conn-row { grid-template-columns: 52px minmax(0, 1fr) auto; column-gap: 10px; padding: 14px 0; }
+  .pen-root .pen-conn .pen-conn-sec { padding: 22px 18px; }
+  /* A Connect / Link button drops under the name, so the status keeps the width; the fold
+     chevron stays at the right end of that line. */
+  .pen-root .pen-conn-act:has(> .pen-btn) { grid-column: 2 / -1; justify-content: flex-start; margin-top: 10px; }
+  .pen-root .pen-conn-act:has(> .pen-btn) .pen-conn-fold { margin-left: auto; }
+  .pen-root .pen-conn-row { grid-template-columns: 52px minmax(0, 1fr) auto; column-gap: 12px; padding: 14px 0; }
   .pen-root .pen-conn-tile { width: 32px; height: 32px; border-radius: 9px; }
   .pen-root .pen-conn-tile + .pen-conn-tile { margin-left: -12px; }
   .pen-root .pen-gacc-acts { column-gap: 16px; }
