@@ -363,7 +363,8 @@ async function listEventsTool(ctx: Ctx, input: Record<string, unknown>): Promise
     ...needsReconnect(cals),
     count: shown.length,
     events: shown.slice(0, 40).map(eventLine(ctx)),
-    note: 'List them by day, one line each: time, title, with whom (first names). Say "nothing" for an empty day. Mention the calendar only when they have more than one and it helps.',
+    note: 'List them by day, one line each: time, title, with whom (first names). Say "nothing" for an empty day. Mention the calendar only when they have more than one and it helps.' +
+      (cals.some((c) => c.broken) ? ' REQUIRED last line: needs_reconnect calendars were NOT read (their access stopped working); name them and offer the link to connect again.' : ''),
   }
 }
 
