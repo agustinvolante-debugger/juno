@@ -63,7 +63,7 @@ import { MODULES } from './tools'
 import { localDate, localIso, markZoneChecked, userZone, zonePromptLine, type Zone } from '../timezone'
 import { getPending, setPending, dropIfUnanswered, confirmPending, BARE_YES, BARE_NO, type Pending } from './confirm'
 import { finishZoneTurn, timeFields, zoneAskLine, type ZoneTurn } from './tools/timezone'
-import { UNDO, runUndo } from './undo'
+import { UNDO, runUndo, addSetUndo } from './undo'
 import { unseen } from './burst'
 
 const anthropic = penAnthropic('whatsapp-agent')
@@ -586,6 +586,8 @@ function system(ctx: Ctx, pending: Draft | null, asked: Pending | null, askedUns
     '- After save_draft, write at most one short intro line (or ask for the missing email), and do not tell them how to send it. The draft and a ' +
     '"reply send it" hint are shown below your reply automatically.\n' +
     '- send_draft only on a clear go-ahead for a draft the user has already seen.\n' +
+    '- Reminders, to-dos and events on their own calendar are done at once, also when the time comes from something you looked up (a meeting found in a ' +
+    'calendar or an invitation email): never "reply yes to confirm". Say what was set in one line; "undo" cancels it.\n' +
     gmailLine(ctx) +
     (ctx.userName ? `\nThe user is ${ctx.userName}. In to-dos, an owner with their name (or "me", "I") is them.\n` : '') +
     (ctx.agentBrief ? `\nAbout the user:\n${ctx.agentBrief}\n` : '') +
@@ -873,6 +875,8 @@ async function setReminder(ctx: Ctx, i: { text: string; in_minutes: number; at: 
     return { error: maxAheadMs(ctx.lang) > MAX_AHEAD_MS ? 'more than 30 days ahead; reminders go up to 30 days' : 'more than 23 hours ahead; WhatsApp only allows reminders within a day' }
   }
   const r = await addReminder({ email: ctx.email, phone: ctx.phone, text, dueAt: due, lang: ctx.lang })
+  // Set at once (never "reply yes"): "undo" cancels it (undo.ts), with anything else this message set.
+  await addSetUndo(ctx.email, ctx.msgId, { reminder: r.id, title: text }).catch(() => {})
   const zone = ctx.zone?.tz
   // A clock time is kept for a "no, I'm in SF" (same local time there); "in 20 minutes" is not.
   const item = zone && i.at.trim() ? { kind: 'reminder' as const, id: r.id, local: localIso(r.due_at, zone), text } : undefined
@@ -881,6 +885,7 @@ async function setReminder(ctx: Ctx, i: { text: string; in_minutes: number; at: 
     id: r.id,
     due_utc: r.due_at,
     ...(zone ? await timeFields(ctx, zone, r.due_at, item, { check: Boolean(item) }) : {}),
+    undo: 'the user can say "undo" to cancel it',
   }
 }
 
@@ -1506,7 +1511,19 @@ const MAIL_SAFE = new Set([
   'search_recordings', 'open_todos', 'get_recording', 'find_person', 'list_recordings', 'recording_people',
   'recording_conversations', 'read_conversation', 'person_brief', 'list_reminders', 'connection_status',
   'list_suggestions', 'missed_items', 'find_events', 'set_reminder', 'add_todo', 'add_to_calendar',
+  'list_events', 'find_meeting',
 ])
+
+/**
+ * The confirm slip (19 Oct, founder's chat): after finding the meeting, Juno wrote "Reply yes to
+ * confirm" before setting two reminders. Reminders, to-dos and adding to the user's own calendar
+ * run at once (confirm.ts). If a reply still asks for a yes while the user asked for one of those
+ * and no tool asked (askConfirm), the turn gets one more round with the rule restated, so the
+ * action is done in this reply instead of the next.
+ */
+export const ASKS_YES = /(\b(reply|answer|say|text)\s+\*?_?(yes|y|ok)\b)|(\b(responde|contesta|escribe|di)\s+\*?_?(s[ií]|ok)(?![a-z]))|(\b(responda|diga)\s+\*?_?(sim|ok)\b)|\bconfirm(ar|a|e|o)?\b[^.\n]{0,60}\?|¿\s*confirm|\b(shall|should) i (go ahead|set|add|create|schedule|put)\b|\b(do you )?want me to (go ahead|set (them|it|those|the|both|a|up)|add (them|it|those|both)|create (them|it))\b|¿\s*(quieres|deseas) que (los |las |lo |la |te )?(ponga|programe|configure|cree|agregue|active)|\b(quer|deseja) que eu (crie|coloque|programe|adicione|configure)|is that (right|correct|ok)\?\s*$|¿(est[aá] bien|correcto)\?\s*$/i
+/** The user asked for something that runs at once: a reminder, a to-do, an event on their own calendar. */
+export const WANTS_SELF = /\b(remind|reminder|alert me|ping me|recu[eé]rd(a|ame|enme)|recordatorio|av[ií]same|lembr(e|a|ete|ar)|lembrete|me avis(e|a)|to-?do|tarea|pendiente|tarefa|add (it |this |that )?to my calendar|agend(a|alo|ar)|a[nñ]ad(e|ir)|agreg(a|alo|ar)|adiciona(r)?|p[oó]n(lo|me)? en (mi )?calendario|coloca na (minha )?agenda)\b/i
 
 /** A bare go-ahead. Handled in code, so a send never depends on the model choosing to call a tool. */
 export const SEND_IT = /^\s*(send( it| the email)?|yes,? send( it)?|env[ií]a(lo)?|m[aá]nd(a|alo)|s[ií],? (env[ií]alo|m[aá]ndalo)|pode enviar|envia(r)?|manda(r)?)\s*[.!👍]*\s*$/i
@@ -1527,6 +1544,13 @@ const SENT: Record<Lang, (to: string, subject: string) => string> = {
   en: (to, s) => `Sent to ${to}: "${s}". A copy is in your inbox, and replies will go to you.`,
   es: (to, s) => `Enviado a ${to}: "${s}". Tienes una copia en tu correo y las respuestas te llegan a ti.`,
   pt: (to, s) => `Enviado para ${to}: "${s}". Uma cópia está no seu email e as respostas vão para você.`,
+}
+
+/** The rule restated for the extra round (ASKS_YES), in the user's language: do it, don't ask. */
+const NO_YES: Record<Lang, string> = {
+  en: '(Juno rule: reminders, to-dos and events on my own calendar are done at once, never after a yes. Do it now with the tools (relative to a meeting: use the meeting time you found), then tell me in one line what was set and that "undo" cancels it. Don\'t ask me anything.)',
+  es: '(Regla de Juno: los recordatorios, pendientes y eventos en mi propio calendario se hacen de inmediato, nunca después de un sí. Hazlo ahora con las herramientas (si es relativo a una reunión, usa la hora que encontraste) y dime en una línea qué quedó y que "deshacer" lo cancela. No me preguntes nada.)',
+  pt: '(Regra do Juno: lembretes, tarefas e eventos na minha própria agenda são feitos na hora, nunca depois de um sim. Faça agora com as ferramentas (se for relativo a uma reunião, use o horário que encontrou) e me diga em uma linha o que ficou e que "desfazer" cancela. Não me pergunte nada.)',
 }
 
 export async function runAgent(opts: {
@@ -1637,7 +1661,10 @@ export async function runAgent(opts: {
   }
 
   let text = ''
-  for (let round = 0; round < MAX_ROUNDS; round++) {
+  // The confirm slip guard (ASKS_YES): one extra round when a reply asks a yes it shouldn't.
+  let nudged = false
+  let ranSelf = false
+  for (let round = 0; round < MAX_ROUNDS + 1; round++) {
     const res = await anthropic.messages.create({
       model: MODEL,
       max_tokens: 16000,
@@ -1648,7 +1675,17 @@ export async function runAgent(opts: {
       messages,
     })
     text = res.content.filter((b): b is Anthropic.TextBlock => b.type === 'text').map((b) => b.text).join('\n').trim()
-    if (res.stop_reason !== 'tool_use') break
+    if (res.stop_reason !== 'tool_use') {
+      // Also after reading email: set_reminder / add_todo / add_to_calendar / find_meeting are MAIL_SAFE.
+      if (!nudged && !ctx.askedNow && !ranSelf && WANTS_SELF.test(opts.question) && ASKS_YES.test(text)) {
+        nudged = true
+        messages.push({ role: 'assistant', content: res.content })
+        messages.push({ role: 'user', content: NO_YES[opts.lang] })
+        continue
+      }
+      break
+    }
+    if (round >= MAX_ROUNDS) break
 
     messages.push({ role: 'assistant', content: res.content })
     const calls = res.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use')
@@ -1663,6 +1700,7 @@ export async function runAgent(opts: {
         }
         const out = await runTool(ctx, c.name, (c.input ?? {}) as Record<string, unknown>)
         const isError = !!out && typeof out === 'object' && 'error' in out
+        if (!isError && (['set_reminder', 'add_todo', 'add_to_calendar'].includes(c.name) || (c.name === 'find_meeting' && ((out as { reminders_set?: unknown[] }).reminders_set?.length ?? 0) > 0))) ranSelf = true
         results.push({ type: 'tool_result', tool_use_id: c.id, content: JSON.stringify(out), ...(isError ? { is_error: true } : {}) })
       } catch (e) {
         console.warn(`pen whatsapp agent: ${c.name} failed: ${(e as Error).message}`)

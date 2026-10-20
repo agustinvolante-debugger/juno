@@ -52,6 +52,12 @@ const ASK: Record<string, boolean | 'if_guests'> = {
   delete_event: 'if_guests',
   move_event: 'if_guests',
   add_to_calendar: false,
+  // The user's own reminders and to-dos, also when relative to something Juno looked up ("15 min
+  // before the meeting with Chris": find_meeting sets them). Never "reply yes" (20 Oct regression).
+  set_reminder: false,
+  add_todo: false,
+  find_meeting: false,
+  set_default_calendar: false,
   combine_recordings: false,
   combine_day: false,
   separate_recordings: false,
@@ -170,7 +176,8 @@ export const confirmModule: ToolModule = {
     '- Ask once, only where the tools ask. A tool that returns ask_user (delete a recording, delete or merge a contact, ' +
     'email or invite other people, change an event that has guests) has changed nothing: send exactly that question and ' +
     'stop. On the user\'s clear yes in their next message, call confirm_pending yes; on no, confirm_pending no.\n' +
-    '- Everything else the user asks for runs at once (combine or separate recordings, delete or move an event with no ' +
-    'guests, disconnect an app, add to their calendar): never add your own "are you sure?" or "shall I?" first. Say in one ' +
+    '- Everything else the user asks for runs at once (reminders, to-dos, add to their calendar, combine or separate recordings, delete or move an event with no ' +
+    'guests, disconnect an app): never add your own "are you sure?", "shall I?" or "reply yes to confirm" first, also when the time comes from something you ' +
+    'looked up (a meeting found in their calendar or an email: set the reminders in the same turn). Say in one ' +
     'line exactly what was done, and pass on the undo line when the tool gives one.',
 }
