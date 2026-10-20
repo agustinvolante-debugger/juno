@@ -11,5 +11,6 @@ import { googleModule } from './google'
 import { granolaModule } from './granola'
 import { audioModule } from './audio'
 import { mailReadModule } from './mailread'
+import { meetingsModule } from './meetings'
 
-export const MODULES: ToolModule[] = [confirmModule, offersModule, parityModule, timezoneModule, calendarModule, connectionsModule, googleModule, granolaModule, audioModule, mailReadModule]
+export const MODULES: ToolModule[] = [confirmModule, offersModule, parityModule, timezoneModule, calendarModule, connectionsModule, googleModule, granolaModule, audioModule, mailReadModule, meetingsModule]

@@ -11,6 +11,7 @@
 
 import { accessToken, listAccounts, type GmailAccount } from './gmail'
 import { cleanBody, extractText, header, type GmailPart, type ThreadMsg } from './mail-thread'
+import { parseIcs, parseInviteText, type Invite } from './invite-parse'
 
 const API = 'https://gmail.googleapis.com/gmail/v1/users/me'
 export const MAX_THREADS = 10
@@ -46,7 +47,7 @@ async function api<T>(userEmail: string, address: string, path: string): Promise
 const metaQs = () => `format=metadata&${META.map((h) => `metadataHeaders=${encodeURIComponent(h)}`).join('&')}`
 
 /** `at`: when the newest message arrived (ms), for the caller to say in the user's zone. */
-export type ThreadHit = { thread_id: string; account: string; from: string; subject: string; at: number; snippet: string; messages: number; unread: boolean }
+export type ThreadHit = { thread_id: string; account: string; from: string; to: string; subject: string; at: number; snippet: string; messages: number; unread: boolean }
 
 /** Threads matching a Gmail query, newest first, across the given addresses (≤ MAX_THREADS in all). */
 export async function searchThreads(userEmail: string, accounts: string[], q: string, max = MAX_THREADS): Promise<ThreadHit[]> {
@@ -63,6 +64,7 @@ export async function searchThreads(userEmail: string, accounts: string[], q: st
         thread_id: t.id,
         account: address,
         from: header(h, 'From'),
+        to: header(h, 'To'),
         subject: header(h, 'Subject'),
         snippet: (last.snippet ?? '').slice(0, 240),
         messages: msgs.length,
@@ -101,4 +103,47 @@ export async function threadHeaders(userEmail: string, address: string, threadId
     const h = m.payload?.headers
     return { from: header(h, 'From'), to: header(h, 'To'), replyTo: header(h, 'Reply-To'), subject: header(h, 'Subject'), messageId: header(h, 'Message-ID'), references: header(h, 'References') }
   })
+}
+
+/* ------------------------------------------------------------ invitations */
+
+export type FoundInvite = Invite & { account: string; thread_id: string; sender: string; to: string; subject: string; received: number }
+
+const b64 = (data: string) => Buffer.from(data.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')
+
+/** Calendar parts of a message: inline text/calendar bodies, and .ics attachments (by id, fetched). */
+function calendarParts(p: GmailPart | undefined, out: { data?: string; attachmentId?: string }[] = []): { data?: string; attachmentId?: string }[] {
+  if (!p) return out
+  const t = (p.mimeType ?? '').toLowerCase()
+  const ics = t === 'text/calendar' || t === 'application/ics' || /\.ics$/i.test(p.filename ?? '')
+  if (ics && (p.body?.data || p.body?.attachmentId)) out.push({ data: p.body?.data, attachmentId: p.body?.attachmentId })
+  for (const c of p.parts ?? []) calendarParts(c, out)
+  return out
+}
+
+/**
+ * The meetings in a thread's invitation emails: each message's .ics (inline or attached), else its
+ * subject and text read as an invitation (parseInviteText). Newest message first. Read-only, never stored.
+ */
+export async function threadInvites(userEmail: string, address: string, threadId: string, o: { fallbackTz?: string | null; now?: Date } = {}): Promise<FoundInvite[]> {
+  if (!/^[A-Za-z0-9_-]{6,40}$/.test(threadId)) throw new ReadError('not_found', 'bad thread id')
+  const t = await api<ApiThread>(userEmail, address, `/threads/${encodeURIComponent(threadId)}?format=full`)
+  const out: FoundInvite[] = []
+  for (const m of [...(t.messages ?? [])].reverse()) {
+    const h = m.payload?.headers
+    const meta = { account: address, thread_id: threadId, sender: header(h, 'From'), to: header(h, 'To'), subject: header(h, 'Subject'), received: Number(m.internalDate) || 0 }
+    let inv: Invite | null = null
+    for (const part of calendarParts(m.payload).slice(0, 2)) {
+      try {
+        const data = part.data ?? (part.attachmentId ? (await api<{ data?: string }>(userEmail, address, `/messages/${encodeURIComponent(m.id)}/attachments/${encodeURIComponent(part.attachmentId)}`)).data : undefined)
+        if (data) inv = parseIcs(b64(data).slice(0, 200_000), o.fallbackTz ?? null)
+      } catch {
+        inv = null
+      }
+      if (inv) break
+    }
+    inv ??= parseInviteText(meta.subject, extractText(m.payload).slice(0, 20_000), { now: o.now, fallbackTz: o.fallbackTz })
+    if (inv) out.push({ ...inv, ...meta })
+  }
+  return out
 }

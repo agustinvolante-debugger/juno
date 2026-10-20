@@ -21,6 +21,26 @@ export type SearchAsk = {
   newerThanDays?: number
   inbox?: boolean
   attachment?: boolean
+  /** Any of these as the sender (a person's addresses and names: lib/pen/person-match.ts). OR'd. */
+  fromAny?: string[]
+  toAny?: string[]
+  /** Any of these as sender OR recipient ("emails with Chris", either way). OR'd. */
+  personAny?: string[]
+  /** Only calendar invitations: an .ics file, or an invitation subject (EN/ES/PT), or "invited you". */
+  invites?: boolean
+}
+
+/** The invitation filter, built in code (no user text in it). */
+export const INVITE_FILTER = '(filename:ics OR subject:invitation OR subject:invite OR subject:invitación OR subject:convite OR "invited you")'
+
+/** (from:a OR from:b): each value through term(), at most 12, empty when none survive. */
+function anyOf(op: string | string[], values: string[] | undefined): string {
+  const ops = Array.isArray(op) ? op : [op]
+  const seen = new Set<string>()
+  // Gmail search is case-insensitive: "Zoltan" and "zoltan" are one term.
+  const vals = (values ?? []).map((v) => term(v, 60)).filter((v) => v && !seen.has(v.toLowerCase()) && seen.add(v.toLowerCase())).slice(0, 12)
+  const parts = vals.flatMap((v) => ops.map((o) => `${o}:${v}`))
+  return parts.length ? (parts.length === 1 ? parts[0] : `(${parts.join(' OR ')})`) : ''
 }
 
 /** A value for one Gmail search operator: no quotes, parentheses or operator syntax smuggled in. */
@@ -37,6 +57,8 @@ export function buildQuery(a: SearchAsk): string {
   if (f) parts.push(`from:${f}`)
   const to = term(a.to)
   if (to) parts.push(`to:${to}`)
+  for (const g of [anyOf('from', a.fromAny), anyOf('to', a.toAny), anyOf(['from', 'to'], a.personAny)]) if (g) parts.push(g)
+  if (a.invites) parts.push(INVITE_FILTER)
   const s = term(a.subject)
   if (s) parts.push(`subject:${s}`)
   if (a.unread) parts.push('is:unread')

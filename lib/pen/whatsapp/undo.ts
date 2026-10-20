@@ -8,6 +8,11 @@
 //
 // Deleting an event is not here: Google's API has no restore, and the guests-free delete is the
 // user's own request. Disconnecting an app needs a new sign-in, so it isn't either.
+//
+// 20 Oct: reminders and calendar events Juno set without asking ("remind me 15 and 30 min before
+// the meeting with Chris", "add lunch Friday to my work calendar") are undoable too: "undo" cancels
+// the reminders / deletes the event (no guests: it was the user's own). Everything set by one
+// message is one undo (both reminders go together).
 
 import { supabaseAdmin } from '@/lib/supabase'
 import { groupSessions, joinSegments, splitGroup } from '../merge'
@@ -22,6 +27,8 @@ export const UNDO = /^\s*(undo|undo (it|that)|deshacer|deshaz(lo|lo por favor)?|
 export type Undo =
   | { kind: 'separate'; ids: string[]; title: string; at: string; done?: boolean }
   | { kind: 'combine'; ids: string[]; title: string; event: boolean; at: string; done?: boolean }
+  /** set: reminder ids and calendar event refs (lib/pen/calendars.ts eventRef) made by one message. */
+  | { kind: 'set'; reminders: string[]; events: { ref: string; title: string }[]; title: string; at: string; done?: boolean }
 
 type UndoIn<U = Undo> = U extends Undo ? Omit<U, 'at'> : never
 
@@ -60,10 +67,30 @@ export async function undone(msgId: string): Promise<boolean> {
   return Boolean((data?.payload as { undo?: Undo } | null)?.undo?.done)
 }
 
+/**
+ * Adds a reminder or an event to what the message msgId set (one undo for all of it). Replaces an
+ * older undo of another kind on the same message (the newest thing done is the one undone).
+ */
+export async function addSetUndo(email: string, msgId: string, add: { reminder?: string; event?: { ref: string; title: string }; title: string }): Promise<void> {
+  const { data } = await supabaseAdmin.from('pen_whatsapp_messages').select('payload').eq('id', msgId).eq('email', email.toLowerCase()).maybeSingle()
+  if (!data) return
+  const payload = (data.payload as Record<string, unknown> | null) ?? {}
+  const cur = payload.undo as Undo | undefined
+  const base = cur?.kind === 'set' && !cur.done ? cur : { kind: 'set' as const, reminders: [], events: [], title: add.title, at: new Date().toISOString() }
+  const next: Undo = {
+    ...base,
+    reminders: add.reminder ? [...base.reminders, add.reminder] : base.reminders,
+    events: add.event ? [...base.events, add.event] : base.events,
+    title: base.title || add.title,
+    at: new Date().toISOString(),
+  }
+  await supabaseAdmin.from('pen_whatsapp_messages').update({ payload: { ...payload, undo: next } }).eq('id', msgId)
+}
+
 /** Runs the latest undo. The result goes to the model, which says it in one line. */
 export async function runUndo(email: string): Promise<Record<string, unknown>> {
   const l = await latest(email)
-  if (!l) return { nothing_to_undo: true, note: 'Say in one line there is nothing to undo (undo covers combining or separating recordings, for a day).' }
+  if (!l) return { nothing_to_undo: true, note: 'Say in one line there is nothing to undo (undo covers reminders and calendar events Juno just set, and combining or separating recordings, for a day).' }
   const { row, undo } = l
   // Claimed first, so two "undo"s in a row can't both run it.
   const { data: claimed } = await supabaseAdmin
@@ -73,6 +100,20 @@ export async function runUndo(email: string): Promise<Record<string, unknown>> {
     .is('payload->undo->>done', null)
     .select('id')
   if (!claimed?.length) return { nothing_to_undo: true, note: 'Say in one line it was already undone.' }
+
+  if (undo.kind === 'set') {
+    const { cancelReminder } = await import('../reminders')
+    const { deleteByRef } = await import('../calendars')
+    const cancelled = (await Promise.all(undo.reminders.map((id) => cancelReminder(email, id).catch(() => false)))).filter(Boolean).length
+    const deleted: string[] = []
+    for (const e of undo.events) {
+      try {
+        await deleteByRef(email, e.ref)
+        deleted.push(e.title)
+      } catch {}
+    }
+    return { ok: true, undone: 'set', reminders_cancelled: cancelled, events_deleted: deleted, note: 'Say in one line what was undone (the reminders cancelled, the event taken off their calendar). If a reminder had already gone off, say that one could not be cancelled.' }
+  }
 
   if (undo.kind === 'separate') {
     const rows = await Promise.all(undo.ids.map((id) => getSession(email, id)))
