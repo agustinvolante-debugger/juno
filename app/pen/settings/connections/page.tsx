@@ -1,4 +1,3 @@
-import Image from 'next/image'
 import { authedEmail } from '@/lib/news/auth'
 import { appLangFor } from '../../app-lang'
 import { BrandMark } from '../../brand-marks'
@@ -56,6 +55,7 @@ const C = {
     gdocsOn: (a: string | null) => (a ? `Connected through ${a}` : 'Connected through Google'),
     off: 'Not connected',
     needsAttention: 'Needs attention',
+    oneNeeds: 'one needs attention',
     connect: 'Connect',
     setUp: 'Set up',
     show: 'Show settings',
@@ -96,6 +96,7 @@ const C = {
     gdocsOn: (a: string | null) => (a ? `Conectado con ${a}` : 'Conectado con Google'),
     off: 'Sin conectar',
     needsAttention: 'Requiere atención',
+    oneNeeds: 'una requiere atención',
     connect: 'Conectar',
     setUp: 'Configurar',
     show: 'Mostrar ajustes',
@@ -136,6 +137,7 @@ const C = {
     gdocsOn: (a: string | null) => (a ? `Conectado por ${a}` : 'Conectado pelo Google'),
     off: 'Não conectado',
     needsAttention: 'Precisa de atenção',
+    oneNeeds: 'um precisa de atenção',
     connect: 'Conectar',
     setUp: 'Configurar',
     show: 'Mostrar configurações',
@@ -143,10 +145,11 @@ const C = {
   },
 } as const
 
-/** "+56 9 1234 5678"-ish: the digits with a plus, grouped for reading. */
-function pretty(phone: string): string {
-  const d = phone.replace(/\D/g, '')
-  return `+${d.replace(/(\d{1,3})(?=(\d{4})+$)/, '$1 ').replace(/(\d{4})(?=\d)/g, '$1 ')}`.trim()
+/** Same as Settings → WhatsApp showed it: US numbers grouped, others as +digits. */
+function pretty(n: string): string {
+  const d = n.replace(/\D/g, '')
+  if (d.length === 11 && d.startsWith('1')) return `+1 ${d.slice(1, 4)} ${d.slice(4, 7)} ${d.slice(7)}`
+  return `+${d}`
 }
 
 export default async function ConnectionsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
@@ -185,7 +188,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
             state={gWarn ? 'warn' : live ? 'on' : 'off'}
             marks={<><MarkTile><BrandMark name="gmail" size={20} /></MarkTile><MarkTile><BrandMark name="googlecalendar" size={19} /></MarkTile></>}
             name="Google"
-            status={gWarn ? T.needsAttention : g.accounts.length ? T.googleN(g.accounts.length) : T.googleNone}
+            status={g.accounts.length ? `${T.googleN(g.accounts.length)}${gWarn ? ` · ${T.oneNeeds}` : ''}` : T.googleNone}
           >
             <GoogleAccounts
               configured={g.configured}
@@ -207,7 +210,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
           <ConnItem
             id="outlook"
             state="links"
-            marks={<MarkTile><Image src="/brands/outlook.png" alt="" width={20} height={20} className="pen-conn-img" /></MarkTile>}
+            marks={<MarkTile><img src="/brands/outlook.png" alt="" width={20} height={20} className="pen-conn-img" /></MarkTile>}
             name={T.outlook}
             badge={mail === 'outlook' || cal === 'outlook' ? T.inUse : null}
             status={T.outlookLine}
@@ -294,7 +297,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
               id="granola"
               state={grConn?.last_error ? 'warn' : grConn ? 'on' : 'off'}
               open={p === 'granola'}
-              marks={<MarkTile><Image src="/brands/granola.png" alt="" width={20} height={20} className="pen-conn-img" /></MarkTile>}
+              marks={<MarkTile><img src="/brands/granola.png" alt="" width={20} height={20} className="pen-conn-img" /></MarkTile>}
               name={T.granola}
               status={grConn?.last_error ? T.needsAttention : grConn ? (grConn.kind === 'api' ? T.granolaKey : T.granolaOauth) : T.off}
               openLabel={grConn ? undefined : T.setUp}

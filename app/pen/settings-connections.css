@@ -129,6 +129,7 @@
 .pen-root .pen-gacc-confirm .pen-btn { min-height: 38px; padding: 7px 16px; font-size: 14.5px; }
 .pen-root .pen-gacc-confirm .pen-btn-quiet { color: var(--bad); }
 .pen-root .pen-gacc-without { margin: 0; max-width: 62ch; }
+.pen-root .pen-gacc > .pen-set-actions .pen-btn { display: inline-flex; align-items: center; gap: 7px; }
 
 /* "What Juno does with Google": the terms fold away under one quiet line. */
 .pen-root .pen-conn-more { border-top: 1px solid var(--hair); padding-top: 4px; }
@@ -146,31 +147,33 @@
 .pen-root .pen-conn-more .pen-set-fine { margin-top: 12px; }
 
 /* ---------------------------------------------------------------- one-tap links */
-.pen-root .pen-lp {
+.pen-root .pen-lnk {
   display: flex; flex-direction: column; gap: 16px;
   padding: 20px; border-radius: 14px; background: var(--sunk);
 }
-.pen-root .pen-lp-title { margin: 0; font-family: var(--ui); font-size: 16px; line-height: 1.35; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
-.pen-root .pen-lp-group { display: flex; flex-direction: column; gap: 2px; }
-.pen-root .pen-lp-label { font-size: 13.5px; font-weight: 600; color: var(--soft); }
-.pen-root .pen-lp .pen-set-chips { margin-top: 6px; }
-.pen-root .pen-lp .pen-set-chip { min-height: 40px; padding: 8px 15px; font-size: 14.5px; }
-.pen-root .pen-lp .pen-set-chip[data-on='true'] { background: var(--accent-wash); border-color: var(--accent); color: var(--accent-ink); box-shadow: none; }
-.pen-root .pen-lp-hint { min-height: 1.4em; margin-top: 4px; font-size: 13px; line-height: 1.4; color: var(--dim); }
-.pen-root .pen-lp-hint:empty { display: none; }
-.pen-root .pen-lp-foot { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; justify-content: space-between; }
-.pen-root .pen-lp-err { color: var(--bad); }
+.pen-root .pen-lnk-title { margin: 0; font-family: var(--ui); font-size: 16px; line-height: 1.35; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+.pen-root .pen-lnk-group { display: flex; flex-direction: column; gap: 2px; }
+.pen-root .pen-lnk-label { font-size: 13.5px; font-weight: 600; color: var(--soft); }
+.pen-root .pen-lnk .pen-set-chips { margin-top: 6px; }
+.pen-root .pen-lnk .pen-set-chip { min-height: 40px; padding: 8px 15px; font-size: 14.5px; }
+.pen-root .pen-lnk .pen-set-chip[data-on='true'] { background: var(--accent-wash); border-color: var(--accent); color: var(--accent-ink); box-shadow: none; }
+.pen-root .pen-lnk-hint { min-height: 1.4em; margin-top: 4px; font-size: 13px; line-height: 1.4; color: var(--dim); }
+.pen-root .pen-lnk-hint:empty { display: none; }
+.pen-root .pen-lnk-foot { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; justify-content: space-between; }
+.pen-root .pen-lnk-err { color: var(--bad); }
 
 /* ---------------------------------------------------------------- phone */
 @media (max-width: 640px) {
-  .pen-root .pen-conn-row { grid-template-columns: 50px minmax(0, 1fr) auto; column-gap: 12px; padding: 14px 0; }
+  .pen-root .pen-conn-sec { padding: 22px 18px; }
+  .pen-root .pen-conn-row { grid-template-columns: 52px minmax(0, 1fr) auto; column-gap: 10px; padding: 14px 0; }
   .pen-root .pen-conn-tile { width: 32px; height: 32px; border-radius: 9px; }
-  .pen-root .pen-conn-tile + .pen-conn-tile { margin-left: -14px; }
+  .pen-root .pen-conn-tile + .pen-conn-tile { margin-left: -12px; }
+  .pen-root .pen-gacc-acts { column-gap: 16px; }
   .pen-root .pen-conn-body { padding-left: 0; }
   .pen-root .pen-conn-act .pen-btn { padding: 8px 14px; }
   .pen-root .pen-gacc-row { grid-template-columns: 28px minmax(0, 1fr); padding: 12px; }
   .pen-root .pen-gacc-avatar { width: 28px; height: 28px; font-size: 13px; }
   .pen-root .pen-gacc-main { padding-top: 3px; }
   .pen-root .pen-gacc-side { grid-column: 2; justify-content: flex-start; }
-  .pen-root .pen-lp { padding: 16px; }
+  .pen-root .pen-lnk { padding: 16px; }
 }

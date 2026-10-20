@@ -56,7 +56,8 @@ const L: Copy<typeof L_EN> = {
   },
 }
 
-function Group<K extends string>({ label, opts, value, guessed, onPick, T }: {
+function Group<K extends string>({ gid, label, opts, value, guessed, onPick, T }: {
+  gid: string
   label: string
   opts: Record<K, string>
   value: K | null
@@ -65,16 +66,16 @@ function Group<K extends string>({ label, opts, value, guessed, onPick, T }: {
   T: typeof L_EN
 }) {
   return (
-    <div className="pen-lp-group">
-      <span className="pen-lp-label" id={`lp-${label}`}>{label}</span>
-      <div className="pen-set-chips" role="radiogroup" aria-labelledby={`lp-${label}`}>
+    <div className="pen-lnk-group">
+      <span className="pen-lnk-label" id={gid}>{label}</span>
+      <div className="pen-set-chips" role="radiogroup" aria-labelledby={gid}>
         {(Object.keys(opts) as K[]).map((k) => (
           <button key={k} type="button" role="radio" aria-checked={value === k} className="pen-set-chip" data-on={value === k} onClick={() => onPick(k)}>
             {opts[k]}
           </button>
         ))}
       </div>
-      <span className="pen-lp-hint">{value ? (guessed ? T.guessed : '') : T.unset}</span>
+      <span className="pen-lnk-hint">{value ? (guessed ? T.guessed : '') : T.unset}</span>
     </div>
   )
 }
@@ -98,16 +99,16 @@ export default function LinkPrefs({ mail, mailGuessed, cal, calGuessed }: { mail
   }
 
   return (
-    <div className="pen-lp" id="links">
+    <div className="pen-lnk" id="links">
       <div className="pen-set-card-head">
-        <h3 className="pen-lp-title">{T.title}</h3>
+        <h3 className="pen-lnk-title">{T.title}</h3>
         <p className="pen-set-lede">{T.lede}</p>
       </div>
-      <Group label={T.mail} opts={T.mailOpts} value={m.v} guessed={m.guess} T={T} onPick={(k) => { const prev = m; setM({ v: k, guess: false }); void save({ mail: k }, () => setM(prev)) }} />
-      <Group label={T.cal} opts={T.calOpts} value={c.v} guessed={c.guess} T={T} onPick={(k) => { const prev = c; setC({ v: k, guess: false }); void save({ calendar: k }, () => setC(prev)) }} />
-      <p className="pen-set-fine pen-lp-foot">
+      <Group gid="lnk-mail" label={T.mail} opts={T.mailOpts} value={m.v} guessed={m.guess} T={T} onPick={(k) => { const prev = m; setM({ v: k, guess: false }); void save({ mail: k }, () => setM(prev)) }} />
+      <Group gid="lnk-cal" label={T.cal} opts={T.calOpts} value={c.v} guessed={c.guess} T={T} onPick={(k) => { const prev = c; setC({ v: k, guess: false }); void save({ calendar: k }, () => setC(prev)) }} />
+      <p className="pen-set-fine pen-lnk-foot">
         <span>{T.chat}</span>
-        {note && <span className={note.ok ? 'pen-set-saved' : 'pen-lp-err'} role="status">{note.text}</span>}
+        {note && <span className={note.ok ? 'pen-set-saved' : 'pen-lnk-err'} role="status">{note.text}</span>}
       </p>
     </div>
   )
