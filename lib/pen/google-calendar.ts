@@ -280,9 +280,11 @@ export async function accessToken(email: string): Promise<string> {
  * (the default when none is given, as before), or a connected Google account's own token from
  * pen_gmail (Settings → Email: one Google connection per address covers mail and calendar).
  */
-export type CalSrc = { kind: 'gcal' } | { kind: 'gmail'; address: string }
+export type CalSrc = { kind: 'gcal' } | { kind: 'gmail'; address: string } | { kind: 'outlook'; address: string }
 
 async function tokenFor(email: string, src?: CalSrc): Promise<string> {
+  // Outlook calendars never come here: lib/pen/calendars.ts sends them to outlook-calendar.ts.
+  if (src?.kind === 'outlook') throw new Error('an Outlook calendar is not a Google calendar')
   if (src?.kind === 'gmail') {
     const { accessToken: gmailToken } = await import('./gmail')
     return gmailToken(email, src.address)
@@ -306,7 +308,8 @@ async function gcal<T>(email: string, path: string, init: { method?: string; bod
 /* ------------------------------------------------------------- events */
 
 export type Attendee = { email: string; name?: string | null }
-export type CreatedEvent = { id: string; link: string | null; meet: string | null }
+/** `video`: what kind of link `meet` is ('Teams', 'Skype'; absent = Google Meet). `videoUnavailable`: a link was asked for and the calendar can't make one (personal Outlook). */
+export type CreatedEvent = { id: string; link: string | null; meet: string | null; video?: string | null; videoUnavailable?: boolean }
 
 type GEvent = {
   id: string
@@ -402,7 +405,7 @@ export type UpcomingEvent = {
   /** The user organised it (their copy is the one to change). */
   organizerSelf?: boolean
   organizer?: { email: string; name: string | null } | null
-  /** Which of the user's calendars it was read from (lib/pen/calendars.ts: 'gcal' or an address); set when reading all of them. */
+  /** Which of the user's calendars it was read from (lib/pen/calendars.ts: 'gcal' or an address, Google or Outlook); set when reading all of them. */
   cal?: string
   /** Every connected calendar it is on, when the same meeting is on more than one. */
   cals?: string[]

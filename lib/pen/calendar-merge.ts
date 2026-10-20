@@ -10,8 +10,8 @@ import { foldName } from './speakers'
 export type CalInfo = {
   key: string
   address: string | null
-  /** Where its token lives: the Settings → Google connection (pen_gcal) or a connected address (pen_gmail). */
-  via: 'google' | 'email'
+  /** Where its token lives: the Settings → Google connection (pen_gcal), a connected Google address (pen_gmail) or a Microsoft one (pen_outlook). */
+  via: 'google' | 'email' | 'outlook'
   broken: boolean
 }
 
@@ -39,6 +39,15 @@ export function pickCalendar(cals: CalInfo[], said: string | null | undefined): 
   const words = q.split(/[^a-z0-9.@_-]+/).filter((w) => w.length >= 3 && !['the', 'my', 'calendar', 'calendario', 'agenda', 'cal', 'one', 'mio', 'meu', 'mi', 'account', 'cuenta', 'conta', 'google', 'gmail', 'del', 'de', 'do', 'da'].includes(w))
   const hits = cals.filter((c) => c.address && words.some((w) => c.address!.includes(w)))
   if (hits.length === 1) return hits[0]
+  // "my Outlook calendar" / "the Google one": the only calendar of that provider.
+  if (/\b(outlook|microsoft|office ?365|m365|hotmail|teams)\b/.test(q)) {
+    const ms = cals.filter((c) => c.via === 'outlook')
+    if (ms.length === 1) return ms[0]
+  }
+  if (/\b(google|gmail|gcal)\b/.test(q)) {
+    const g = cals.filter((c) => c.via !== 'outlook')
+    if (g.length === 1) return g[0]
+  }
   if (/\b(work|trabajo|trabalho|empresa|company|office|oficina|job|laboral)\b/.test(q)) {
     const biz = cals.filter((c) => c.address && !CONSUMER.test(c.address))
     if (biz.length === 1) return biz[0]
@@ -72,19 +81,34 @@ export function sameMeetingKey(e: UpcomingEvent): string {
   return e.uid ? `u:${e.uid}|${at}` : `t:${foldName(e.title).replace(/\s+/g, ' ')}|${at}`
 }
 
+/** Same title at the same start: the fallback that catches one meeting on a Google and an Outlook calendar whose UIDs differ. */
+export function titleKey(e: UpcomingEvent): string {
+  const at = e.allDay ? e.start.slice(0, 10) : String(startMs(e))
+  return `t:${foldName(e.title).replace(/\s+/g, ' ')}|${at}`
+}
+
 /**
  * Events from every calendar (each tagged with `cal`) → one list, soonest first, the same meeting
- * once. The copy kept: the user's own (they organised it) > the default calendar's > the first
- * read; `cals` lists every calendar it is on.
+ * once. Same meeting = same UID at the same start, or (across two different calendars only, since
+ * Google and Outlook don't always agree on a UID) the same title at the same start. The copy kept:
+ * the user's own (they organised it) > the default calendar's > the first read; `cals` lists every
+ * calendar it is on.
  */
 export function mergeEvents(lists: UpcomingEvent[][], defaultKey?: string | null): UpcomingEvent[] {
   const byKey = new Map<string, UpcomingEvent>()
+  const byTitle = new Map<string, string>()
   for (const list of lists) {
     for (const e of list) {
-      const k = sameMeetingKey(e)
+      let k = sameMeetingKey(e)
+      if (!byKey.has(k)) {
+        const alias = byTitle.get(titleKey(e))
+        const other = alias ? byKey.get(alias) : undefined
+        if (alias && other && !(other.cals ?? []).includes(e.cal ?? '')) k = alias
+      }
       const have = byKey.get(k)
       if (!have) {
         byKey.set(k, { ...e, cals: e.cal ? [e.cal] : [] })
+        if (!byTitle.has(titleKey(e))) byTitle.set(titleKey(e), k)
         continue
       }
       const cals = [...new Set([...(have.cals ?? []), ...(e.cal ? [e.cal] : [])])]
@@ -92,7 +116,7 @@ export function mergeEvents(lists: UpcomingEvent[][], defaultKey?: string | null
       // Guests from either copy (one calendar may only list the user).
       const others = [...(better ? e.others : have.others)]
       for (const o of better ? have.others : e.others) if (!others.some((x) => x.email === o.email)) others.push(o)
-      byKey.set(k, { ...(better ? e : have), others, cals })
+      byKey.set(k, { ...(better ? e : have), others, cals, meet: (better ? e.meet : have.meet) ?? e.meet ?? have.meet })
     }
   }
   return [...byKey.values()].sort((a, b) => startMs(a) - startMs(b))

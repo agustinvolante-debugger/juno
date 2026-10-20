@@ -272,6 +272,7 @@ export default function GoogleAccounts({
   readAllowed,
   accounts,
   calCount,
+  outlookSenders = 0,
   status,
 }: {
   /** Google OAuth is set up at all (gcalConfigured). */
@@ -281,6 +282,8 @@ export default function GoogleAccounts({
   readAllowed: boolean
   accounts: GAccount[]
   calCount: number
+  /** Outlook addresses that send (one default From across both, so "Make default" shows with any choice). */
+  outlookSenders?: number
   status: GoogleStatus
 }) {
   const T = useCopy(G)
@@ -309,7 +312,7 @@ export default function GoogleAccounts({
     }
   }
 
-  const senders = accounts.filter((a) => a.send).length
+  const senders = accounts.filter((a) => a.send).length + outlookSenders
   const full = accounts.length >= 5
   const connectHref = gmailOn ? GMAIL : `${GCAL}?want=gcal`
 

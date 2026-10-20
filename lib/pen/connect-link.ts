@@ -24,7 +24,8 @@ import type { Lang } from './i18n'
 
 /** gdrive = Google Docs & Sheets: the same Google connection as gcal, the drive.file ability. */
 /** gmail = send-only Gmail (lib/pen/gmail.ts): its own Google token, one per connected address. */
-export type ConnectApp = 'gcal' | 'gdrive' | 'notion' | 'granola' | 'gmail'
+/** outlook = a Microsoft account (lib/pen/outlook.ts): its calendar + sending as the user, one per address. */
+export type ConnectApp = 'gcal' | 'gdrive' | 'notion' | 'granola' | 'gmail' | 'outlook'
 export type Via = 'wa' | 'im'
 
 export const LINK_TTL_MS = 15 * 60 * 1000
@@ -59,7 +60,7 @@ function openPayload(domain: string, token: string): Record<string, unknown> | n
   }
 }
 
-const isApp = (a: unknown): a is ConnectApp => a === 'gcal' || a === 'gdrive' || a === 'notion' || a === 'granola' || a === 'gmail'
+const isApp = (a: unknown): a is ConnectApp => a === 'gcal' || a === 'gdrive' || a === 'notion' || a === 'granola' || a === 'gmail' || a === 'outlook'
 export const viaOf = (phone: string | null | undefined): Via => (phone?.startsWith('im:') ? 'im' : 'wa')
 
 /* ------------------------------------------------------------ the link */
@@ -112,20 +113,21 @@ const STATE = 'pen-connect-state'
 const CHAT_PREFIX = 'c.'
 
 /** The OAuth state for a connect that started in the chat: account, app, browser nonce, channel. */
-export function chatState(email: string, app: ConnectApp, nonce: string, via: Via, now = Date.now()): string {
-  return CHAT_PREFIX + sealPayload(STATE, { e: email.toLowerCase(), a: app, n: nonce, x: now + STATE_TTL_MS, v: via })
+/** `w`: what the consent asked for, when the callback needs it (Outlook: 'cs' = calendar + send, 'c', 's'). */
+export function chatState(email: string, app: ConnectApp, nonce: string, via: Via, now = Date.now(), w?: string): string {
+  return CHAT_PREFIX + sealPayload(STATE, { e: email.toLowerCase(), a: app, n: nonce, x: now + STATE_TTL_MS, v: via, ...(w ? { w } : {}) })
 }
 
 /**
  * The account a chat-started callback belongs to, or null (not a chat state, tampered, expired,
  * other app, or not this browser's nonce cookie). The website flow's states never match.
  */
-export function readChatState(state: string | null | undefined, app: ConnectApp, nonce: string | null | undefined, now = Date.now()): { email: string; via: Via } | null {
+export function readChatState(state: string | null | undefined, app: ConnectApp, nonce: string | null | undefined, now = Date.now()): { email: string; via: Via; w?: string } | null {
   if (!state?.startsWith(CHAT_PREFIX) || !nonce) return null
   const p = openPayload(STATE, state.slice(CHAT_PREFIX.length))
   if (!p || p.a !== app || typeof p.e !== 'string' || typeof p.x !== 'number' || p.x <= now) return null
   if (typeof p.n !== 'string' || p.n.length !== nonce.length || !crypto.timingSafeEqual(Buffer.from(p.n), Buffer.from(nonce))) return null
-  return { email: p.e, via: p.v === 'im' ? 'im' : 'wa' }
+  return { email: p.e, via: p.v === 'im' ? 'im' : 'wa', ...(typeof p.w === 'string' ? { w: p.w } : {}) }
 }
 
 /** Where a chat-started callback lands: /pen/connected in the user's language. */
@@ -138,15 +140,22 @@ export async function connectedPage(app: ConnectApp, email: string, via: Via, er
 /* --------------------------------------------------------------- copy */
 
 export const APP_NAME: Record<Lang, Record<ConnectApp, string>> = {
-  en: { gcal: 'Google Calendar', gdrive: 'Google Docs & Sheets', notion: 'Notion', granola: 'Granola', gmail: 'Gmail' },
-  es: { gcal: 'Google Calendar', gdrive: 'Google Docs y Sheets', notion: 'Notion', granola: 'Granola', gmail: 'Gmail' },
-  pt: { gcal: 'Google Agenda', gdrive: 'Google Docs e Planilhas', notion: 'Notion', granola: 'Granola', gmail: 'Gmail' },
+  en: { gcal: 'Google Calendar', gdrive: 'Google Docs & Sheets', notion: 'Notion', granola: 'Granola', gmail: 'Gmail', outlook: 'Outlook' },
+  es: { gcal: 'Google Calendar', gdrive: 'Google Docs y Sheets', notion: 'Notion', granola: 'Granola', gmail: 'Gmail', outlook: 'Outlook' },
+  pt: { gcal: 'Google Agenda', gdrive: 'Google Docs e Planilhas', notion: 'Notion', granola: 'Granola', gmail: 'Gmail', outlook: 'Outlook' },
 }
 
 export const COPY = {
   en: {
     tap: (app: string, url: string) => `Tap to connect ${app} (the link works once, for 15 minutes):\n${url}`,
-    connected: { gcal: (who: string | null) => `Connected ✓ Google Calendar${who ? ` (${who})` : ''}. Events you say yes to here go straight onto it.`, gdrive: (who: string | null) => `Connected ✓ Google Docs & Sheets${who ? ` (${who})` : ''}. Docs and sheets Juno makes go into a “Juno Pen” folder in your Drive; Juno can only open the files it made.`, notion: (who: string | null) => `Connected ✓ Notion${who ? ` (${who})` : ''}. Your notes land in the “Juno Pen notes” table, and plans and memos you say yes to go there too.`, granola: (who: string | null) => `Connected ✓ Granola${who ? ` (${who})` : ''}. Ask me to import your Granola meetings, e.g. “import my Granola meetings from this week”.`, gmail: (who: string | null) => `Connected ✓ Gmail${who ? ` (${who})` : ''}. When you say “send it” to a draft, it goes from this address and lands in your Sent folder. Juno can only send; it never reads your mail.` },
+    connected: { gcal: (who: string | null) => `Connected ✓ Google Calendar${who ? ` (${who})` : ''}. Events you say yes to here go straight onto it.`, gdrive: (who: string | null) => `Connected ✓ Google Docs & Sheets${who ? ` (${who})` : ''}. Docs and sheets Juno makes go into a “Juno Pen” folder in your Drive; Juno can only open the files it made.`, notion: (who: string | null) => `Connected ✓ Notion${who ? ` (${who})` : ''}. Your notes land in the “Juno Pen notes” table, and plans and memos you say yes to go there too.`, granola: (who: string | null) => `Connected ✓ Granola${who ? ` (${who})` : ''}. Ask me to import your Granola meetings, e.g. “import my Granola meetings from this week”.`, gmail: (who: string | null) => `Connected ✓ Gmail${who ? ` (${who})` : ''}. When you say “send it” to a draft, it goes from this address and lands in your Sent folder. Juno can only send; it never reads your mail.`, outlook: (who: string | null) => `Connected ✓ Outlook${who ? ` (${who})` : ''}.` },
+    outlook: {
+      cal: ' Its calendar is read together with your others, and events you ask for can go on it (say “add it to my Outlook calendar”).',
+      send: ' When you say “send it” to a draft, it can go from this address and lands in your Sent Items.',
+      noRead: ' Juno can’t read your Outlook mail.',
+      calFull: ' Its calendar wasn’t added: you already have 5 calendars connected.',
+    },
+    adminLink: 'Approval link for your IT admin:',
     calendarOnly: (who: string | null) => `Connected ✓ Google Calendar${who ? ` (${who})` : ''}. I read it together with your other calendars, and you can say “add it to this calendar” for new events.`,
     calToo: ' Its calendar is connected too: I read it with your other calendars.',
     calFull: ' Its calendar wasn’t added: you already have 5 calendars connected.',
@@ -167,12 +176,23 @@ export const COPY = {
       failed: 'That didn’t go through.',
       not_granted: 'Sending wasn’t allowed on Google’s screen, so nothing was connected. Leave the box ticked next time.',
       too_many: 'You can connect up to 5 addresses. Disconnect one in Settings → Email first.',
+      admin_consent: 'Your organization lets only its IT admin approve new apps for its Microsoft 365 accounts, so nothing was connected. Send your IT admin the approval link below; once they approve Juno Pen, connect again.',
+      ms_not_granted: 'Microsoft didn’t give Juno the permissions it asked for, so nothing was connected.',
+      ms_too_many: 'You can connect up to 5 Microsoft addresses. Disconnect one in Settings → Connections first.',
+      ms_cal_full: 'You already have 5 calendars connected. Disconnect one in Settings → Connections first.',
     } as Record<string, string>,
     askAgain: 'Ask Juno in the chat for a new link.',
   },
   es: {
     tap: (app: string, url: string) => `Toca para conectar ${app} (el link sirve una vez, por 15 minutos):\n${url}`,
-    connected: { gcal: (who: string | null) => `Conectado ✓ Google Calendar${who ? ` (${who})` : ''}. Los eventos a los que digas que sí aquí van directo a tu calendario.`, gdrive: (who: string | null) => `Conectado ✓ Google Docs y Sheets${who ? ` (${who})` : ''}. Los documentos y hojas que haga Juno van a una carpeta “Juno Pen” en tu Drive; Juno solo puede abrir los archivos que creó.`, notion: (who: string | null) => `Conectado ✓ Notion${who ? ` (${who})` : ''}. Tus notas llegan a la tabla “Juno Pen notes”, y los planes y memos que apruebes también.`, granola: (who: string | null) => `Conectado ✓ Granola${who ? ` (${who})` : ''}. Pídeme importar tus reuniones de Granola, por ejemplo “importa mis reuniones de Granola de esta semana”.`, gmail: (who: string | null) => `Conectado ✓ Gmail${who ? ` (${who})` : ''}. Cuando digas “envíalo” a un borrador, sale desde esta dirección y queda en tus Enviados. Juno solo puede enviar; nunca lee tu correo.` },
+    connected: { gcal: (who: string | null) => `Conectado ✓ Google Calendar${who ? ` (${who})` : ''}. Los eventos a los que digas que sí aquí van directo a tu calendario.`, gdrive: (who: string | null) => `Conectado ✓ Google Docs y Sheets${who ? ` (${who})` : ''}. Los documentos y hojas que haga Juno van a una carpeta “Juno Pen” en tu Drive; Juno solo puede abrir los archivos que creó.`, notion: (who: string | null) => `Conectado ✓ Notion${who ? ` (${who})` : ''}. Tus notas llegan a la tabla “Juno Pen notes”, y los planes y memos que apruebes también.`, granola: (who: string | null) => `Conectado ✓ Granola${who ? ` (${who})` : ''}. Pídeme importar tus reuniones de Granola, por ejemplo “importa mis reuniones de Granola de esta semana”.`, gmail: (who: string | null) => `Conectado ✓ Gmail${who ? ` (${who})` : ''}. Cuando digas “envíalo” a un borrador, sale desde esta dirección y queda en tus Enviados. Juno solo puede enviar; nunca lee tu correo.`, outlook: (who: string | null) => `Conectado ✓ Outlook${who ? ` (${who})` : ''}.` },
+    outlook: {
+      cal: ' Leo su calendario junto con los demás, y los eventos que pidas pueden ir ahí (di “agrégalo a mi calendario de Outlook”).',
+      send: ' Cuando digas “envíalo” a un borrador, puede salir desde esta dirección y queda en tus Elementos enviados.',
+      noRead: ' Juno no puede leer tu correo de Outlook.',
+      calFull: ' Su calendario no se agregó: ya tienes 5 calendarios conectados.',
+    },
+    adminLink: 'Link de aprobación para tu administrador de TI:',
     calendarOnly: (who: string | null) => `Conectado ✓ Google Calendar${who ? ` (${who})` : ''}. Lo leo junto con tus otros calendarios, y puedes decir “agrégalo a este calendario” para eventos nuevos.`,
     calToo: ' Su calendario también quedó conectado: lo leo junto con tus otros calendarios.',
     calFull: ' Su calendario no se agregó: ya tienes 5 calendarios conectados.',
@@ -193,12 +213,23 @@ export const COPY = {
       failed: 'No se pudo completar.',
       not_granted: 'No se permitió enviar en la pantalla de Google, así que no se conectó nada. La próxima vez deja la casilla marcada.',
       too_many: 'Puedes conectar hasta 5 direcciones. Primero desconecta una en Ajustes → Correo.',
+      admin_consent: 'Tu organización solo deja que su administrador de TI apruebe apps nuevas para sus cuentas de Microsoft 365, así que no se conectó nada. Envíale a tu administrador el link de aprobación de abajo; cuando apruebe Juno Pen, conéctala de nuevo.',
+      ms_not_granted: 'Microsoft no le dio a Juno los permisos que pidió, así que no se conectó nada.',
+      ms_too_many: 'Puedes conectar hasta 5 direcciones de Microsoft. Primero desconecta una en Ajustes → Conexiones.',
+      ms_cal_full: 'Ya tienes 5 calendarios conectados. Primero desconecta uno en Ajustes → Conexiones.',
     } as Record<string, string>,
     askAgain: 'Pídele a Juno un link nuevo en el chat.',
   },
   pt: {
     tap: (app: string, url: string) => `Toque para conectar o ${app} (o link funciona uma vez, por 15 minutos):\n${url}`,
-    connected: { gcal: (who: string | null) => `Conectado ✓ Google Agenda${who ? ` (${who})` : ''}. Os eventos que você aprovar aqui vão direto para a sua agenda.`, gdrive: (who: string | null) => `Conectado ✓ Google Docs e Planilhas${who ? ` (${who})` : ''}. Os documentos e planilhas que o Juno criar vão para uma pasta “Juno Pen” no seu Drive; o Juno só consegue abrir os arquivos que ele criou.`, notion: (who: string | null) => `Conectado ✓ Notion${who ? ` (${who})` : ''}. Suas notas vão para a tabela “Juno Pen notes”, e os planos e memos que você aprovar também.`, granola: (who: string | null) => `Conectado ✓ Granola${who ? ` (${who})` : ''}. Peça para importar suas reuniões do Granola, por exemplo “importe minhas reuniões do Granola desta semana”.`, gmail: (who: string | null) => `Conectado ✓ Gmail${who ? ` (${who})` : ''}. Quando você disser “enviar” a um rascunho, ele sai deste endereço e fica nos seus Enviados. O Juno só consegue enviar; nunca lê seus e-mails.` },
+    connected: { gcal: (who: string | null) => `Conectado ✓ Google Agenda${who ? ` (${who})` : ''}. Os eventos que você aprovar aqui vão direto para a sua agenda.`, gdrive: (who: string | null) => `Conectado ✓ Google Docs e Planilhas${who ? ` (${who})` : ''}. Os documentos e planilhas que o Juno criar vão para uma pasta “Juno Pen” no seu Drive; o Juno só consegue abrir os arquivos que ele criou.`, notion: (who: string | null) => `Conectado ✓ Notion${who ? ` (${who})` : ''}. Suas notas vão para a tabela “Juno Pen notes”, e os planos e memos que você aprovar também.`, granola: (who: string | null) => `Conectado ✓ Granola${who ? ` (${who})` : ''}. Peça para importar suas reuniões do Granola, por exemplo “importe minhas reuniões do Granola desta semana”.`, gmail: (who: string | null) => `Conectado ✓ Gmail${who ? ` (${who})` : ''}. Quando você disser “enviar” a um rascunho, ele sai deste endereço e fica nos seus Enviados. O Juno só consegue enviar; nunca lê seus e-mails.`, outlook: (who: string | null) => `Conectado ✓ Outlook${who ? ` (${who})` : ''}.` },
+    outlook: {
+      cal: ' Eu leio a agenda dele junto com as outras, e os eventos que você pedir podem ir para lá (diga “coloque na minha agenda do Outlook”).',
+      send: ' Quando você disser “enviar” a um rascunho, ele pode sair deste endereço e fica nos seus Itens enviados.',
+      noRead: ' O Juno não consegue ler seus e-mails do Outlook.',
+      calFull: ' A agenda dele não foi adicionada: você já tem 5 agendas conectadas.',
+    },
+    adminLink: 'Link de aprovação para o seu administrador de TI:',
     calendarOnly: (who: string | null) => `Conectado ✓ Google Agenda${who ? ` (${who})` : ''}. Eu leio junto com as suas outras agendas, e você pode dizer “coloque nesta agenda” para eventos novos.`,
     calToo: ' A agenda dele também foi conectada: eu leio junto com as suas outras agendas.',
     calFull: ' A agenda dele não foi adicionada: você já tem 5 agendas conectadas.',
@@ -219,6 +250,10 @@ export const COPY = {
       failed: 'Não deu certo.',
       not_granted: 'O envio não foi permitido na tela do Google, então nada foi conectado. Da próxima vez, deixe a caixa marcada.',
       too_many: 'Você pode conectar até 5 endereços. Desconecte um em Configurações → E-mail primeiro.',
+      admin_consent: 'Sua organização só deixa o administrador de TI aprovar apps novos para as contas do Microsoft 365, então nada foi conectado. Envie ao seu administrador o link de aprovação abaixo; quando ele aprovar o Juno Pen, conecte de novo.',
+      ms_not_granted: 'A Microsoft não deu ao Juno as permissões que ele pediu, então nada foi conectado.',
+      ms_too_many: 'Você pode conectar até 5 endereços da Microsoft. Desconecte um em Configurações → Conexões primeiro.',
+      ms_cal_full: 'Você já tem 5 agendas conectadas. Desconecte uma em Configurações → Conexões primeiro.',
     } as Record<string, string>,
     askAgain: 'Peça um link novo ao Juno no chat.',
   },
@@ -249,7 +284,7 @@ export async function announceConnected(email: string, app: ConnectApp, via: Via
     const { userLang } = await import('./user-lang')
     const lang = await userLang(email)
     let who: string | null = account ?? null
-    if (app === 'gmail') {
+    if (app === 'gmail' || app === 'outlook') {
       // The address just connected comes in `account`.
     } else if (app === 'gcal' || app === 'gdrive') {
       const { getGcalConnection } = await import('./google-calendar')
@@ -263,7 +298,8 @@ export async function announceConnected(email: string, app: ConnectApp, via: Via
     }
     const L = COPY[lang]
     const text =
-      app === 'gmail' && opts.canSend === false ? L.calendarOnly(who)
+      app === 'outlook' ? `${L.connected.outlook(who)}${opts.canCal ? L.outlook.cal : ''}${opts.canSend !== false ? L.outlook.send : ''}${L.outlook.noRead}${opts.calFull ? L.outlook.calFull : ''}`
+        : app === 'gmail' && opts.canSend === false ? L.calendarOnly(who)
         : app === 'gmail' ? `${opts.canRead ? L.gmailReading(who) : L.connected.gmail(who)}${opts.canCal ? L.calToo : opts.calFull ? L.calFull : ''}`
           : L.connected[app](who)
     const { sendText } = await import('./whatsapp/provider')
@@ -272,6 +308,33 @@ export async function announceConnected(email: string, app: ConnectApp, via: Via
     return { sent: true }
   } catch (e) {
     console.warn(`pen connect: chat confirmation not sent: ${(e as Error).message}`)
+    return { sent: false, reason: (e as Error).message }
+  }
+}
+
+/**
+ * A Microsoft 365 organisation that lets only IT approve apps (lib/pen/outlook.ts): say so in the
+ * chat the connect came from, with the approval link to forward. Same window rules as above.
+ */
+export async function announceAdminConsent(email: string, via: Via, adminUrl: string): Promise<{ sent: boolean; reason?: string }> {
+  try {
+    const { getLinkByEmail, setChat } = await import('./whatsapp/store')
+    const link = await getLinkByEmail(email)
+    if (!link?.phone || !link.linked_at) return { sent: false, reason: 'no linked phone' }
+    if (via === 'wa') {
+      const { data } = await supabaseAdmin.from('pen_whatsapp_messages').select('created_at').eq('email', email.toLowerCase()).not('phone', 'like', 'im:%').order('created_at', { ascending: false }).limit(1)
+      const last = data?.[0]?.created_at ? Date.parse(data[0].created_at as string) : 0
+      if (Date.now() - last > WINDOW_MS) return { sent: false, reason: 'outside the 24-hour window' }
+    }
+    const { userLang } = await import('./user-lang')
+    const L = COPY[await userLang(email)]
+    const text = `${L.errors.admin_consent}\n${L.adminLink}\n${adminUrl}`
+    const { sendText } = await import('./whatsapp/provider')
+    await sendText(via === 'im' ? `im:${link.phone}` : link.phone, text)
+    await setChat(email, [...(link.chat ?? []), { role: 'assistant', content: text, ts: Date.now() }]).catch(() => {})
+    return { sent: true }
+  } catch (e) {
+    console.warn(`pen connect: admin-consent message not sent: ${(e as Error).message}`)
     return { sent: false, reason: (e as Error).message }
   }
 }

@@ -8,7 +8,10 @@ import { getLinkByEmail } from '@/lib/pen/whatsapp/store'
 import { botNumber, configured as whatsappReady } from '@/lib/pen/whatsapp/provider'
 import { imessageFor } from '@/lib/pen/imessage/sendblue'
 import { getPrefs } from '@/lib/pen/proactive'
+import { listOutlookAccounts, outlookAvailable } from '@/lib/pen/outlook'
+import { PERSONAL_TID } from '@/lib/pen/outlook-graph'
 import type { GAccount } from './GoogleAccounts'
+import type { OAccount } from './OutlookAccounts'
 import type { CalChoice, MailChoice } from './LinkPrefs'
 
 // Everything Settings → Connections shows, read once per request. Plain data, so the page itself
@@ -23,6 +26,8 @@ export type ConnData = {
     calCount: number
     docs: { on: boolean; calendarToo: boolean; address: string | null; broken: boolean }
   }
+  /** Outlook / Microsoft 365 (lib/pen/outlook.ts): `available` = switched on and the table exists; otherwise the links row. */
+  outlook: { available: boolean; accounts: OAccount[]; senders: number }
   links: { mail: MailChoice | null; mailGuessed: boolean; cal: CalChoice | null; calGuessed: boolean }
   chat: { ready: boolean; imessage: string | null; number: string; phone: string | null; loadError: string | null }
   notion: { configured: boolean; conn: NotionConnection | null }
@@ -43,8 +48,12 @@ export async function loadConnections(email: string): Promise<ConnData> {
     whatsappReady() || imessageFor(lower) ? getLinkByEmail(lower).then((l) => ({ l, e: null as string | null }), (e: Error) => ({ l: null, e: e.message })) : Promise.resolve({ l: null, e: null }),
   ])
   const gmail = gmailOn ? await listGoogleAccounts(lower).catch(() => []) : []
+  const msOn = await outlookAvailable().catch(() => false)
+  const ms = msOn ? await listOutlookAccounts(lower).catch(() => []) : []
   const def = cals.length ? (await defaultCalendar(lower, cals).catch(() => null))?.key ?? null : null
-  const senders = gmail.filter((a) => a.can_send).length
+  // One default From across Gmail and Outlook: a default marker shows once there is a choice.
+  const msSenders = ms.filter((a) => a.can_send).length
+  const senders = gmail.filter((a) => a.can_send).length + msSenders
 
   // One row per address: pen_gmail rows first (oldest first), then the pen_gcal connection,
   // merged into the matching address when it is the same Google account.
@@ -81,7 +90,8 @@ export async function loadConnections(email: string): Promise<ConnData> {
   const saidMail = p.mailAppSource === 'said'
   const rawMail = typeof p.mailApp === 'string' && p.mailApp !== 'none' ? (p.mailApp as MailChoice) : null
   // The same order as lib/pen/mail-pref.ts: said, then the connected Gmail, then the guess.
-  const mail: MailChoice | null = saidMail ? rawMail : senders > 0 ? 'gmail' : rawMail
+  const gmailSenders = senders - msSenders
+  const mail: MailChoice | null = saidMail ? rawMail : gmailSenders > 0 ? 'gmail' : msSenders > 0 ? 'outlook' : rawMail
   const cal = typeof p.calendarApp === 'string' ? (p.calendarApp as CalChoice) : null
 
   return {
@@ -92,6 +102,19 @@ export async function loadConnections(email: string): Promise<ConnData> {
       accounts,
       calCount: cals.length,
       docs: { on: on.drive, calendarToo: on.calendar, address: gconn?.calendar_email ?? null, broken: Boolean(gconn?.last_error) },
+    },
+    outlook: {
+      available: msOn,
+      senders,
+      accounts: ms.map((a) => ({
+        address: a.address,
+        send: a.can_send,
+        cal: a.can_cal,
+        defaultEmail: a.can_send && a.is_default && senders > 1,
+        defaultCal: a.can_cal && def === a.address && cals.length > 1,
+        broken: Boolean(a.last_error),
+        personal: a.tenant_id === PERSONAL_TID,
+      })),
     },
     links: { mail, mailGuessed: Boolean(mail) && !saidMail, cal, calGuessed: Boolean(cal) && p.calendarAppSource !== 'said' },
     chat: {

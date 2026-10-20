@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { APP_NAME, COPY, asLang, type ConnectApp } from '@/lib/pen/connect-link'
 import { botNumber } from '@/lib/pen/whatsapp/provider'
+import { outlookAdminUrl } from '@/lib/pen/outlook'
 
 export const dynamic = 'force-dynamic'
 export const metadata: Metadata = { title: 'Juno Pen', robots: { index: false } }
@@ -12,7 +13,7 @@ export default async function ConnectedPage({ searchParams }: { searchParams: Pr
   const sp = await searchParams
   const one = (k: string) => (typeof sp[k] === 'string' ? (sp[k] as string) : '')
   const lang = asLang(one('lang'))
-  const app: ConnectApp = one('app') === 'notion' ? 'notion' : one('app') === 'gdrive' ? 'gdrive' : one('app') === 'granola' ? 'granola' : one('app') === 'gmail' ? 'gmail' : 'gcal'
+  const app: ConnectApp = one('app') === 'notion' ? 'notion' : one('app') === 'gdrive' ? 'gdrive' : one('app') === 'granola' ? 'granola' : one('app') === 'gmail' ? 'gmail' : one('app') === 'outlook' ? 'outlook' : 'gcal'
   const L = COPY[lang]
   const error = one('error')
   const wa = botNumber()
@@ -36,8 +37,15 @@ export default async function ConnectedPage({ searchParams }: { searchParams: Pr
           {error ? L.failTitle : `${L.pageTitle} ✓`}
         </h1>
         <p style={{ fontFamily: 'var(--font-serif), Georgia, serif', fontSize: 17, lineHeight: 1.5, color: 'var(--soft)', margin: '0 0 24px' }}>
-          {error ? `${L.errors[error] ?? error.slice(0, 200)} ${L.askAgain}` : L.pageLine(APP_NAME[lang][app])}
+          {error === 'admin_consent' ? L.errors.admin_consent : error ? `${L.errors[error] ?? error.slice(0, 200)} ${L.askAgain}` : L.pageLine(APP_NAME[lang][app])}
         </p>
+        {error === 'admin_consent' && app === 'outlook' && (
+          // A Microsoft 365 organisation that lets only IT approve apps: the link to forward them.
+          <p style={{ fontFamily: 'var(--font-ui), system-ui, sans-serif', fontSize: 14, lineHeight: 1.5, color: 'var(--soft)', margin: '0 0 24px', overflowWrap: 'anywhere' }}>
+            {L.adminLink}<br />
+            <a href={outlookAdminUrl({ tenant: one('tenant') || null })} style={{ color: 'var(--accent)' }}>{outlookAdminUrl({ tenant: one('tenant') || null })}</a>
+          </p>
+        )}
         {back}
       </div>
     </main>

@@ -38,7 +38,7 @@ export async function guessProvider(email: string, mx: MxLookup = realMx): Promi
 }
 
 /**
- * The provider for this user's draft links. `from` = the connected Gmail the draft goes out from.
+ * The provider for this user's draft links. `from` = the connected Gmail or Outlook address the draft goes out from.
  * A guess from MX is stored so the lookup runs once ('none' when nothing matched).
  */
 export async function mailProvider(email: string, from?: string | null, mx: MxLookup = realMx): Promise<MailProvider | null> {
@@ -48,7 +48,13 @@ export async function mailProvider(email: string, from?: string | null, mx: MxLo
     const said = providerFromApp(app, email)
     if (said !== undefined) return said
   }
-  if (from) return 'gmail'
+  if (from) {
+    // The draft goes out from a connected address: its own web compose. Outlook (21 Oct): a
+    // Microsoft address opens Outlook (outlook.com for personal ones, Microsoft 365 otherwise).
+    const { isOutlookSender } = await import('./outlook')
+    if (await isOutlookSender(email, from).catch(() => false)) return providerFromDomain(from) === 'outlook_live' ? 'outlook_live' : 'outlook'
+    return 'gmail'
+  }
   if (p.mailAppSource === 'guess' && app) return app === 'none' ? null : (providerFromApp(app, email) ?? null)
   const guess = await guessProvider(email, mx)
   const asApp: MailApp | 'none' = guess === 'outlook_live' ? 'outlook' : guess ?? 'none'

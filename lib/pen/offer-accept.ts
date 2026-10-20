@@ -77,7 +77,7 @@ export async function acceptMeeting(ctx: AcceptCtx, s: Suggestion, tzIn: string,
       await decideSuggestion(ctx.email, s.id, 'done', { local, tz, gcal_event_id: e.ref, gcal_link: e.link }, { starts_at: start.toISOString() })
       return {
         ok: true,
-        added_to: 'Google Calendar',
+        added_to: e.provider === 'outlook' ? 'Outlook calendar' : 'Google Calendar',
         title,
         when,
         time_zone: `${tz} (${ZONE_NOTE})`,
@@ -86,9 +86,9 @@ export async function acceptMeeting(ctx: AcceptCtx, s: Suggestion, tzIn: string,
         event_id: e.ref,
         ...(e.calendarAddress ? { calendar: e.calendarAddress } : {}),
         note:
-          'Say "Added to your Google Calendar:" with the title and when, in one line (it has a 30-minute alert). Then offer in one ' +
-          `line a Google Meet link (on yes: add_meet_link with event_id) and to invite ${s.person ?? 'the other person'} (needs their ` +
-          'email; on yes: invite_to_meeting with event_id, which asks before Google emails them).',
+          `Say "Added to your ${e.provider === 'outlook' ? 'Outlook calendar' : 'Google Calendar'}:" with the title and when, in one line (it has a 30-minute alert). Then offer in one ` +
+          `line a ${e.provider === 'outlook' ? 'Teams' : 'Google Meet'} link (on yes: add_meet_link with event_id) and to invite ${s.person ?? 'the other person'} (needs their ` +
+          'email; on yes: invite_to_meeting with event_id, which asks before the calendar emails them).',
       }
     } catch (err) {
       // Revoked or down: fall through to the links, which still work.

@@ -5,7 +5,7 @@
 // `p` says which panel a status belongs to (each panel used `connected=` / `error=` for its own
 // meaning), and the #anchor scrolls to it.
 
-export type ConnPanel = 'google' | 'email' | 'notion' | 'granola' | 'whatsapp' | 'docs'
+export type ConnPanel = 'google' | 'email' | 'outlook' | 'notion' | 'granola' | 'whatsapp' | 'docs'
 
 export const CONNECTIONS = '/pen/settings/connections'
 

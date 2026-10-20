@@ -227,6 +227,9 @@ export async function setDefault(userEmail: string, address: string): Promise<bo
   if (a.error) throw new Error(a.error.message)
   const b = await supabaseAdmin.from('pen_gmail').update({ is_default: false }).eq('user_email', lower).neq('address', addr)
   if (b.error) throw new Error(b.error.message)
+  // One default From across Gmail and Outlook (lib/pen/outlook.ts).
+  const { clearOutlookDefault } = await import('./outlook')
+  await clearOutlookDefault(lower)
   return true
 }
 
@@ -319,7 +322,9 @@ export async function connectGmail(userEmail: string, code: string, origin: stri
   const refresh = t.refresh_token ?? (prior ? open((await row(lower, address))!.refresh_token) : null)
   if (!refresh) throw new GmailError('no_refresh', 'Google didn’t give Juno lasting access. Try connecting again.')
   // The default From is a sending address; a calendar-only one never is.
-  const isDefault = sendOk && (prior ? prior.is_default : !existing.some((a) => a.is_default && a.can_send))
+  // One default across Gmail and Outlook: an Outlook default counts (no table = none).
+  const outlookDefault = await supabaseAdmin.from('pen_outlook').select('address').eq('user_email', lower).eq('is_default', true).limit(1).then((x) => !x.error && (x.data ?? []).length > 0, () => false)
+  const isDefault = sendOk && (prior ? prior.is_default : !existing.some((a) => a.is_default && a.can_send) && !outlookDefault)
   const calFull = calGranted && (await calendarCount(lower, address)) >= MAX_CALENDARS
   // Reading only for the allowlist: a token that came back with readonly for anyone else is kept
   // without it (the scope isn't recorded, so nothing reads with it).
@@ -400,6 +405,12 @@ export async function disconnectGmail(userEmail: string, address: string): Promi
   if (r.is_default) {
     const left = await listAccounts(lower)
     if (left.length && !left.some((a) => a.is_default)) await setDefault(lower, left[0].address)
+    else if (!left.length) {
+      // No Gmail left: the oldest Outlook sender becomes the default, if any.
+      const { listOutlookSenders, setDefaultOutlook } = await import('./outlook')
+      const o = await listOutlookSenders(lower).catch(() => [])
+      if (o.length && !o.some((a) => a.is_default)) await setDefaultOutlook(lower, o[0].address).catch(() => {})
+    }
   }
   return { revoked, removed: true }
 }

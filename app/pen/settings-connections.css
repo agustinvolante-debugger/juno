@@ -134,6 +134,23 @@
 .pen-root .pen-gacc-without { margin: 0; max-width: 62ch; }
 .pen-root .pen-gacc > .pen-set-actions .pen-btn { display: inline-flex; align-items: center; gap: 7px; }
 
+/* Outlook rows reuse the Google ones. A personal account's tag is quieter than an ability. */
+.pen-root .pen-gacc-chip-quiet { background: transparent; box-shadow: inset 0 0 0 1px var(--hair); color: var(--dim); font-weight: 500; padding: 3px 10px; }
+/* Work tenant that lets only IT approve apps: what happened, and the link to forward. */
+.pen-root .pen-oacc-admin {
+  display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 14px;
+  background: var(--warn-wash); color: var(--ink); font-size: 14.5px; line-height: 1.45;
+}
+.pen-root .pen-oacc-admin strong { font-size: 15px; font-weight: 600; }
+.pen-root .pen-oacc-admin p { margin: 0; color: var(--soft); max-width: 62ch; }
+.pen-root .pen-oacc-admin-link { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 2px; }
+.pen-root .pen-oacc-admin-link code {
+  flex: 1 1 260px; min-width: 0; padding: 8px 10px; border-radius: 10px; background: #fff;
+  box-shadow: 0 0 0 1px rgba(29, 29, 31, .08); font: 12.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--soft); overflow-wrap: anywhere; user-select: all;
+}
+.pen-root .pen-oacc-admin-link .pen-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; }
+
 /* "What Juno does with Google": the terms fold away under one quiet line. */
 .pen-root .pen-conn-more { border-top: 1px solid var(--hair); padding-top: 4px; }
 .pen-root .pen-conn-more > summary {

@@ -7,6 +7,8 @@ import GranolaPanel from '../granola/GranolaPanel'
 import WhatsAppLink from '../whatsapp/WhatsAppLink'
 import ConnItem, { MarkTile } from './ConnItem'
 import GoogleAccounts from './GoogleAccounts'
+import OutlookAccounts from './OutlookAccounts'
+import { outlookAdminUrl } from '@/lib/pen/outlook'
 import DocsSheets from './DocsSheets'
 import LinkPrefs from './LinkPrefs'
 import { loadConnections } from './data'
@@ -32,6 +34,8 @@ const C = {
     googleNone: 'Gmail and Google Calendar · not connected',
     outlook: 'Outlook / Microsoft 365',
     outlookLine: 'Drafts open in Outlook with one tap, and so do new events. Full connection coming soon.',
+    outlookN: (n: number) => (n === 1 ? 'Outlook calendar and email · 1 address connected' : `Outlook calendar and email · ${n} addresses connected`),
+    outlookNone: 'Outlook calendar and email, work or personal · not connected',
     apple: 'Apple Calendar & iCloud',
     appleLine: 'Events added with one tap.',
     yahoo: 'Yahoo & other email',
@@ -73,6 +77,8 @@ const C = {
     googleNone: 'Gmail y Google Calendar · sin conectar',
     outlook: 'Outlook / Microsoft 365',
     outlookLine: 'Los borradores se abren en Outlook con un toque, y los eventos nuevos también. La conexión completa llega pronto.',
+    outlookN: (n: number) => (n === 1 ? 'Calendario y correo de Outlook · 1 dirección conectada' : `Calendario y correo de Outlook · ${n} direcciones conectadas`),
+    outlookNone: 'Calendario y correo de Outlook, del trabajo o personal · sin conectar',
     apple: 'Calendario de Apple e iCloud',
     appleLine: 'Los eventos se agregan con un toque.',
     yahoo: 'Yahoo y otros correos',
@@ -114,6 +120,8 @@ const C = {
     googleNone: 'Gmail e Google Agenda · não conectado',
     outlook: 'Outlook / Microsoft 365',
     outlookLine: 'Os rascunhos abrem no Outlook com um toque, e os eventos novos também. A conexão completa chega em breve.',
+    outlookN: (n: number) => (n === 1 ? 'Agenda e e-mail do Outlook · 1 endereço conectado' : `Agenda e e-mail do Outlook · ${n} endereços conectados`),
+    outlookNone: 'Agenda e e-mail do Outlook, do trabalho ou pessoal · não conectado',
     apple: 'Calendário da Apple e iCloud',
     appleLine: 'Os eventos são adicionados com um toque.',
     yahoo: 'Yahoo e outros e-mails',
@@ -165,6 +173,9 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   const g = d.google
   const live = g.accounts.filter((a) => !a.broken).length
   const gWarn = g.accounts.some((a) => a.broken)
+  const o = d.outlook.accounts
+  const oLive = o.filter((a) => !a.broken).length
+  const oWarn = o.some((a) => a.broken)
   const mail = d.links.mail
   const cal = d.links.cal
   const chatOn = d.chat.ready || Boolean(d.chat.imessage)
@@ -196,6 +207,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
               readAllowed={g.readAllowed}
               accounts={g.accounts}
               calCount={g.calCount}
+              outlookSenders={d.outlook.accounts.filter((a) => a.send).length}
               status={{
                 p: p === 'email' || p === 'google' ? p : null,
                 connected: p === 'email' || p === 'google' ? one('connected') : null,
@@ -207,14 +219,39 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
               }}
             />
           </ConnItem>
-          <ConnItem
-            id="outlook"
-            state="links"
-            marks={<MarkTile><img src="/brands/outlook.png" alt="" width={20} height={20} className="pen-conn-img" /></MarkTile>}
-            name={T.outlook}
-            badge={mail === 'outlook' || cal === 'outlook' ? T.inUse : null}
-            status={T.outlookLine}
-          />
+          {d.outlook.available ? (
+            <ConnItem
+              id="outlook"
+              fixed
+              state={oWarn ? 'warn' : oLive ? 'on' : 'off'}
+              marks={<MarkTile><img src="/brands/outlook.png" alt="" width={20} height={20} className="pen-conn-img" /></MarkTile>}
+              name={T.outlook}
+              status={o.length ? `${T.outlookN(o.length)}${oWarn ? ` · ${T.oneNeeds}` : ''}` : T.outlookNone}
+            >
+              <OutlookAccounts
+                accounts={o}
+                calCount={g.calCount}
+                senders={d.outlook.senders}
+                status={{
+                  connected: at('outlook')('connected'),
+                  cal: at('outlook')('cal'),
+                  send: at('outlook')('send'),
+                  gone: at('outlook')('gone'),
+                  error: at('outlook')('error'),
+                  adminUrl: at('outlook')('error') === 'admin_consent' ? outlookAdminUrl({ tenant: at('outlook')('tenant') }) : null,
+                }}
+              />
+            </ConnItem>
+          ) : (
+            <ConnItem
+              id="outlook"
+              state="links"
+              marks={<MarkTile><img src="/brands/outlook.png" alt="" width={20} height={20} className="pen-conn-img" /></MarkTile>}
+              name={T.outlook}
+              badge={mail === 'outlook' || cal === 'outlook' ? T.inUse : null}
+              status={T.outlookLine}
+            />
+          )}
           <ConnItem
             id="apple"
             state="links"

@@ -6,6 +6,9 @@
 //   npx tsx --env-file=.env.local scripts/pen-delete-account.mts someone@example.com        (dry run)
 //   npx tsx --env-file=.env.local scripts/pen-delete-account.mts someone@example.com --yes  (delete)
 //
+// Outlook (21 Oct): pen_outlook rows (sealed Microsoft tokens) are deleted with the rest; Microsoft
+// can't be asked to revoke them, so the script prints where the person removes Juno Pen there.
+//
 // Order: Gmail access is revoked at Google first (disconnectGmail, which skips the revoke when
 // the same Google account still serves Calendar/Docs here — those rows go below anyway), then each
 // recording goes through deleteSession (audio in our bucket, pieces, AssemblyAI's copy), then every
@@ -16,6 +19,7 @@
 import { supabaseAdmin } from '../lib/supabase'
 import { deleteSession } from '../lib/pen/store'
 import { disconnectGmail, listAccounts } from '../lib/pen/gmail'
+import { listOutlookAccounts } from '../lib/pen/outlook'
 
 const email = (process.argv[2] ?? '').trim().toLowerCase()
 const GO = process.argv.includes('--yes')
@@ -29,7 +33,7 @@ const TABLES = [
   'pen_session_people', 'pen_people', 'pen_clients', 'pen_chats', 'pen_docs', 'pen_archive_chat', 'pen_sessions',
   'pen_profiles', 'pen_sent_emails', 'pen_usage', 'pen_feedback', 'pen_hour_purchases', 'pen_announcement_sends',
   'pen_email_prefs', 'pen_referral_codes', 'pen_referrals', 'pen_notion', 'pen_notion_pages', 'pen_granola', 'pen_gcal',
-  'pen_gmail', 'pen_mail_from',
+  'pen_gmail', 'pen_mail_from', 'pen_outlook',
   'pen_whatsapp_links', 'pen_whatsapp_messages', 'pen_whatsapp_failures', 'pen_login_links', 'pen_signups', 'pen_health',
   'pen_accounts',
 ]
@@ -41,6 +45,12 @@ for (const a of gmail) {
   console.log(`gmail ${a.address}${GO ? ' -> disconnecting' : ''}`)
   if (GO) console.log('  ', JSON.stringify(await disconnectGmail(email, a.address).catch((e) => ({ error: (e as Error).message }))))
 }
+
+// 1b. Outlook: Microsoft has no per-app revoke Juno can call for delegated tokens, so the sealed
+// tokens are deleted with the pen_outlook rows below. Tell the person where to remove Juno Pen at
+// Microsoft: https://account.live.com/consent/Manage (personal) or https://myapps.microsoft.com (work).
+const outlook = await listOutlookAccounts(email).catch(() => [])
+for (const a of outlook) console.log(`outlook ${a.address}: token row deleted below; the user removes the app at Microsoft (${a.tenant_id === '9188040d-6c67-4c5b-b112-36a304b66dad' ? 'account.live.com/consent/Manage' : 'myapps.microsoft.com'})`)
 
 // 2. Recordings, one by one, so their audio and AssemblyAI copies go too.
 const { data: sessions } = await supabaseAdmin.from('pen_sessions').select('id').ilike('user_email', email).limit(5000)

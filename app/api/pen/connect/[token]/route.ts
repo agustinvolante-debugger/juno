@@ -6,6 +6,7 @@ import { STATE_COOKIE, authorizeUrl as gcalAuthorizeUrl, gcalConfigured } from '
 import { gmailAuthorizeUrl, gmailAvailable, gmailReadAllowed, scopesOf } from '@/lib/pen/gmail'
 import { authorizeUrl as notionAuthorizeUrl, notionConfigured } from '@/lib/pen/notion'
 import { STATE_COOKIE as GRANOLA_COOKIE, authorizeUrl as granolaAuthorizeUrl, granolaAvailable, makeAttempt } from '@/lib/pen/granola'
+import { OUTLOOK_COOKIE, listOutlookAccounts, outlookAuthorizeUrl, outlookAvailable } from '@/lib/pen/outlook'
 import type { Lang } from '@/lib/pen/i18n'
 
 export const dynamic = 'force-dynamic'
@@ -60,7 +61,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   }
 
   const L = await lang(v.email)
-  const configured: Record<ConnectApp, boolean> = { gcal: gcalConfigured(), gdrive: gcalConfigured(), notion: notionConfigured(), granola: v.app === 'granola' ? await granolaAvailable() : false, gmail: v.app === 'gmail' ? await gmailAvailable() : false }
+  const configured: Record<ConnectApp, boolean> = { gcal: gcalConfigured(), gdrive: gcalConfigured(), notion: notionConfigured(), granola: v.app === 'granola' ? await granolaAvailable() : false, gmail: v.app === 'gmail' ? await gmailAvailable() : false, outlook: v.app === 'outlook' ? await outlookAvailable() : false }
   if (!configured[v.app]) return refuse(503, L, 'setup')
   if (await readOnlyRefusal(v.email)) return refuse(403, L, 'readonly')
   if (!(await claimNonce(v.email, v.nonce, v.app))) return refuse(410, L, 'used')
@@ -78,6 +79,20 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
       console.warn(`pen connect granola: ${(e as Error).message}`)
       return refuse(502, L, 'failed')
     }
+  }
+
+  // Outlook (21 Oct): Microsoft's sign-in. An address already connected (hint) keeps what it does,
+  // plus the calendar when the link is for a calendar; a new one asks calendar + sending (or only
+  // the calendar for "connect my Outlook calendar").
+  if (v.app === 'outlook') {
+    const nonce = crypto.randomBytes(16).toString('hex')
+    const had = v.hint ? (await listOutlookAccounts(v.email).catch(() => [])).find((a) => a.address === v.hint) ?? null : null
+    const want = had ? { cal: had.can_cal || v.cal || !had.can_send, send: had.can_send || !v.cal } : { cal: true, send: !v.cal }
+    const res = NextResponse.redirect(outlookAuthorizeUrl(chatState(v.email, 'outlook', nonce, v.via, Date.now(), `${want.cal ? 'c' : ''}${want.send ? 's' : ''}`), origin, { ...want, hint: v.hint }))
+    res.cookies.set(OUTLOOK_COOKIE, nonce, { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 600, secure: origin.startsWith('https') })
+    res.headers.set('Cache-Control', 'no-store')
+    res.headers.set('Referrer-Policy', 'no-referrer')
+    return res
   }
 
   const nonce = crypto.randomBytes(16).toString('hex')

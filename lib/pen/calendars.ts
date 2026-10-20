@@ -13,12 +13,18 @@
 //
 // The same Google account connected both ways (Settings → Google and Settings → Email) is ONE
 // calendar: the Settings → Google token is used for it.
+//
+// Outlook (21 Oct, lib/pen/outlook.ts + outlook-calendar.ts): a connected Microsoft address with
+// its calendar on is one more calendar here (src kind 'outlook'), read and written through Graph
+// with the same shapes. The 5-calendar limit counts Google and Microsoft together. A video link on
+// an Outlook calendar is Teams (or none on personal calendars that can't: videoUnavailable).
 
 import { supabaseAdmin } from '@/lib/supabase'
 import type { CalEvent } from './calendar'
 import { addAttendee, addMeet, createEvent, deleteEvent, eventsInRange, getEvent, getGcalConnection, hasCalendar, moveEvent, upcomingEvents, READ_DAYS, type Attendee, type CalSrc, type CreatedEvent, type UpcomingEvent } from './google-calendar'
 import { chooseDefault, eventRef, mergeEvents, parseEventRef, pickCalendar, type CalInfo } from './calendar-merge'
 import { cleanProfile, getProfileRaw } from './profile'
+import { outlookAddAttendee, outlookAddVideo, outlookCreate, outlookDelete, outlookGet, outlookMove, outlookRange, outlookUpcoming } from './outlook-calendar'
 
 export { eventRef, parseEventRef, pickCalendar, type CalInfo } from './calendar-merge'
 
@@ -36,6 +42,13 @@ export async function listCalendars(email: string): Promise<Calendar[]> {
     for (const a of await listGoogleAccounts(lower).catch(() => [])) {
       if (!a.can_cal || out.some((c) => c.key === a.address)) continue
       out.push({ key: a.address, address: a.address, via: 'email', broken: Boolean(a.last_error), src: { kind: 'gmail', address: a.address } })
+    }
+  }
+  const { outlookAvailable, listOutlookAccounts } = await import('./outlook')
+  if (await outlookAvailable().catch(() => false)) {
+    for (const a of await listOutlookAccounts(lower).catch(() => [])) {
+      if (!a.can_cal || out.some((c) => c.key === a.address)) continue
+      out.push({ key: a.address, address: a.address, via: 'outlook', broken: Boolean(a.last_error), src: { kind: 'outlook', address: a.address } })
     }
   }
   return out.slice(0, MAX)
@@ -101,52 +114,70 @@ async function readAll(email: string, read: (src: CalSrc) => Promise<UpcomingEve
 
 /** Every calendar's events from now to `days` ahead (≤ READ_DAYS), merged. For briefs. */
 export async function upcomingAll(email: string, days = READ_DAYS, now = new Date()): Promise<UpcomingEvent[]> {
-  return (await readAll(email, (src) => upcomingEvents(email, days, now, src))).events
+  return (await readAll(email, (src) => (src.kind === 'outlook' ? outlookUpcoming(email, src.address, days, now) : upcomingEvents(email, days, now, src)))).events
 }
 
 /** Every calendar's events in [from, to), merged (optionally Google's free-text q on each). */
 export async function eventsBetween(email: string, from: Date, to: Date, q?: string): Promise<{ events: UpcomingEvent[]; read: string[]; failed: string[] }> {
-  return readAll(email, (src) => eventsInRange(email, from, to, { q }, src))
+  return readAll(email, (src) => (src.kind === 'outlook' ? outlookRange(email, src.address, from, to, { q }) : eventsInRange(email, from, to, { q }, src)))
 }
 
 /** One event by ref, from the calendar the ref names (bare id: the default). */
 export async function getEventByRef(email: string, ref: string): Promise<{ event: UpcomingEvent; cal: Calendar } | null> {
   const r = await resolveCalendar(email, { ref })
   if (!r.cal || !r.id) return null
-  const e = await getEvent(email, r.id, r.cal.src)
+  const src = r.cal.src
+  const e = src.kind === 'outlook' ? await outlookGet(email, src.address, r.id) : await getEvent(email, r.id, src)
   return e ? { event: { ...e, cal: r.cal.key }, cal: r.cal } : null
 }
 
 export async function deleteByRef(email: string, ref: string): Promise<void> {
   const r = await resolveCalendar(email, { ref })
   if (!r.cal || !r.id) throw new Error(r.error ?? 'no calendar is connected')
-  await deleteEvent(email, r.id, r.cal.src)
+  const src = r.cal.src
+  if (src.kind === 'outlook') await outlookDelete(email, src.address, r.id)
+  else await deleteEvent(email, r.id, src)
 }
 
 export async function moveByRef(email: string, ref: string, startIso: string, tz: string, durationMin?: number): Promise<CreatedEvent & { ref: string }> {
   const r = await resolveCalendar(email, { ref })
   if (!r.cal || !r.id) throw new Error(r.error ?? 'no calendar is connected')
-  const e = await moveEvent(email, r.id, startIso, tz, durationMin, r.cal.src)
+  const src = r.cal.src
+  const e = src.kind === 'outlook' ? await outlookMove(email, src.address, r.id, startIso, durationMin) : await moveEvent(email, r.id, startIso, tz, durationMin, src)
   return { ...e, ref: eventRef(e.id, r.cal.key) }
 }
 
 export async function addMeetByRef(email: string, ref: string): Promise<CreatedEvent> {
   const r = await resolveCalendar(email, { ref })
   if (!r.cal || !r.id) throw new Error(r.error ?? 'no calendar is connected')
-  return addMeet(email, r.id, r.cal.src)
+  const src = r.cal.src
+  return src.kind === 'outlook' ? outlookAddVideo(email, src.address, r.id) : addMeet(email, r.id, src)
 }
 
 export async function addAttendeeByRef(email: string, ref: string, who: Attendee): Promise<CreatedEvent & { ref: string }> {
   const r = await resolveCalendar(email, { ref })
   if (!r.cal || !r.id) throw new Error(r.error ?? 'no calendar is connected')
-  const e = await addAttendee(email, r.id, who, r.cal.src)
+  const src = r.cal.src
+  const e = src.kind === 'outlook' ? await outlookAddAttendee(email, src.address, r.id, who) : await addAttendee(email, r.id, who, src)
   return { ...e, ref: eventRef(e.id, r.cal.key) }
 }
 
 /** A new event on the calendar the user named (`said`), else the default. Throws when none is connected. */
-export async function createOn(email: string, ev: CalEvent, o: { attendees?: Attendee[]; meet?: boolean; ref?: string } = {}, said?: string | null): Promise<CreatedEvent & { ref: string; calendar: string; calendarAddress: string | null }> {
+export async function createOn(email: string, ev: CalEvent, o: { attendees?: Attendee[]; meet?: boolean; ref?: string } = {}, said?: string | null): Promise<CreatedEvent & { ref: string; calendar: string; calendarAddress: string | null; provider: CalProvider }> {
   const r = await resolveCalendar(email, { said })
   if (!r.cal) throw new Error(r.error ?? 'no calendar is connected')
-  const e = await createEvent(email, ev, o, r.cal.src)
-  return { ...e, ref: eventRef(e.id, r.cal.key), calendar: r.cal.key, calendarAddress: r.cal.address }
+  const src = r.cal.src
+  const e = src.kind === 'outlook' ? await outlookCreate(email, src.address, ev, o) : await createEvent(email, ev, o, src)
+  return { ...e, ref: eventRef(e.id, r.cal.key), calendar: r.cal.key, calendarAddress: r.cal.address, provider: providerOf(r.cal) }
+}
+
+export type CalProvider = 'google' | 'outlook'
+export const providerOf = (c: Pick<CalInfo, 'via'> | null | undefined): CalProvider => (c?.via === 'outlook' ? 'outlook' : 'google')
+/** "Google Calendar" / "Outlook" for what the chat says. */
+export const calendarName = (c: Pick<CalInfo, 'via'> | null | undefined) => (providerOf(c) === 'outlook' ? 'Outlook calendar' : 'Google Calendar')
+
+/** The provider of the calendar an event ref names (bare id: the default). */
+export async function providerOfRef(email: string, ref: string | null | undefined): Promise<CalProvider> {
+  const r = await resolveCalendar(email, { ref: ref ?? null }).catch(() => null)
+  return providerOf(r?.cal)
 }

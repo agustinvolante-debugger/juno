@@ -52,6 +52,7 @@ import { foldName, speakerName, resolve as resolveLabel, type SpeakerMap } from 
 import { COMMON_TYPES } from '../categories'
 import { sendFollowUp } from '../follow-up'
 import { gmailAvailable, gmailReadAllowed, lastFromFor, listAccounts, sendViaGmail, type GmailAccount } from '../gmail'
+import { listOutlookSenders, outlookAvailable, sendViaOutlook, type OutlookAccount } from '../outlook'
 import { chooseFrom, PROVIDER_NAME, type MailApp } from '../mail-compose'
 import { mailProvider, setMailApp } from '../mail-pref'
 import { getProfile } from '../profile'
@@ -93,6 +94,8 @@ export type Ctx = {
   drafted: Draft | null
   /** Gmail addresses connected for sending (empty when none, or before the table exists). */
   gmail?: GmailAccount[]
+  /** Outlook / Microsoft addresses connected for sending (lib/pen/outlook.ts; empty when off). */
+  outlook?: OutlookAccount[]
   /** Addresses Juno may read this turn (allowlisted user, gmail.readonly granted): tools/mailread.ts. */
   gmailRead?: string[]
   /** On the reading allowlist (whether or not an address has reading yet). */
@@ -249,8 +252,8 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: 'set_draft_from',
     description:
-      'Change which connected Gmail address the pending draft goes out from ("send it from my work email", "from ana@x.com", ' +
-      '"use my personal one"). The draft is shown again with the new From; it is NOT sent: wait for their "send it".',
+      'Change which connected address (Gmail or Outlook) the pending draft goes out from ("send it from my work email", "from ana@x.com", ' +
+      '"use my personal one", "send it from my Outlook"). The draft is shown again with the new From; it is NOT sent: wait for their "send it".',
     input_schema: {
       type: 'object',
       properties: { from: { type: 'string', description: 'The address, or the user\'s words for it ("work").' } },
@@ -589,6 +592,7 @@ function system(ctx: Ctx, pending: Draft | null, asked: Pending | null, askedUns
     '- Reminders, to-dos and events on their own calendar are done at once, also when the time comes from something you looked up (a meeting found in a ' +
     'calendar or an invitation email): never "reply yes to confirm". Say what was set in one line; "undo" cancels it.\n' +
     gmailLine(ctx) +
+    outlookLine(ctx) +
     (ctx.userName ? `\nThe user is ${ctx.userName}. In to-dos, an owner with their name (or "me", "I") is them.\n` : '') +
     (ctx.agentBrief ? `\nAbout the user:\n${ctx.agentBrief}\n` : '') +
     (pending
@@ -771,16 +775,27 @@ async function saveDraft(
     : { ok: true, shown_to_user: true, to: toName, ...from, missing: `No email saved for ${toName}. Ask the user for it.` }
 }
 
-/** Which connected Gmail a draft goes out from: named > last used for this recipient > default. */
+/** Which connected address (Gmail or Outlook) a draft goes out from: named > last used for this recipient > default (one across both). */
 async function pickFrom(ctx: Ctx, toEmail: string | null, said?: string): Promise<{ from: string | null; why: string } | { error: string; connected?: string[]; next: string }> {
-  const accounts = ctx.gmail ?? []
+  const gmail = ctx.gmail ?? []
+  const outlook = ctx.outlook ?? []
+  const accounts = [...gmail, ...outlook]
   if (!accounts.length) {
     return said?.trim()
-      ? { error: 'no Gmail is connected for sending', next: 'say so in one line and offer to connect it (connect_app app gmail); the draft can still go "via Juno"' }
+      ? { error: 'no email address is connected for sending', next: 'say so in one line and offer to connect one (connect_app app gmail, or app outlook for Outlook/Microsoft 365 when connection_status says it is available); the draft can still go "via Juno"' }
       : { from: null, why: 'none' }
   }
-  const c = chooseFrom(accounts, { override: said, lastForRecipient: await lastFromFor(ctx.email, toEmail) })
-  if (c.why === 'no_match') return { error: `no connected Gmail matches "${c.asked}"`, connected: accounts.map((a) => a.address), next: 'ask which of these, or offer to connect another (connect_app app gmail)' }
+  // "from my Outlook" / "from my Gmail": the only connected address of that kind.
+  const q = (said ?? '').toLowerCase()
+  if (/\b(outlook|microsoft|hotmail|office ?365|m365)\b/.test(q)) {
+    if (outlook.length === 1) return { from: outlook[0].address, why: 'override' }
+    if (!outlook.length) return { error: 'no Outlook address is connected for sending', connected: accounts.map((a) => a.address), next: 'say so in one line; offer to connect it (connect_app app outlook) or to send from a connected address' }
+  } else if (/\b(gmail|google)\b/.test(q)) {
+    if (gmail.length === 1) return { from: gmail[0].address, why: 'override' }
+  }
+  const pool = /\b(outlook|microsoft|hotmail|office ?365|m365)\b/.test(q) ? outlook : accounts
+  const c = chooseFrom(pool, { override: said, lastForRecipient: await lastFromFor(ctx.email, toEmail) })
+  if (c.why === 'no_match') return { error: `no connected address matches "${c.asked}"`, connected: accounts.map((a) => a.address), next: 'ask which of these, or offer to connect another (connect_app app gmail / outlook)' }
   return { from: c.address, why: c.why }
 }
 
@@ -806,7 +821,19 @@ async function setMailAppTool(ctx: Ctx, app: string): Promise<unknown> {
   return { ok: true, shown_to_user: true, note: 'Confirm in one line; the draft is shown again below with the new link.' }
 }
 
+/** The Outlook addresses Juno can send from, for the system prompt (empty when none). */
+function outlookLine(ctx: Ctx): string {
+  const o = ctx.outlook ?? []
+  if (!o.length) return ''
+  return `- Outlook connected for sending: ${o.map((a) => `${a.address}${a.is_default ? ' (default From)' : ''}${a.last_error ? ' (needs reconnecting)' : ''}`).join(', ')}. ` +
+    'A draft from one of these goes out through Outlook (their Sent Items). Juno cannot read Outlook mail. "Send it from my Outlook" → set_draft_from. ' +
+    (o.some((a) => a.last_error) ? 'One needs reconnecting: connect_app app outlook with account. ' : '') + '\n'
+}
+
 function gmailLine(ctx: Ctx): string {
+  if (!(ctx.gmail ?? []).length && (ctx.outlook ?? []).length) {
+    return '- Email sending: no Gmail; drafts go from their connected Outlook address shown on the draft (above). "Connect my Gmail" → connect_app app gmail.\n'
+  }
   const g = ctx.gmail ?? []
   const reads = ctx.gmailRead ?? []
   if (!reads.length && ctx.gmailReadOk) {
@@ -838,6 +865,22 @@ async function sendDraft(ctx: Ctx): Promise<unknown> {
   }
   if (!d.toEmail) return { error: `no email address for ${d.toName}; ask the user for it` }
   if (ctx.sent) return { error: 'already sent in this turn' }
+  const viaOutlook = Boolean(d.from && (ctx.outlook ?? []).some((a) => a.address === d.from!.toLowerCase()) && !(ctx.gmail ?? []).some((a) => a.address === d.from!.toLowerCase()))
+  if (d.from && viaOutlook) {
+    // Their Outlook (lib/pen/outlook.ts). Same rule: a failure is never retried through Juno's sender.
+    if (d.thread) return { error: 'a reply in a Gmail thread cannot go from an Outlook address; set_draft_from the Gmail address it came to' }
+    const o = await sendViaOutlook({ userEmail: ctx.email, from: d.from, to: d.toEmail, toName: d.toName, subject: d.subject, body: d.body, sessionId: d.sessionId })
+    if (!o.ok) {
+      return {
+        error: `not sent from ${d.from}: ${o.error}`,
+        plain: gmailFailed(ctx.lang, d, o.reason, 'outlook'),
+        note: 'Reply with `plain` word for word (translate the words only if the chat is in another language; never change the links).',
+      }
+    }
+    ctx.sent = true
+    await setDraft(ctx.email, null)
+    return { ok: true, sent_from: d.from, via: 'Outlook', sent_to: `${d.toName} <${d.toEmail}>`, subject: d.subject, note: 'It is in their Outlook Sent Items; replies come to that address.' }
+  }
   if (d.from) {
     // Their Gmail. A failure is never retried through Juno's sender: they chose this address.
     const g = await sendViaGmail({ userEmail: ctx.email, from: d.from, fromName: ctx.userName, to: d.toEmail, toName: d.toName, subject: d.subject, body: d.body, sessionId: d.sessionId, thread: d.thread ?? null })
@@ -1474,27 +1517,28 @@ export function draftPreview(d: Draft, lang: Lang = 'en'): string {
   )
 }
 
-/** Gmail didn't send it: say so plainly, and hand them the draft to send themselves. */
-function gmailFailed(lang: Lang, d: Draft, reason: 'cap' | 'not_connected' | 'revoked' | 'failed'): string {
+/** Gmail or Outlook didn't send it: say so plainly, and hand them the draft to send themselves. */
+function gmailFailed(lang: Lang, d: Draft, reason: 'cap' | 'not_connected' | 'revoked' | 'failed', provider: 'gmail' | 'outlook' = 'gmail'): string {
   const links = draftLinks(d, lang)
+  const ms = provider === 'outlook'
   const L = {
     en: {
-      revoked: `I couldn't send it from ${d.from}: Google no longer lets Juno send from that address. Say "connect my Gmail" to connect it again, or send it yourself:`,
-      not_connected: `I couldn't send it: ${d.from} isn't connected anymore. Say "connect my Gmail" to connect it again, or send it yourself:`,
+      revoked: `I couldn't send it from ${d.from}: ${ms ? 'Microsoft' : 'Google'} no longer lets Juno send from that address. Say "connect my ${ms ? 'Outlook' : 'Gmail'}" to connect it again, or send it yourself:`,
+      not_connected: `I couldn't send it: ${d.from} isn't connected anymore. Say "connect my ${ms ? 'Outlook' : 'Gmail'}" to connect it again, or send it yourself:`,
       cap: 'I couldn\'t send it: that\'s the daily limit of emails from Juno. Send it yourself:',
-      failed: `Gmail didn't accept it, so nothing was sent from ${d.from}. Try "send it" again in a minute, or send it yourself:`,
+      failed: `${ms ? 'Outlook' : 'Gmail'} didn't accept it, so nothing was sent from ${d.from}. Try "send it" again in a minute, or send it yourself:`,
     },
     es: {
-      revoked: `No pude enviarlo desde ${d.from}: Google ya no deja que Juno envíe desde esa dirección. Di "conecta mi Gmail" para conectarla de nuevo, o envíalo tú:`,
-      not_connected: `No pude enviarlo: ${d.from} ya no está conectada. Di "conecta mi Gmail" para conectarla de nuevo, o envíalo tú:`,
+      revoked: `No pude enviarlo desde ${d.from}: ${ms ? 'Microsoft' : 'Google'} ya no deja que Juno envíe desde esa dirección. Di "conecta mi ${ms ? 'Outlook' : 'Gmail'}" para conectarla de nuevo, o envíalo tú:`,
+      not_connected: `No pude enviarlo: ${d.from} ya no está conectada. Di "conecta mi ${ms ? 'Outlook' : 'Gmail'}" para conectarla de nuevo, o envíalo tú:`,
       cap: 'No pude enviarlo: llegaste al límite diario de correos desde Juno. Envíalo tú:',
-      failed: `Gmail no lo aceptó, así que no salió nada desde ${d.from}. Intenta "envíalo" de nuevo en un minuto, o envíalo tú:`,
+      failed: `${ms ? 'Outlook' : 'Gmail'} no lo aceptó, así que no salió nada desde ${d.from}. Intenta "envíalo" de nuevo en un minuto, o envíalo tú:`,
     },
     pt: {
-      revoked: `Não consegui enviar de ${d.from}: o Google não deixa mais o Juno enviar desse endereço. Diga "conectar meu Gmail" para conectar de novo, ou envie você mesmo:`,
-      not_connected: `Não consegui enviar: ${d.from} não está mais conectado. Diga "conectar meu Gmail" para conectar de novo, ou envie você mesmo:`,
+      revoked: `Não consegui enviar de ${d.from}: ${ms ? 'a Microsoft' : 'o Google'} não deixa mais o Juno enviar desse endereço. Diga "conectar meu ${ms ? 'Outlook' : 'Gmail'}" para conectar de novo, ou envie você mesmo:`,
+      not_connected: `Não consegui enviar: ${d.from} não está mais conectado. Diga "conectar meu ${ms ? 'Outlook' : 'Gmail'}" para conectar de novo, ou envie você mesmo:`,
       cap: 'Não consegui enviar: é o limite diário de e-mails pelo Juno. Envie você mesmo:',
-      failed: `O Gmail não aceitou, então nada saiu de ${d.from}. Tente "enviar" de novo daqui a um minuto, ou envie você mesmo:`,
+      failed: `O ${ms ? 'Outlook' : 'Gmail'} não aceitou, então nada saiu de ${d.from}. Tente "enviar" de novo daqui a um minuto, ou envie você mesmo:`,
     },
   }[lang]
   return `${L[reason]}\n${links}`
@@ -1571,10 +1615,11 @@ export async function runAgent(opts: {
   const recentTitle = opts.recent ? ((await getSession(opts.email, opts.recent).catch(() => null))?.title ?? null) : null
   const zone = await userZone(opts.email, opts.phone).catch((): Zone => ({ tz: null, source: 'none', sure: false }))
   const gmail = (await gmailAvailable().catch(() => false)) ? await listAccounts(opts.email).catch((): GmailAccount[] => []) : []
+  const outlook = (await outlookAvailable().catch(() => false)) ? await listOutlookSenders(opts.email).catch((): OutlookAccount[] => []) : []
   // Reading (team test): the allowlist AND an address whose token carries gmail.readonly.
   const gmailReadOk = await gmailReadAllowed(opts.email).catch(() => false)
   const gmailRead = gmailReadOk ? gmail.filter((a) => a.can_read && !a.last_error).map((a) => a.address) : []
-  const ctx: Ctx = { ...opts, userName, recentTitle, citations: [], drafted: null, sent: false, enrich: new Set(), later: [], zone, gmail, gmailRead, gmailReadOk }
+  const ctx: Ctx = { ...opts, userName, recentTitle, citations: [], drafted: null, sent: false, enrich: new Set(), later: [], zone, gmail, outlook, gmailRead, gmailReadOk }
   const pending = await getDraft(opts.email).catch(() => null)
   const asked = await getPending(opts.email).catch(() => null)
   // Asked, or drafted, after this turn's last message arrived: the user hasn't seen it, so nothing

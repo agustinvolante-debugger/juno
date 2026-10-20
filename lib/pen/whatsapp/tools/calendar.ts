@@ -14,6 +14,11 @@
 // unless the user names one ("add it to my work calendar": `calendar`). Event ids the model sees
 // carry their calendar ("<id>|<address>"). find_events widens on its own (title → the person as a
 // guest → a day either side → the coming weeks) before saying nothing matched.
+//
+// Outlook (21 Oct): an Outlook calendar is one more connected calendar (lib/pen/calendars.ts); the
+// same tools read and write it. What the user is told names the provider ("Added to your Outlook
+// calendar"), and a video link there is Teams (meet: true), or none on a personal calendar that
+// can't make one (videoUnavailable: said plainly). Invites, moves and deletes with guests still ask first.
 
 import type Anthropic from '@anthropic-ai/sdk'
 import type { Ctx } from '../agent'
@@ -23,7 +28,7 @@ import { timeFields, zoneOf } from './timezone'
 import { sendInvite, type CalEvent } from '../../calendar'
 import { calendarPref, linksMessage, setCalendarPref, type CalendarApp } from '../../calendar-pref'
 import type { UpcomingEvent } from '../../google-calendar'
-import { addAttendeeByRef, addMeetByRef, anyCalendar, createOn, deleteByRef, eventRef, eventsBetween, getEventByRef, listCalendars, moveByRef, pickCalendar, setDefaultCalendar, type Calendar } from '../../calendars'
+import { addAttendeeByRef, addMeetByRef, anyCalendar, calendarName, createOn, defaultCalendar, deleteByRef, eventRef, eventsBetween, getEventByRef, listCalendars, moveByRef, parseEventRef, pickCalendar, providerOf, setDefaultCalendar, type Calendar } from '../../calendars'
 import { localDate, localIso, localToUtc, localWhen, validZone, whenLabel, zoneTimeLabel } from '../../timezone'
 import { isPerson, type PersonVariants } from '../../person-match'
 import { eventPeople, resolvePerson } from '../../person-resolve'
@@ -48,11 +53,11 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: 'add_to_calendar',
     description:
-      'Add an event the user asked for to their own calendar, at once (no confirmation). With Google Calendar connected it is added to their default calendar ' +
+      'Add an event the user asked for to their own calendar, at once (no confirmation). With a calendar connected (Google or Outlook) it is added to their default calendar ' +
       '(or the one they name); otherwise it makes a tap-to-add link (Apple Calendar on iPhone, Google Calendar on Android, plus a Google Calendar web link).',
     input_schema: {
       type: 'object',
-      properties: { ...EVENT_PROPS, meet: { type: 'boolean', description: 'true only if the user asked for a Google Meet / video link on it.' }, calendar: CAL_PROP },
+      properties: { ...EVENT_PROPS, meet: { type: 'boolean', description: 'true only if the user asked for a video link on it (Google Meet on a Google calendar, Teams on an Outlook calendar).' }, calendar: CAL_PROP },
       required: ['title', 'start_local'],
       additionalProperties: false,
     },
@@ -61,16 +66,16 @@ const TOOLS: Anthropic.Tool[] = [
     name: 'invite_to_meeting',
     description:
       'Invite someone to a meeting from the user (they are the organizer; replies go to them). Give to_name: their saved email is ' +
-      'looked up in the user\'s contacts; only if none is saved, ask for it (to_email). With Google Calendar connected the event ' +
-      'is created with them as a guest (and a Meet link if meet is true) and Google emails the invite. Asks the user to confirm first.',
+      'looked up in the user\'s contacts; only if none is saved, ask for it (to_email). With a calendar connected (Google or Outlook) the event ' +
+      'is created with them as a guest (and a Meet / Teams link if meet is true) and the calendar emails the invite. Asks the user to confirm first.',
     input_schema: {
       type: 'object',
       properties: {
         ...EVENT_PROPS,
         to_name: { type: 'string', description: 'As the user said it, e.g. "Carlos V".' },
         to_email: { type: 'string', description: 'Only if the user gave it or no contact has one.' },
-        meet: { type: 'boolean', description: 'true if they asked for a Google Meet / video link.' },
-        event_id: { type: 'string', description: 'The Google Calendar event id when inviting them to an event Juno just added (from an earlier tool result). Omit otherwise.' },
+        meet: { type: 'boolean', description: 'true if they asked for a video link (Meet on Google, Teams on Outlook).' },
+        event_id: { type: 'string', description: 'The calendar event id when inviting them to an event Juno just added (from an earlier tool result). Omit otherwise.' },
       },
       required: ['title', 'start_local'],
       additionalProperties: false,
@@ -78,7 +83,7 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'add_meet_link',
-    description: 'Put a Google Meet link on a Google Calendar event. Pass event_id if a tool gave it in this turn, else the event\'s title (it is looked up).',
+    description: 'Put a video link on a calendar event: Google Meet on a Google calendar, Teams on an Outlook calendar. Pass event_id if a tool gave it in this turn, else the event\'s title (it is looked up).',
     input_schema: { type: 'object', properties: { event_id: { type: 'string' }, title: { type: 'string' } }, additionalProperties: false },
   },
   {
@@ -125,12 +130,12 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'delete_event',
-    description: 'Delete a Google Calendar event the user asked to delete. Deleted at once when it has no guests; with guests it asks first (they get Google\'s cancellation).',
+    description: 'Delete a calendar event (Google or Outlook) the user asked to delete. Deleted at once when it has no guests; with guests it asks first (they get a cancellation).',
     input_schema: { type: 'object', properties: { event_id: { type: 'string' }, title: { type: 'string', description: 'If no event_id: the title, looked up.' } }, additionalProperties: false },
   },
   {
     name: 'move_event',
-    description: 'Move a Google Calendar event to a new time ("move it to 3pm"). Asks first only if it has guests (Google emails them the change).',
+    description: 'Move a calendar event (Google or Outlook) to a new time ("move it to 3pm"). Asks first only if it has guests (the calendar emails them the change).',
     input_schema: {
       type: 'object',
       properties: {
@@ -171,13 +176,20 @@ async function eventFrom(ctx: Ctx, input: Record<string, unknown>): Promise<{ ev
 }
 
 const ADDED_NOTE =
-  'Say "Added to your Google Calendar:" with the title and when (local_time, zone_label), in one line. Then, unless it already has a Meet link, offer one ' +
-  'in a few words (on their yes: add_meet_link with event_id). Never add or change anything else without a yes.'
+  'Say "Added to your <added_to>:" with the title and when (local_time, zone_label), in one line. Then, unless it already has a video link (or video_unavailable), offer one ' +
+  'in a few words (a Meet link on Google, a Teams link on Outlook; on their yes: add_meet_link with event_id). Never add or change anything else without a yes.'
 
 /** Writes the event to Google Calendar (default calendar, or the one `calendar` names); shared by add_to_calendar and offers. */
 export async function addToGoogle(ctx: Ctx, ev: CalEvent, o: { meet?: boolean; ref?: string; calendar?: string | null } = {}) {
   const e = await createOn(ctx.email, ev, { meet: o.meet, ref: o.ref }, o.calendar)
-  return { event_id: e.ref, google_calendar_link: e.link, calendar: e.calendarAddress ?? e.calendar, ...(e.meet ? { meet_link: e.meet } : {}) }
+  return {
+    event_id: e.ref,
+    calendar_link: e.link,
+    calendar: e.calendarAddress ?? e.calendar,
+    provider: e.provider,
+    ...(e.meet ? { meet_link: e.meet, video: e.video ?? 'Google Meet' } : {}),
+    ...(e.videoUnavailable ? { video_unavailable: 'this Outlook calendar cannot make a Teams link (personal Microsoft accounts often can\'t); the event was added without one' } : {}),
+  }
 }
 
 async function addToCalendar(ctx: Ctx, input: Record<string, unknown>): Promise<unknown> {
@@ -189,7 +201,7 @@ async function addToCalendar(ctx: Ctx, input: Record<string, unknown>): Promise<
   if (await anyCalendar(ctx.email)) {
     if (said) {
       const cals = await listCalendars(ctx.email)
-      if (!pickCalendar(cals, said)) return { error: `no connected calendar matches "${said}"`, connected: cals.map((c) => c.address ?? c.key), next: 'ask which one in one line, or offer to connect it (connect_app google_calendar with account)' }
+      if (!pickCalendar(cals, said)) return { error: `no connected calendar matches "${said}"`, connected: cals.map((c) => c.address ?? c.key), next: 'ask which one in one line, or offer to connect it (connect_app google_calendar with account; app outlook for an Outlook / Microsoft 365 calendar)' }
     }
     return confirmGcalAdd(ctx, { ev: r.ev, meet: input.meet === true, calendar: said || null })
   }
@@ -208,25 +220,26 @@ async function confirmGcalAdd(ctx: Ctx, args: Record<string, unknown>): Promise<
     const added = await addToGoogle(ctx, ev, { meet: args.meet === true, calendar: typeof args.calendar === 'string' ? args.calendar : null })
     const tz = ev.tz ?? 'UTC'
     const several = (await listCalendars(ctx.email).catch((): Calendar[] => [])).length > 1
+    const name = added.provider === 'outlook' ? 'Outlook calendar' : 'Google Calendar'
     await addSetUndo(ctx.email, ctx.msgId, { event: { ref: added.event_id, title: ev.title }, title: ev.title }).catch(() => {})
     return {
       ok: true,
-      added_to: several ? `Google Calendar (${added.calendar})` : 'Google Calendar',
+      added_to: several ? `${name} (${added.calendar})` : name,
       title: ev.title,
       ...(await timeFields(ctx, tz, ev.start, { kind: 'event', id: added.event_id, local: localIso(ev.start, tz), title: ev.title })),
       ...added,
       undo: 'the user can say "undo" to take it off',
-      note: ADDED_NOTE + (several ? ' Name the calendar it went on (added_to).' : ''),
+      note: ADDED_NOTE + (several ? ' Name the calendar it went on (added_to).' : '') + (added.video_unavailable ? ' They asked for a video link: say in a few words this calendar could not make one (video_unavailable).' : ''),
     }
   } catch (e) {
-    // Google refused (access revoked, outage): the tap-to-add link still works.
+    // The calendar refused (access revoked, outage): the tap-to-add link still works.
     console.warn(`pen gcal add: ${(e as Error).message}`)
     const { message } = linksMessage(ev, await calendarPref(ctx.email))
     return {
       ok: false,
-      google_calendar_error: (e as Error).message.slice(0, 200),
+      calendar_error: (e as Error).message.slice(0, 200),
       message,
-      note: 'Say in one line it could not be added to Google Calendar directly, then give the message exactly.',
+      note: 'Say in one line it could not be added to their calendar directly (if the error says to connect again, offer to send the link: connect_app), then give the message exactly.',
     }
   }
 }
@@ -276,7 +289,25 @@ export function dayRange(ctx: Ctx, fromDay: string, toDay: string): { from: Date
   return from && to && to > from ? { from, to } : null
 }
 
-const NOT_CONNECTED = { error: 'Google Calendar is not connected; connect_app google_calendar gives a one-tap link' }
+const NOT_CONNECTED = { error: 'no calendar is connected; connect_app google_calendar (or app outlook for an Outlook calendar) gives a one-tap link' }
+
+/** Calendars whose access died (refresh refused): not read; the user is told and offered the link. */
+function needsReconnect(cals: Calendar[]): Record<string, unknown> {
+  const b = cals.filter((c) => c.broken)
+  if (!b.length) return {}
+  return {
+    needs_reconnect: b.map((c) => `${c.address ?? c.key} (${c.via === 'outlook' ? 'Outlook' : 'Google'})`),
+    note_reconnect: 'After the list, say in one line that these calendars were not read because their access stopped working, and offer to send the link to connect again (on yes: connect_app, app outlook for Outlook / google_calendar with account for Google).',
+  }
+}
+
+/** "Google Calendar" / "Outlook calendar" and whose cancellation/update guests get, for the event's calendar. */
+async function calOf(ctx: Ctx, ref: string): Promise<{ name: string; who: 'Google' | 'Outlook' }> {
+  const key = parseEventRef(ref).cal
+  const cals = await listCalendars(ctx.email).catch((): Calendar[] => [])
+  const cal = key ? cals.find((c) => c.key === key) : await defaultCalendar(ctx.email, cals).catch(() => null)
+  return { name: calendarName(cal), who: providerOf(cal) === 'outlook' ? 'Outlook' : 'Google' }
+}
 
 /** Events matching the title words and/or the person. */
 export function matching(events: UpcomingEvent[], words: string, v: PersonVariants | null): UpcomingEvent[] {
@@ -305,7 +336,7 @@ async function findEventsTool(ctx: Ctx, input: Record<string, unknown>): Promise
     if (!hits.length && query && v) hits = matching(events, '', v)
     tried.push(`${w.step}: ${localDate(ctx.zone?.tz, w.from)} to ${localDate(ctx.zone?.tz, new Date(w.to.getTime() - 1))}`)
     if (hits.length) {
-      return { events: hits.slice(0, 12).map(eventLine(ctx)), calendars_read: cals.map((c) => c.address ?? c.key), ...(failed.length ? { could_not_read: failed } : {}), searched: tried, ...(w.step !== 'asked' ? { widened: `nothing on the day(s) asked; found by widening (${w.step})` } : {}) }
+      return { events: hits.slice(0, 12).map(eventLine(ctx)), calendars_read: cals.filter((c) => !c.broken).map((c) => c.address ?? c.key), ...(failed.length ? { could_not_read: failed } : {}), ...needsReconnect(cals), searched: tried, ...(w.step !== 'asked' ? { widened: `nothing on the day(s) asked; found by widening (${w.step})` } : {}) }
     }
     if (!str(input, 'from_date') && w.step === 'asked') break
   }
@@ -329,6 +360,7 @@ async function listEventsTool(ctx: Ctx, input: Record<string, unknown>): Promise
     times_are: `the user's local time (${ctx.zone?.tz ?? 'UTC'})`,
     calendars_read: read,
     ...(failed.length ? { could_not_read: failed, note_failed: 'say in one line which calendar could not be read' } : {}),
+    ...needsReconnect(cals),
     count: shown.length,
     events: shown.slice(0, 40).map(eventLine(ctx)),
     note: 'List them by day, one line each: time, title, with whom (first names). Say "nothing" for an empty day. Mention the calendar only when they have more than one and it helps.',
@@ -344,28 +376,31 @@ async function setDefaultCalendarTool(ctx: Ctx, input: Record<string, unknown>):
 }
 
 async function addMeetLink(ctx: Ctx, input: Record<string, unknown>): Promise<unknown> {
-  if (!(await anyCalendar(ctx.email))) return { error: 'Google Calendar is not connected' }
+  if (!(await anyCalendar(ctx.email))) return NOT_CONNECTED
   const p = await pickEvent(ctx, input)
   if ('error' in p) return p
   try {
     const e = await addMeetByRef(ctx.email, eventRef(p.event.id, p.event.cal))
-    return e.meet ? { ok: true, meet_link: e.meet, note: 'Give the Meet link in one line; it is on the calendar event too.' } : { error: 'Google did not create a Meet link for that event' }
+    const kind = e.video ?? 'Meet'
+    if (e.videoUnavailable) return { error: 'this Outlook calendar cannot make a Teams link (personal Microsoft accounts often can\'t)', next: 'say so in one line; they can paste a link of their own into the event' }
+    return e.meet ? { ok: true, meet_link: e.meet, video: kind, note: `Give the ${kind} link in one line; it is on the calendar event too.` } : { error: 'the calendar did not create a video link for that event' }
   } catch (e) {
     return { error: (e as Error).message.slice(0, 200) }
   }
 }
 
 async function deleteEventTool(ctx: Ctx, input: Record<string, unknown>): Promise<unknown> {
-  if (!(await anyCalendar(ctx.email))) return { error: 'Google Calendar is not connected' }
+  if (!(await anyCalendar(ctx.email))) return NOT_CONNECTED
   const p = await pickEvent(ctx, input)
   if ('error' in p) return p
   const line = eventLine(ctx)(p.event)
-  const args = { eventId: line.event_id, title: line.title, when: line.when }
+  const c = await calOf(ctx, line.event_id)
+  const args = { eventId: line.event_id, title: line.title, when: line.when, calName: c.name }
   if (!asksFirst('delete_event', { guests: line.guests.length > 0 })) return confirmDelete(ctx, args)
   return askConfirm(ctx, {
     kind: 'gcal_delete',
     args,
-    summary: `Delete "${line.title}", ${line.when}, from your Google Calendar? ${line.guests.join(', ')} will get Google's cancellation. Reply yes.`,
+    summary: `Delete "${line.title}", ${line.when}, from your ${c.name}? ${line.guests.join(', ')} will get ${c.who}'s cancellation. Reply yes.`,
   })
 }
 
@@ -377,7 +412,7 @@ async function confirmDelete(ctx: Ctx, args: Record<string, unknown>): Promise<u
     return {
       ok: true,
       deleted: typeof args.title === 'string' ? args.title : true,
-      note: 'Say exactly one line: Deleted "<title>" from your Google Calendar. (in the language of your reply). No date, nothing else.',
+      note: `Say exactly one line: Deleted "<title>" from your ${typeof args.calName === 'string' ? args.calName : 'calendar'}. (in the language of your reply). No date, nothing else.`,
     }
   } catch (e) {
     return { error: (e as Error).message.slice(0, 200) }
@@ -385,7 +420,7 @@ async function confirmDelete(ctx: Ctx, args: Record<string, unknown>): Promise<u
 }
 
 async function moveEventTool(ctx: Ctx, input: Record<string, unknown>): Promise<unknown> {
-  if (!(await anyCalendar(ctx.email))) return { error: 'Google Calendar is not connected' }
+  if (!(await anyCalendar(ctx.email))) return NOT_CONNECTED
   const p = await pickEvent(ctx, input)
   if ('error' in p) return p
   const local = str(input, 'start_local')
@@ -401,7 +436,7 @@ async function moveEventTool(ctx: Ctx, input: Record<string, unknown>): Promise<
     return askConfirm(ctx, {
       kind: 'gcal_move',
       args,
-      summary: `Move "${line.title}" to ${localWhen(start, tz)}, ${zoneTimeLabel(tz)}? ${line.guests.join(', ')} will get Google's update. Reply yes.`,
+      summary: `Move "${line.title}" to ${localWhen(start, tz)}, ${zoneTimeLabel(tz)}? ${line.guests.join(', ')} will get ${(await calOf(ctx, line.event_id)).who}'s update. Reply yes.`,
     })
   }
   return confirmMove(ctx, args)
@@ -446,10 +481,12 @@ async function inviteToMeeting(ctx: Ctx, input: Record<string, unknown>): Promis
   const meet = input.meet === true
   if (await anyCalendar(ctx.email)) {
     const eventId = str(input, 'event_id') || null
+    const c = await calOf(ctx, eventId ?? '')
+    const video = c.who === 'Outlook' ? 'Teams' : 'Meet'
     return askConfirm(ctx, {
       kind: 'gcal_invite',
       args: { ev: r.ev, toName, toEmail, eventId, meet },
-      summary: `Create "${r.ev.title}", ${r.when}${meet ? ', with a Meet link,' : ''} and invite ${toName ? `${toName} <${toEmail}>` : toEmail}? Google Calendar will email them the invite from you. Reply yes.`,
+      summary: `Create "${r.ev.title}", ${r.when}${meet ? `, with a ${video} link,` : ''} and invite ${toName ? `${toName} <${toEmail}>` : toEmail}? Your ${c.name} will email them the invite from you. Reply yes.`,
     })
   }
   return askConfirm(ctx, {
@@ -475,7 +512,7 @@ async function confirmInvite(ctx: Ctx, args: Record<string, unknown>): Promise<u
   }
 }
 
-/** Google Calendar connected: the guest goes on the event and Google emails the invite. */
+/** A calendar connected (Google or Outlook): the guest goes on the event and the calendar emails the invite. */
 async function confirmGcalInvite(ctx: Ctx, args: Record<string, unknown>): Promise<unknown> {
   const ev = args.ev as CalEvent
   const toEmail = String(args.toEmail ?? '')
@@ -491,7 +528,7 @@ async function confirmGcalInvite(ctx: Ctx, args: Record<string, unknown>): Promi
       ...(await timeFields(ctx, ev.tz ?? 'UTC', ev.start)),
       event_id: e.ref,
       ...(e.meet ? { meet_link: e.meet } : {}),
-      note: 'Confirm in one line with when (local_time, zone_label): the event is on their Google Calendar and Google emailed the invite. Unless it has a Meet link, offer one (on yes: add_meet_link).',
+      note: `Confirm in one line with when (local_time, zone_label): the event is on their ${(await calOf(ctx, e.ref)).name} and it emailed the invite. Unless it has a video link${e.videoUnavailable ? ' (this calendar could not make one: say so)' : ', offer one (on yes: add_meet_link)'}.`,
     }
   } catch (err) {
     console.warn(`pen gcal invite: ${(err as Error).message}`)
@@ -514,13 +551,13 @@ export const calendarModule: ToolModule = {
                 : undefined,
   confirm: { calendar_invite: confirmInvite, gcal_add: confirmGcalAdd, gcal_invite: confirmGcalInvite, gcal_delete: confirmDelete, gcal_move: confirmMove },
   prompt:
-    '- Calendar: "add X to my calendar" -> add_to_calendar (with Google Calendar connected it is added at once; otherwise send ' +
+    '- Calendar: "add X to my calendar" -> add_to_calendar (with a calendar connected, Google or Outlook, it is added at once; otherwise send ' +
     'its message with the links as they are). "Delete / move / add a Meet link to <event>" -> delete_event / move_event / ' +
     'add_meet_link with the event\'s title (or event_id from a tool result in this same turn); if several match, list them and ' +
     'ask which. With no guests a delete or move happens at once: never ask "are you sure?" yourself; the tool asks when guests would be emailed. "Delete it and make a new one at 3" is move_event. Inviting someone else -> invite_to_meeting with their email ' +
-    '(give to_name: the saved email is looked up; ask only if none; meet true for a video link — one step creates the event, the Meet link and the invite). Never say you cannot delete or change events: you can, with Google Calendar connected. ' +
+    '(give to_name: the saved email is looked up; ask only if none; meet true for a video link — Meet on Google, Teams on Outlook — one step creates the event, the link and the invite). Never say you cannot delete or change events: you can, with a calendar connected (Google or Outlook). ' +
     '"I use Outlook / Apple / Google calendar" -> set_calendar_app. Times are wall-clock where the user is; never compute UTC offsets yourself.\n' +
     '- Reading their calendars: "what\'s on tomorrow?", "my meetings this week", "am I free Friday?" -> list_events (every connected calendar, merged). ' +
-    'A meeting by person or title -> find_events (it widens on its own). Never say you can only search by title. "Add it to my work calendar" -> add_to_calendar with calendar; ' +
+    'A meeting by person or title -> find_events (it widens on its own). Never say you can only search by title. "Add it to my work calendar" / "to my Outlook calendar" -> add_to_calendar with calendar; ' +
     '"use my work calendar by default" -> set_default_calendar.',
 }
