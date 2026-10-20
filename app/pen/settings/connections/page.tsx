@@ -232,8 +232,10 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
                 accounts={o}
                 calCount={g.calCount}
                 senders={d.outlook.senders}
+                readAllowed={d.outlook.readAllowed}
                 status={{
                   connected: at('outlook')('connected'),
+                  read: at('outlook')('read'),
                   cal: at('outlook')('cal'),
                   send: at('outlook')('send'),
                   gone: at('outlook')('gone'),

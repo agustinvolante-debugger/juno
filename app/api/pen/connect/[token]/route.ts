@@ -6,7 +6,8 @@ import { STATE_COOKIE, authorizeUrl as gcalAuthorizeUrl, gcalConfigured } from '
 import { gmailAuthorizeUrl, gmailAvailable, gmailReadAllowed, scopesOf } from '@/lib/pen/gmail'
 import { authorizeUrl as notionAuthorizeUrl, notionConfigured } from '@/lib/pen/notion'
 import { STATE_COOKIE as GRANOLA_COOKIE, authorizeUrl as granolaAuthorizeUrl, granolaAvailable, makeAttempt } from '@/lib/pen/granola'
-import { OUTLOOK_COOKIE, listOutlookAccounts, outlookAuthorizeUrl, outlookAvailable } from '@/lib/pen/outlook'
+import { OUTLOOK_COOKIE, listOutlookAccounts, outlookAuthorizeUrl, outlookAvailable, outlookReadAllowed } from '@/lib/pen/outlook'
+import { withRead } from '@/lib/pen/outlook-graph'
 import type { Lang } from '@/lib/pen/i18n'
 
 export const dynamic = 'force-dynamic'
@@ -87,8 +88,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   if (v.app === 'outlook') {
     const nonce = crypto.randomBytes(16).toString('hex')
     const had = v.hint ? (await listOutlookAccounts(v.email).catch(() => [])).find((a) => a.address === v.hint) ?? null : null
-    const want = had ? { cal: had.can_cal || v.cal || !had.can_send, send: had.can_send || !v.cal } : { cal: true, send: !v.cal }
-    const res = NextResponse.redirect(outlookAuthorizeUrl(chatState(v.email, 'outlook', nonce, v.via, Date.now(), `${want.cal ? 'c' : ''}${want.send ? 's' : ''}`), origin, { ...want, hint: v.hint }))
+    // Reading (team test, like Gmail's chat connect): an allowlisted account is asked for Mail.Read too.
+    const base = had ? { cal: had.can_cal || v.cal || !had.can_send, send: had.can_send || !v.cal } : { cal: true, send: !v.cal }
+    const want = withRead(base, { had, chat: true, calOnly: v.cal && !had?.can_read, allowed: await outlookReadAllowed(v.email).catch(() => false) })
+    const res = NextResponse.redirect(outlookAuthorizeUrl(chatState(v.email, 'outlook', nonce, v.via, Date.now(), `${want.cal ? 'c' : ''}${want.send ? 's' : ''}${want.read ? 'r' : ''}`), origin, { ...want, hint: v.hint }))
     res.cookies.set(OUTLOOK_COOKIE, nonce, { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 600, secure: origin.startsWith('https') })
     res.headers.set('Cache-Control', 'no-store')
     res.headers.set('Referrer-Policy', 'no-referrer')

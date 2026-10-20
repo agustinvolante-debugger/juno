@@ -7,8 +7,9 @@
 //
 //   1. every connected calendar (lib/pen/calendars.ts), by day and person (guests, organiser,
 //      title), widening a day either side, then the coming weeks
-//   2. invitation emails in every read-enabled Gmail (an .ics, or Google's "Invitation: … @ Tue
-//      Oct 20, 2026 1pm - 1:30pm (GMT-4)"), with the person as sender or recipient
+//   2. invitation emails in every read-enabled inbox, Gmail and Outlook (an .ics, Google's
+//      "Invitation: … @ Tue Oct 20, 2026 1pm - 1:30pm (GMT-4)", or an Outlook meeting request,
+//      Graph eventMessage), with the person as sender or recipient
 //   3. recordings with that person on that day (a meeting that already happened)
 //
 // The person is everyone Juno knows by that name (lib/pen/person-resolve.ts). When the user asked
@@ -29,6 +30,8 @@ import { isPerson, type PersonVariants } from '../../person-match'
 import { calendarWindows, personTerms } from '../../search-widen'
 import { buildQuery } from '../../mail-thread'
 import { searchThreads, threadInvites, type FoundInvite } from '../../gmail-read'
+import { conversationInvites, searchOutlook } from '../../outlook-read'
+import { mergeHits, type MailHit, type SearchAsk } from '../../mail-thread'
 import { addReminder, maxAheadMs } from '../../reminders'
 import { localDate, localWhen, zoneTimeLabel } from '../../timezone'
 import { foldName } from '../../speakers'
@@ -41,7 +44,7 @@ const TOOLS: Anthropic.Tool[] = [
     name: 'find_meeting',
     description:
       'Find one meeting the user refers to ("the meeting with Chris tomorrow", "my call with Acme on Friday") wherever it is: ALL connected calendars, then calendar ' +
-      'invitation emails in their Gmail, then recordings. Knows every name and address for the person ("Chris" = Christian Dyas, chris@…, chrisdyas9@…) and widens ' +
+      'invitation emails in the inboxes Juno can read (Gmail, Outlook), then recordings. Knows every name and address for the person ("Chris" = Christian Dyas, chris@…, chrisdyas9@…) and widens ' +
       'the dates on its own. Returns the meeting and WHERE it was found. If they asked for reminders relative to it ("15 and 30 min before"), pass remind_before_min: ' +
       'they are set at once in the same step (never ask first).',
     input_schema: {
@@ -103,27 +106,33 @@ async function fromCalendars(ctx: Ctx, cals: Calendar[], person: string, words: 
   return null
 }
 
-/** Invitation emails with the person, in every read-enabled Gmail; the meeting inside the best one. */
+/** Invitation emails with the person, in every read-enabled inbox (Gmail + Outlook); the meeting inside the best one. */
 async function fromInvites(ctx: Ctx, person: string, words: string, range: { from: Date; to: Date }, dated: boolean, v0: PersonVariants | null, mine: string[], tried: string[]): Promise<Found | null> {
-  const accounts = ctx.gmailRead ?? []
+  const gAccounts = ctx.gmailRead ?? []
+  const oAccounts = ctx.outlookRead ?? []
+  const accounts = [...gAccounts, ...oAccounts]
   if (!accounts.length) {
     tried.push('invitation emails: no inbox Juno can read')
     return null
   }
   const v = v0 ?? (person ? await resolvePerson(ctx.email, person, { mine }) : null)
   const terms = person ? personTerms(v, person) : []
-  const qs = [
-    buildQuery({ personAny: terms.length ? terms : undefined, words: terms.length ? undefined : words, invites: true, newerThanDays: 45 }),
-    ...(terms.length && words ? [buildQuery({ words, invites: true, newerThanDays: 45 })] : []),
+  const asks: SearchAsk[] = [
+    { personAny: terms.length ? terms : undefined, words: terms.length ? undefined : words, invites: true, newerThanDays: 45 },
+    ...(terms.length && words ? [{ words, invites: true, newerThanDays: 45 }] : []),
   ]
   ctx.mailTainted = true
   const now = Date.now()
   const lo = dated ? range.from.getTime() - D : now - H
   const hi = dated ? range.to.getTime() + D : now + 45 * D
-  for (const q of qs) {
-    let hits
+  for (const ask of asks) {
+    let hits: ReturnType<typeof mergeHits>
     try {
-      hits = await searchThreads(ctx.email, accounts, q, 6)
+      const [g, o] = await Promise.all([
+        gAccounts.length ? searchThreads(ctx.email, gAccounts, buildQuery(ask), 6) : ([] as MailHit[]),
+        oAccounts.length ? searchOutlook(ctx.email, oAccounts, ask, 6) : ([] as MailHit[]),
+      ])
+      hits = mergeHits([{ provider: 'gmail', hits: g }, { provider: 'outlook', hits: o }], 6)
     } catch (e) {
       tried.push(`invitation emails: could not search (${(e as Error).message.slice(0, 80)})`)
       return null
@@ -136,7 +145,8 @@ async function fromInvites(ctx: Ctx, person: string, words: string, range: { fro
     for (const h of hits.slice(0, 5)) {
       ctx.mailSeen ??= []
       if (!ctx.mailSeen.some((x) => x.thread_id === h.thread_id)) ctx.mailSeen.push({ thread_id: h.thread_id, account: h.account, from: h.from.replace(/<[^>]*>/g, '').trim().slice(0, 60) })
-      invites.push(...(await threadInvites(ctx.email, h.account, h.thread_id, { fallbackTz: ctx.zone?.tz ?? null }).catch(() => [])))
+      const o = { fallbackTz: ctx.zone?.tz ?? null }
+      invites.push(...(await (h.provider === 'outlook' ? conversationInvites(ctx.email, h.account, h.thread_id, o) : threadInvites(ctx.email, h.account, h.thread_id, o)).catch(() => [])))
     }
     const cancelled = new Set(invites.filter((i) => i.cancelled && i.uid).map((i) => i.uid))
     const ok = invites.filter((i) => {

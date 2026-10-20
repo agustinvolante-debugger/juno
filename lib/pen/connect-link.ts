@@ -113,7 +113,7 @@ const STATE = 'pen-connect-state'
 const CHAT_PREFIX = 'c.'
 
 /** The OAuth state for a connect that started in the chat: account, app, browser nonce, channel. */
-/** `w`: what the consent asked for, when the callback needs it (Outlook: 'cs' = calendar + send, 'c', 's'). */
+/** `w`: what the consent asked for, when the callback needs it (Outlook: 'cs' = calendar + send, 'c', 's'; + 'r' = reading, team test). */
 export function chatState(email: string, app: ConnectApp, nonce: string, via: Via, now = Date.now(), w?: string): string {
   return CHAT_PREFIX + sealPayload(STATE, { e: email.toLowerCase(), a: app, n: nonce, x: now + STATE_TTL_MS, v: via, ...(w ? { w } : {}) })
 }
@@ -153,6 +153,7 @@ export const COPY = {
       cal: ' Its calendar is read together with your others, and events you ask for can go on it (say “add it to my Outlook calendar”).',
       send: ' When you say “send it” to a draft, it can go from this address and lands in your Sent Items.',
       noRead: ' Juno can’t read your Outlook mail.',
+      read: ' Reading is on too (testing, team only): ask me things like “anything from Carlos today?” and I search this inbox together with your Gmail, and I can draft a reply in the same conversation. I read only when you ask, keep nothing from your inbox, and send only after you say “send it”.',
       calFull: ' Its calendar wasn’t added: you already have 5 calendars connected.',
     },
     adminLink: 'Approval link for your IT admin:',
@@ -190,6 +191,7 @@ export const COPY = {
       cal: ' Leo su calendario junto con los demás, y los eventos que pidas pueden ir ahí (di “agrégalo a mi calendario de Outlook”).',
       send: ' Cuando digas “envíalo” a un borrador, puede salir desde esta dirección y queda en tus Elementos enviados.',
       noRead: ' Juno no puede leer tu correo de Outlook.',
+      read: ' También quedó activa la lectura (en prueba, solo el equipo): pregúntame cosas como “¿algo de Carlos hoy?” y busco en esta bandeja junto con tu Gmail, y puedo redactar una respuesta en la misma conversación. Solo leo cuando me lo pides, no guardo nada de tu bandeja y envío solo cuando dices “envíalo”.',
       calFull: ' Su calendario no se agregó: ya tienes 5 calendarios conectados.',
     },
     adminLink: 'Link de aprobación para tu administrador de TI:',
@@ -227,6 +229,7 @@ export const COPY = {
       cal: ' Eu leio a agenda dele junto com as outras, e os eventos que você pedir podem ir para lá (diga “coloque na minha agenda do Outlook”).',
       send: ' Quando você disser “enviar” a um rascunho, ele pode sair deste endereço e fica nos seus Itens enviados.',
       noRead: ' O Juno não consegue ler seus e-mails do Outlook.',
+      read: ' A leitura também está ativa (em teste, só a equipe): me pergunte coisas como “algo do Carlos hoje?” e eu busco nesta caixa junto com o seu Gmail, e posso escrever uma resposta na mesma conversa. Só leio quando você pede, não guardo nada da sua caixa e só envio depois que você diz “enviar”.',
       calFull: ' A agenda dele não foi adicionada: você já tem 5 agendas conectadas.',
     },
     adminLink: 'Link de aprovação para o seu administrador de TI:',
@@ -298,7 +301,7 @@ export async function announceConnected(email: string, app: ConnectApp, via: Via
     }
     const L = COPY[lang]
     const text =
-      app === 'outlook' ? `${L.connected.outlook(who)}${opts.canCal ? L.outlook.cal : ''}${opts.canSend !== false ? L.outlook.send : ''}${L.outlook.noRead}${opts.calFull ? L.outlook.calFull : ''}`
+      app === 'outlook' ? `${L.connected.outlook(who)}${opts.canCal ? L.outlook.cal : ''}${opts.canSend !== false ? L.outlook.send : ''}${opts.canRead ? L.outlook.read : L.outlook.noRead}${opts.calFull ? L.outlook.calFull : ''}`
         : app === 'gmail' && opts.canSend === false ? L.calendarOnly(who)
         : app === 'gmail' ? `${opts.canRead ? L.gmailReading(who) : L.connected.gmail(who)}${opts.canCal ? L.calToo : opts.calFull ? L.calFull : ''}`
           : L.connected[app](who)

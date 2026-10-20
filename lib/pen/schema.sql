@@ -493,3 +493,5 @@ alter table public.pen_segments enable row level security;  -- service role only
 -- create table if not exists public.pen_outlook (id uuid primary key default gen_random_uuid(), user_email text not null, address text not null, tenant_id text, display_name text, refresh_token text not null, scopes text[] not null default '{}', is_default boolean not null default false, last_error text, connected_at timestamptz not null default now(), last_used_at timestamptz, unique (user_email, address));
 -- create index if not exists pen_outlook_address on public.pen_outlook(address);
 -- alter table public.pen_outlook enable row level security;  -- service role only
+
+-- 2026-10-21, Outlook READING (team test, lib/pen/outlook-read.ts). NO DDL: an address that may be read has 'Mail.Read' in pen_outlook.scopes (the column above, already run), recorded only for accounts on PEN_GMAIL_READ_USERS with PEN_GMAIL_READ=1. Nothing read from the inbox is stored.

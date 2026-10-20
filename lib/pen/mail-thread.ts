@@ -237,3 +237,28 @@ export function readAllowedFor(email: string | null | undefined, env: Record<str
   const list = (env.PEN_GMAIL_READ_USERS ?? '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
   return list.includes(email.trim().toLowerCase())
 }
+
+/* ------------------------------------------------------ several inboxes */
+
+/** One thread found in one inbox (gmail-read.ts searchThreads, outlook-read.ts searchOutlook). `at` in ms. */
+export type MailHit = { thread_id: string; account: string; from: string; to: string; subject: string; at: number; snippet: string; messages: number; unread: boolean }
+export type MailProviderName = 'gmail' | 'outlook'
+
+/**
+ * Results from every read-enabled inbox (Gmail and Outlook) as one list: newest first, at most
+ * `max`, each labelled with the inbox it came from ("Gmail · sam@x.com", "Outlook · sam@work.com")
+ * so the answer can say where each one is. The same thread can't come back twice from one inbox.
+ */
+export function mergeHits(lists: { provider: MailProviderName; hits: MailHit[] }[], max = 10): (MailHit & { provider: MailProviderName; inbox: string })[] {
+  const seen = new Set<string>()
+  const all: (MailHit & { provider: MailProviderName; inbox: string })[] = []
+  for (const l of lists) {
+    for (const h of l.hits) {
+      const k = `${l.provider}|${h.account}|${h.thread_id}`
+      if (seen.has(k)) continue
+      seen.add(k)
+      all.push({ ...h, provider: l.provider, inbox: `${l.provider === 'gmail' ? 'Gmail' : 'Outlook'} · ${h.account}` })
+    }
+  }
+  return all.sort((a, b) => b.at - a.at).slice(0, max)
+}

@@ -12,14 +12,35 @@ export const GRAPH = 'https://graph.microsoft.com/v1.0'
 /** The tenant id Microsoft gives every personal account (outlook.com, hotmail, live). */
 export const PERSONAL_TID = '9188040d-6c67-4c5b-b112-36a304b66dad'
 
-/** The two abilities, as Microsoft names the delegated permissions. Reading mail (Mail.Read) is not asked yet. */
+/**
+ * The abilities, as Microsoft names the delegated permissions. Mail.Read (reading the inbox, 21 Oct)
+ * is asked ONLY for accounts on the reading test (mail-thread.ts readAllowedFor), on "Let Juno read
+ * this inbox" or a chat connect; nobody else is ever asked for it (outlookWant below).
+ */
 export const MS_CAL = 'Calendars.ReadWrite'
 export const MS_SEND = 'Mail.Send'
+export const MS_READ = 'Mail.Read'
 const BASE = ['offline_access', 'openid', 'email', 'profile', 'User.Read']
 
 /** The scopes one consent asks for: always sign-in + refresh, plus the abilities chosen. */
-export function msScopes(o: { cal: boolean; send: boolean }): string[] {
-  return [...BASE, ...(o.send ? [MS_SEND] : []), ...(o.cal ? [MS_CAL] : [])]
+export function msScopes(o: { cal: boolean; send: boolean; read?: boolean }): string[] {
+  return [...BASE, ...(o.send ? [MS_SEND] : []), ...(o.cal ? [MS_CAL] : []), ...(o.read ? [MS_READ] : [])]
+}
+
+/**
+ * Whether one Microsoft consent also asks for Mail.Read, for every entry point (Settings, chat
+ * link, re-consent). `base` = the calendar/sending the entry point already decided to ask for.
+ *   had      the address's abilities now (null = a new address)
+ *   add      'read' = "Let Juno read this inbox" pressed on that address
+ *   chat     a chat connect ("connect my Outlook"): an allowlisted account is asked for reading
+ *            too, like Gmail's chat connect (not for "connect my Outlook calendar")
+ *   allowed  on the reading test. When false, read is ALWAYS false: no Mail.Read on the screen.
+ * Reading sits on an address that sends (as with Gmail). An address that reads keeps reading on any
+ * re-consent: a token asked without Mail.Read would lose it.
+ */
+export function withRead<T extends { cal: boolean; send: boolean }>(base: T, o: { had?: { can_read?: boolean } | null; add?: string | null; chat?: boolean; calOnly?: boolean; allowed: boolean }): T & { read: boolean } {
+  const read = o.allowed && base.send && (o.add === 'read' || Boolean(o.had?.can_read) || (Boolean(o.chat) && !o.calOnly))
+  return { ...base, read }
 }
 
 /**
@@ -29,19 +50,19 @@ export function msScopes(o: { cal: boolean; send: boolean }): string[] {
  */
 export function grantedAbilities(scope: string | null | undefined): string[] {
   const names = (scope ?? '').split(/\s+/).map((s) => s.replace(/^https:\/\/graph\.microsoft\.com\//i, '').toLowerCase())
-  return [...(names.includes(MS_SEND.toLowerCase()) ? [MS_SEND] : []), ...(names.includes(MS_CAL.toLowerCase()) ? [MS_CAL] : [])]
+  return [MS_SEND, MS_CAL, MS_READ].filter((x) => names.includes(x.toLowerCase()))
 }
 
-export function msCaps(scopes: string[] | null | undefined): { can_send: boolean; can_cal: boolean } {
+export function msCaps(scopes: string[] | null | undefined): { can_send: boolean; can_cal: boolean; can_read: boolean } {
   const s = Array.isArray(scopes) ? scopes : []
-  return { can_send: s.includes(MS_SEND), can_cal: s.includes(MS_CAL) }
+  return { can_send: s.includes(MS_SEND), can_cal: s.includes(MS_CAL), can_read: s.includes(MS_READ) }
 }
 
 /**
  * Microsoft's sign-in for one account. /common: work, school and personal accounts.
  * prompt=select_account so they can pick any account, not the one the browser is signed in to.
  */
-export function msAuthorizeUrl(o: { clientId: string; redirectUri: string; state: string; cal: boolean; send: boolean; hint?: string | null }): string {
+export function msAuthorizeUrl(o: { clientId: string; redirectUri: string; state: string; cal: boolean; send: boolean; read?: boolean; hint?: string | null }): string {
   const q = new URLSearchParams({
     client_id: o.clientId,
     response_type: 'code',

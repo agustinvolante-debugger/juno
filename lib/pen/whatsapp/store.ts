@@ -213,8 +213,9 @@ export type Draft = {
   provider?: import('../mail-compose').MailProvider | null
   /** The chat's language, for the /m/ pages. */
   lang?: 'en' | 'es' | 'pt'
-  /** A reply in a Gmail thread (whatsapp/tools/mailread.ts): sent with threadId + In-Reply-To + References. */
-  thread?: { id: string; inReplyTo: string | null; references: string | null } | null
+  /** A reply in a thread (whatsapp/tools/mailread.ts). Gmail: sent with threadId + In-Reply-To + References.
+   *  Outlook (provider 'outlook'): id = the conversationId, messageId = the Graph message answered (POST …/reply). */
+  thread?: { id: string; inReplyTo: string | null; references: string | null; provider?: 'gmail' | 'outlook'; messageId?: string } | null
 }
 
 /** A draft older than this is gone: "send it" a day later is more likely a different email. */

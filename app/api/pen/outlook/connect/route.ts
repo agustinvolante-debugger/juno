@@ -3,7 +3,8 @@ import { NextResponse } from 'next/server'
 import { connectionsHref } from '@/lib/pen/settings-paths'
 import { authedEmail } from '@/lib/news/auth'
 import { readOnlyRefusal } from '@/lib/pen/access'
-import { OUTLOOK_COOKIE, listOutlookAccounts, outlookAuthorizeUrl, outlookAvailable, outlookState } from '@/lib/pen/outlook'
+import { OUTLOOK_COOKIE, listOutlookAccounts, outlookAuthorizeUrl, outlookAvailable, outlookReadAllowed, outlookState } from '@/lib/pen/outlook'
+import { withRead } from '@/lib/pen/outlook-graph'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,6 +14,8 @@ export const dynamic = 'force-dynamic'
 // Every connect asks for the calendar AND sending (Microsoft's screen is all or nothing).
 // ?address=x&add=cal|send — "Add calendar" / "Send email from it" on an address already connected:
 // what it does now plus the new ability, that address preselected. ?only=cal — a calendar-only account.
+// ?address=x&add=read — "Let Juno read this inbox" (team test only: outlookReadAllowed; Mail.Read is
+// never asked for anyone else). An address that reads keeps reading on every re-consent.
 export async function GET(req: Request) {
   const email = await authedEmail()
   if (!email) return NextResponse.redirect(new URL('/pen', req.url))
@@ -23,9 +26,10 @@ export async function GET(req: Request) {
   const hint = /^[^\s@]+@[^\s@]+$/.test(raw) ? raw : null
   const had = hint ? (await listOutlookAccounts(email).catch(() => [])).find((a) => a.address === hint) ?? null : null
   const add = u.searchParams.get('add')
-  const want = had
+  const base = had
     ? { cal: had.can_cal || add === 'cal' || !had.can_send, send: had.can_send || add === 'send' }
     : u.searchParams.get('only') === 'cal' ? { cal: true, send: false } : { cal: true, send: true }
+  const want = withRead(base, { had, add, allowed: await outlookReadAllowed(email).catch(() => false) })
   const nonce = crypto.randomBytes(16).toString('hex')
   const res = NextResponse.redirect(outlookAuthorizeUrl(outlookState(email, nonce, want), u.origin, { ...want, hint }))
   res.cookies.set(OUTLOOK_COOKIE, nonce, { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 600, secure: u.origin.startsWith('https') })

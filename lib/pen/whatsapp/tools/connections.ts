@@ -96,7 +96,7 @@ async function status(email: string) {
       ? { connected: true, addresses: gm.map((a) => ({ address: a.address, default: a.is_default, ...(a.can_read ? { can_read: true } : { send_only: true }), ...(a.last_error ? { needs_reconnect: true } : {}) })) }
       : { connected: false, available: gmOk },
     outlook: ol.length
-      ? { connected: ol.some((a) => !a.last_error), addresses: ol.map((a) => ({ address: a.address, ...(a.can_send ? { sending: true } : {}), ...(a.can_cal ? { calendar: true } : {}), ...(a.is_default && a.can_send ? { default_from: true } : {}), ...(a.last_error ? { needs_reconnect: true } : {}) })) }
+      ? { connected: ol.some((a) => !a.last_error), addresses: ol.map((a) => ({ address: a.address, ...(a.can_send ? { sending: true } : {}), ...(a.can_cal ? { calendar: true } : {}), ...(a.can_read ? { can_read: true } : {}), ...(a.is_default && a.can_send ? { default_from: true } : {}), ...(a.last_error ? { needs_reconnect: true } : {}) })) }
       : { connected: false, available: olOk },
   }
 }
@@ -137,7 +137,9 @@ async function connectOutlookLink(ctx: Ctx, input: Record<string, unknown>): Pro
   const said = str(input, 'account')
   const accounts = await listOutlookAccounts(ctx.email).catch(() => [])
   const hit = said ? accounts.find((a) => a.address === matchAccount(accounts, said)?.address) ?? null : !said && accounts.length === 1 && input.calendar === true ? accounts[0] : null
-  if (hit && !hit.last_error && input.reconnect !== true && (input.calendar !== true || hit.can_cal)) {
+  // Reading (team test): an allowlisted user's address that doesn't read yet gets a link that asks for it.
+  const readOk = Boolean(ctx.outlookReadOk)
+  if (hit && !hit.last_error && input.reconnect !== true && (input.calendar !== true || hit.can_cal) && !(readOk && hit.can_send && !hit.can_read && input.calendar !== true)) {
     return { already_connected: true, account: hit.address, ...(hit.can_cal ? { calendar: true } : {}), ...(hit.can_send ? { sending: true } : {}), note: 'Say in one line it is already connected. Offer to connect another Outlook account if they want.' }
   }
   const hint = hit?.address ?? (said && /^[^\s@]+@[^\s@]+$/.test(said) ? said.toLowerCase() : null)

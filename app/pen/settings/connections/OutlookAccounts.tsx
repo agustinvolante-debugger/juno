@@ -17,6 +17,8 @@ export type OAccount = {
   address: string
   send: boolean
   cal: boolean
+  /** Juno may read this inbox (team test only; false for everyone else). */
+  read: boolean
   defaultEmail: boolean
   defaultCal: boolean
   broken: boolean
@@ -24,7 +26,7 @@ export type OAccount = {
   personal: boolean
 }
 
-export type OutlookStatus = { connected: string | null; cal: string | null; send: string | null; gone: string | null; error: string | null; adminUrl: string | null }
+export type OutlookStatus = { connected: string | null; read?: string | null; cal: string | null; send: string | null; gone: string | null; error: string | null; adminUrl: string | null }
 
 const O_EN = {
   none: 'No Outlook account connected yet.',
@@ -35,6 +37,9 @@ const O_EN = {
   unverified: 'Microsoft may say the app is unverified while our publisher check is pending. Some workplaces also need their IT admin to approve Juno Pen once.',
   chipSend: 'Sending',
   chipCal: 'Calendar',
+  chipRead: 'Reading',
+  test: 'test',
+  letRead: 'Let Juno read this inbox',
   personal: 'personal',
   defEmail: 'Default for email',
   defCal: 'New events go here',
@@ -59,6 +64,10 @@ const O_EN = {
   sends: 'Only drafts you’ve seen and told Juno to send, one at a time, from your own address. They land in your Sent Items.',
   readsLabel: 'Reads mail',
   reads: 'Nothing. Juno has no access to your Outlook inbox.',
+  readsSome: 'Only when you ask in the chat (search, open a conversation), read-only. Nothing from your inbox is kept.',
+  readTest: 'Reading is a test for the team. Juno uses Microsoft’s Mail.Read permission, reads only when you ask in the chat, and keeps nothing from your inbox. To stop, disconnect the address and connect it again without reading.',
+  readFlash: 'Juno can read it when you ask in the chat.',
+  readDenied: 'Reading wasn’t allowed on Microsoft’s screen, so Juno can still only send from it.',
   calLabel: 'Calendar',
   calTerms: 'Adds only events you ask for or say yes to in the chat; a video link on Outlook is Teams. Reads your next days for briefs and “what’s on tomorrow?”, together with your Google calendars; a meeting on two of them counts once. Nothing from your calendar is stored.',
   removeLabel: 'Removing access',
@@ -98,6 +107,9 @@ const O: Copy<typeof O_EN> = {
     unverified: 'Puede que Microsoft diga que la app no está verificada mientras termina nuestra verificación de editor. Algunos trabajos además necesitan que su administrador de TI apruebe Juno Pen una vez.',
     chipSend: 'Envío',
     chipCal: 'Calendario',
+    chipRead: 'Lectura',
+    test: 'prueba',
+    letRead: 'Dejar que Juno lea esta bandeja',
     personal: 'personal',
     defEmail: 'Predeterminada para correo',
     defCal: 'Los eventos nuevos van aquí',
@@ -122,6 +134,10 @@ const O: Copy<typeof O_EN> = {
     sends: 'Solo los borradores que viste y le dijiste a Juno que envíe, uno a la vez, desde tu propia dirección. Quedan en tus Elementos enviados.',
     readsLabel: 'Lee correo',
     reads: 'Nada. Juno no tiene acceso a tu bandeja de Outlook.',
+    readsSome: 'Solo cuando se lo pides en el chat (buscar, abrir una conversación), en modo solo lectura. No se guarda nada de tu bandeja.',
+    readTest: 'La lectura es una prueba para el equipo. Juno usa el permiso Mail.Read de Microsoft, lee solo cuando se lo pides en el chat y no guarda nada de tu bandeja. Para detenerlo, desconecta la dirección y conéctala de nuevo sin lectura.',
+    readFlash: 'Juno puede leerla cuando se lo pides en el chat.',
+    readDenied: 'No se permitió la lectura en la pantalla de Microsoft, así que Juno solo puede enviar desde ella.',
     calLabel: 'Calendario',
     calTerms: 'Agrega solo los eventos que pides o apruebas en el chat; el link de video en Outlook es de Teams. Lee tus próximos días para los resúmenes y “¿qué tengo mañana?”, junto con tus calendarios de Google; una reunión que está en dos cuenta una vez. No se guarda nada de tu calendario.',
     removeLabel: 'Quitar el acceso',
@@ -158,6 +174,9 @@ const O: Copy<typeof O_EN> = {
     unverified: 'A Microsoft pode dizer que o app não é verificado enquanto nossa verificação de editor não termina. Alguns trabalhos também precisam que o administrador de TI aprove o Juno Pen uma vez.',
     chipSend: 'Envio',
     chipCal: 'Agenda',
+    chipRead: 'Leitura',
+    test: 'teste',
+    letRead: 'Deixar o Juno ler esta caixa',
     personal: 'pessoal',
     defEmail: 'Padrão para e-mail',
     defCal: 'Os eventos novos vão para cá',
@@ -182,6 +201,10 @@ const O: Copy<typeof O_EN> = {
     sends: 'Só os rascunhos que você viu e mandou o Juno enviar, um de cada vez, do seu próprio endereço. Ficam nos seus Itens enviados.',
     readsLabel: 'Lê e-mail',
     reads: 'Nada. O Juno não tem acesso à sua caixa do Outlook.',
+    readsSome: 'Só quando você pede no chat (buscar, abrir uma conversa), somente leitura. Nada da sua caixa é guardado.',
+    readTest: 'A leitura é um teste para a equipe. O Juno usa a permissão Mail.Read da Microsoft, lê só quando você pede no chat e não guarda nada da sua caixa. Para parar, desconecte o endereço e conecte de novo sem leitura.',
+    readFlash: 'O Juno pode ler quando você pede no chat.',
+    readDenied: 'A leitura não foi permitida na tela da Microsoft, então o Juno só consegue enviar dele.',
     calLabel: 'Agenda',
     calTerms: 'Adiciona só os eventos que você pede ou aprova no chat; o link de vídeo no Outlook é do Teams. Lê os seus próximos dias para os resumos e “o que tenho amanhã?”, junto com as suas agendas do Google; uma reunião que está em duas conta uma vez. Nada da sua agenda fica guardado.',
     removeLabel: 'Remover o acesso',
@@ -221,8 +244,10 @@ const post = async (path: string, body: Record<string, string>) => {
   if (!r.ok) throw new Error(String(r.status))
 }
 
-export default function OutlookAccounts({ accounts, calCount, senders, status }: {
+export default function OutlookAccounts({ accounts, calCount, senders, readAllowed = false, status }: {
   accounts: OAccount[]
+  /** On the reading test: "Let Juno read this inbox" shows on sending addresses that don't read yet. */
+  readAllowed?: boolean
   /** Calendars connected in all, Google and Microsoft (the cap of 5 is shared). */
   calCount: number
   /** Sending addresses in all, Gmail and Outlook (one default across both). */
@@ -276,7 +301,8 @@ export default function OutlookAccounts({ accounts, calCount, senders, status }:
     const acc = accounts.find((x) => x.address === status.connected!.toLowerCase())
     if (!acc) return null
     const parts = [T.justConnected(acc.address)]
-    if (acc.send) parts.push(T.sendReady)
+    if (acc.send) parts.push(status.read === 'on' ? T.readFlash : T.sendReady)
+    if (status.read === 'denied') parts.push(T.readDenied)
     if (status.cal === 'on') parts.push(T.calFlashOn)
     else if (status.cal === 'full') parts.push(T.calFlashFull)
     return parts.join(' ')
@@ -312,6 +338,7 @@ export default function OutlookAccounts({ accounts, calCount, senders, status }:
               if (a.cal && !a.defaultCal && calCount > 1) acts.push(<button key="dc" type="button" className="pen-mail-off" onClick={() => run(a, [['/api/pen/calendars/default', { key: a.address }]])} disabled={busy !== null}>{T.useForEvents}</button>)
               if (!a.cal && calCount < 5) acts.push(<a key="ac" className="pen-mail-read" href={`${CONNECT}?address=${enc}&add=cal`}>{T.addCal}</a>)
               if (!a.send) acts.push(<a key="as" className="pen-mail-read" href={`${CONNECT}?address=${enc}&add=send`}>{T.addSend}</a>)
+              if (readAllowed && a.send && !a.read) acts.push(<a key="rd" className="pen-mail-read" href={`${CONNECT}?address=${enc}&add=read`}>{T.letRead}</a>)
               if (a.cal && a.send) acts.push(<button key="co" type="button" className="pen-mail-off" onClick={() => run(a, [['/api/pen/outlook/calendar-off', { address: a.address }]])} disabled={busy !== null}>{T.calOff}</button>)
             }
             return (
@@ -322,6 +349,7 @@ export default function OutlookAccounts({ accounts, calCount, senders, status }:
                   <span className="pen-gacc-chips">
                     {a.send && <span className="pen-gacc-chip"><Icon name="mail" size={14} />{T.chipSend}</span>}
                     {a.cal && <span className="pen-gacc-chip"><Icon name="calendar" size={14} />{T.chipCal}</span>}
+                    {a.read && <span className="pen-gacc-chip"><Icon name="search" size={14} />{T.chipRead}<em>{T.test}</em></span>}
                     {a.personal && <span className="pen-gacc-chip pen-gacc-chip-quiet">{T.personal}</span>}
                   </span>
                   {a.broken ? (
@@ -376,7 +404,7 @@ export default function OutlookAccounts({ accounts, calCount, senders, status }:
         <summary>{T.termsTitle}</summary>
         <dl className="pen-gcal-terms">
           <div><dt>{T.sendsLabel}</dt><dd>{T.sends}</dd></div>
-          <div><dt>{T.readsLabel}</dt><dd>{T.reads}</dd></div>
+          <div><dt>{T.readsLabel}</dt><dd>{accounts.some((x) => x.read) ? T.readsSome : T.reads}</dd></div>
           <div><dt>{T.calLabel}</dt><dd>{T.calTerms}</dd></div>
           <div>
             <dt>{T.removeLabel}</dt>
@@ -387,6 +415,7 @@ export default function OutlookAccounts({ accounts, calCount, senders, status }:
             </dd>
           </div>
         </dl>
+        {readAllowed && <p className="pen-set-fine pen-gacc-without">{T.readTest}</p>}
       </details>
     </div>
   )

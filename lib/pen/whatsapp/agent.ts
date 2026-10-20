@@ -52,7 +52,8 @@ import { foldName, speakerName, resolve as resolveLabel, type SpeakerMap } from 
 import { COMMON_TYPES } from '../categories'
 import { sendFollowUp } from '../follow-up'
 import { gmailAvailable, gmailReadAllowed, lastFromFor, listAccounts, sendViaGmail, type GmailAccount } from '../gmail'
-import { listOutlookSenders, outlookAvailable, sendViaOutlook, type OutlookAccount } from '../outlook'
+import { listOutlookAccounts, outlookAvailable, outlookReadAllowed, sendViaOutlook, type OutlookAccount } from '../outlook'
+import { replyViaOutlook } from '../outlook-read'
 import { chooseFrom, PROVIDER_NAME, type MailApp } from '../mail-compose'
 import { mailProvider, setMailApp } from '../mail-pref'
 import { getProfile } from '../profile'
@@ -100,6 +101,10 @@ export type Ctx = {
   gmailRead?: string[]
   /** On the reading allowlist (whether or not an address has reading yet). */
   gmailReadOk?: boolean
+  /** Outlook addresses Juno may read this turn (same allowlist, Mail.Read granted): tools/mailread.ts. */
+  outlookRead?: string[]
+  /** On the reading allowlist with Outlook available (whether or not an Outlook address reads yet). */
+  outlookReadOk?: boolean
   /** Threads looked at this turn: their ids go in the chat history (never shown), for "reply to that". */
   mailSeen?: { thread_id: string; account: string; from: string }[]
   /** Email content entered this turn: from then on only read-only tools and drafts run (MAIL_SAFE). */
@@ -802,6 +807,8 @@ async function pickFrom(ctx: Ctx, toEmail: string | null, said?: string): Promis
 async function setDraftFrom(ctx: Ctx, said: string): Promise<unknown> {
   const d = await getDraft(ctx.email)
   if (!d) return { error: 'no draft is pending' }
+  // A reply in a thread lives in one mailbox: it goes from the address that received it.
+  if (d.thread && d.from) return { error: `this is a reply in a thread, so it goes from ${d.from}, the address that received it`, next: 'say so in one line; to write from another address, they can ask for a new email instead of a reply' }
   const picked = await pickFrom(ctx, d.toEmail, said || ' ')
   if ('error' in picked) return picked
   const draft: Draft = { ...d, id: crypto.randomBytes(12).toString('base64url'), msgId: ctx.msgId, createdAt: new Date().toISOString(), from: picked.from, provider: await mailProvider(ctx.email, picked.from).catch(() => null), lang: ctx.lang }
@@ -825,8 +832,15 @@ async function setMailAppTool(ctx: Ctx, app: string): Promise<unknown> {
 function outlookLine(ctx: Ctx): string {
   const o = ctx.outlook ?? []
   if (!o.length) return ''
+  const reads = ctx.outlookRead ?? []
+  // Reading (team test only): what Juno can read, or how to turn it on. Everyone else: it can't.
+  const read = reads.length
+    ? `Juno can also READ the Outlook inbox of ${reads.join(', ')} (read-only, when they ask; search_email covers it with Gmail). `
+    : ctx.outlookReadOk
+      ? 'This account can also let Juno READ an Outlook inbox (testing): "read my Outlook" / "let Juno read my Outlook inbox" → connect_app app outlook with account and reconnect true; Microsoft asks to read. Until then you cannot see that inbox: say so, never guess. '
+      : 'Juno cannot read Outlook mail. '
   return `- Outlook connected for sending: ${o.map((a) => `${a.address}${a.is_default ? ' (default From)' : ''}${a.last_error ? ' (needs reconnecting)' : ''}`).join(', ')}. ` +
-    'A draft from one of these goes out through Outlook (their Sent Items). Juno cannot read Outlook mail. "Send it from my Outlook" → set_draft_from. ' +
+    `A draft from one of these goes out through Outlook (their Sent Items). ${read}"Send it from my Outlook" → set_draft_from. ` +
     (o.some((a) => a.last_error) ? 'One needs reconnecting: connect_app app outlook with account. ' : '') + '\n'
 }
 
@@ -868,7 +882,22 @@ async function sendDraft(ctx: Ctx): Promise<unknown> {
   const viaOutlook = Boolean(d.from && (ctx.outlook ?? []).some((a) => a.address === d.from!.toLowerCase()) && !(ctx.gmail ?? []).some((a) => a.address === d.from!.toLowerCase()))
   if (d.from && viaOutlook) {
     // Their Outlook (lib/pen/outlook.ts). Same rule: a failure is never retried through Juno's sender.
-    if (d.thread) return { error: 'a reply in a Gmail thread cannot go from an Outlook address; set_draft_from the Gmail address it came to' }
+    if (d.thread && d.thread.provider !== 'outlook') return { error: 'a reply in a Gmail thread cannot go from an Outlook address; set_draft_from the Gmail address it came to' }
+    if (d.thread?.provider === 'outlook') {
+      // A reply in its Outlook conversation (outlook-read.ts): POST /reply on the message answered.
+      if (!d.thread.messageId) return { error: 'that reply lost its thread; write it again with reply_in_thread' }
+      const r = await replyViaOutlook({ userEmail: ctx.email, from: d.from, messageId: d.thread.messageId, to: d.toEmail, toName: d.toName, body: d.body, sessionId: d.sessionId })
+      if (!r.ok) {
+        return {
+          error: `not sent from ${d.from}: ${r.error}`,
+          plain: gmailFailed(ctx.lang, d, r.reason, 'outlook'),
+          note: 'Reply with `plain` word for word (translate the words only if the chat is in another language; never change the links).',
+        }
+      }
+      ctx.sent = true
+      await setDraft(ctx.email, null)
+      return { ok: true, sent_from: d.from, via: 'Outlook', in_thread: true, sent_to: `${d.toName} <${d.toEmail}>`, subject: d.subject, note: 'It is in their Outlook Sent Items, in the same conversation.' }
+    }
     const o = await sendViaOutlook({ userEmail: ctx.email, from: d.from, to: d.toEmail, toName: d.toName, subject: d.subject, body: d.body, sessionId: d.sessionId })
     if (!o.ok) {
       return {
@@ -881,6 +910,7 @@ async function sendDraft(ctx: Ctx): Promise<unknown> {
     await setDraft(ctx.email, null)
     return { ok: true, sent_from: d.from, via: 'Outlook', sent_to: `${d.toName} <${d.toEmail}>`, subject: d.subject, note: 'It is in their Outlook Sent Items; replies come to that address.' }
   }
+  if (d.from && d.thread?.provider === 'outlook') return { error: 'a reply in an Outlook conversation can only go from the Outlook address it came to' }
   if (d.from) {
     // Their Gmail. A failure is never retried through Juno's sender: they chose this address.
     const g = await sendViaGmail({ userEmail: ctx.email, from: d.from, fromName: ctx.userName, to: d.toEmail, toName: d.toName, subject: d.subject, body: d.body, sessionId: d.sessionId, thread: d.thread ?? null })
@@ -1578,10 +1608,10 @@ const SENT_GMAIL: Record<Lang, (from: string, to: string, subject: string) => st
   pt: (f, to, s) => `Enviado de ${f} para ${to}: "${s}". Está nos seus Enviados e as respostas vão para você.`,
 }
 
-const SENT_REPLY: Record<Lang, (from: string, to: string, subject: string) => string> = {
-  en: (f, to, s) => `Replied from ${f} to ${to} in the same thread: "${s}". It's in your Sent folder.`,
-  es: (f, to, s) => `Respondí desde ${f} a ${to} en el mismo hilo: "${s}". Está en tus Enviados.`,
-  pt: (f, to, s) => `Respondi de ${f} para ${to} na mesma conversa: "${s}". Está nos seus Enviados.`,
+const SENT_REPLY: Record<Lang, (from: string, to: string, subject: string, outlook?: boolean) => string> = {
+  en: (f, to, s, o) => `Replied from ${f} to ${to} in the same thread: "${s}". It's in your ${o ? 'Sent Items' : 'Sent folder'}.`,
+  es: (f, to, s, o) => `Respondí desde ${f} a ${to} en el mismo hilo: "${s}". Está en tus ${o ? 'Elementos enviados' : 'Enviados'}.`,
+  pt: (f, to, s, o) => `Respondi de ${f} para ${to} na mesma conversa: "${s}". Está nos seus ${o ? 'Itens enviados' : 'Enviados'}.`,
 }
 
 const SENT: Record<Lang, (to: string, subject: string) => string> = {
@@ -1615,11 +1645,15 @@ export async function runAgent(opts: {
   const recentTitle = opts.recent ? ((await getSession(opts.email, opts.recent).catch(() => null))?.title ?? null) : null
   const zone = await userZone(opts.email, opts.phone).catch((): Zone => ({ tz: null, source: 'none', sure: false }))
   const gmail = (await gmailAvailable().catch(() => false)) ? await listAccounts(opts.email).catch((): GmailAccount[] => []) : []
-  const outlook = (await outlookAvailable().catch(() => false)) ? await listOutlookSenders(opts.email).catch((): OutlookAccount[] => []) : []
+  const outlookAll = (await outlookAvailable().catch(() => false)) ? await listOutlookAccounts(opts.email).catch((): OutlookAccount[] => []) : []
+  const outlook = outlookAll.filter((a) => a.can_send)
   // Reading (team test): the allowlist AND an address whose token carries gmail.readonly.
   const gmailReadOk = await gmailReadAllowed(opts.email).catch(() => false)
   const gmailRead = gmailReadOk ? gmail.filter((a) => a.can_read && !a.last_error).map((a) => a.address) : []
-  const ctx: Ctx = { ...opts, userName, recentTitle, citations: [], drafted: null, sent: false, enrich: new Set(), later: [], zone, gmail, outlook, gmailRead, gmailReadOk }
+  // Outlook reading: the same allowlist, and an address whose token carries Mail.Read.
+  const outlookReadOk = outlookAll.length ? await outlookReadAllowed(opts.email).catch(() => false) : false
+  const outlookRead = outlookReadOk ? outlookAll.filter((a) => a.can_read && !a.last_error).map((a) => a.address) : []
+  const ctx: Ctx = { ...opts, userName, recentTitle, citations: [], drafted: null, sent: false, enrich: new Set(), later: [], zone, gmail, outlook, gmailRead, gmailReadOk, outlookRead, outlookReadOk }
   const pending = await getDraft(opts.email).catch(() => null)
   const asked = await getPending(opts.email).catch(() => null)
   // Asked, or drafted, after this turn's last message arrived: the user hasn't seen it, so nothing
@@ -1676,7 +1710,10 @@ export async function runAgent(opts: {
     if (r.ok) {
       await dropIfUnanswered(ctx, asked).catch(() => {})
       const to = `${pending.toName} <${pending.toEmail}>`
-      return { text: r.sent_from ? (pending.thread ? SENT_REPLY : SENT_GMAIL)[opts.lang](r.sent_from, to, pending.subject) : SENT[opts.lang](to, pending.subject), citations: [] }
+      const text = !r.sent_from ? SENT[opts.lang](to, pending.subject)
+        : pending.thread ? SENT_REPLY[opts.lang](r.sent_from, to, pending.subject, pending.thread.provider === 'outlook')
+          : SENT_GMAIL[opts.lang](r.sent_from, to, pending.subject)
+      return { text, citations: [] }
     }
     // Their Gmail refused it: the plain words and the links, from code, not the model.
     if (r.plain) {

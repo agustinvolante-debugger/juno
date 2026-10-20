@@ -33,7 +33,7 @@ export function adminPage(acceptLanguage: string | null, ok: boolean): Response 
   return new Response(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' } })
 }
 
-const wantOf = (w: string | undefined): Want => (w ? { cal: w.includes('c'), send: w.includes('s') } : { cal: true, send: true })
+const wantOf = (w: string | undefined): Want => (w ? { cal: w.includes('c'), send: w.includes('s'), read: w.includes('r') } : { cal: true, send: true })
 
 export type CallbackResult = { redirect: string; clearCookie: boolean } | { page: Response }
 
@@ -70,9 +70,11 @@ export async function handleOutlookCallback(url: string, o: { nonce: string | nu
   if (!code || (!chat && !site)) return back({ error: 'state' })
   if (await readOnlyRefusal(email)) return back({ error: 'readonly' })
   try {
-    const r = await connectOutlook(email, code, u.origin, chat ? wantOf(chat.w) : site!)
-    if (chat) await announceConnected(email, 'outlook', chat.via, r.address, { canSend: r.canSend, canCal: r.canCal, calFull: r.calFull })
-    return back({ connected: r.address, cal: r.canCal ? 'on' : r.calFull ? 'full' : 'off', send: r.canSend ? 'on' : 'off' })
+    const want = chat ? wantOf(chat.w) : site!
+    const r = await connectOutlook(email, code, u.origin, want)
+    if (chat) await announceConnected(email, 'outlook', chat.via, r.address, { canSend: r.canSend, canCal: r.canCal, calFull: r.calFull, canRead: r.canRead })
+    // Reading asked (team test) but not granted on Microsoft's screen: said, like Gmail's ?read=denied.
+    return back({ connected: r.address, cal: r.canCal ? 'on' : r.calFull ? 'full' : 'off', send: r.canSend ? 'on' : 'off', ...(want.read ? { read: r.canRead ? 'on' : 'denied' } : {}) })
   } catch (e) {
     console.warn(`pen outlook connect: ${(e as Error).message}`)
     if (e instanceof OutlookError && e.code === 'admin_consent') return adminConsent(e.tenant)

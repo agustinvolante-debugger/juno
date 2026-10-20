@@ -8,7 +8,7 @@ import { getLinkByEmail } from '@/lib/pen/whatsapp/store'
 import { botNumber, configured as whatsappReady } from '@/lib/pen/whatsapp/provider'
 import { imessageFor } from '@/lib/pen/imessage/sendblue'
 import { getPrefs } from '@/lib/pen/proactive'
-import { listOutlookAccounts, outlookAvailable } from '@/lib/pen/outlook'
+import { listOutlookAccounts, outlookAvailable, outlookReadAllowed } from '@/lib/pen/outlook'
 import { PERSONAL_TID } from '@/lib/pen/outlook-graph'
 import type { GAccount } from './GoogleAccounts'
 import type { OAccount } from './OutlookAccounts'
@@ -27,7 +27,8 @@ export type ConnData = {
     docs: { on: boolean; calendarToo: boolean; address: string | null; broken: boolean }
   }
   /** Outlook / Microsoft 365 (lib/pen/outlook.ts): `available` = switched on and the table exists; otherwise the links row. */
-  outlook: { available: boolean; accounts: OAccount[]; senders: number }
+  /** `readAllowed`: on the reading test (same switch + team list as Gmail reading). */
+  outlook: { available: boolean; accounts: OAccount[]; senders: number; readAllowed: boolean }
   links: { mail: MailChoice | null; mailGuessed: boolean; cal: CalChoice | null; calGuessed: boolean }
   chat: { ready: boolean; imessage: string | null; number: string; phone: string | null; loadError: string | null }
   notion: { configured: boolean; conn: NotionConnection | null }
@@ -50,6 +51,7 @@ export async function loadConnections(email: string): Promise<ConnData> {
   const gmail = gmailOn ? await listGoogleAccounts(lower).catch(() => []) : []
   const msOn = await outlookAvailable().catch(() => false)
   const ms = msOn ? await listOutlookAccounts(lower).catch(() => []) : []
+  const msRead = msOn ? await outlookReadAllowed(lower).catch(() => false) : false
   const def = cals.length ? (await defaultCalendar(lower, cals).catch(() => null))?.key ?? null : null
   // One default From across Gmail and Outlook: a default marker shows once there is a choice.
   const msSenders = ms.filter((a) => a.can_send).length
@@ -106,10 +108,12 @@ export async function loadConnections(email: string): Promise<ConnData> {
     outlook: {
       available: msOn,
       senders,
+      readAllowed: msRead,
       accounts: ms.map((a) => ({
         address: a.address,
         send: a.can_send,
         cal: a.can_cal,
+        read: msRead && a.can_read,
         defaultEmail: a.can_send && a.is_default && senders > 1,
         defaultCal: a.can_cal && def === a.address && cals.length > 1,
         broken: Boolean(a.last_error),

@@ -4,8 +4,10 @@
 //
 //   · Entra app "Juno Pen" (multitenant + personal accounts), env MS_CLIENT_ID / MS_CLIENT_SECRET.
 //     Authority /common. Delegated permissions: offline_access openid email profile User.Read
-//     + Calendars.ReadWrite (calendar) + Mail.Send (send as you). No Mail.Read: Juno can't read
-//     Outlook mail. Adding reading later = one more scope in outlook-graph.ts + the consent again.
+//     + Calendars.ReadWrite (calendar) + Mail.Send (send as you). Mail.Read (reading the inbox) only
+//     for the reading test (21 Oct, same switch + team list as Gmail reading: mail-thread.ts
+//     readAllowedFor), asked on "Let Juno read this inbox" / a chat connect, recorded in
+//     pen_outlook.scopes; lib/pen/outlook-read.ts reads. Everyone else is never asked for it.
 //   · One redirect URI: /api/pen/outlook/callback (www and localhost:3100 registered in Entra).
 //   · Refresh tokens are sealed like Google's (AES-256-GCM, NEXTAUTH_SECRET; google-calendar.ts
 //     seal/open). Microsoft ROTATES refresh tokens: every refresh hands back a new one, and it is
@@ -29,7 +31,8 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { isMissingSchema } from './allowance'
 import { open, seal } from './google-calendar'
 import { DAILY_SEND_CAP, sentToday } from './follow-up'
-import { GRAPH, MS_CAL, MS_LOGIN, MS_SEND, adminConsentUrl, classifyMsError, grantedAbilities, idClaims, msAuthorizeUrl, msCaps, msScopes, sendMailPayload } from './outlook-graph'
+import { readAllowedFor } from './mail-thread'
+import { GRAPH, MS_CAL, MS_LOGIN, MS_READ, MS_SEND, adminConsentUrl, classifyMsError, grantedAbilities, idClaims, msAuthorizeUrl, msCaps, msScopes, sendMailPayload } from './outlook-graph'
 
 export const MAX_ACCOUNTS = 5
 const TOKEN = `${MS_LOGIN}/common/oauth2/v2.0/token`
@@ -58,6 +61,11 @@ export async function outlookAvailable(): Promise<boolean> {
   return avail.ok
 }
 
+/** Reading Outlook (team test): the same switch and team list as Gmail reading, and Outlook available. */
+export async function outlookReadAllowed(userEmail: string): Promise<boolean> {
+  return readAllowedFor(userEmail) && (await outlookAvailable())
+}
+
 /* ---------------------------------------------------------------- state */
 
 function secret(): string {
@@ -67,11 +75,11 @@ function secret(): string {
 }
 const sign = (body: string) => crypto.createHmac('sha256', secret()).update(`outlook-state.${body}`).digest('base64url')
 export const OUTLOOK_STATE_PREFIX = 'o.'
-export type Want = { cal: boolean; send: boolean }
+export type Want = { cal: boolean; send: boolean; read?: boolean }
 
 /** The website's state (Settings → Connections → Connect an Outlook account): signed-in email, this browser's nonce, what was asked. */
 export function outlookState(email: string, nonce: string, want: Want = { cal: true, send: true }, now = Date.now()): string {
-  const body = Buffer.from(JSON.stringify({ e: email.toLowerCase(), n: nonce, x: now + STATE_TTL_MS, c: want.cal ? 1 : 0, s: want.send ? 1 : 0 })).toString('base64url')
+  const body = Buffer.from(JSON.stringify({ e: email.toLowerCase(), n: nonce, x: now + STATE_TTL_MS, c: want.cal ? 1 : 0, s: want.send ? 1 : 0, ...(want.read ? { r: 1 } : {}) })).toString('base64url')
   return `${OUTLOOK_STATE_PREFIX}${body}.${sign(body)}`
 }
 
@@ -82,16 +90,16 @@ export function verifyOutlookState(state: string | null | undefined, email: stri
   const want = sign(body)
   if (sig.length !== want.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(want))) return null
   try {
-    const p = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as { e?: string; n?: string; x?: number; c?: number; s?: number }
+    const p = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as { e?: string; n?: string; x?: number; c?: number; s?: number; r?: number }
     if (p.e !== email.toLowerCase() || p.n !== nonce || typeof p.x !== 'number' || p.x <= now) return null
-    return { cal: p.c !== 0, send: p.s !== 0 }
+    return { cal: p.c !== 0, send: p.s !== 0, read: p.r === 1 }
   } catch {
     return null
   }
 }
 
 export function outlookAuthorizeUrl(state: string, origin: string, o: Want & { hint?: string | null }): string {
-  return msAuthorizeUrl({ clientId: process.env.MS_CLIENT_ID ?? '', redirectUri: outlookRedirectUri(origin), state, cal: o.cal, send: o.send, hint: o.hint })
+  return msAuthorizeUrl({ clientId: process.env.MS_CLIENT_ID ?? '', redirectUri: outlookRedirectUri(origin), state, cal: o.cal, send: o.send, read: o.read, hint: o.hint })
 }
 
 /* ------------------------------------------------------------------ rows */
@@ -107,8 +115,10 @@ export type OutlookAccount = {
   display_name: string | null
   can_send: boolean
   can_cal: boolean
+  /** Mail.Read granted AND recorded (only ever for the reading test). The tools also check the allowlist. */
+  can_read: boolean
 }
-type Row = Omit<OutlookAccount, 'provider' | 'can_send' | 'can_cal'> & { id: string; user_email: string; refresh_token: string; scopes: string[] | null }
+type Row = Omit<OutlookAccount, 'provider' | 'can_send' | 'can_cal' | 'can_read'> & { id: string; user_email: string; refresh_token: string; scopes: string[] | null }
 
 const COLS = 'address,is_default,last_error,connected_at,last_used_at,tenant_id,display_name,scopes'
 
@@ -209,7 +219,7 @@ async function hasDefaultSender(lower: string, except: string): Promise<boolean>
   return g.length + o.length > 0
 }
 
-export type OutlookConnected = { address: string; isDefault: boolean; canSend: boolean; canCal: boolean; calFull?: boolean; tenant: string | null; personal: boolean }
+export type OutlookConnected = { address: string; isDefault: boolean; canSend: boolean; canCal: boolean; canRead: boolean; calFull?: boolean; tenant: string | null; personal: boolean }
 
 /**
  * The OAuth callback: swap the code, find the mailbox address, keep the refresh token sealed and
@@ -223,7 +233,7 @@ export async function connectOutlook(userEmail: string, code: string, origin: st
     const kind = classifyMsError(t.error, t.error_description)
     throw new OutlookError(kind === 'admin_consent' ? 'admin_consent' : kind === 'cancelled' ? 'cancelled' : 'failed', t.error_description?.split(/\r?\n/)[0] ?? t.error ?? 'Microsoft didn’t accept the connection.', claims.tid)
   }
-  const granted = grantedAbilities(t.scope).filter((s) => (s === MS_SEND ? want.send : want.cal))
+  const granted = grantedAbilities(t.scope).filter((s) => (s === MS_SEND ? want.send : s === MS_CAL ? want.cal : false))
   if (!granted.length) throw new OutlookError('not_granted', 'Microsoft didn’t give Juno the permissions it asked for, so nothing was connected.', claims.tid)
   const me = await whoAmI(t.access_token)
   const address = me.address ?? claims.email
@@ -239,7 +249,10 @@ export async function connectOutlook(userEmail: string, code: string, origin: st
   const calWanted = granted.includes(MS_CAL) || (had.can_cal && grantedAbilities(t.scope).includes(MS_CAL))
   const calFull = calWanted && !had.can_cal && (await calendarCount(lower, address)) >= 5
   const sendOk = granted.includes(MS_SEND) || (had.can_send && grantedAbilities(t.scope).includes(MS_SEND))
-  const scopes = [...(sendOk ? [MS_SEND] : []), ...(calWanted && !calFull ? [MS_CAL] : [])]
+  // Reading: only for the team test (checked again here, whatever the screen granted), on an
+  // address that sends, when asked now or kept from before.
+  const readOk = sendOk && readAllowedFor(lower) && grantedAbilities(t.scope).includes(MS_READ) && (Boolean(want.read) || had.can_read)
+  const scopes = [...(sendOk ? [MS_SEND] : []), ...(calWanted && !calFull ? [MS_CAL] : []), ...(readOk ? [MS_READ] : [])]
   if (!scopes.length) throw new OutlookError('cal_full', 'You already have 5 calendars connected. Disconnect one first.')
   const isDefault = sendOk && (prior ? prior.is_default : !(await hasDefaultSender(lower, address)))
   const { error } = await supabaseAdmin.from('pen_outlook').upsert(
@@ -259,7 +272,7 @@ export async function connectOutlook(userEmail: string, code: string, origin: st
   if (error) throw new OutlookError('failed', error.message)
   cache.set(`${lower}|${address}`, { token: t.access_token, until: Date.now() + ((t.expires_in ?? 3600) - 120) * 1000 })
   const { PERSONAL_TID } = await import('./outlook-graph')
-  return { address, isDefault, canSend: sendOk, canCal: scopes.includes(MS_CAL), ...(calFull ? { calFull: true } : {}), tenant: claims.tid, personal: claims.tid === PERSONAL_TID }
+  return { address, isDefault, canSend: sendOk, canCal: scopes.includes(MS_CAL), canRead: readOk, ...(calFull ? { calFull: true } : {}), tenant: claims.tid, personal: claims.tid === PERSONAL_TID }
 }
 
 const cache = new Map<string, { token: string; until: number }>()
@@ -284,7 +297,7 @@ async function refresh(userEmail: string, address: string, k: string): Promise<s
   const r = await row(userEmail, address)
   if (!r) throw new OutlookError('failed', 'not connected')
   const caps = msCaps(r.scopes)
-  const t = await tokenCall({ grant_type: 'refresh_token', refresh_token: open(r.refresh_token), scope: msScopes({ cal: caps.can_cal, send: caps.can_send }).join(' ') })
+  const t = await tokenCall({ grant_type: 'refresh_token', refresh_token: open(r.refresh_token), scope: msScopes({ cal: caps.can_cal, send: caps.can_send, read: caps.can_read }).join(' ') })
   if (!t.access_token) {
     const kind = classifyMsError(t.error, t.error_description)
     if (kind === 'reconnect' || kind === 'admin_consent') {
@@ -305,12 +318,12 @@ async function refresh(userEmail: string, address: string, k: string): Promise<s
 
 export type GraphError = Error & { status?: number; code?: string }
 
-/** One Graph call as this address. Times come back in UTC (Prefer header). 202/204 → null. */
-export async function graph<T>(userEmail: string, address: string, path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+/** One Graph call as this address. Times come back in UTC (Prefer header; `prefer` adds more, e.g. text bodies). 202/204 → null. */
+export async function graph<T>(userEmail: string, address: string, path: string, init: { method?: string; body?: unknown; prefer?: string[] } = {}): Promise<T> {
   const token = await accessToken(userEmail, address)
   const res = await fetch(path.startsWith('http') ? path : `${GRAPH}/${path.replace(/^\//, '')}`, {
     method: init.method ?? (init.body ? 'POST' : 'GET'),
-    headers: { Authorization: `Bearer ${token}`, Prefer: 'outlook.timezone="UTC"', ...(init.body ? { 'Content-Type': 'application/json' } : {}) },
+    headers: { Authorization: `Bearer ${token}`, Prefer: ['outlook.timezone="UTC"', ...(init.prefer ?? [])].join(', '), ...(init.body ? { 'Content-Type': 'application/json' } : {}) },
     ...(init.body ? { body: JSON.stringify(init.body) } : {}),
   })
   if (res.status === 202 || res.status === 204) return null as T
