@@ -15,7 +15,7 @@ import { COPY, type Copy, type Market } from './landing-copy'
 import { AUD_PARAM, KITS, PLUS, PRO, type Kit } from './landing-audiences'
 import { INVITED, SIGN_IN, ownPlans, penPlans, signup, type PlanCard } from './Landing'
 import './landing-apple.css'
-import { DOCS_URL as DOCS } from '@/lib/docs-url'
+import { docsUrl } from '@/lib/docs-url'
 
 // The help center (Mintlify) and the blog, linked from the nav and the footer. English only for now.
 
@@ -347,7 +347,7 @@ export default function LandingApple({ market, audience = null, invitedBy = null
             <a href="#connectors" className="lpa-navlink lpa-hide-md">{CONNECT[lang].nav}</a>
             <a href="#pen" className="lpa-navlink lpa-hide-sm">{t.nav.pen}</a>
             <a href="#pricing" className="lpa-navlink lpa-hide-sm">{t.nav.pricing}</a>
-            <a href={DOCS} className="lpa-navlink lpa-hide-md">Docs</a>
+            <a href={docsUrl(lang)} className="lpa-navlink lpa-hide-md">Docs</a>
             <Link href="/blog" className="lpa-navlink lpa-hide-md">Blog</Link>
             <Link href={SIGN_IN} className="lpa-navlink">{t.nav.signIn}</Link>
             <Link href={cta('nav')} className="lpa-btn lpa-btn-sm">{ctaLabel}</Link>
@@ -410,7 +410,7 @@ export default function LandingApple({ market, audience = null, invitedBy = null
               <a href="#connectors">{CONNECT[lang].nav}</a>
               <a href="#pen">{t.nav.pen}</a>
               <a href="#pricing">{t.nav.pricing}</a>
-              <a href={DOCS}>Docs</a>
+              <a href={docsUrl(lang)}>Docs</a>
               <Link href="/blog">Blog</Link>
               <Link href={`/privacy${legal}`}>{t.footer.privacy}</Link>
               <Link href={`/terms${legal}`}>{t.footer.terms}</Link>

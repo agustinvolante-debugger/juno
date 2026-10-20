@@ -6,7 +6,12 @@ import Image from 'next/image'
 import '../pen/landing-apple.css'
 import './blog.css'
 import { BLOG_DESCRIPTION, BLOG_TITLE, SITE } from '@/lib/blog'
-import { DOCS_URL as DOCS } from '@/lib/docs-url'
+import { docsUrl } from '@/lib/docs-url'
+
+// The blog is written in English, so its Docs links open the English help center (Mintlify's
+// language switcher is one click away). Reading the juno_lang cookie here would make every
+// blog page render per request instead of statically.
+const DOCS = docsUrl('en')
 
 // The landing page's faces (app/pen/layout.tsx): Newsreader italic for headings and the
 // wordmark "J", Lora for reading. Same configuration, so next/font serves the same files.
