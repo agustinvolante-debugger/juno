@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 import { NextResponse } from 'next/server'
+import { connectionsHref } from '@/lib/pen/settings-paths'
 import { authedEmail } from '@/lib/news/auth'
 import { readOnlyRefusal } from '@/lib/pen/access'
 import { STATE_COOKIE, asWant, authorizeUrl, gcalConfigured, makeState } from '@/lib/pen/google-calendar'
@@ -13,8 +14,8 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: Request) {
   const email = await authedEmail()
   if (!email) return NextResponse.redirect(new URL('/pen', req.url))
-  if (!gcalConfigured()) return NextResponse.redirect(new URL('/pen/settings/google?error=setup', req.url))
-  if (await readOnlyRefusal(email)) return NextResponse.redirect(new URL('/pen/settings/google?error=readonly', req.url))
+  if (!gcalConfigured()) return NextResponse.redirect(new URL(connectionsHref('google', 'error=setup'), req.url))
+  if (await readOnlyRefusal(email)) return NextResponse.redirect(new URL(connectionsHref('google', 'error=readonly'), req.url))
   const want = asWant(new URL(req.url).searchParams.get('want'))
   const nonce = crypto.randomBytes(16).toString('hex')
   const res = NextResponse.redirect(authorizeUrl(email, makeState(email, nonce, Date.now(), want), new URL(req.url).origin, want))

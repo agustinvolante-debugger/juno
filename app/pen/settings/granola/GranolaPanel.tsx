@@ -132,7 +132,7 @@ export default function GranolaPanel({ available, conn, justConnected, error }: 
     try {
       await postJson('/api/pen/granola/key', { key: key.trim() })
       setKey('')
-      router.replace('/pen/settings/granola?connected=1')
+      router.replace(`${window.location.pathname}?p=granola&connected=1#granola`, { scroll: false })
       router.refresh()
     } catch (e2) {
       setErr(errMessage(e2, T.failed))
@@ -145,7 +145,7 @@ export default function GranolaPanel({ available, conn, justConnected, error }: 
     setBusy('off'); setErr(null)
     try {
       await postJson('/api/pen/granola/disconnect', {})
-      router.replace('/pen/settings/granola')
+      router.replace(`${window.location.pathname}#granola`, { scroll: false })
       router.refresh()
     } catch (e) {
       setErr(errMessage(e, T.failed))
@@ -160,7 +160,7 @@ export default function GranolaPanel({ available, conn, justConnected, error }: 
     <div className="pen-set-stack">
       <div className="pen-set-card">
         <div className="pen-set-card-head">
-          <h2 className="pen-set-h2">{T.title}</h2>
+          <h4 className="pen-set-h2">{T.title}</h4>
           <p className="pen-set-lede">{T.lede}</p>
         </div>
         {justConnected && conn && <div className="pen-set-ok" role="status">{T.justConnected}</div>}
@@ -196,7 +196,7 @@ export default function GranolaPanel({ available, conn, justConnected, error }: 
         <>
           <form className="pen-set-card" onSubmit={saveKey}>
             <div className="pen-set-card-head">
-              <h2 className="pen-set-h2">{T.keyTitle}</h2>
+              <h4 className="pen-set-h2">{T.keyTitle}</h4>
               <p className="pen-set-lede">{T.keyLede}</p>
             </div>
             <p className="pen-set-lede">{T.keyWhere}</p>
@@ -220,7 +220,7 @@ export default function GranolaPanel({ available, conn, justConnected, error }: 
 
           <div className="pen-set-card">
             <div className="pen-set-card-head">
-              <h2 className="pen-set-h2">{T.oauthTitle}</h2>
+              <h4 className="pen-set-h2">{T.oauthTitle}</h4>
               <p className="pen-set-lede">{T.oauthLede}</p>
             </div>
             <div className="pen-set-actions">

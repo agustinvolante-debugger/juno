@@ -390,8 +390,8 @@ function NoticedRow({
           <div className="pen-jn-ask" role="status">
             <span className="pen-jn-ask-label">{googleToo ? T.pageOff : T.notionOff}</span>
             <span className="pen-jn-ask-row">
-              <a className="pen-btn pen-btn-accent pen-jn-btn" href="/pen/settings/notion">{T.connectNotion}</a>
-              {googleToo && <a className="pen-btn pen-jn-btn" href="/pen/settings/google">{T.connectGdocs}</a>}
+              <a className="pen-btn pen-btn-accent pen-jn-btn" href="/pen/settings/connections#notion">{T.connectNotion}</a>
+              {googleToo && <a className="pen-btn pen-jn-btn" href="/pen/settings/connections#docs">{T.connectGdocs}</a>}
               <button type="button" className="pen-btn pen-jn-btn" disabled={busy} onClick={() => void accept({ plain: true })}>{T.plainInstead}</button>
             </span>
           </div>

@@ -82,7 +82,7 @@ export default {
     whatsapp: L('Text Juno on WhatsApp →', 'Escríbele a Juno por WhatsApp →', 'Fale com o Juno no WhatsApp →'),
     imessage: L('Text Juno on iMessage →', 'Escríbele a Juno por iMessage →', 'Fale com o Juno no iMessage →'),
     unlinked: L('Connect your WhatsApp →', 'Conecta tu WhatsApp →', 'Conecte seu WhatsApp →'),
-    unlinkedPath: '/pen/settings/whatsapp',
+    unlinkedPath: '/pen/settings/connections#whatsapp',
   },
   footer: L(
     'Reply to this email with ideas — I read every one.',

@@ -152,7 +152,7 @@ export default function NotionImport({ people, connected, onClose, onImported }:
           {!connected ? (
             <>
               <p className="pen-tximp-lede">{T.notConnected}</p>
-              <div><a className="pen-btn pen-btn-accent" href="/pen/settings/notion">{T.connect}</a></div>
+              <div><a className="pen-btn pen-btn-accent" href="/pen/settings/connections#notion">{T.connect}</a></div>
             </>
           ) : meetings === null ? (
             <p className="pen-tximp-lede">{T.loading}</p>

@@ -1,20 +1,11 @@
-import { authedEmail } from '@/lib/news/auth'
-import { getConnection, granolaAvailable } from '@/lib/pen/granola'
-import GranolaPanel from './GranolaPanel'
+import { redirect } from 'next/navigation'
+import { connectionsHref } from '@/lib/pen/settings-paths'
 
 export const dynamic = 'force-dynamic'
 
-// Settings → Granola (lib/pen/granola.ts): an API key or Granola's sign-in, last import, disconnect.
-export default async function GranolaPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const email = (await authedEmail())!
+// Settings → granola became a section of Settings → Connections on 20 Oct. Old links (OAuth
+// callbacks in flight, emails, WhatsApp messages, bookmarks) land on it, status and all.
+export default async function Old({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams
-  const [available, conn] = await Promise.all([granolaAvailable().catch(() => false), getConnection(email).catch(() => null)])
-  return (
-    <GranolaPanel
-      available={available}
-      conn={conn}
-      justConnected={sp.connected === '1'}
-      error={typeof sp.error === 'string' ? sp.error : null}
-    />
-  )
+  redirect(connectionsHref('granola', Object.fromEntries(Object.entries(sp).flatMap(([k, v]) => (typeof v === 'string' ? [[k, v]] : [])))))
 }

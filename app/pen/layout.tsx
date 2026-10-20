@@ -6,6 +6,7 @@ import './app-skin-literals.css'
 import './app-skin.css'
 import './assistant-first.css'
 import './get-whatsapp.css'
+import './settings-connections.css'
 
 // Self-hosted at build time rather than fetched from Google at render.
 //

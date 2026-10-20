@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 import { NextResponse } from 'next/server'
+import { connectionsHref } from '@/lib/pen/settings-paths'
 import { authedEmail } from '@/lib/news/auth'
 import { authorizeUrl, notionConfigured } from '@/lib/pen/notion'
 
@@ -11,7 +12,7 @@ export async function GET(req: Request) {
   const email = await authedEmail()
   const origin = new URL(req.url).origin
   if (!email) return NextResponse.redirect(new URL('/pen', req.url))
-  if (!notionConfigured()) return NextResponse.redirect(new URL('/pen/settings/notion?error=setup', req.url))
+  if (!notionConfigured()) return NextResponse.redirect(new URL(connectionsHref('notion', 'error=setup'), req.url))
   const state = crypto.randomBytes(16).toString('hex')
   const res = NextResponse.redirect(authorizeUrl(origin, state))
   res.cookies.set('juno_notion_state', state, { path: '/', httpOnly: true, sameSite: 'lax', maxAge: 600, secure: origin.startsWith('https') })

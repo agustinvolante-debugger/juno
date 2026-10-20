@@ -18,6 +18,8 @@ export async function proxy(req: NextRequest) {
   const isRoot = host === 'tryjunoapp.com' || host === 'www.tryjunoapp.com'
   if (isRoot) {
     const map: Record<string, string> = { '/': '/pen', '/signup': '/pen/signup', '/settings': '/pen/settings', '/settings/hours': '/pen/settings/hours', '/settings/whatsapp': '/pen/settings/whatsapp', '/settings/billing': '/pen/settings/billing', '/settings/invite': '/pen/settings/invite', '/settings/notion': '/pen/settings/notion', '/settings/email': '/pen/settings/email',
+      // Settings → Connections (20 Oct) and the old per-company pages, which redirect into it.
+      '/settings/connections': '/pen/settings/connections', '/settings/messages': '/pen/settings/messages', '/settings/google': '/pen/settings/google', '/settings/granola': '/pen/settings/granola', '/settings/calendar': '/pen/settings/calendar',
       // Pen's own privacy policy and terms. Only here: other hosts keep app/privacy and app/terms.
       '/privacy': '/pen/privacy', '/terms': '/pen/terms' }
     // One address per page: /pen itself redirects to the clean root.

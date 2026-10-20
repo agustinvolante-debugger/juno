@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { connectionsHref } from '@/lib/pen/settings-paths'
 import { cookies } from 'next/headers'
 import { authedEmail } from '@/lib/news/auth'
 import { readOnlyRefusal } from '@/lib/pen/access'
@@ -21,7 +22,7 @@ export async function GET(req: Request) {
   if (!email) return NextResponse.redirect(new URL('/pen', req.url))
   const back = async (q: string) => {
     const err = new URLSearchParams(q).get('error') ?? undefined
-    const res = NextResponse.redirect(new URL(chat ? await connectedPage('notion', email, chat.via, err) : `/pen/settings/notion?${q}`, req.url))
+    const res = NextResponse.redirect(new URL(chat ? await connectedPage('notion', email, chat.via, err) : connectionsHref('notion', q), req.url))
     res.cookies.delete('juno_notion_state')
     return res
   }

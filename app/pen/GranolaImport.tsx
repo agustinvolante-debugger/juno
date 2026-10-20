@@ -148,7 +148,7 @@ export default function GranolaImport({ connected, onClose, onQueued }: { connec
           ) : !connected ? (
             <>
               <p className="pen-tximp-lede">{T.notConnected}</p>
-              <div><a className="pen-btn pen-btn-accent" href="/pen/settings/granola">{T.connect}</a></div>
+              <div><a className="pen-btn pen-btn-accent" href="/pen/settings/connections#granola">{T.connect}</a></div>
             </>
           ) : meetings === null ? (
             <p className="pen-tximp-lede">{T.loading}</p>

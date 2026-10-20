@@ -221,8 +221,8 @@ export async function acceptNotion(ctx: AcceptCtx, s: Suggestion, plain: boolean
           }
         : {
             notion_connected: false,
-            settings_link: `${base()}/settings/notion`,
-            ...(offerGoogle ? { google_settings_link: `${base()}/settings/google` } : {}),
+            settings_link: `${base()}/settings/connections#notion`,
+            ...(offerGoogle ? { google_settings_link: `${base()}/settings/connections#docs` } : {}),
             note: 'Nothing to write the page to is connected; connect Notion or Google Docs in Settings, or make a plain to-do plan instead. Nothing was created yet.',
           }
     }

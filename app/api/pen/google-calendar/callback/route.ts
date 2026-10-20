@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { connectionsHref } from '@/lib/pen/settings-paths'
 import { cookies } from 'next/headers'
 import { authedEmail } from '@/lib/news/auth'
 import { readOnlyRefusal } from '@/lib/pen/access'
@@ -36,7 +37,7 @@ export async function GET(req: Request) {
   if (!email) return NextResponse.redirect(new URL('/pen', req.url))
   const back = async (q: string) => {
     const err = new URLSearchParams(q).get('error') ?? undefined
-    const res = NextResponse.redirect(new URL(chat ? await connectedPage(app, email, chat.via, err) : `/pen/settings/google?${q}`, req.url))
+    const res = NextResponse.redirect(new URL(chat ? await connectedPage(app, email, chat.via, err) : connectionsHref('google', q), req.url))
     res.cookies.delete(STATE_COOKIE)
     return res
   }
@@ -58,7 +59,7 @@ async function gmailCallback(req: Request, u: URL, state: string | null, nonce: 
   const email = chat?.email ?? (await authedEmail())
   if (!email) return NextResponse.redirect(new URL('/pen', req.url))
   const back = async (q: Record<string, string>) => {
-    const res = NextResponse.redirect(new URL(chat ? await connectedPage('gmail', email, chat.via, q.error) : `/pen/settings/email?${new URLSearchParams(q)}`, req.url))
+    const res = NextResponse.redirect(new URL(chat ? await connectedPage('gmail', email, chat.via, q.error) : connectionsHref('email', q), req.url))
     res.cookies.delete(STATE_COOKIE)
     return res
   }

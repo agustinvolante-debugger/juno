@@ -1039,7 +1039,7 @@ export default function PenApp({
                 </button>
               )}
               {whatsapp && (
-                <a className="pen-m-rowbtn" href={whatsapp.linked ? `https://wa.me/${whatsapp.number}` : '/pen/settings/whatsapp'}>
+                <a className="pen-m-rowbtn" href={whatsapp.linked ? `https://wa.me/${whatsapp.number}` : '/pen/settings/connections#whatsapp'}>
                   <Icon name="chat" size={19} />
                   <span>
                     <strong>{whatsapp.linked ? T.waPhoneLinked : T.waPhoneUnlinked}</strong>
@@ -1385,7 +1385,7 @@ export default function PenApp({
         onNotion={!readOnly && !paused && notion ? () => { setNavOpen(false); setNImport(true) } : null}
         onGranola={!readOnly && !paused && granola ? () => { setNavOpen(false); setGImport(true) } : null}
         whatsapp={whatsapp ? {
-          href: whatsapp.linked ? `https://wa.me/${whatsapp.number}` : '/pen/settings/whatsapp',
+          href: whatsapp.linked ? `https://wa.me/${whatsapp.number}` : '/pen/settings/connections#whatsapp',
           external: whatsapp.linked,
           label: whatsapp.linked ? T.openWhatsApp : T.useWhatsApp,
         } : null}
@@ -1582,7 +1582,7 @@ export default function PenApp({
       {whatsapp && (
         <a
           className="pen-wa-phone"
-          href={whatsapp.linked ? `https://wa.me/${whatsapp.number}` : '/pen/settings/whatsapp'}
+          href={whatsapp.linked ? `https://wa.me/${whatsapp.number}` : '/pen/settings/connections#whatsapp'}
         >
           <Icon name="chat" size={18} />
           <span>
@@ -3840,7 +3840,7 @@ function NotionButton({ sessionId, connected, sentUrl, menu }: { sessionId: stri
   // Already in Notion (sent by hand or automatically): open it rather than offer to send.
   const [url, setUrl] = useState<string | null>(sentUrl)
   const [err, setErr] = useState<string | null>(null)
-  if (!connected) return <a className="pen-btn" role={role} href="/pen/settings/notion">{T.notionSend}</a>
+  if (!connected) return <a className="pen-btn" role={role} href="/pen/settings/connections#notion">{T.notionSend}</a>
   if (url) return <a className="pen-notion-sent" role={role} href={url} target="_blank" rel="noreferrer">{T.notionOpen} ↗</a>
   async function send() {
     setBusy(true); setErr(null)
@@ -3875,7 +3875,7 @@ function GoogleDocsButton({ sessionId, connected, menu }: { sessionId: string; c
   const [busy, setBusy] = useState(false)
   const [url, setUrl] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
-  if (!connected) return <a className="pen-btn" role={role} href="/pen/settings/google"><Icon name="doc" size={15} />{T.gdocSend}</a>
+  if (!connected) return <a className="pen-btn" role={role} href="/pen/settings/connections#docs"><Icon name="doc" size={15} />{T.gdocSend}</a>
   if (url) return <a className="pen-notion-sent" role={role} href={url} target="_blank" rel="noreferrer">{T.gdocOpen} ↗</a>
   async function send() {
     setBusy(true); setErr(null)

@@ -82,7 +82,7 @@ async function outcome(email: string, lang: Lang, id: string, r: Record<string, 
   if (r.needs === 'time') return { status: 'needs_time' }
   if (r.needs === 'time_zone') return { status: 'needs_zone' }
   if (r.needs === 'destination') return { status: 'choose_dest' }
-  if (r.notion_connected === false) return { status: 'connect_notion', settings: '/pen/settings/notion', google: typeof r.google_settings_link === 'string' ? '/pen/settings/google' : null }
+  if (r.notion_connected === false) return { status: 'connect_notion', settings: '/pen/settings/connections#notion', google: typeof r.google_settings_link === 'string' ? '/pen/settings/connections#docs' : null }
   const row = await resolveSuggestion(email, id)
   if (!row) return { status: 'error', error: 'not found' }
   const titles = await titlesFor(email, [row])

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { connectionsHref } from '@/lib/pen/settings-paths'
 import { cookies } from 'next/headers'
 import { authedEmail } from '@/lib/news/auth'
 import { readOnlyRefusal } from '@/lib/pen/access'
@@ -21,7 +22,7 @@ export async function GET(req: Request) {
   if (!email) return NextResponse.redirect(new URL('/pen', req.url))
   const back = async (q: string) => {
     const err = new URLSearchParams(q).get('error') ?? undefined
-    const res = NextResponse.redirect(new URL(chat ? await connectedPage('granola', email, chat.via, err) : `/pen/settings/granola?${q}`, req.url))
+    const res = NextResponse.redirect(new URL(chat ? await connectedPage('granola', email, chat.via, err) : connectionsHref('granola', q), req.url))
     res.cookies.delete(STATE_COOKIE)
     return res
   }

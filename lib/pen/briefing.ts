@@ -111,7 +111,7 @@ async function askLink(session: PenSession, lang: Lang): Promise<{ href: string;
   const A = ASK[lang]
   if (!link?.linked_at) {
     const base = (process.env.PEN_PUBLIC_URL || 'https://www.tryjunoapp.com').replace(/\/$/, '')
-    return { href: `${base}/settings/whatsapp`, label: A.unlinked }
+    return { href: `${base}/settings/connections#whatsapp`, label: A.unlinked }
   }
   const title = session.title ?? session.source_name ?? ''
   return { href: `https://wa.me/${botNumber().replace(/\D/g, '')}?text=${encodeURIComponent(A.prompt(title.slice(0, 80)))}`, label: A.linked }

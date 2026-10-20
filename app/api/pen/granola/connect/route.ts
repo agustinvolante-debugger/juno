@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { connectionsHref } from '@/lib/pen/settings-paths'
 import { authedEmail } from '@/lib/news/auth'
 import { STATE_COOKIE, authorizeUrl, granolaAvailable, makeAttempt } from '@/lib/pen/granola'
 
@@ -11,7 +12,7 @@ export async function GET(req: Request) {
   const email = await authedEmail()
   const origin = new URL(req.url).origin
   if (!email) return NextResponse.redirect(new URL('/pen', req.url))
-  if (!(await granolaAvailable())) return NextResponse.redirect(new URL('/pen/settings/granola?error=setup', req.url))
+  if (!(await granolaAvailable())) return NextResponse.redirect(new URL(connectionsHref('granola', 'error=setup'), req.url))
   try {
     const a = makeAttempt()
     const res = NextResponse.redirect(await authorizeUrl(origin, a.nonce, a.verifier))
@@ -19,6 +20,6 @@ export async function GET(req: Request) {
     return res
   } catch (e) {
     console.warn(`pen granola connect: ${(e as Error).message}`)
-    return NextResponse.redirect(new URL(`/pen/settings/granola?error=${encodeURIComponent((e as Error).message.slice(0, 200))}`, req.url))
+    return NextResponse.redirect(new URL(connectionsHref('granola', { error: (e as Error).message.slice(0, 200) }), req.url))
   }
 }

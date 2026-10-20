@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useCopy } from '../../LangContext'
 import type { Copy } from '@/lib/pen/i18n'
 import JunoMessages, { type Prefs } from './JunoMessages'
@@ -129,6 +130,8 @@ export default function WhatsAppLink({
   loadError,
   prefs,
   imessage = null,
+  part = 'all',
+  messages = true,
 }: {
   initialPhone: string | null
   number: string
@@ -138,8 +141,15 @@ export default function WhatsAppLink({
   prefs: Prefs
   /** Juno's iMessage number (Sendblue), when that channel is switched on. */
   imessage?: string | null
+  /** Settings → Connections shows WhatsApp and iMessage as two rows (20 Oct): which one this is. */
+  part?: 'all' | 'whatsapp' | 'imessage'
+  /** Messages from Juno moved to its own Settings page; false hides it here. */
+  messages?: boolean
 }) {
   const T = useCopy(WA)
+  const router = useRouter()
+  /** Linked: the other row (WhatsApp / iMessage) learns it from the server. */
+  const linked = (p: string) => { setPhone(p); setLink(null); router.refresh() }
   const [phone, setPhone] = useState(initialPhone)
   const [link, setLink] = useState<{ code: string; waLink: string; qr: string } | null>(null)
   // Linking from the iMessage card: same code, but the message goes to Juno's iMessage number.
@@ -175,10 +185,7 @@ export default function WhatsAppLink({
     const t = setInterval(async () => {
       if (Date.now() > until) return clearInterval(t)
       const j = await (await fetch('/api/pen/whatsapp/link')).json().catch(() => ({}))
-      if (j.phone) {
-        setPhone(j.phone)
-        setLink(null)
-      }
+      if (j.phone) linked(j.phone)
     }, 3000)
     return () => clearInterval(t)
   }, [link, phone])
@@ -188,13 +195,15 @@ export default function WhatsAppLink({
     await fetch('/api/pen/whatsapp/link', { method: 'DELETE' }).catch(() => {})
     setPhone(null)
     setBusy(false)
+    router.refresh()
   }
 
   return (
     <div className="pen-set-stack">
+      {part !== 'imessage' && (
       <div className="pen-set-card">
         <div className="pen-set-card-head">
-          <h2 className="pen-set-h2">{T.title}</h2>
+          <h4 className="pen-set-h2">{T.title}</h4>
           <p className="pen-set-lede">{T.lede}</p>
         </div>
         {err && <div className="pen-su-err">{err}</div>}
@@ -214,18 +223,20 @@ export default function WhatsAppLink({
           // One tap (16 Oct): WhatsApp opens with "LINK <code>" typed, on the phone in the same
           // window, on a computer in a new tab, plus the QR to scan with the phone.
           <>
-            <GetWhatsApp number={number} variant="button" qr onLinked={(p) => { setPhone(p); setLink(null) }} />
+            <GetWhatsApp number={number} variant="button" qr onLinked={linked} />
             <p className="pen-set-fine">{T.proactive}</p>
           </>
         )}
       </div>
+      )}
 
-      {imessage && (
+      {imessage && part !== 'whatsapp' && (
         <div className="pen-set-card">
           <div className="pen-set-card-head">
-            <h2 className="pen-set-h2">{T.imTitle} <span className="pen-im-beta">{T.imBeta}</span></h2>
+            <h4 className="pen-set-h2">{T.imTitle} <span className="pen-im-beta">{T.imBeta}</span></h4>
             <p className="pen-set-lede">{T.imLede}</p>
           </div>
+          {part === 'imessage' && err && <div className="pen-su-err">{err}</div>}
           {phone ? (
             <>
               <p className="pen-set-fine">{T.imLinked(pretty(phone), pretty(imessage))}</p>
@@ -251,17 +262,19 @@ export default function WhatsAppLink({
       )}
 
       {/* Applies to both channels, so it sits after both cards. */}
-      {phone && <JunoMessages initial={prefs} />}
+      {messages && phone && <JunoMessages initial={prefs} />}
 
+      {part !== 'imessage' && (
       <div className="pen-set-card">
         <div className="pen-set-card-head">
-          <h2 className="pen-set-h2">{T.howTitle}</h2>
+          <h4 className="pen-set-h2">{T.howTitle}</h4>
         </div>
         <ol className="pen-set-fine" style={{ paddingLeft: 20, lineHeight: 1.7, listStyle: 'decimal' }}>
           {T.steps.map((s) => <li key={s}>{s}</li>)}
         </ol>
         <p className="pen-set-fine">{T.fine}</p>
       </div>
+      )}
     </div>
   )
 }

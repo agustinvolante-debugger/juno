@@ -7,67 +7,39 @@ import { useCopy } from '../LangContext'
 import type { Copy } from '@/lib/pen/i18n'
 import { SUPPORT_EMAIL } from '@/lib/support'
 
-const SN: Copy<{ profile: string; aria: string; billing: string; invite: string; help: string; calendar: string; email: string }> = {
-  en: { profile: 'Profile', aria: 'Settings', billing: 'Billing', invite: 'Invite friends', help: 'Help', calendar: 'Google', email: 'Email' },
-  es: { profile: 'Perfil', aria: 'Ajustes', billing: 'Facturación', invite: 'Invitar amigos', help: 'Ayuda', calendar: 'Google', email: 'Correo' },
-  pt: { profile: 'Perfil', aria: 'Configurações', billing: 'Cobrança', invite: 'Convidar amigos', help: 'Ajuda', calendar: 'Google', email: 'E-mail' },
+// Settings, 20 Oct: Profile · Connections · Messages from Juno · Invite friends · Billing · Help.
+// Connections replaced one item per company (Google, Email, Notion, Granola, WhatsApp), which
+// told an Outlook user nothing applied to them and split one Gmail account across two pages.
+const SN: Copy<{ aria: string; profile: string; connections: string; messages: string; invite: string; billing: string; help: string }> = {
+  en: { aria: 'Settings', profile: 'Profile', connections: 'Connections', messages: 'Messages from Juno', invite: 'Invite friends', billing: 'Billing', help: 'Help' },
+  es: { aria: 'Ajustes', profile: 'Perfil', connections: 'Conexiones', messages: 'Mensajes de Juno', invite: 'Invitar amigos', billing: 'Facturación', help: 'Ayuda' },
+  pt: { aria: 'Configurações', profile: 'Perfil', connections: 'Conexões', messages: 'Mensagens do Juno', invite: 'Convidar amigos', billing: 'Cobrança', help: 'Ajuda' },
 }
 
-const ITEMS: { href: string; label: 'profile' | 'WhatsApp'; icon: IconName }[] = [
-  { href: '/pen/settings', label: 'profile', icon: 'person' },
-  { href: '/pen/settings/whatsapp', label: 'WhatsApp', icon: 'chat' },
-]
+type Item = { href: string; key: 'profile' | 'connections' | 'messages' | 'invite' | 'billing'; icon: IconName }
 
 /**
- * `whatsapp` is false until WhatsApp (Meta Cloud API) or iMessage is configured, so nobody finds a page that can't work.
- * `billing` is true for anyone Stripe knows: pause, and the way into Stripe's portal.
+ * `messages`: WhatsApp or iMessage is switched on (Messages from Juno only goes out there).
+ * `billing`: anyone Stripe knows (pause, and the way into Stripe's portal).
  */
-export default function SettingsNav({ whatsapp = false, billing = false, notion = false, calendar = false, imessage = false, granola = false, email = false }: { whatsapp?: boolean; billing?: boolean; notion?: boolean; calendar?: boolean; imessage?: boolean; granola?: boolean; email?: boolean }) {
+export default function SettingsNav({ messages = false, billing = false }: { messages?: boolean; billing?: boolean }) {
   const T = useCopy(SN)
   const path = usePathname()
+  const items: Item[] = [
+    { href: '/pen/settings', key: 'profile', icon: 'person' },
+    { href: '/pen/settings/connections', key: 'connections', icon: 'link' },
+    ...(messages ? [{ href: '/pen/settings/messages', key: 'messages', icon: 'bell' } as Item] : []),
+    { href: '/pen/settings/invite', key: 'invite', icon: 'people' },
+    ...(billing ? [{ href: '/pen/settings/billing', key: 'billing', icon: 'lock' } as Item] : []),
+  ]
   return (
     <nav className="pen-set-nav" aria-label={T.aria}>
-      {ITEMS.filter((i) => whatsapp || !i.href.endsWith('/whatsapp')).map((i) => (
+      {items.map((i) => (
         <Link key={i.href} href={i.href} className="pen-cat" data-active={path === i.href} aria-current={path === i.href ? 'page' : undefined}>
           <Icon name={i.icon} size={19} />
-          <span className="pen-cat-label">{i.label === 'profile' ? T.profile : imessage ? 'WhatsApp & iMessage' : i.label}</span>
+          <span className="pen-cat-label">{T[i.key]}</span>
         </Link>
       ))}
-      {notion && (
-        <Link href="/pen/settings/notion" className="pen-cat" data-active={path === '/pen/settings/notion'} aria-current={path === '/pen/settings/notion' ? 'page' : undefined}>
-          <Icon name="link" size={19} />
-          <span className="pen-cat-label">Notion</span>
-        </Link>
-      )}
-      {granola && (
-        <Link href="/pen/settings/granola" className="pen-cat" data-active={path === '/pen/settings/granola'} aria-current={path === '/pen/settings/granola' ? 'page' : undefined}>
-          <Icon name="link" size={19} />
-          <span className="pen-cat-label">Granola</span>
-        </Link>
-      )}
-      {calendar && (
-        <Link href="/pen/settings/google" className="pen-cat" data-active={path === '/pen/settings/google'} aria-current={path === '/pen/settings/google' ? 'page' : undefined}>
-          <Icon name="calendar" size={19} />
-          <span className="pen-cat-label">{T.calendar}</span>
-        </Link>
-      )}
-      {/* Gmail send-only (lib/pen/gmail.ts): shown once its table exists. */}
-      {email && (
-        <Link href="/pen/settings/email" className="pen-cat" data-active={path === '/pen/settings/email'} aria-current={path === '/pen/settings/email' ? 'page' : undefined}>
-          <Icon name="mail" size={19} />
-          <span className="pen-cat-label">{T.email}</span>
-        </Link>
-      )}
-      <Link href="/pen/settings/invite" className="pen-cat" data-active={path === '/pen/settings/invite'} aria-current={path === '/pen/settings/invite' ? 'page' : undefined}>
-        <Icon name="link" size={19} />
-        <span className="pen-cat-label">{T.invite}</span>
-      </Link>
-      {billing && (
-        <Link href="/pen/settings/billing" className="pen-cat" data-active={path === '/pen/settings/billing'} aria-current={path === '/pen/settings/billing' ? 'page' : undefined}>
-          <Icon name="lock" size={19} />
-          <span className="pen-cat-label">{T.billing}</span>
-        </Link>
-      )}
       {/* Goes to the support inbox (a Google Group the founders read). The address is shown too,
           because a mailto does nothing on a computer with no mail app set up. */}
       <a href={`mailto:${SUPPORT_EMAIL}?subject=Juno%20Pen`} className="pen-cat">

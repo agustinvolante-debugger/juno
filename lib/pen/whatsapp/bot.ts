@@ -361,7 +361,7 @@ export async function handleInbound(msg: Inbound, opts: { at?: number } = {}): P
 
   const L = BOT[await langFor(msg.from, link?.email)]
   if (!link) {
-    await sendText(msg.from, L.notLinked(appUrl('/settings/whatsapp'), appUrl()))
+    await sendText(msg.from, L.notLinked(appUrl('/settings/connections#whatsapp'), appUrl()))
     return
   }
   // STOP / START work on any account, active or not: being able to turn messages off can't
@@ -474,7 +474,7 @@ async function allowed(email: string): Promise<boolean> {
 async function linkPhone(msg: Inbound, code: string): Promise<void> {
   const link = await claimCode(code, msg.from)
   if (!link) {
-    await sendText(msg.from, BOT[langForPhone(msg.from)].badCode(appUrl('/settings/whatsapp')))
+    await sendText(msg.from, BOT[langForPhone(msg.from)].badCode(appUrl('/settings/connections#whatsapp')))
     return
   }
   // The LINK message came in before there was a link, so it was stored without the email; with

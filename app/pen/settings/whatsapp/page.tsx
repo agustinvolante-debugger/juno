@@ -1,24 +1,11 @@
-import { authedEmail } from '@/lib/news/auth'
-import { getLinkByEmail } from '@/lib/pen/whatsapp/store'
-import { botNumber, configured } from '@/lib/pen/whatsapp/provider'
-import { imessageFor } from '@/lib/pen/imessage/sendblue'
-import WhatsAppLink from './WhatsAppLink'
-import { getPrefs } from '@/lib/pen/proactive'
+import { redirect } from 'next/navigation'
+import { connectionsHref } from '@/lib/pen/settings-paths'
 
 export const dynamic = 'force-dynamic'
 
-export default async function WhatsAppPage() {
-  const email = (await authedEmail())!
-  let phone: string | null = null
-  let loadError: string | null = null
-  let prefs = { off: false, offKinds: [] as import('@/lib/pen/suggestions-types').ProactiveKind[] }
-  try {
-    const link = await getLinkByEmail(email)
-    phone = link?.linked_at ? link.phone : null
-    const p = await getPrefs(email)
-    prefs = { off: !!p.off, offKinds: p.offKinds ?? [] }
-  } catch (e) {
-    loadError = (e as Error).message
-  }
-  return <WhatsAppLink initialPhone={phone} number={botNumber()} ready={configured()} loadError={loadError} prefs={prefs} imessage={imessageFor(email) ? process.env.SENDBLUE_NUMBER! : null} />
+// Settings → whatsapp became a section of Settings → Connections on 20 Oct. Old links (OAuth
+// callbacks in flight, emails, WhatsApp messages, bookmarks) land on it, status and all.
+export default async function Old({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const sp = await searchParams
+  redirect(connectionsHref('whatsapp', Object.fromEntries(Object.entries(sp).flatMap(([k, v]) => (typeof v === 'string' ? [[k, v]] : [])))))
 }

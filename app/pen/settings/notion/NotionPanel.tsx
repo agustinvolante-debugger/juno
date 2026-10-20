@@ -104,7 +104,7 @@ export default function NotionPanel({ configured, conn, justConnected, error }: 
     try {
       const r = await fetch('/api/pen/notion', { method: 'DELETE' })
       if (!r.ok) throw new Error(T.failed)
-      router.replace('/pen/settings/notion')
+      router.replace(`${window.location.pathname}#notion`, { scroll: false })
       router.refresh()
     } catch (e) {
       setErr(errMessage(e, T.failed))
@@ -117,7 +117,7 @@ export default function NotionPanel({ configured, conn, justConnected, error }: 
     <div className="pen-set-stack">
       <div className="pen-set-card">
         <div className="pen-set-card-head">
-          <h2 className="pen-set-h2">{T.title}</h2>
+          <h4 className="pen-set-h2">{T.title}</h4>
           <p className="pen-set-lede">{T.lede}</p>
         </div>
         {justConnected && conn && !conn.last_error && <div className="pen-set-ok" role="status">{T.justConnected}</div>}
@@ -158,7 +158,7 @@ export default function NotionPanel({ configured, conn, justConnected, error }: 
       {configured && conn && (
         <div className="pen-set-card">
           <div className="pen-set-card-head">
-            <h2 className="pen-set-h2">{T.shareTitle}</h2>
+            <h4 className="pen-set-h2">{T.shareTitle}</h4>
             <p className="pen-set-lede">{T.shareLede}</p>
           </div>
           <ol className="pen-invite-rules pen-notion-steps">

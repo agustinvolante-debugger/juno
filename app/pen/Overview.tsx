@@ -1174,7 +1174,7 @@ function ExportSheet({ what }: { what: 'todos' | 'contacts' }) {
     try {
       const r = await fetch('/api/pen/google-sheets/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ what }) })
       const j = (await r.json().catch(() => ({}))) as { url?: string; rows?: number; connect?: boolean; error?: string }
-      if (r.status === 409 && j.connect) { window.location.href = '/pen/settings/google'; return }
+      if (r.status === 409 && j.connect) { window.location.href = '/pen/settings/connections#docs'; return }
       if (!r.ok || !j.url) throw new Error(j.error || T.saveFailed)
       setDone({ url: j.url, rows: j.rows ?? 0 })
     } catch (e) {

@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 import { NextResponse } from 'next/server'
+import { connectionsHref } from '@/lib/pen/settings-paths'
 import { authedEmail } from '@/lib/news/auth'
 import { readOnlyRefusal } from '@/lib/pen/access'
 import { STATE_COOKIE } from '@/lib/pen/google-calendar'
@@ -21,8 +22,8 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: Request) {
   const email = await authedEmail()
   if (!email) return NextResponse.redirect(new URL('/pen', req.url))
-  if (!(await gmailAvailable())) return NextResponse.redirect(new URL('/pen/settings/email?error=setup', req.url))
-  if (await readOnlyRefusal(email)) return NextResponse.redirect(new URL('/pen/settings/email?error=readonly', req.url))
+  if (!(await gmailAvailable())) return NextResponse.redirect(new URL(connectionsHref('email', 'error=setup'), req.url))
+  if (await readOnlyRefusal(email)) return NextResponse.redirect(new URL(connectionsHref('email', 'error=readonly'), req.url))
   const u = new URL(req.url)
   const origin = u.origin
   const raw = (u.searchParams.get('address') ?? '').trim().toLowerCase()

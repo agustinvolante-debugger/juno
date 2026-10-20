@@ -8,10 +8,6 @@ import { imessageFor } from '@/lib/pen/imessage/sendblue'
 import { LangProvider } from '../LangContext'
 import { appLangFor } from '../app-lang'
 import { getAccount } from '@/lib/pen/accounts'
-import { notionConfigured } from '@/lib/pen/notion'
-import { gcalConfigured } from '@/lib/pen/google-calendar'
-import { granolaAvailable } from '@/lib/pen/granola'
-import { gmailAvailable } from '@/lib/pen/gmail'
 import { getLinkByEmail } from '@/lib/pen/whatsapp/store'
 import { botNumber } from '@/lib/pen/whatsapp/provider'
 import { channelFor } from '@/lib/pen/proactive'
@@ -30,7 +26,7 @@ export const dynamic = 'force-dynamic'
 export default async function SettingsLayout({ children }: { children: React.ReactNode }) {
   const email = await authedEmail()
   if (!email) redirect('/pen')
-  const [lang, account, granola, gmail] = await Promise.all([appLangFor(email), getAccount(email), granolaAvailable().catch(() => false), gmailAvailable().catch(() => false)])
+  const [lang, account] = await Promise.all([appLangFor(email), getAccount(email)])
   const T = COPY[lang]
   // The phone tab bar's Chat: WhatsApp or iMessage when linked (as in the app), else the web chat.
   let chatLink: { href: string; label: string } | null = null
@@ -57,7 +53,7 @@ export default async function SettingsLayout({ children }: { children: React.Rea
         <aside className="pen-set-side">
           <h1 className="pen-display pen-set-title">{T.title}</h1>
           <div className="pen-set-email">{email}</div>
-          <SettingsNav whatsapp={whatsappReady() || imessageFor(email)} imessage={imessageFor(email)} billing={Boolean(account?.stripe_customer_id)} notion={notionConfigured()} calendar={gcalConfigured()} granola={granola} email={gmail} />
+          <SettingsNav messages={whatsappReady() || imessageFor(email)} billing={Boolean(account?.stripe_customer_id)} />
         </aside>
         <section className="pen-set-main">{children}</section>
       </div>

@@ -1,0 +1,176 @@
+/* Settings → Connections (20 Oct). Part of the app skin (app-skin.css): the same glass cards, Inter,
+   one blue, pill controls. A section is one card; inside it each provider is a row on a hairline,
+   led by its mark in a small white tile, like an app icon on a phone. The panels that open under a
+   row (Notion, Granola, WhatsApp…) were cards of their own; here they lie flat inside the section,
+   so there is never a card in a card.
+
+   Prefixed with .pen-root so these rules outrank the skin's nested card rules (same specificity,
+   later in the cascade: this file is imported after app-skin.css and assistant-first.css). */
+
+.pen-root .pen-conn { display: flex; flex-direction: column; gap: 22px; }
+.pen-root .pen-conn-intro { margin: 0 0 2px; max-width: 60ch; font-size: var(--t-small); line-height: var(--t-small-lh); color: var(--soft); }
+.pen-root .pen-conn-sec { gap: 18px; }
+
+/* ---------------------------------------------------------------- provider rows */
+.pen-root .pen-conn-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--hair); }
+.pen-root .pen-conn-item { border-bottom: 1px solid var(--hair); scroll-margin-top: 20px; }
+.pen-root .pen-conn-item:last-child { border-bottom: 0; }
+.pen-root .pen-conn-row {
+  display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; align-items: center; column-gap: 14px;
+  padding: 16px 0; min-height: 72px;
+}
+.pen-root .pen-conn-marks { display: flex; align-items: center; }
+.pen-root .pen-conn-tile {
+  flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px;
+  background: #fff; color: var(--soft);
+  box-shadow: 0 0 0 1px rgba(29, 29, 31, .09), 0 1px 2px rgba(29, 29, 31, .08), 0 4px 10px -4px rgba(29, 29, 31, .14);
+}
+/* Two marks (Gmail + Calendar, Docs + Sheets) overlap like a stack of app icons. */
+.pen-root .pen-conn-tile + .pen-conn-tile { margin-left: -10px; box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgba(29, 29, 31, .09), 0 4px 10px -4px rgba(29, 29, 31, .14); }
+.pen-root .pen-conn-img { width: 20px; height: 20px; object-fit: contain; border-radius: 5px; display: block; }
+
+.pen-root .pen-conn-text { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.pen-root .pen-conn-name {
+  margin: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px;
+  font-family: var(--ui); font-size: 16.5px; line-height: 1.3; font-weight: 600; letter-spacing: -0.012em; color: var(--ink);
+}
+.pen-root .pen-conn-badge {
+  font-style: normal; font-size: 12px; font-weight: 600; line-height: 1; letter-spacing: 0;
+  padding: 4px 9px; border-radius: 999px; background: var(--accent-wash); color: var(--accent-ink);
+}
+.pen-root .pen-conn-status {
+  margin: 0; max-width: 62ch; font-size: 14.5px; line-height: 1.45; color: var(--dim);
+  overflow-wrap: anywhere;
+}
+/* Connected: the line says so in green, with a dot, so a scan down the page finds what's on. */
+.pen-root .pen-conn-item[data-state='on'] > .pen-conn-row .pen-conn-status { color: var(--good); }
+.pen-root .pen-conn-item[data-state='warn'] > .pen-conn-row .pen-conn-status { color: var(--warn); font-weight: 600; }
+.pen-root .pen-conn-item:is([data-state='on'], [data-state='warn']) > .pen-conn-row .pen-conn-status::before {
+  content: ''; display: inline-block; width: 7px; height: 7px; margin: 0 7px 1px 0; border-radius: 50%;
+  background: currentColor; vertical-align: middle;
+}
+.pen-root .pen-conn-item[data-state='links'] > .pen-conn-row .pen-conn-status { color: var(--soft); }
+
+.pen-root .pen-conn-act { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.pen-root .pen-conn-act .pen-btn { min-height: 40px; padding: 8px 18px; font-size: 15px; }
+.pen-root .pen-conn-fold {
+  display: grid; place-items: center; width: 40px; height: 40px; border-radius: 999px;
+  background: none; border: 0; color: var(--dim); cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.pen-root .pen-conn-fold:hover { background: var(--sunk); color: var(--ink); }
+.pen-root .pen-conn-fold svg { transition: rotate .28s cubic-bezier(.16, 1, .3, 1); }
+.pen-root .pen-conn-fold[aria-expanded='true'] svg { rotate: 90deg; }
+
+/* ---------------------------------------------------------------- the fold */
+.pen-root .pen-conn-body { padding: 0 0 22px 76px; }
+.pen-root .pen-conn-body[hidden] { display: none; }
+.pen-root .pen-conn-item:not(#google) .pen-conn-body:not([hidden]) {
+  animation: pen-conn-open .34s cubic-bezier(.16, 1, .3, 1);
+}
+@keyframes pen-conn-open { from { opacity: 0; translate: 0 -4px; } }
+@media (prefers-reduced-motion: reduce) {
+  .pen-root .pen-conn-body:not([hidden]) { animation: none !important; }
+  .pen-root .pen-conn-fold svg { transition: none; }
+}
+
+/* Panels lie flat in the fold: no glass, no padding, hairlines between their parts. The first
+   part's title repeats the row's name, so it goes. */
+.pen-root .pen-conn-body .pen-set-stack { gap: 20px; }
+.pen-root .pen-conn-body .pen-set-card {
+  background: none; -webkit-backdrop-filter: none; backdrop-filter: none;
+  border: 0; border-radius: 0; box-shadow: none; padding: 0; gap: 16px;
+}
+.pen-root .pen-conn-body .pen-set-card + .pen-set-card { border-top: 1px solid var(--hair); padding-top: 20px; }
+.pen-root .pen-conn-body > .pen-set-stack > .pen-set-card:first-child > .pen-set-card-head > .pen-set-h2 { display: none; }
+.pen-root .pen-conn-body .pen-set-h2 { font-family: var(--ui); font-size: 16px; line-height: 1.35; font-weight: 600; letter-spacing: -0.01em; }
+.pen-root .pen-conn-body .pen-set-fine { margin-top: -6px; }
+
+/* ---------------------------------------------------------------- Google accounts */
+.pen-root .pen-gacc { display: flex; flex-direction: column; gap: 16px; }
+.pen-root .pen-gacc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.pen-root .pen-gacc-row {
+  display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; column-gap: 12px; align-items: start;
+  padding: 14px 16px; border-radius: 14px; background: var(--sunk);
+}
+.pen-root .pen-gacc-row[data-broken='true'] { background: var(--warn-wash); }
+.pen-root .pen-gacc-avatar {
+  display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%;
+  background: #fff; color: var(--soft); font-size: 14px; font-weight: 600;
+  box-shadow: 0 0 0 1px rgba(29, 29, 31, .08);
+}
+.pen-root .pen-gacc-main { min-width: 0; display: flex; flex-direction: column; gap: 8px; padding-top: 5px; }
+.pen-root .pen-gacc-addr { font-size: 15.5px; line-height: 1.3; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.pen-root .pen-gacc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.pen-root .pen-gacc-chip {
+  display: inline-flex; align-items: center; gap: 5px; min-height: 26px; padding: 3px 10px 3px 8px; border-radius: 999px;
+  background: #fff; color: var(--soft); font-size: 13px; font-weight: 600; line-height: 1; text-decoration: none;
+  box-shadow: 0 0 0 1px rgba(29, 29, 31, .08);
+}
+.pen-root .pen-gacc-chip svg { color: var(--accent); }
+.pen-root .pen-gacc-chip em { font-style: normal; font-weight: 500; color: var(--dim); margin-left: 2px; }
+.pen-root a.pen-gacc-chip:hover { box-shadow: 0 0 0 1px var(--accent-line); color: var(--accent-ink); }
+.pen-root .pen-gacc-defs { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.pen-root .pen-gacc-def { display: inline-flex; align-items: center; gap: 5px; font-size: 13.5px; font-weight: 600; color: var(--accent-ink); }
+.pen-root .pen-gacc-warn { display: inline-flex; align-items: flex-start; gap: 6px; font-size: 14px; line-height: 1.4; color: var(--warn); }
+.pen-root .pen-gacc-warn svg { flex: none; margin-top: 2px; }
+.pen-root .pen-gacc-acts { display: flex; flex-wrap: wrap; align-items: center; column-gap: 18px; row-gap: 0; margin-top: -4px; }
+.pen-root .pen-gacc-acts .pen-mail-off, .pen-root .pen-gacc-acts .pen-mail-read {
+  display: inline-flex; align-items: center; min-height: 36px; padding: 4px 0; font-size: 14px;
+}
+.pen-root .pen-gacc-side { display: flex; align-items: center; gap: 10px; }
+.pen-root .pen-gacc-side .pen-mail-off { min-height: 36px; padding: 6px 0; font-size: 14px; }
+.pen-root .pen-gacc-confirm {
+  display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: 12px;
+  background: #fff; box-shadow: 0 0 0 1px rgba(29, 29, 31, .08);
+  font-size: 14.5px; line-height: 1.45; color: var(--ink);
+}
+.pen-root .pen-gacc-confirm-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.pen-root .pen-gacc-confirm .pen-btn { min-height: 38px; padding: 7px 16px; font-size: 14.5px; }
+.pen-root .pen-gacc-confirm .pen-btn-quiet { color: var(--bad); }
+.pen-root .pen-gacc-without { margin: 0; max-width: 62ch; }
+
+/* "What Juno does with Google": the terms fold away under one quiet line. */
+.pen-root .pen-conn-more { border-top: 1px solid var(--hair); padding-top: 4px; }
+.pen-root .pen-conn-more > summary {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 40px; cursor: pointer; list-style: none;
+  font-size: 14px; font-weight: 600; color: var(--accent-ink);
+}
+.pen-root .pen-conn-more > summary::-webkit-details-marker { display: none; }
+.pen-root .pen-conn-more > summary::after {
+  content: ''; width: 7px; height: 7px; margin-left: 2px; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor;
+  rotate: 45deg; translate: 0 -2px; transition: rotate .25s cubic-bezier(.16, 1, .3, 1);
+}
+.pen-root .pen-conn-more[open] > summary::after { rotate: 225deg; translate: 0 2px; }
+.pen-root .pen-conn-more .pen-gcal-terms { margin-top: 6px; }
+.pen-root .pen-conn-more .pen-set-fine { margin-top: 12px; }
+
+/* ---------------------------------------------------------------- one-tap links */
+.pen-root .pen-lp {
+  display: flex; flex-direction: column; gap: 16px;
+  padding: 20px; border-radius: 14px; background: var(--sunk);
+}
+.pen-root .pen-lp-title { margin: 0; font-family: var(--ui); font-size: 16px; line-height: 1.35; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+.pen-root .pen-lp-group { display: flex; flex-direction: column; gap: 2px; }
+.pen-root .pen-lp-label { font-size: 13.5px; font-weight: 600; color: var(--soft); }
+.pen-root .pen-lp .pen-set-chips { margin-top: 6px; }
+.pen-root .pen-lp .pen-set-chip { min-height: 40px; padding: 8px 15px; font-size: 14.5px; }
+.pen-root .pen-lp .pen-set-chip[data-on='true'] { background: var(--accent-wash); border-color: var(--accent); color: var(--accent-ink); box-shadow: none; }
+.pen-root .pen-lp-hint { min-height: 1.4em; margin-top: 4px; font-size: 13px; line-height: 1.4; color: var(--dim); }
+.pen-root .pen-lp-hint:empty { display: none; }
+.pen-root .pen-lp-foot { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; justify-content: space-between; }
+.pen-root .pen-lp-err { color: var(--bad); }
+
+/* ---------------------------------------------------------------- phone */
+@media (max-width: 640px) {
+  .pen-root .pen-conn-row { grid-template-columns: 50px minmax(0, 1fr) auto; column-gap: 12px; padding: 14px 0; }
+  .pen-root .pen-conn-tile { width: 32px; height: 32px; border-radius: 9px; }
+  .pen-root .pen-conn-tile + .pen-conn-tile { margin-left: -14px; }
+  .pen-root .pen-conn-body { padding-left: 0; }
+  .pen-root .pen-conn-act .pen-btn { padding: 8px 14px; }
+  .pen-root .pen-gacc-row { grid-template-columns: 28px minmax(0, 1fr); padding: 12px; }
+  .pen-root .pen-gacc-avatar { width: 28px; height: 28px; font-size: 13px; }
+  .pen-root .pen-gacc-main { padding-top: 3px; }
+  .pen-root .pen-gacc-side { grid-column: 2; justify-content: flex-start; }
+  .pen-root .pen-lp { padding: 16px; }
+}
