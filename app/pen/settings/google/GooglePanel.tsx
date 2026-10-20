@@ -41,6 +41,16 @@ const CP_EN = {
   driveJustDisconnected: 'Disconnected. Juno won’t make files in your Drive anymore.',
   bothJustConnected: 'Google is connected: Calendar, and Docs & Sheets.',
   shared: 'Both use one Google permission, so Google keeps it until you disconnect the other one too.',
+  calsTitle: 'Your calendars',
+  calsLede: 'Juno reads all of them together for briefs and “what’s on tomorrow?”. A meeting on two of them counts once.',
+  calNew: 'New events go here',
+  calUse: 'Use for new events',
+  calViaEmail: 'Connected in Email',
+  calViaGoogle: 'Connected above',
+  calWorking: 'One moment…',
+  calBroken: 'Google stopped accepting Juno’s access.',
+  calAddAnother: 'Add another calendar',
+  calsFine: 'Up to 5 calendars. Say “add it to my work calendar” in the chat to pick one for a single event.',
   errors: {
     cancelled: 'You cancelled on Google’s screen, so nothing was connected.',
     state: 'That connection attempt expired. Try again.',
@@ -85,6 +95,16 @@ const CP: Copy<typeof CP_EN> = {
     driveJustDisconnected: 'Desconectado. Juno ya no creará archivos en tu Drive.',
     bothJustConnected: 'Google está conectado: Calendar, y Docs y Sheets.',
     shared: 'Los dos usan un mismo permiso de Google, así que Google lo mantiene hasta que desconectes el otro también.',
+    calsTitle: 'Tus calendarios',
+    calsLede: 'Juno los lee todos juntos para los resúmenes y “¿qué tengo mañana?”. Una reunión que está en dos cuenta una vez.',
+    calNew: 'Los eventos nuevos van aquí',
+    calUse: 'Usar para eventos nuevos',
+    calViaEmail: 'Conectado en Correo',
+    calViaGoogle: 'Conectado arriba',
+    calWorking: 'Un momento…',
+    calBroken: 'Google dejó de aceptar el acceso de Juno.',
+    calAddAnother: 'Agregar otro calendario',
+    calsFine: 'Hasta 5 calendarios. Di “agrégalo a mi calendario del trabajo” en el chat para elegir uno para un evento.',
     errors: {
       cancelled: 'Cancelaste en la pantalla de Google, así que no se conectó nada.',
       state: 'Ese intento de conexión expiró. Inténtalo de nuevo.',
@@ -126,6 +146,16 @@ const CP: Copy<typeof CP_EN> = {
     driveJustDisconnected: 'Desconectado. O Juno não vai mais criar arquivos no seu Drive.',
     bothJustConnected: 'O Google está conectado: Agenda, e Docs e Planilhas.',
     shared: 'Os dois usam uma mesma permissão do Google, então o Google a mantém até você desconectar o outro também.',
+    calsTitle: 'Suas agendas',
+    calsLede: 'O Juno lê todas juntas para os resumos e “o que tenho amanhã?”. Uma reunião que está em duas conta uma vez.',
+    calNew: 'Os eventos novos vão para cá',
+    calUse: 'Usar para eventos novos',
+    calViaEmail: 'Conectada em E-mail',
+    calViaGoogle: 'Conectada acima',
+    calWorking: 'Um momento…',
+    calBroken: 'O Google parou de aceitar o acesso do Juno.',
+    calAddAnother: 'Adicionar outra agenda',
+    calsFine: 'Até 5 agendas. Diga “coloque na minha agenda do trabalho” no chat para escolher uma para um evento.',
     errors: {
       cancelled: 'Você cancelou na tela do Google, então nada foi conectado.',
       state: 'Essa tentativa de conexão expirou. Tente de novo.',
@@ -150,8 +180,12 @@ function Account({ conn, T, icon }: { conn: GcalConnection; T: typeof CP_EN; ico
   )
 }
 
-export default function GooglePanel({ configured, conn, on, justConnected, justDisconnected, error }: {
+type Cal = { key: string; address: string | null; via: 'google' | 'email'; broken: boolean; isDefault: boolean }
+
+export default function GooglePanel({ configured, conn, on, justConnected, justDisconnected, calendars = [], canAddCalendar = false, error }: {
   configured: boolean
+  calendars?: Cal[]
+  canAddCalendar?: boolean
   conn: GcalConnection | null
   on: { calendar: boolean; drive: boolean }
   justConnected: GoogleWant | null
@@ -160,7 +194,7 @@ export default function GooglePanel({ configured, conn, on, justConnected, justD
 }) {
   const T = useCopy(CP)
   const router = useRouter()
-  const [busy, setBusy] = useState<'gcal' | 'drive' | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(error ? T.errors[error] ?? decodeURIComponent(error) : null)
   const live = Boolean(conn && !conn.last_error)
 
@@ -170,6 +204,19 @@ export default function GooglePanel({ configured, conn, on, justConnected, justD
       const r = await fetch('/api/pen/google-calendar/disconnect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ what }) })
       if (!r.ok) throw new Error(T.failed)
       router.replace(`/pen/settings/google?disconnected=${what}`)
+      router.refresh()
+    } catch (e) {
+      setErr(errMessage(e, T.failed))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function setDefault(key: string) {
+    setBusy(key); setErr(null)
+    try {
+      const r = await fetch('/api/pen/calendars/default', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }) })
+      if (!r.ok) throw new Error(T.failed)
       router.refresh()
     } catch (e) {
       setErr(errMessage(e, T.failed))
@@ -224,6 +271,40 @@ export default function GooglePanel({ configured, conn, on, justConnected, justD
           </>
         )}
       </div>
+
+      {(calendars.length > 1 || calendars.some((c) => c.via === 'email')) && (
+        <div className="pen-set-card">
+          <div className="pen-set-card-head">
+            <h2 className="pen-set-h2">{T.calsTitle}</h2>
+            <p className="pen-set-lede">{T.calsLede}</p>
+          </div>
+          <ul className="pen-mail-list">
+            {calendars.map((c) => (
+              <li key={c.key} className="pen-mail-row" data-default={c.isDefault} data-broken={c.broken}>
+                <span className="pen-gcal-mark" aria-hidden="true"><Icon name="calendar" size={20} /></span>
+                <span className="pen-mail-who">
+                  <strong>{c.address ? <>{c.address.split('@')[0]}@<wbr />{c.address.split('@').slice(1).join('@')}</> : T.connectedNoEmail}</strong>
+                  <span>
+                    {c.isDefault && calendars.length > 1 && <em className="pen-mail-default">{T.calNew}</em>}
+                    {c.broken ? T.calBroken : c.via === 'email' ? T.calViaEmail : T.calViaGoogle}
+                  </span>
+                </span>
+                <span className="pen-mail-acts">
+                  {!c.isDefault && !c.broken && (
+                    <button type="button" className="pen-btn" onClick={() => setDefault(c.key)} disabled={busy !== null}>{busy === c.key ? T.calWorking : T.calUse}</button>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {canAddCalendar && (
+            <div className="pen-set-actions">
+              <a className="pen-btn" href="/api/pen/gmail/connect?cal=1">{T.calAddAnother}</a>
+            </div>
+          )}
+          <p className="pen-set-fine">{T.calsFine}</p>
+        </div>
+      )}
 
       <div className="pen-set-card">
         <div className="pen-set-card-head">

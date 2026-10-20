@@ -7,14 +7,14 @@ import { useCopy } from '../../LangContext'
 import { errMessage } from '@/lib/pen/http'
 import type { Copy } from '@/lib/pen/i18n'
 
-type Account = { address: string; isDefault: boolean; needsReconnect: boolean; canRead: boolean }
+type Account = { address: string; isDefault: boolean; needsReconnect: boolean; canRead: boolean; calendar: 'off' | 'on' | 'default' }
 
 const EM_EN = {
   title: 'Send from your Gmail',
   lede: 'When you say “send it” to a draft in the chat, it goes from your own address and lands in your Sent folder.',
   connect: 'Connect Gmail',
   another: 'Connect another Gmail',
-  how: 'Google asks for one permission: to send email as you. Juno can’t read, search or delete your mail. Any Google account works, including a work one.',
+  how: 'Google asks to send email as you, and to see and add events on that account’s calendar (untick it if you only want sending). Juno can’t read, search or delete your mail. Any Google account works, including a work one.',
   isDefault: 'Default',
   defaultLine: 'Drafts go from here unless you name another.',
   otherLine: 'Used when you say “send it from this address”, or for people you last wrote to from it.',
@@ -37,6 +37,17 @@ const EM_EN = {
   readsSome: 'Only when you ask in the chat (search, open a thread), read-only. Nothing from your inbox is kept.',
   readFlash: (a: string) => `${a} is connected, and Juno can read it when you ask in the chat.`,
   readDenied: 'Reading wasn’t allowed on Google’s screen, so Juno can still only send from that address.',
+  // Calendar per address (20 Oct)
+  calOn: 'Calendar connected.',
+  calDefault: 'Calendar connected. New events go here.',
+  calUseNew: 'Use for new events',
+  calAdd: 'Add calendar',
+  calOff: 'Turn off calendar',
+  calFlashOn: 'Its calendar is connected too.',
+  calFlashDenied: 'The calendar wasn’t allowed on Google’s screen. Use “Add calendar” to try again.',
+  calFlashFull: 'Its calendar wasn’t added: you already have 5 calendars connected.',
+  calendarLabel: 'Calendar',
+  calendarTerms: 'For each address with its calendar on: sees and adds events on calendars that account owns. Briefs and “what’s on tomorrow?” read all of them together.',
   errors: {
     cancelled: 'You cancelled on Google’s screen, so nothing was connected.',
     state: 'That connection attempt expired. Try again.',
@@ -55,7 +66,7 @@ const EM: Copy<typeof EM_EN> = {
     lede: 'Cuando dices “envíalo” a un borrador en el chat, sale desde tu propia dirección y queda en tus Enviados.',
     connect: 'Conectar Gmail',
     another: 'Conectar otro Gmail',
-    how: 'Google pide un solo permiso: enviar correos en tu nombre. Juno no puede leer, buscar ni borrar tu correo. Sirve cualquier cuenta de Google, también la del trabajo.',
+    how: 'Google pide enviar correos en tu nombre, y ver y agregar eventos en el calendario de esa cuenta (desmárcalo si solo quieres enviar). Juno no puede leer, buscar ni borrar tu correo. Sirve cualquier cuenta de Google, también la del trabajo.',
     isDefault: 'Predeterminada',
     defaultLine: 'Los borradores salen desde aquí, salvo que nombres otra.',
     otherLine: 'Se usa cuando dices “envíalo desde esta dirección”, o con quienes les escribiste la última vez desde ella.',
@@ -77,6 +88,16 @@ const EM: Copy<typeof EM_EN> = {
     readsSome: 'Solo cuando se lo pides en el chat (buscar, abrir un hilo), en modo solo lectura. No se guarda nada de tu bandeja.',
     readFlash: (a) => `${a} quedó conectada, y Juno puede leerla cuando se lo pides en el chat.`,
     readDenied: 'No se permitió la lectura en la pantalla de Google, así que Juno solo puede enviar desde esa dirección.',
+    calOn: 'Calendario conectado.',
+    calDefault: 'Calendario conectado. Los eventos nuevos van aquí.',
+    calUseNew: 'Usar para eventos nuevos',
+    calAdd: 'Agregar calendario',
+    calOff: 'Desactivar calendario',
+    calFlashOn: 'Su calendario también quedó conectado.',
+    calFlashDenied: 'No se permitió el calendario en la pantalla de Google. Usa “Agregar calendario” para intentarlo de nuevo.',
+    calFlashFull: 'Su calendario no se agregó: ya tienes 5 calendarios conectados.',
+    calendarLabel: 'Calendario',
+    calendarTerms: 'En cada dirección con su calendario activo: ve y agrega eventos en los calendarios de esa cuenta. Los resúmenes y “¿qué tengo mañana?” los leen todos juntos.',
     errors: {
       cancelled: 'Cancelaste en la pantalla de Google, así que no se conectó nada.',
       state: 'Ese intento de conexión expiró. Inténtalo de nuevo.',
@@ -92,7 +113,7 @@ const EM: Copy<typeof EM_EN> = {
     lede: 'Quando você diz “enviar” a um rascunho no chat, ele sai do seu próprio endereço e fica nos seus Enviados.',
     connect: 'Conectar o Gmail',
     another: 'Conectar outro Gmail',
-    how: 'O Google pede uma única permissão: enviar e-mails em seu nome. O Juno não consegue ler, buscar nem apagar seus e-mails. Qualquer conta Google serve, inclusive a do trabalho.',
+    how: 'O Google pede para enviar e-mails em seu nome, e para ver e adicionar eventos na agenda dessa conta (desmarque se quiser só enviar). O Juno não consegue ler, buscar nem apagar seus e-mails. Qualquer conta Google serve, inclusive a do trabalho.',
     isDefault: 'Padrão',
     defaultLine: 'Os rascunhos saem daqui, a menos que você indique outro.',
     otherLine: 'Usado quando você diz “envie deste endereço”, ou para quem você escreveu por último a partir dele.',
@@ -114,6 +135,16 @@ const EM: Copy<typeof EM_EN> = {
     readsSome: 'Só quando você pede no chat (buscar, abrir uma conversa), somente leitura. Nada da sua caixa é guardado.',
     readFlash: (a) => `${a} está conectado, e o Juno pode ler quando você pede no chat.`,
     readDenied: 'A leitura não foi permitida na tela do Google, então o Juno só consegue enviar desse endereço.',
+    calOn: 'Agenda conectada.',
+    calDefault: 'Agenda conectada. Os eventos novos vão para cá.',
+    calUseNew: 'Usar para eventos novos',
+    calAdd: 'Adicionar agenda',
+    calOff: 'Desativar agenda',
+    calFlashOn: 'A agenda dele também foi conectada.',
+    calFlashDenied: 'A agenda não foi permitida na tela do Google. Use “Adicionar agenda” para tentar de novo.',
+    calFlashFull: 'A agenda dele não foi adicionada: você já tem 5 agendas conectadas.',
+    calendarLabel: 'Agenda',
+    calendarTerms: 'Em cada endereço com a agenda ativa: vê e adiciona eventos nas agendas dessa conta. Os resumos e “o que tenho amanhã?” leem todas juntas.',
     errors: {
       cancelled: 'Você cancelou na tela do Google, então nada foi conectado.',
       state: 'Essa tentativa de conexão expirou. Tente de novo.',
@@ -136,12 +167,16 @@ export default function EmailPanel({
   readAllowed = false,
   justConnected,
   readResult = null,
+  calResult = null,
+  severalCalendars = false,
   error,
 }: {
   accounts: Account[]
   readAllowed?: boolean
   justConnected: string | null
   readResult?: 'on' | 'denied' | null
+  calResult?: 'on' | 'denied' | 'full' | null
+  severalCalendars?: boolean
   error: string | null
 }) {
   const T = useCopy(EM)
@@ -149,10 +184,10 @@ export default function EmailPanel({
   const [busy, setBusy] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(error ? T.errors[error] ?? decodeURIComponent(error) : null)
 
-  async function post(path: string, address: string) {
+  async function post(path: string, address: string, body: Record<string, string> = { address }) {
     setBusy(address); setErr(null)
     try {
-      const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address }) })
+      const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (!r.ok) throw new Error(T.failed)
       router.replace('/pen/settings/email')
       router.refresh()
@@ -164,8 +199,11 @@ export default function EmailPanel({
   }
 
   const connectedNow = justConnected && accounts.some((a) => a.address === justConnected.toLowerCase()) ? justConnected : null
-  const flash = connectedNow ? (readResult === 'on' ? T.readFlash(connectedNow) : readResult === 'denied' ? `${T.justConnected(connectedNow)} ${T.readDenied}` : T.justConnected(connectedNow)) : null
+  const base = connectedNow ? (readResult === 'on' ? T.readFlash(connectedNow) : readResult === 'denied' ? `${T.justConnected(connectedNow)} ${T.readDenied}` : T.justConnected(connectedNow)) : null
+  const calLine = calResult === 'on' ? T.calFlashOn : calResult === 'denied' ? T.calFlashDenied : calResult === 'full' ? T.calFlashFull : ''
+  const flash = base ? `${base}${calLine ? ` ${calLine}` : ''}` : null
   const anyReads = accounts.some((a) => a.canRead)
+  const anyCal = accounts.some((a) => a.calendar !== 'off')
 
   return (
     <div className="pen-set-stack">
@@ -192,6 +230,17 @@ export default function EmailPanel({
                   {readAllowed && !a.needsReconnect && (a.canRead
                     ? <span>{T.readOn}</span>
                     : <a className="pen-mail-read" href={`${CONNECT}?read=1&address=${encodeURIComponent(a.address)}`}>{T.letRead}</a>)}
+                  {!a.needsReconnect && (a.calendar === 'off'
+                    ? <a className="pen-mail-read" href={`${CONNECT}?cal=1&address=${encodeURIComponent(a.address)}`}>{T.calAdd}</a>
+                    : (
+                      <span className="pen-mail-cal">
+                        <span>{a.calendar === 'default' && severalCalendars ? T.calDefault : T.calOn}</span>
+                        {a.calendar === 'on' && severalCalendars && (
+                          <button type="button" className="pen-mail-off" onClick={() => post('/api/pen/calendars/default', a.address, { key: a.address })} disabled={busy !== null}>{T.calUseNew}</button>
+                        )}
+                        <button type="button" className="pen-mail-off" onClick={() => post('/api/pen/gmail/calendar-off', a.address)} disabled={busy !== null}>{T.calOff}</button>
+                      </span>
+                    ))}
                 </span>
                 <span className="pen-mail-acts">
                   {a.needsReconnect && <a className="pen-btn pen-btn-accent" href={CONNECT}>{T.reconnect}</a>}
@@ -226,6 +275,7 @@ export default function EmailPanel({
         <dl className="pen-gcal-terms">
           <div><dt>{T.sendsLabel}</dt><dd>{T.sends}</dd></div>
           <div><dt>{T.readsLabel}</dt><dd>{anyReads ? T.readsSome : T.reads}</dd></div>
+          {anyCal && <div><dt>{T.calendarLabel}</dt><dd>{T.calendarTerms}</dd></div>}
         </dl>
       </div>
 

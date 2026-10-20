@@ -1,5 +1,7 @@
 import { authedEmail } from '@/lib/news/auth'
 import { abilities, asWant, gcalConfigured, getGcalConnection } from '@/lib/pen/google-calendar'
+import { defaultCalendar, listCalendars } from '@/lib/pen/calendars'
+import { gmailAvailable } from '@/lib/pen/gmail'
 import GooglePanel from './GooglePanel'
 
 export const dynamic = 'force-dynamic'
@@ -11,6 +13,9 @@ export default async function GooglePage({ searchParams }: { searchParams: Promi
   const sp = await searchParams
   const one = (k: string) => (typeof sp[k] === 'string' ? (sp[k] as string) : null)
   const conn = await getGcalConnection(email).catch(() => null)
+  // Every connected calendar (20 Oct, lib/pen/calendars.ts): this one plus addresses from Settings → Email.
+  const [cals, mail] = await Promise.all([listCalendars(email).catch(() => []), gmailAvailable().catch(() => false)])
+  const def = cals.length ? (await defaultCalendar(email, cals).catch(() => null))?.key ?? null : null
   const connected = one('connected')
   const disconnected = one('disconnected')
   return (
@@ -20,6 +25,8 @@ export default async function GooglePage({ searchParams }: { searchParams: Promi
       on={abilities(conn)}
       justConnected={connected ? (connected === '1' ? 'gcal' : asWant(connected)) : null}
       justDisconnected={disconnected === 'drive' ? 'drive' : disconnected ? 'gcal' : null}
+      calendars={cals.map((c) => ({ key: c.key, address: c.address, via: c.via, broken: c.broken, isDefault: c.key === def }))}
+      canAddCalendar={mail && cals.length < 5}
       error={one('error')}
     />
   )

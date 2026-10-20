@@ -4267,6 +4267,9 @@ html.pen-m-lock, html.pen-m-lock body { height: 100%; overflow: hidden; overscro
 }
 .pen-mail-read:hover { text-decoration-color: currentColor; }
 .pen-mail-read:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+/* A calendar's state under its address: words, then quiet text actions (20 Oct). */
+.pen-mail-cal { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 12px; row-gap: 2px; }
+.pen-mail-cal .pen-mail-off { font-size: inherit; padding: 4px 0; min-height: 0; }
 @media (max-width: 560px) {
   .pen-mail-row { grid-template-columns: auto 1fr; }
   .pen-mail-acts { grid-column: 2; justify-content: flex-start; }
