@@ -139,6 +139,8 @@ export type GraphEvent = {
   organizer?: { emailAddress?: { name?: string | null; address?: string | null } } | null
   isOrganizer?: boolean
   iCalUId?: string | null
+  /** 'singleInstance' | 'occurrence' | 'exception' | 'seriesMaster' */
+  type?: string | null
   responseStatus?: { response?: string } | null
   singleValueExtendedProperties?: { id: string; value: string }[]
 }
@@ -148,7 +150,7 @@ export type GraphEvent = {
  * Outlook's public-strings set, value = the pen_suggestions id it came from, or "1".
  */
 export const JUNO_PROP = 'String {00020329-0000-0000-C000-000000000046} Name junoRef'
-export const EVENT_SELECT = 'id,subject,bodyPreview,isCancelled,isAllDay,start,end,location,webLink,isOnlineMeeting,onlineMeetingProvider,onlineMeeting,onlineMeetingUrl,attendees,organizer,isOrganizer,iCalUId,responseStatus'
+export const EVENT_SELECT = 'id,subject,bodyPreview,isCancelled,isAllDay,start,end,location,webLink,isOnlineMeeting,onlineMeetingProvider,onlineMeeting,onlineMeetingUrl,attendees,organizer,isOrganizer,iCalUId,type,responseStatus'
 export const EVENT_EXPAND = `singleValueExtendedProperties($filter=id eq '${JUNO_PROP}')`
 
 /** Minutes east of UTC for a zone at an instant. */
@@ -247,6 +249,7 @@ export function fromGraph(e: GraphEvent, self?: string | null): UpcomingEvent {
     organizerSelf: e.isOrganizer === true,
     organizer: org ? { email: org, name: e.organizer?.emailAddress?.name?.trim() || null } : null,
     ...(notes ? { description: notes } : {}),
+    ...(e.type === 'occurrence' || e.type === 'exception' ? { recurring: true } : {}),
   }
 }
 

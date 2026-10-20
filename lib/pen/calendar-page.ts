@@ -62,6 +62,7 @@ export function toViewEvent(e: UpcomingEvent, o: { own: Set<string>; now?: Date;
     organizer: e.organizer ? { email: e.organizer.email, name: e.organizer.name } : null,
     editable: isEditable(e, o.own),
     juno: e.juno,
+    recurring: Boolean(e.recurring),
     recording: o.recording ?? null,
     hasBrief: !e.allDay && !e.declined && e.others.length > 0 && !Number.isNaN(startMs) && startMs > now,
   }

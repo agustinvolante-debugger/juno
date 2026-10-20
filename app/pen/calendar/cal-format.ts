@@ -86,9 +86,10 @@ export function zoneShort(lang: Lang): string {
   }
 }
 
-/** A Google instance id ("abc_20261021T160000Z") means one occurrence of a repeating event.
- *  The contract has no recurrence flag, so this is a best guess; Outlook occurrences don't say. */
+/** One occurrence of a repeating event: the server's flag (Google recurringEventId, Outlook type
+ *  occurrence/exception); older payloads without it fall back to Google's instance id ("abc_20261021T160000Z"). */
 export function looksRecurring(ev: CalViewEvent): boolean {
+  if (typeof ev.recurring === 'boolean') return ev.recurring
   const id = ev.ref.split('|')[0] ?? ''
   return /_\d{8}(T\d{6}Z?)?$/.test(id)
 }

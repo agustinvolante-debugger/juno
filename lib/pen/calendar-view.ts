@@ -53,6 +53,8 @@ export type CalViewEvent = {
   editable: boolean
   /** Juno added it. */
   juno: boolean
+  /** One occurrence of a repeating event: a change applies to that occurrence only. */
+  recurring?: boolean
   /** A past meeting matched to its Pen recording (time overlap, guests). */
   recording: { id: string; title: string } | null
   /** An upcoming meeting with guests: GET /api/pen/calendar/brief has something to show. */

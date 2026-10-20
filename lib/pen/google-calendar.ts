@@ -322,6 +322,7 @@ type GEvent = {
   start?: { dateTime?: string; date?: string; timeZone?: string }
   end?: { dateTime?: string; date?: string }
   iCalUID?: string
+  recurringEventId?: string
   organizer?: { email?: string; displayName?: string; self?: boolean }
   attendees?: { email?: string; displayName?: string; self?: boolean; resource?: boolean; organizer?: boolean; responseStatus?: string }[]
   conferenceData?: { entryPoints?: { entryPointType?: string; uri?: string }[] }
@@ -417,6 +418,8 @@ export type UpcomingEvent = {
   cals?: string[]
   /** Its notes, as plain text (≤ 1000 chars; Google's description, Outlook's bodyPreview). Absent when empty. */
   description?: string
+  /** One occurrence of a repeating event (a change applies to that occurrence only). */
+  recurring?: boolean
 }
 
 export function toUpcoming(e: GEvent): UpcomingEvent {
@@ -439,10 +442,11 @@ export function toUpcoming(e: GEvent): UpcomingEvent {
     organizerSelf: e.organizer?.self === true,
     organizer: e.organizer?.email ? { email: e.organizer.email.toLowerCase(), name: e.organizer.displayName?.trim() || null } : null,
     ...(notes ? { description: notes } : {}),
+    ...(e.recurringEventId ? { recurring: true } : {}),
   }
 }
 
-const EVENT_FIELDS = 'id,status,summary,description,location,htmlLink,hangoutLink,start,end,iCalUID,organizer(email,displayName,self),attendees(email,displayName,self,resource,responseStatus),conferenceData(entryPoints(entryPointType,uri)),extendedProperties'
+const EVENT_FIELDS = 'id,status,summary,description,location,htmlLink,hangoutLink,start,end,iCalUID,recurringEventId,organizer(email,displayName,self),attendees(email,displayName,self,resource,responseStatus),conferenceData(entryPoints(entryPointType,uri)),extendedProperties'
 
 /** The user's events from now to `days` ahead (at most READ_DAYS), soonest first. Never stored. */
 export async function upcomingEvents(email: string, days = READ_DAYS, now = new Date(), src?: CalSrc): Promise<UpcomingEvent[]> {
