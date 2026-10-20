@@ -121,6 +121,8 @@ const en = {
   confirmDeleteChat: (t: string) => `Delete “${t}”? This removes the conversation for good.`,
   chatActionFailed: 'That did not work. Try again.',
   pages: 'Pages',
+  calendar: 'Calendar',
+  mAdd: 'Add',
 
   // header and banners
   browseAria: 'Browse recordings and categories',
@@ -452,6 +454,8 @@ const es: AppCopy = {
   confirmDeleteChat: (t) => `¿Eliminar «${t}»? La conversación se borra para siempre.`,
   chatActionFailed: 'No funcionó. Inténtalo otra vez.',
   pages: 'Páginas',
+  calendar: 'Calendario',
+  mAdd: 'Agregar',
 
   browseAria: 'Ver grabaciones y categorías',
   browse: 'Menú',
@@ -770,6 +774,8 @@ const pt: AppCopy = {
   confirmDeleteChat: (t) => `Excluir “${t}”? A conversa é apagada para sempre.`,
   chatActionFailed: 'Não funcionou. Tente de novo.',
   pages: 'Páginas',
+  calendar: 'Calendário',
+  mAdd: 'Adicionar',
 
   browseAria: 'Ver gravações e categorias',
   browse: 'Menu',

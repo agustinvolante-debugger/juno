@@ -480,3 +480,31 @@
     .pen-doc.mt-7 { margin-top: 18px; }
   }
 }
+
+/* ===================================================== Calendar page (22 Oct) */
+/* The Calendar takes the whole width: a week grid next to the 336px recordings rail would be
+   cramped, so the rail steps aside on that page (All recordings in the sidebar goes Home). */
+.pen-root:has(.pen-page) .pen-shell[data-view='calendar'] { grid-template-columns: minmax(0, 1fr); }
+.pen-root:has(.pen-page) .pen-shell[data-view='calendar'] > .pen-rail { display: none; }
+
+.pen-root:has(.pen-m) {
+  /* Recordings on a phone: the Add pill heads the list (the Upload tab became Calendar). */
+  .pen-m-listhead { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin: 0 0 14px; }
+  .pen-m-listhead .pen-m-filterrow { margin: 0 auto 0 0; min-width: 0; }
+  .pen-m-add {
+    display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 18px 0 14px;
+    border: 1px solid #0062c4; border-radius: 9999px; cursor: pointer;
+    font-family: var(--ui); font-size: 15px; font-weight: 600; color: #fff;
+    background: linear-gradient(180deg, #1b7be3, #0066cc);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .32), 0 1px 2px rgba(0, 51, 122, .22), 0 8px 18px -8px rgba(0, 102, 204, .55);
+  }
+  .pen-m-add:active { transform: scale(.98); }
+  .pen-m-add:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+}
+
+/* The Add sheet (portalled to .pen-root): the old Upload screen, sized to its content and
+   scrolling inside when the list is long. */
+.pen-root .pen-m-addsheet { max-height: calc(100dvh - 48px); overflow-y: auto; overscroll-behavior: contain; }
+.pen-root .pen-m-addsheet .pen-gw-sheet-title { padding-right: 48px; }
+.pen-root .pen-m-addsheet .pen-m-upload { min-height: 0; gap: 14px; }
+.pen-root .pen-m-addsheet .pen-m-upload-actions { margin-top: 0; }

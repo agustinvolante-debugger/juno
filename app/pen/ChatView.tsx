@@ -44,6 +44,7 @@ const CV_EN = {
   asking: 'Asking…',
   ask: 'Ask',
   recent: 'Recent',
+  pages: 'Pages',
 }
 
 const CV: Copy<typeof CV_EN> = {
@@ -71,6 +72,7 @@ const CV: Copy<typeof CV_EN> = {
     asking: 'Preguntando…',
     ask: 'Preguntar',
     recent: 'Recientes',
+    pages: 'Páginas',
   },
   pt: {
     quick: [
@@ -95,6 +97,7 @@ const CV: Copy<typeof CV_EN> = {
     asking: 'Perguntando…',
     ask: 'Perguntar',
     recent: 'Recentes',
+    pages: 'Páginas',
   },
 }
 
@@ -109,6 +112,8 @@ export default function ChatView({
   suggestions = [],
   recent = [],
   onOpenRecent,
+  pages = [],
+  onOpenPage,
   readOnly = false,
 }: {
   chatId: string | null
@@ -119,6 +124,9 @@ export default function ChatView({
   /** Recent threads to reopen from an empty chat (phone). */
   recent?: { id: string; title: string }[]
   onOpenRecent?: (id: string) => void
+  /** Saved pages (pen_docs), newest first: they live here, under Recent, since the sidebar gave its slot to Calendar. */
+  pages?: { id: string; title: string }[]
+  onOpenPage?: (id: string) => void
   /** What @ can tag: people, and recordings (joined meetings once, under their first part). */
   recordings?: Taggable[]
   /** A question typed into the header search, with its @-tags; asked as soon as the view mounts. */
@@ -272,6 +280,14 @@ export default function ChatView({
                 <span className="pen-label">{T.recent}</span>
                 {recent.map((r) => (
                   <button type="button" key={r.id} className="pen-chat-recent-btn" onClick={() => onOpenRecent(r.id)}>{r.title}</button>
+                ))}
+              </div>
+            )}
+            {pages.length > 0 && onOpenPage && (
+              <div className="pen-chat-recent">
+                <span className="pen-label">{T.pages}</span>
+                {pages.slice(0, 6).map((d) => (
+                  <button type="button" key={d.id} className="pen-chat-recent-btn" onClick={() => onOpenPage(d.id)}>{d.title}</button>
                 ))}
               </div>
             )}
