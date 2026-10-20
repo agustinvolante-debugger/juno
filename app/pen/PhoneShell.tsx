@@ -12,19 +12,19 @@ import Icon, { type IconName } from './Icon'
 import { useCopy } from './LangContext'
 import type { Copy } from '@/lib/pen/i18n'
 
-export type PhoneTab = 'home' | 'upload' | 'recordings' | 'search'
+export type PhoneTab = 'home' | 'calendar' | 'recordings' | 'search'
 
 const TABS: { id: PhoneTab; icon: IconName }[] = [
   { id: 'home', icon: 'home' },
-  { id: 'upload', icon: 'plus' },
+  { id: 'calendar', icon: 'calendar' },
   { id: 'recordings', icon: 'recordings' },
   { id: 'search', icon: 'chat' },
 ]
 
 const PS: Copy<Record<PhoneTab, string> & { back: string; tabs: string; skip: string }> = {
-  en: { home: 'Home', upload: 'Upload', recordings: 'Recordings', search: 'Chat', back: 'Back', tabs: 'Main', skip: 'Skip to main content' },
-  es: { home: 'Inicio', upload: 'Subir', recordings: 'Grabaciones', search: 'Chat', back: 'Atrás', tabs: 'Principal', skip: 'Ir al contenido principal' },
-  pt: { home: 'Início', upload: 'Enviar', recordings: 'Gravações', search: 'Chat', back: 'Voltar', tabs: 'Principal', skip: 'Ir para o conteúdo principal' },
+  en: { home: 'Home', calendar: 'Calendar', recordings: 'Recordings', search: 'Chat', back: 'Back', tabs: 'Main', skip: 'Skip to main content' },
+  es: { home: 'Inicio', calendar: 'Calendario', recordings: 'Grabaciones', search: 'Chat', back: 'Atrás', tabs: 'Principal', skip: 'Ir al contenido principal' },
+  pt: { home: 'Início', calendar: 'Calendário', recordings: 'Gravações', search: 'Chat', back: 'Voltar', tabs: 'Principal', skip: 'Ir para o conteúdo principal' },
 }
 
 export default function PhoneShell({

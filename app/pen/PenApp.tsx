@@ -19,6 +19,7 @@ import Tour from './Tour'
 import GetWhatsApp, { WaChatSheet } from './GetWhatsApp'
 import { speakersIn, type SpeakerMap } from '@/lib/pen/speakers'
 import ChatView from './ChatView'
+import CalendarView from './calendar/CalendarView'
 import DocView from './DocView'
 import Overview from './Overview'
 import { JunoNoticed, DateChip } from './JunoNoticed'
@@ -60,6 +61,7 @@ type View =
   | { k: 'session'; id: string }
   | { k: 'chat'; id: string | null }
   | { k: 'doc'; id: string }
+  | { k: 'calendar' }
 
 // The File System Access API isn't in the default TS lib.
 type FsHandle = { kind: 'file' | 'directory'; name: string; getFile?: () => Promise<File> }
@@ -208,6 +210,15 @@ export default function PenApp({
     window.history.replaceState(null, '', u.toString())
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  // ?view=calendar: links (an email, Settings → Calendar) open the Calendar page. Dropped
+  // afterwards, like ?open=.
+  useEffect(() => {
+    const u = new URL(window.location.href)
+    if (u.searchParams.get('view') !== 'calendar') return
+    setView({ k: 'calendar' })
+    u.searchParams.delete('view')
+    window.history.replaceState(null, '', u.toString())
+  }, [])
   // The browser's time zone, so WhatsApp reminders and calendar links use the right clock
   // (lib/pen/timezone.ts). Once a day per browser; the server skips it while a zone the user
   // gave on WhatsApp ("in SF until Friday") is still in force.
@@ -263,11 +274,15 @@ export default function PenApp({
   const lastChat = useRef<View>({ k: 'chat', id: null })
   useEffect(() => {
     if (view.k === 'session') setPhoneTab('recordings')
+    else if (view.k === 'calendar') setPhoneTab('calendar')
     else if (view.k === 'chat' || view.k === 'doc') { setPhoneTab('search'); lastChat.current = view }
   }, [view])
   // The Chat tab before WhatsApp (or iMessage) is linked: a sheet with the one tap to Juno on
   // WhatsApp, or the web chat. Choosing the web chat is remembered on this phone.
   const [waSheet, setWaSheet] = useState(false)
+  // Every way to add a recording (pen, WhatsApp, transcript, Notion, Granola, audio files), as a
+  // sheet over Recordings since the Calendar took the Upload tab's place (22 Oct).
+  const [addSheet, setAddSheet] = useState(false)
   /** A tab tap. Tapping the tab you're on goes back to its first screen, as apps do. */
   const goTab = (t: PhoneTab, viaSheet = false) => {
     if (t === 'search' && !viaSheet && phoneTab !== 'search' && whatsapp && !whatsapp.linked) {
@@ -278,16 +293,17 @@ export default function PenApp({
     if (t === 'home' || (t === 'recordings' && (phoneTab === 'recordings' || view.k !== 'session'))) setView({ k: 'archive' })
     if (t === 'search' && view.k !== 'chat' && view.k !== 'doc') setView(lastChat.current)
     if (t === 'search' && phoneTab === 'search') { setChatSeed(null); setView({ k: 'chat', id: null }) }
+    if (t === 'calendar') setView({ k: 'calendar' })
     setPhoneTab(t)
   }
   // Settings' phone tab bar links back here with ?tab=, since Settings is its own page.
   useEffect(() => {
     if (!isPhone) return
     const t = new URLSearchParams(window.location.search).get('tab')
-    if (t === 'home' || t === 'upload' || t === 'recordings' || t === 'search') {
-      goTab(t)
-      window.history.replaceState(null, '', window.location.pathname)
-    }
+    if (t === 'home' || t === 'calendar' || t === 'recordings' || t === 'search') goTab(t)
+    // Old links to the Upload tab: Recordings, with the Add sheet open.
+    else if (t === 'upload') { goTab('recordings'); setAddSheet(true) }
+    if (t) window.history.replaceState(null, '', window.location.pathname)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPhone])
   // Linked to WhatsApp (or iMessage): the phone's Chat tab opens that chat, where the assistant
@@ -977,6 +993,65 @@ export default function PenApp({
       </>
     )
 
+    // What the Upload tab used to hold; now the Add sheet over Recordings.
+    const uploadBody = (
+        <div className="pen-m-upload">
+          <div className="pen-m-meter"><UsageBar allowance={allowance} /></div>
+          <div className="pen-m-upload-actions">
+          {readOnly ? (
+            <ReadOnlyBanner T={T} />
+          ) : paused ? (
+            <div className="pen-paused">
+              <strong>{T.pausedTitle(fmtDate(paused, appLang, { day: 'numeric', month: 'long' }))}</strong>
+              <span>{T.pausedSub}</span>
+              <button type="button" className="pen-btn pen-btn-accent" onClick={resumePlan} disabled={resuming}>
+                {resuming ? T.resuming : T.resumeNow}
+              </button>
+            </div>
+          ) : (
+            <>
+              <p className="pen-m-lede">{T.mUploadLede}</p>
+              {supportsPicker && (
+                <button type="button" className="pen-m-rowbtn" onClick={() => { setAddSheet(false); connectPen() }}>
+                  <Icon name="usb" size={19} />
+                  <span>{T.connectPen}</span>
+                </button>
+              )}
+              {whatsapp && (
+                <a className="pen-m-rowbtn" href={whatsapp.linked ? `https://wa.me/${whatsapp.number}` : '/pen/settings/connections#whatsapp'}>
+                  <Icon name="chat" size={19} />
+                  <span>
+                    <strong>{whatsapp.linked ? T.waPhoneLinked : T.waPhoneUnlinked}</strong>
+                    <em>{whatsapp.linked ? T.waPhoneLinkedSub : T.waPhoneUnlinkedSub}</em>
+                  </span>
+                </a>
+              )}
+              <button type="button" className="pen-m-rowbtn" onClick={() => { setAddSheet(false); setTxImport(true) }}>
+                <Icon name="quote" size={19} />
+                <span>{T.importTranscript}</span>
+              </button>
+              {notion && (
+                <button type="button" className="pen-m-rowbtn" onClick={() => { setAddSheet(false); setNImport(true) }}>
+                  <Icon name="link" size={19} />
+                  <span>{T.importNotion}</span>
+                </button>
+              )}
+              {granola && (
+                <button type="button" className="pen-m-rowbtn" onClick={() => { setAddSheet(false); setGImport(true) }}>
+                  <Icon name="link" size={19} />
+                  <span>{T.importGranola}</span>
+                </button>
+              )}
+              <button type="button" className="pen-m-bigbtn" onClick={() => fileInput.current?.click()}>
+                <Icon name="plus" size={22} />
+                <span><strong>{T.mChoose}</strong><em>{T.mChooseSub}</em></span>
+              </button>
+            </>
+          )}
+          </div>
+        </div>
+    )
+
     let screen: React.ReactNode
     let title = ''
     let onBack: (() => void) | undefined
@@ -992,7 +1067,7 @@ export default function PenApp({
         <Overview
           phone
           ownRecordings={ownRecordings}
-          onUpload={locked ? undefined : () => { setPhoneTab('upload'); fileInput.current?.click() }}
+          onUpload={locked ? undefined : () => { setAddSheet(true); fileInput.current?.click() }}
           next={next}
           whatsapp={whatsapp ?? null}
           stats={stats}
@@ -1013,64 +1088,14 @@ export default function PenApp({
       ) : (
         <p className="pen-m-empty">{T.chooseRecording}</p>
       )
-    } else if (phoneTab === 'upload') {
-      title = T.mUploadTitle
+    } else if (phoneTab === 'calendar') {
+      title = T.calendar
       screen = (
-        <div className="pen-m-upload">
-          <div className="pen-m-meter"><UsageBar allowance={allowance} /></div>
-          <div className="pen-m-upload-actions">
-          {readOnly ? (
-            <ReadOnlyBanner T={T} />
-          ) : paused ? (
-            <div className="pen-paused">
-              <strong>{T.pausedTitle(fmtDate(paused, appLang, { day: 'numeric', month: 'long' }))}</strong>
-              <span>{T.pausedSub}</span>
-              <button type="button" className="pen-btn pen-btn-accent" onClick={resumePlan} disabled={resuming}>
-                {resuming ? T.resuming : T.resumeNow}
-              </button>
-            </div>
-          ) : (
-            <>
-              <p className="pen-m-lede">{T.mUploadLede}</p>
-              {supportsPicker && (
-                <button type="button" className="pen-m-rowbtn" onClick={connectPen}>
-                  <Icon name="usb" size={19} />
-                  <span>{T.connectPen}</span>
-                </button>
-              )}
-              {whatsapp && (
-                <a className="pen-m-rowbtn" href={whatsapp.linked ? `https://wa.me/${whatsapp.number}` : '/pen/settings/connections#whatsapp'}>
-                  <Icon name="chat" size={19} />
-                  <span>
-                    <strong>{whatsapp.linked ? T.waPhoneLinked : T.waPhoneUnlinked}</strong>
-                    <em>{whatsapp.linked ? T.waPhoneLinkedSub : T.waPhoneUnlinkedSub}</em>
-                  </span>
-                </a>
-              )}
-              <button type="button" className="pen-m-rowbtn" onClick={() => setTxImport(true)}>
-                <Icon name="quote" size={19} />
-                <span>{T.importTranscript}</span>
-              </button>
-              {notion && (
-                <button type="button" className="pen-m-rowbtn" onClick={() => setNImport(true)}>
-                  <Icon name="link" size={19} />
-                  <span>{T.importNotion}</span>
-                </button>
-              )}
-              {granola && (
-                <button type="button" className="pen-m-rowbtn" onClick={() => setGImport(true)}>
-                  <Icon name="link" size={19} />
-                  <span>{T.importGranola}</span>
-                </button>
-              )}
-              <button type="button" className="pen-m-bigbtn" onClick={() => fileInput.current?.click()}>
-                <Icon name="plus" size={22} />
-                <span><strong>{T.mChoose}</strong><em>{T.mChooseSub}</em></span>
-              </button>
-            </>
-          )}
-          </div>
-        </div>
+        <CalendarView
+          phone
+          onOpenRecording={(id) => { openSession(id); setTab('note'); setChatOpen(false) }}
+          onOpenConnections={() => router.push('/pen/settings/connections')}
+        />
       )
     } else if (phoneTab === 'recordings') {
       if (active) {
@@ -1127,11 +1152,17 @@ export default function PenApp({
         }
         screen = (
           <div className="pen-m-list">
-            {catFilter && (
-              <div className="pen-m-filterrow">
-                <RecFilterChip T={T} lang={appLang} cat={catFilter} onClear={() => setCatFilter(null)} />
-              </div>
-            )}
+            <div className="pen-m-listhead">
+              {catFilter && (
+                <div className="pen-m-filterrow">
+                  <RecFilterChip T={T} lang={appLang} cat={catFilter} onClear={() => setCatFilter(null)} />
+                </div>
+              )}
+              <button type="button" className="pen-m-add" aria-haspopup="dialog" aria-expanded={addSheet} onClick={() => setAddSheet(true)}>
+                <Icon name="plus" size={17} />
+                {T.mAdd}
+              </button>
+            </div>
             {visible.length === 0 ? (
               <p className="pen-m-empty">
                 {catFilter ? T.emptyCat : <>{T.emptyAll[0]}<strong>{T.connectPen}</strong>{T.emptyAll[1]}</>}
@@ -1195,6 +1226,8 @@ export default function PenApp({
             suggestions={searchSuggestions(stats, T, appLang)}
             recent={chats.slice(0, 3).map((c) => ({ id: c.id, title: c.title ?? T.untitledChat }))}
             onOpenRecent={(id) => openChat(id)}
+            pages={docs.map((d) => ({ id: d.id, title: d.title }))}
+            onOpenPage={(id) => setView({ k: 'doc', id })}
           />
         )
       }
@@ -1203,7 +1236,7 @@ export default function PenApp({
     return (
       <LangProvider lang={appLang}>
         <input ref={fileInput} type="file" multiple accept={accept} className="hidden"
-               onChange={(e) => e.target.files && addFiles(e.target.files)} />
+               onChange={(e) => { if (e.target.files) { setAddSheet(false); addFiles(e.target.files) } }} />
         <PhoneShell
           tab={phoneTab}
           onTab={goTab}
@@ -1253,6 +1286,12 @@ export default function PenApp({
           </>
         )}
 
+        {addSheet && (
+          <PhoneSheet title={T.mUploadTitle} closeLabel={T.close} onClose={() => setAddSheet(false)}>
+            {uploadBody}
+          </PhoneSheet>
+        )}
+
         {(pending.length > 0 || progress || importDone) && (
           <>
             <button className="pen-scrim pen-scrim-on" aria-label={T.close} onClick={closeSheet} />
@@ -1282,7 +1321,7 @@ export default function PenApp({
           />
         )}
         {gImport && <GranolaImport connected={Boolean(granola?.connected)} onClose={() => { setGImport(false); void refresh() }} onQueued={() => window.setTimeout(() => void refresh(), 8000)} />}
-        {tourOpen && <Tour lang={appLang} phone linked={Boolean(whatsapp?.linked)} onClose={closeTour} onUpload={() => { setPhoneTab('upload'); fileInput.current?.click() }} onOpenFirst={tourFirst} />}
+        {tourOpen && <Tour lang={appLang} phone linked={Boolean(whatsapp?.linked)} onClose={closeTour} onUpload={() => { setAddSheet(true); fileInput.current?.click() }} onOpenFirst={tourFirst} />}
         {waSheet && whatsapp && !whatsapp.linked && (
           <WaChatSheet
             number={whatsapp.number}
@@ -1428,12 +1467,29 @@ export default function PenApp({
           </button>
           <button
             className="pen-cat"
-            data-active={catFilter === null && view.k !== 'archive' && view.k !== 'chat' && view.k !== 'doc'}
+            data-active={view.k === 'calendar'}
+            aria-current={view.k === 'calendar' ? 'page' : undefined}
+            aria-label={sideCollapsed ? T.calendar : undefined}
+            data-tip={sideCollapsed ? T.calendar : undefined}
+            onClick={() => { setView({ k: 'calendar' }); setNavOpen(false) }}
+          >
+            <Icon name="calendar" size={19} />
+            <span className="pen-cat-label">{T.calendar}</span>
+          </button>
+          <button
+            className="pen-cat"
+            data-active={catFilter === null && view.k === 'session'}
             aria-pressed={railAll && catFilter === null}
             data-tour="recordings"
             aria-label={sideCollapsed ? T.allRecordingsNav : undefined}
             data-tip={sideCollapsed ? T.allRecordingsNav : undefined}
-            onClick={() => { setCatFilter(null); setRailAll(true); setNavOpen(false) }}
+            onClick={() => {
+              setCatFilter(null)
+              setRailAll(true)
+              setNavOpen(false)
+              // The Calendar page hides the rail: go where the list is.
+              if (view.k === 'calendar') setView({ k: 'archive' })
+            }}
           >
             <Icon name="recordings" size={19} />
             <span className="pen-cat-label">{T.allRecordingsNav}</span>
@@ -1457,18 +1513,6 @@ export default function PenApp({
           >
             <Icon name="chat" size={19} />
           </button>
-          {docs.length > 0 && (
-            <button
-              type="button"
-              className="pen-cat"
-              data-active={view.k === 'doc'}
-              aria-label={`${T.pages}: ${docs[0].title}`}
-              data-tip={docs[0].title}
-              onClick={() => setView({ k: 'doc', id: docs[0].id })}
-            >
-              <Icon name="doc" size={19} />
-            </button>
-          )}
         </nav>
       ) : (
       <nav className="pen-saved">
@@ -1510,26 +1554,6 @@ export default function PenApp({
               />
             ))}
           </div>
-        )}
-
-        {/* ---------------------------------------------------------- pages */}
-        {docs.length > 0 && (
-          <>
-            <div className="pen-cats-head pen-label">{T.pages}</div>
-            <div className="pen-cats-list">
-              {docs.slice(0, 4).map((d) => (
-                <button
-                  key={d.id}
-                  className="pen-cat"
-                  data-active={view.k === 'doc' && view.id === d.id}
-                  onClick={() => { setView({ k: 'doc', id: d.id }); setNavOpen(false) }}
-                  title={d.title}
-                >
-                  <span className="pen-cat-label">{d.title}</span>
-                </button>
-              ))}
-            </div>
-          </>
         )}
       </nav>
       )}
@@ -1649,7 +1673,7 @@ export default function PenApp({
         </>
       )}
 
-      <div className="pen-shell" data-nav={navOpen ? 'open' : 'closed'}>
+      <div className="pen-shell" data-nav={navOpen ? 'open' : 'closed'} data-view={view.k}>
         {/* On desktop `.pen-side` is display:contents, so nav and rail stay direct grid
             children and the three-column layout is untouched. On a phone it becomes a single
             off-canvas drawer, which is the only way the note gets the whole screen. */}
@@ -1664,7 +1688,17 @@ export default function PenApp({
         />
 
         <section className="pen-shell-main min-w-0" id="pen-main" tabIndex={-1}>
-          {view.k === 'chat' ? (
+          {view.k === 'calendar' ? (
+            <CalendarView
+              onOpenRecording={(id) => {
+                openSession(id)
+                setTab('note')
+                setChatOpen(false)
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+              }}
+              onOpenConnections={() => router.push('/pen/settings/connections')}
+            />
+          ) : view.k === 'chat' ? (
             <ChatView
               readOnly={readOnly}
               recordings={taggable}
@@ -1686,6 +1720,8 @@ export default function PenApp({
                 setChatOpen(false)
                 window.scrollTo({ top: 0, behavior: 'smooth' })
               }}
+              pages={docs.map((d) => ({ id: d.id, title: d.title }))}
+              onOpenPage={(id) => setView({ k: 'doc', id })}
             />
           ) : view.k === 'doc' ? (
             <DocView
@@ -4273,5 +4309,47 @@ function RecPills({ s, T, lang }: { s: PenSession; T: AppCopy; lang: Lang }) {
       {label && <span className="pen-catpill" data-tint={catTint(label)} title={label}>{label}</span>}
       {code && <span className="pen-langpill">{code}</span>}
     </span>
+  )
+}
+
+/** A phone bottom sheet in the WhatsApp sheet's dress (get-whatsapp.css): grip, round close,
+ *  backdrop and Esc close it. Focus moves into it and goes back where it was on close. */
+function PhoneSheet({ title, closeLabel, onClose, children }: { title: string; closeLabel: string; onClose: () => void; children: React.ReactNode }) {
+  const [host, setHost] = useState<Element | null>(null)
+  const panel = useRef<HTMLDivElement>(null)
+  useEffect(() => setHost(document.querySelector('.pen-root') ?? document.body), [])
+  // The parent passes a fresh onClose each render; read it through a ref so the effect below
+  // runs once (its cleanup hands focus back, which must happen only on close).
+  const close = useRef(onClose)
+  close.current = onClose
+  useEffect(() => {
+    const back = document.activeElement as HTMLElement | null
+    const key = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close.current()
+      if (e.key !== 'Tab' || !panel.current) return
+      // Keep Tab inside the sheet while it is open.
+      const f = panel.current.querySelectorAll<HTMLElement>('button:not([disabled]), a[href]')
+      if (!f.length) return
+      const first = f[0], last = f[f.length - 1]
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+    }
+    window.addEventListener('keydown', key)
+    return () => { window.removeEventListener('keydown', key); back?.focus?.() }
+  }, [])
+  useEffect(() => { if (host) panel.current?.querySelector<HTMLElement>('.pen-gw-sheet-x')?.focus() }, [host])
+  if (!host) return null
+  return createPortal(
+    <div className="pen-gw-sheet-wrap" onClick={onClose}>
+      <div ref={panel} className="pen-gw-sheet pen-m-addsheet" role="dialog" aria-modal="true" aria-labelledby="pen-m-addsheet-title" onClick={(e) => e.stopPropagation()}>
+        <div className="pen-gw-sheet-grip" aria-hidden="true" />
+        <button type="button" className="pen-gw-sheet-x" onClick={onClose} aria-label={closeLabel}>
+          <Icon name="close" size={18} />
+        </button>
+        <h2 id="pen-m-addsheet-title" className="pen-gw-sheet-title">{title}</h2>
+        {children}
+      </div>
+    </div>,
+    host,
   )
 }

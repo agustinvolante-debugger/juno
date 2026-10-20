@@ -9,15 +9,15 @@ import Icon, { type IconName } from '../Icon'
 import { useCopy } from '../LangContext'
 import type { Copy } from '@/lib/pen/i18n'
 
-const ST: Copy<{ home: string; upload: string; recordings: string; search: string; tabs: string }> = {
-  en: { home: 'Home', upload: 'Upload', recordings: 'Recordings', search: 'Chat', tabs: 'Main' },
-  es: { home: 'Inicio', upload: 'Subir', recordings: 'Grabaciones', search: 'Chat', tabs: 'Principal' },
-  pt: { home: 'Início', upload: 'Enviar', recordings: 'Gravações', search: 'Chat', tabs: 'Principal' },
+const ST: Copy<{ home: string; calendar: string; recordings: string; search: string; tabs: string }> = {
+  en: { home: 'Home', calendar: 'Calendar', recordings: 'Recordings', search: 'Chat', tabs: 'Main' },
+  es: { home: 'Inicio', calendar: 'Calendario', recordings: 'Grabaciones', search: 'Chat', tabs: 'Principal' },
+  pt: { home: 'Início', calendar: 'Calendário', recordings: 'Gravações', search: 'Chat', tabs: 'Principal' },
 }
 
-const TABS: { id: 'home' | 'upload' | 'recordings' | 'search'; icon: IconName }[] = [
+const TABS: { id: 'home' | 'calendar' | 'recordings' | 'search'; icon: IconName }[] = [
   { id: 'home', icon: 'home' },
-  { id: 'upload', icon: 'plus' },
+  { id: 'calendar', icon: 'calendar' },
   { id: 'recordings', icon: 'recordings' },
   { id: 'search', icon: 'chat' },
 ]
