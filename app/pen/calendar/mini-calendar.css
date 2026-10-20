@@ -1,0 +1,61 @@
+/* The sidebar's mini month (MiniCalendar.tsx). Sits in .pen-side between the Chats list and the
+   pinned recording meter, in the sidebar's own language: Inter, small tabular numerals, hairline
+   above, the app blue only for today. Event days carry one neutral dot, never a calendar hue.
+
+   Short windows: .pen-side is a scrolling flex column and the meter is sticky at its foot, so the
+   mini month keeps its size (flex: none) and the sidebar scrolls under the meter instead. */
+
+.pen-root .pen-page .pen-mcal {
+  flex: none;
+  margin-top: 16px; padding: 12px 2px 14px;
+  border-top: 1px solid var(--hair);
+  font-family: var(--ui); color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.pen-root .pen-page .pen-mcal-head {
+  display: flex; align-items: center; gap: 2px;
+  padding: 0 0 6px 6px;
+}
+.pen-root .pen-page .pen-mcal-title {
+  flex: 1 1 auto; min-width: 0; margin: 0;
+  font-size: var(--t-label); line-height: var(--t-label-lh); font-weight: 600; letter-spacing: -0.01em;
+  color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pen-root .pen-page .pen-mcal-nav {
+  flex: none; display: grid; place-items: center;
+  width: 28px; height: 28px; border-radius: 9999px;
+  color: var(--dim); transition: background .15s, color .15s;
+}
+.pen-root .pen-page .pen-mcal-nav:hover { background: var(--sunk); color: var(--ink); }
+.pen-root .pen-page .pen-mcal-prev svg { transform: rotate(180deg); }
+
+.pen-root .pen-page .pen-mcal-grid { display: flex; flex-direction: column; }
+.pen-root .pen-page .pen-mcal-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.pen-root .pen-page .pen-mcal-row > span { display: grid; place-items: center; min-width: 0; }
+.pen-root .pen-page .pen-mcal-dow {
+  height: 22px;
+  font-size: var(--t-micro); font-weight: 600; color: var(--dim);
+}
+.pen-root .pen-page .pen-mcal-day {
+  position: relative; display: grid; place-items: center;
+  width: 28px; height: 28px; border-radius: 9999px;
+  font-size: 12px; font-weight: 500; line-height: 1; color: var(--soft);
+  transition: background .15s, color .15s;
+}
+.pen-root .pen-page .pen-mcal-day:hover { background: var(--sunk); color: var(--ink); }
+.pen-root .pen-page .pen-mcal-day[data-out] { color: var(--dim); font-weight: 400; opacity: .72; }
+.pen-root .pen-page .pen-mcal-day[data-today] { background: var(--accent); color: #fff; font-weight: 600; opacity: 1; }
+.pen-root .pen-page .pen-mcal-day[data-today]:hover { background: var(--accent-ink); }
+.pen-root .pen-page .pen-mcal-n { transform: translateY(-1px); }
+.pen-root .pen-page .pen-mcal-dot {
+  position: absolute; left: 50%; bottom: 3px;
+  width: 4px; height: 4px; margin-left: -2px; border-radius: 50%;
+  background: var(--dim); opacity: .55;
+}
+.pen-root .pen-page .pen-mcal-day[data-today] .pen-mcal-dot { background: #fff; opacity: .85; }
+.pen-root .pen-page .pen-mcal-day:focus-visible,
+.pen-root .pen-page .pen-mcal-nav:focus-visible { outline: 2px solid var(--sk-blue-hi); outline-offset: 1px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pen-root .pen-page .pen-mcal-day, .pen-root .pen-page .pen-mcal-nav { transition: none; }
+}
