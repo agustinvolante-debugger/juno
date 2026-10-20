@@ -66,17 +66,25 @@ export const viaOf = (phone: string | null | undefined): Via => (phone?.startsWi
 
 const LINK = 'pen-connect-link'
 
-export function connectToken(email: string, app: ConnectApp, via: Via = 'wa', now = Date.now()): string {
-  return sealPayload(LINK, { e: email.toLowerCase(), a: app, n: crypto.randomBytes(12).toString('base64url'), x: now + LINK_TTL_MS, ...(via === 'im' ? { c: 'im' } : {}) })
+/**
+ * Gmail links only (20 Oct): `hint` = the address Google's screen preselects ("add calendar to
+ * agustin@tryjunoapp.com"), `cal` = this is for a calendar ("connect my work calendar"): the screen
+ * asks for the calendar, plus whatever that address already allows, and nothing else new.
+ */
+export type LinkExtra = { hint?: string | null; cal?: boolean }
+
+export function connectToken(email: string, app: ConnectApp, via: Via = 'wa', now = Date.now(), extra: LinkExtra = {}): string {
+  const hint = extra.hint && /^[^\s@]+@[^\s@]+$/.test(extra.hint) ? extra.hint.toLowerCase() : null
+  return sealPayload(LINK, { e: email.toLowerCase(), a: app, n: crypto.randomBytes(12).toString('base64url'), x: now + LINK_TTL_MS, ...(via === 'im' ? { c: 'im' } : {}), ...(hint ? { h: hint } : {}), ...(extra.cal ? { k: 'cal' } : {}) })
 }
 
 /** The personal link the chat sends. `origin` defaults to the public site (must be a redirect URI the providers know). */
-export function connectLink(email: string, app: ConnectApp, origin?: string, via: Via = 'wa'): string {
-  return `${(origin || baseUrl()).replace(/\/$/, '')}/api/pen/connect/${connectToken(email, app, via)}`
+export function connectLink(email: string, app: ConnectApp, origin?: string, via: Via = 'wa', extra: LinkExtra = {}): string {
+  return `${(origin || baseUrl()).replace(/\/$/, '')}/api/pen/connect/${connectToken(email, app, via, Date.now(), extra)}`
 }
 
 export type LinkCheck =
-  | { ok: true; email: string; app: ConnectApp; nonce: string; via: Via }
+  | { ok: true; email: string; app: ConnectApp; nonce: string; via: Via; hint: string | null; cal: boolean }
   | { ok: false; reason: 'bad' }
   | { ok: false; reason: 'expired'; email: string; app: ConnectApp }
 
@@ -85,7 +93,7 @@ export function verifyConnectToken(token: string, now = Date.now()): LinkCheck {
   const p = openPayload(LINK, token)
   if (!p || typeof p.e !== 'string' || !p.e.includes('@') || !isApp(p.a) || typeof p.n !== 'string' || typeof p.x !== 'number') return { ok: false, reason: 'bad' }
   if (p.x <= now) return { ok: false, reason: 'expired', email: p.e, app: p.a }
-  return { ok: true, email: p.e, app: p.a, nonce: p.n, via: p.c === 'im' ? 'im' : 'wa' }
+  return { ok: true, email: p.e, app: p.a, nonce: p.n, via: p.c === 'im' ? 'im' : 'wa', hint: typeof p.h === 'string' ? p.h : null, cal: p.k === 'cal' }
 }
 
 /** Spends a nonce. True the first time; false if it was already spent (or the claim failed). */
@@ -139,6 +147,9 @@ export const COPY = {
   en: {
     tap: (app: string, url: string) => `Tap to connect ${app} (the link works once, for 15 minutes):\n${url}`,
     connected: { gcal: (who: string | null) => `Connected ✓ Google Calendar${who ? ` (${who})` : ''}. Events you say yes to here go straight onto it.`, gdrive: (who: string | null) => `Connected ✓ Google Docs & Sheets${who ? ` (${who})` : ''}. Docs and sheets Juno makes go into a “Juno Pen” folder in your Drive; Juno can only open the files it made.`, notion: (who: string | null) => `Connected ✓ Notion${who ? ` (${who})` : ''}. Your notes land in the “Juno Pen notes” table, and plans and memos you say yes to go there too.`, granola: (who: string | null) => `Connected ✓ Granola${who ? ` (${who})` : ''}. Ask me to import your Granola meetings, e.g. “import my Granola meetings from this week”.`, gmail: (who: string | null) => `Connected ✓ Gmail${who ? ` (${who})` : ''}. When you say “send it” to a draft, it goes from this address and lands in your Sent folder. Juno can only send; it never reads your mail.` },
+    calendarOnly: (who: string | null) => `Connected ✓ Google Calendar${who ? ` (${who})` : ''}. I read it together with your other calendars, and you can say “add it to this calendar” for new events.`,
+    calToo: ' Its calendar is connected too: I read it with your other calendars.',
+    calFull: ' Its calendar wasn’t added: you already have 5 calendars connected.',
     gmailReading: (who: string | null) => `Connected ✓ Gmail${who ? ` (${who})` : ''}, with reading (testing, team only). Ask me things like “anything from Carlos today?” or “summarize my unread from today”, and I can draft a reply in the same thread. I read only when you ask, keep nothing from your inbox, and send only after you say “send it”.`,
     pageTitle: 'Connected',
     pageLine: (app: string) => `${app} is connected. You can go back to the chat.`,
@@ -162,6 +173,9 @@ export const COPY = {
   es: {
     tap: (app: string, url: string) => `Toca para conectar ${app} (el link sirve una vez, por 15 minutos):\n${url}`,
     connected: { gcal: (who: string | null) => `Conectado ✓ Google Calendar${who ? ` (${who})` : ''}. Los eventos a los que digas que sí aquí van directo a tu calendario.`, gdrive: (who: string | null) => `Conectado ✓ Google Docs y Sheets${who ? ` (${who})` : ''}. Los documentos y hojas que haga Juno van a una carpeta “Juno Pen” en tu Drive; Juno solo puede abrir los archivos que creó.`, notion: (who: string | null) => `Conectado ✓ Notion${who ? ` (${who})` : ''}. Tus notas llegan a la tabla “Juno Pen notes”, y los planes y memos que apruebes también.`, granola: (who: string | null) => `Conectado ✓ Granola${who ? ` (${who})` : ''}. Pídeme importar tus reuniones de Granola, por ejemplo “importa mis reuniones de Granola de esta semana”.`, gmail: (who: string | null) => `Conectado ✓ Gmail${who ? ` (${who})` : ''}. Cuando digas “envíalo” a un borrador, sale desde esta dirección y queda en tus Enviados. Juno solo puede enviar; nunca lee tu correo.` },
+    calendarOnly: (who: string | null) => `Conectado ✓ Google Calendar${who ? ` (${who})` : ''}. Lo leo junto con tus otros calendarios, y puedes decir “agrégalo a este calendario” para eventos nuevos.`,
+    calToo: ' Su calendario también quedó conectado: lo leo junto con tus otros calendarios.',
+    calFull: ' Su calendario no se agregó: ya tienes 5 calendarios conectados.',
     gmailReading: (who: string | null) => `Conectado ✓ Gmail${who ? ` (${who})` : ''}, con lectura (en prueba, solo el equipo). Pregúntame cosas como “¿algo de Carlos hoy?” o “resume mis no leídos de hoy”, y puedo redactar una respuesta en el mismo hilo. Solo leo cuando me lo pides, no guardo nada de tu bandeja y envío solo cuando dices “envíalo”.`,
     pageTitle: 'Conectado',
     pageLine: (app: string) => `${app} quedó conectado. Ya puedes volver al chat.`,
@@ -185,6 +199,9 @@ export const COPY = {
   pt: {
     tap: (app: string, url: string) => `Toque para conectar o ${app} (o link funciona uma vez, por 15 minutos):\n${url}`,
     connected: { gcal: (who: string | null) => `Conectado ✓ Google Agenda${who ? ` (${who})` : ''}. Os eventos que você aprovar aqui vão direto para a sua agenda.`, gdrive: (who: string | null) => `Conectado ✓ Google Docs e Planilhas${who ? ` (${who})` : ''}. Os documentos e planilhas que o Juno criar vão para uma pasta “Juno Pen” no seu Drive; o Juno só consegue abrir os arquivos que ele criou.`, notion: (who: string | null) => `Conectado ✓ Notion${who ? ` (${who})` : ''}. Suas notas vão para a tabela “Juno Pen notes”, e os planos e memos que você aprovar também.`, granola: (who: string | null) => `Conectado ✓ Granola${who ? ` (${who})` : ''}. Peça para importar suas reuniões do Granola, por exemplo “importe minhas reuniões do Granola desta semana”.`, gmail: (who: string | null) => `Conectado ✓ Gmail${who ? ` (${who})` : ''}. Quando você disser “enviar” a um rascunho, ele sai deste endereço e fica nos seus Enviados. O Juno só consegue enviar; nunca lê seus e-mails.` },
+    calendarOnly: (who: string | null) => `Conectado ✓ Google Agenda${who ? ` (${who})` : ''}. Eu leio junto com as suas outras agendas, e você pode dizer “coloque nesta agenda” para eventos novos.`,
+    calToo: ' A agenda dele também foi conectada: eu leio junto com as suas outras agendas.',
+    calFull: ' A agenda dele não foi adicionada: você já tem 5 agendas conectadas.',
     gmailReading: (who: string | null) => `Conectado ✓ Gmail${who ? ` (${who})` : ''}, com leitura (em teste, só a equipe). Me pergunte coisas como “algo do Carlos hoje?” ou “resuma meus não lidos de hoje”, e posso escrever uma resposta na mesma conversa. Só leio quando você pede, não guardo nada da sua caixa e só envio depois que você diz “enviar”.`,
     pageTitle: 'Conectado',
     pageLine: (app: string) => `O ${app} está conectado. Já pode voltar para o chat.`,
@@ -218,8 +235,8 @@ const WINDOW_MS = 24 * 60 * 60 * 1000
  * has the context. WhatsApp only inside the 24-hour window (the user asked for the link, so it
  * is open unless they waited a day); iMessage is free-form. Never throws.
  */
-/** `canRead`: a Gmail connected with reading (team test, lib/pen/gmail.ts), said differently. */
-export async function announceConnected(email: string, app: ConnectApp, via: Via, account?: string | null, opts: { canRead?: boolean } = {}): Promise<{ sent: boolean; reason?: string }> {
+/** `canRead`: a Gmail connected with reading (team test, lib/pen/gmail.ts), said differently. `canSend: false` = calendar only; `canCal` / `calFull`: its calendar too. */
+export async function announceConnected(email: string, app: ConnectApp, via: Via, account?: string | null, opts: { canRead?: boolean; canSend?: boolean; canCal?: boolean; calFull?: boolean } = {}): Promise<{ sent: boolean; reason?: string }> {
   try {
     const { getLinkByEmail, setChat } = await import('./whatsapp/store')
     const link = await getLinkByEmail(email)
@@ -244,7 +261,11 @@ export async function announceConnected(email: string, app: ConnectApp, via: Via
       const { getConnection } = await import('./notion')
       who = (await getConnection(email).catch(() => null))?.workspace_name ?? null
     }
-    const text = app === 'gmail' && opts.canRead ? COPY[lang].gmailReading(who) : COPY[lang].connected[app](who)
+    const L = COPY[lang]
+    const text =
+      app === 'gmail' && opts.canSend === false ? L.calendarOnly(who)
+        : app === 'gmail' ? `${opts.canRead ? L.gmailReading(who) : L.connected.gmail(who)}${opts.canCal ? L.calToo : opts.calFull ? L.calFull : ''}`
+          : L.connected[app](who)
     const { sendText } = await import('./whatsapp/provider')
     await sendText(via === 'im' ? `im:${link.phone}` : link.phone, text)
     await setChat(email, [...(link.chat ?? []), { role: 'assistant', content: text, ts: Date.now() }]).catch(() => {})

@@ -35,7 +35,8 @@
 // refuses every send instead, so the real path can be tested (provider.ts).
 
 import { renderOffers, markOffered, validZone as validSuggestionZone, zonedToUtc } from './suggestions'
-import { gcalConnected, upcomingEvents, type UpcomingEvent } from './google-calendar'
+import type { UpcomingEvent } from './google-calendar'
+import { anyCalendar, upcomingAll } from './calendars'
 import { userZone, localToUtc } from './timezone'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ALLOWED_EMAILS } from '@/lib/auth'
@@ -614,10 +615,11 @@ export function calendarMeetings(events: UpcomingEvent[], from: Date, to: Date, 
 /** Accepted offers plus Google Calendar meetings (when connected), soonest first. */
 async function meetingsBetween(email: string, now: Date, from: Date, to: Date): Promise<Meeting[]> {
   const accepted = await acceptedMeetings(email, from, to).catch(() => [] as Meeting[])
-  if (!(await gcalConnected(email))) return accepted
-  // The calendar window starts now; the read is capped at 7 days in google-calendar.ts.
+  if (!(await anyCalendar(email))) return accepted
+  // The calendar window starts now; the read is capped at 7 days in google-calendar.ts. Every
+  // connected calendar, merged, the same meeting once (lib/pen/calendars.ts).
   const days = Math.ceil((to.getTime() - now.getTime()) / (24 * HOUR))
-  const events = await upcomingEvents(email, days, now).catch((e) => {
+  const events = await upcomingAll(email, days, now).catch((e) => {
     console.warn(`pen proactive: google calendar for ${email}: ${(e as Error).message}`)
     return [] as UpcomingEvent[]
   })

@@ -24,11 +24,21 @@
 // audit, under Google's 100-test-user cap. An allowed user upgrades one address at a time
 // (incremental consent asking send + readonly for that address); pen_gmail.scopes records what
 // each token carries. Without that column (SQL not run) reading stays off for everyone.
+//
+// CALENDAR (20 Oct): one Google connection per address covers email AND calendar. The same
+// consent screen also asks for that account's calendar (GCAL_SCOPE, the one pen_gcal uses:
+// calendar.events.owned = see and add events on calendars they own); the user can untick it.
+// pen_gmail.scopes records it (no new column). A row can also be calendar-only ("connect my work
+// calendar" for an address they don't send from): it never shows as a From address. Up to
+// MAX_CALENDARS calendars per Juno account, the old pen_gcal one included; which one new events
+// go on, and reading them all merged, is lib/pen/calendars.ts. "Add calendar" on an address
+// already connected re-asks that address's scopes plus calendar (askScopes), so nothing it
+// could do before is lost (a new consent's token carries exactly what it asked for).
 
 import crypto from 'node:crypto'
 import { supabaseAdmin } from '@/lib/supabase'
 import { isMissingSchema } from './allowance'
-import { gcalConfigured, open, redirectUri, seal } from './google-calendar'
+import { GCAL_FALLBACK_SCOPE, GCAL_SCOPE, gcalConfigured, open, redirectUri, seal } from './google-calendar'
 import { buildRfc2822, toRaw, type SendAccount } from './mail-compose'
 import { DAILY_SEND_CAP, sentToday } from './follow-up'
 import { readAllowedFor } from './mail-thread'
@@ -42,6 +52,9 @@ const REVOKE = 'https://oauth2.googleapis.com/revoke'
 const SEND = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send'
 const STATE_TTL_MS = 10 * 60 * 1000
 export const MAX_ACCOUNTS = 5
+/** Calendars per Juno account, from every source (pen_gcal + addresses with calendar on). */
+export const MAX_CALENDARS = 5
+const CAL_SCOPES = [GCAL_SCOPE, GCAL_FALLBACK_SCOPE]
 
 /* ------------------------------------------------------------ available */
 
@@ -93,10 +106,20 @@ function secret(): string {
 const sign = (body: string) => crypto.createHmac('sha256', secret()).update(`gmail-state.${body}`).digest('base64url')
 export const GMAIL_STATE_PREFIX = 'm.'
 
-/** The website's state (Settings → Email → Connect): signed-in email + this browser's nonce (+ r: reading asked). */
-export function gmailState(email: string, nonce: string, now = Date.now(), read = false): string {
-  const body = Buffer.from(JSON.stringify({ e: email.toLowerCase(), n: nonce, x: now + STATE_TTL_MS, ...(read ? { r: 1 } : {}) })).toString('base64url')
+/** The website's state (Settings → Email → Connect): signed-in email + this browser's nonce (+ r: reading asked, c: calendar asked). */
+export function gmailState(email: string, nonce: string, now = Date.now(), read = false, cal = false): string {
+  const body = Buffer.from(JSON.stringify({ e: email.toLowerCase(), n: nonce, x: now + STATE_TTL_MS, ...(read ? { r: 1 } : {}), ...(cal ? { c: 1 } : {}) })).toString('base64url')
   return `${GMAIL_STATE_PREFIX}${body}.${sign(body)}`
+}
+
+/** Whether a (verified) website state asked for the calendar too. */
+export function gmailStateWantsCal(state: string | null | undefined): boolean {
+  try {
+    const body = (state ?? '').slice(GMAIL_STATE_PREFIX.length).split('.')[0]
+    return (JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as { c?: number }).c === 1
+  } catch {
+    return false
+  }
 }
 
 /** Whether a (verified) website state asked for reading too. */
@@ -124,16 +147,20 @@ export function verifyGmailState(state: string | null | undefined, email: string
 }
 
 /**
- * Google's consent screen for send-only Gmail. select_account: any Google account, not the Juno login.
+ * Google's consent screen for Gmail. select_account: any Google account, not the Juno login.
  * `read` (allowed users only): send + readonly in one grant; `hint` preselects the address being
- * upgraded. Both scopes are asked by name, so the new token carries exactly these.
+ * upgraded. `calendar` (default on, 20 Oct): the account's calendar on the same screen (the user
+ * can untick it); `send: false` = calendar only ("connect my work calendar"). Every scope is asked
+ * by name, so the new token carries exactly these.
  */
-export function gmailAuthorizeUrl(state: string, origin: string, opts: { read?: boolean; hint?: string | null } = {}): string {
+export function gmailAuthorizeUrl(state: string, origin: string, opts: { read?: boolean; hint?: string | null; calendar?: boolean; send?: boolean } = {}): string {
+  const send = opts.send !== false
+  const scopes = ['openid', 'email', ...(send ? [GMAIL_SEND_SCOPE] : []), ...(opts.read && send ? [GMAIL_READ_SCOPE] : []), ...(opts.calendar !== false || !send ? [GCAL_SCOPE] : [])]
   const q = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID!,
     redirect_uri: redirectUri(origin),
     response_type: 'code',
-    scope: [...SCOPES, ...(opts.read ? [GMAIL_READ_SCOPE] : [])].join(' '),
+    scope: scopes.join(' '),
     access_type: 'offline',
     prompt: 'consent select_account',
     state,
@@ -144,13 +171,23 @@ export function gmailAuthorizeUrl(state: string, origin: string, opts: { read?: 
 
 /* ------------------------------------------------------------------ rows */
 
-/** `can_read`: this address's token carries gmail.readonly (pen_gmail.scopes; false without the column). */
-export type GmailAccount = SendAccount & { connected_at: string; last_used_at: string | null; can_read: boolean }
-type Row = Omit<GmailAccount, 'can_read'> & { id: string; user_email: string; refresh_token: string; scopes?: string[] | null }
+/**
+ * `can_read`: this address's token carries gmail.readonly (pen_gmail.scopes; false without the column).
+ * `can_send`: gmail.send (every row from before scopes existed sends). `can_cal`: its calendar is on.
+ */
+export type GmailAccount = SendAccount & { connected_at: string; last_used_at: string | null; can_read: boolean; can_send: boolean; can_cal: boolean }
+type Row = Omit<GmailAccount, 'can_read' | 'can_send' | 'can_cal'> & { id: string; user_email: string; refresh_token: string; scopes?: string[] | null }
 
 const ACCOUNT_COLS = 'address,is_default,last_error,connected_at,last_used_at'
 
-export async function listAccounts(userEmail: string): Promise<GmailAccount[]> {
+/** What a token's recorded scopes allow. null (no scopes recorded) = a send-only row from 19 Oct. */
+export function capsOf(scopes: string[] | null | undefined): { can_read: boolean; can_send: boolean; can_cal: boolean } {
+  if (!Array.isArray(scopes)) return { can_read: false, can_send: true, can_cal: false }
+  return { can_read: scopes.includes(GMAIL_READ_SCOPE), can_send: scopes.includes(GMAIL_SEND_SCOPE), can_cal: scopes.some((x) => CAL_SCOPES.includes(x)) }
+}
+
+/** Every connected Google address of this user: senders and calendar-only ones. */
+export async function listGoogleAccounts(userEmail: string): Promise<GmailAccount[]> {
   const q = (cols: string) => supabaseAdmin.from('pen_gmail').select(cols).eq('user_email', userEmail.toLowerCase()).order('connected_at', { ascending: true })
   let res = await q(`${ACCOUNT_COLS},scopes`)
   if (res.error && isScopesMissing(res.error.message)) res = await q(ACCOUNT_COLS)
@@ -158,10 +195,18 @@ export async function listAccounts(userEmail: string): Promise<GmailAccount[]> {
     if (isMissingSchema(res.error.message)) return []
     throw new Error(res.error.message)
   }
-  return ((res.data ?? []) as unknown as (Omit<GmailAccount, 'can_read'> & { scopes?: string[] | null })[]).map(({ scopes, ...a }) => ({
-    ...a,
-    can_read: Array.isArray(scopes) && scopes.includes(GMAIL_READ_SCOPE),
-  }))
+  return ((res.data ?? []) as unknown as (Omit<GmailAccount, 'can_read' | 'can_send' | 'can_cal'> & { scopes?: string[] | null })[]).map(({ scopes, ...a }) => ({ ...a, ...capsOf(scopes) }))
+}
+
+/** The addresses drafts can go out from (a calendar-only address is never a From). */
+export async function listAccounts(userEmail: string): Promise<GmailAccount[]> {
+  return (await listGoogleAccounts(userEmail)).filter((a) => a.can_send)
+}
+
+/** The scopes the token for this address carries now (for "Add calendar": ask these again, plus calendar). */
+export async function scopesOf(userEmail: string, address: string): Promise<{ read: boolean; send: boolean; cal: boolean } | null> {
+  const a = (await listGoogleAccounts(userEmail).catch(() => [])).find((x) => x.address === address.toLowerCase())
+  return a ? { read: a.can_read, send: a.can_send, cal: a.can_cal } : null
 }
 
 async function row(userEmail: string, address: string): Promise<Row | null> {
@@ -177,6 +222,7 @@ export async function setDefault(userEmail: string, address: string): Promise<bo
   if (!(await row(lower, addr))) return false
   // Set first, then clear the others: a crash between leaves two defaults (chooseFrom takes the
   // first), never none.
+  if (!capsOf((await row(lower, addr))?.scopes).can_send) return false
   const a = await supabaseAdmin.from('pen_gmail').update({ is_default: true }).eq('user_email', lower).eq('address', addr)
   if (a.error) throw new Error(a.error.message)
   const b = await supabaseAdmin.from('pen_gmail').update({ is_default: false }).eq('user_email', lower).neq('address', addr)
@@ -235,40 +281,81 @@ export class GmailError extends Error {
   }
 }
 
+/** How many calendars this user has connected, not counting `except` (pen_gcal's + addresses with calendar on). */
+async function calendarCount(lower: string, except: string): Promise<number> {
+  const [g, rows] = await Promise.all([
+    supabaseAdmin.from('pen_gcal').select('scope,calendar_email,last_error').eq('email', lower).maybeSingle().then((x) => (x.error ? null : (x.data as { scope: string | null; calendar_email: string | null } | null)), () => null),
+    listGoogleAccounts(lower).catch((): GmailAccount[] => []),
+  ])
+  const keys = new Set(rows.filter((a) => a.can_cal && a.address !== except).map((a) => a.address))
+  const legacyCal = g && (g.scope == null || g.scope.split(/\s+/).some((x) => CAL_SCOPES.includes(x)))
+  if (legacyCal && g.calendar_email !== except) keys.add(g.calendar_email ?? 'gcal')
+  return keys.size
+}
+
+export type GmailConnected = { address: string; isDefault: boolean; canRead: boolean; canSend: boolean; canCal: boolean; calFull?: boolean }
+
 /**
- * The OAuth callback: swap the code, check gmail.send was granted, keep the token sealed, and record
- * which Gmail scopes it carries (canRead: gmail.readonly was granted and could be recorded).
+ * The OAuth callback: swap the code, check sending or the calendar was granted, keep the token
+ * sealed, and record which scopes it carries (canRead: gmail.readonly granted and recorded; canCal:
+ * the calendar, unless MAX_CALENDARS are already connected: calFull).
  */
-export async function connectGmail(userEmail: string, code: string, origin: string): Promise<{ address: string; isDefault: boolean; canRead: boolean }> {
+export async function connectGmail(userEmail: string, code: string, origin: string): Promise<GmailConnected> {
   const lower = userEmail.toLowerCase()
   const t = await tokenCall({ code, grant_type: 'authorization_code', redirect_uri: redirectUri(origin) })
   if (t.status >= 400 || !t.access_token) throw new GmailError('failed', t.error_description ?? t.error ?? 'Google didn’t accept the connection.')
   const granted = (t.scope ?? '').split(/\s+/)
-  if (!granted.includes(GMAIL_SEND_SCOPE)) {
+  const sendOk = granted.includes(GMAIL_SEND_SCOPE)
+  const calGranted = granted.some((x) => CAL_SCOPES.includes(x))
+  if (!sendOk && !calGranted) {
     if (t.refresh_token) await revokeToken(t.refresh_token)
     throw new GmailError('not_granted', 'Sending wasn’t allowed on Google’s screen, so nothing was connected. Try again and leave the box ticked.')
   }
   const address = idTokenEmail(t.id_token)
   if (!address) throw new GmailError('no_email', 'Google didn’t say which address this is. Try again.')
-  const existing = await listAccounts(lower)
+  const existing = await listGoogleAccounts(lower)
   const prior = existing.find((a) => a.address === address)
   if (!prior && existing.length >= MAX_ACCOUNTS) throw new GmailError('too_many', `You can connect up to ${MAX_ACCOUNTS} addresses. Disconnect one first.`)
   const refresh = t.refresh_token ?? (prior ? open((await row(lower, address))!.refresh_token) : null)
   if (!refresh) throw new GmailError('no_refresh', 'Google didn’t give Juno lasting access. Try connecting again.')
-  const isDefault = prior ? prior.is_default : !existing.some((a) => a.is_default)
+  // The default From is a sending address; a calendar-only one never is.
+  const isDefault = sendOk && (prior ? prior.is_default : !existing.some((a) => a.is_default && a.can_send))
+  const calFull = calGranted && (await calendarCount(lower, address)) >= MAX_CALENDARS
   // Reading only for the allowlist: a token that came back with readonly for anyone else is kept
-  // as send-only (the scope isn't recorded, so nothing reads with it).
-  const scopes = granted.filter((x) => x === GMAIL_SEND_SCOPE || (x === GMAIL_READ_SCOPE && readAllowedFor(lower)))
-  const base = { user_email: lower, address, refresh_token: seal(refresh), is_default: isDefault, last_error: null, connected_at: new Date().toISOString() }
+  // without it (the scope isn't recorded, so nothing reads with it).
+  const scopes = granted.filter((x) => x === GMAIL_SEND_SCOPE || (x === GMAIL_READ_SCOPE && readAllowedFor(lower)) || (CAL_SCOPES.includes(x) && !calFull))
+  const base = { user_email: lower, address, refresh_token: seal(refresh), is_default: isDefault, last_error: null, connected_at: prior?.connected_at ?? new Date().toISOString() }
   let { error } = await supabaseAdmin.from('pen_gmail').upsert({ ...base, scopes }, { onConflict: 'user_email,address' })
   let recorded = !error
   if (error && isScopesMissing(error.message)) {
+    // Before the scopes column: only sending can be recorded (a row without scopes = send-only).
+    if (!sendOk) throw new GmailError('not_granted', 'Sending wasn’t allowed on Google’s screen, so nothing was connected. Try again and leave the box ticked.')
     ;({ error } = await supabaseAdmin.from('pen_gmail').upsert(base, { onConflict: 'user_email,address' }))
     recorded = false
   }
   if (error) throw new GmailError('failed', error.message)
   cache.set(`${lower}|${address}`, { token: t.access_token, until: Date.now() + ((t.expires_in ?? 3600) - 120) * 1000 })
-  return { address, isDefault, canRead: recorded && scopes.includes(GMAIL_READ_SCOPE) }
+  const canCal = recorded && scopes.some((x) => CAL_SCOPES.includes(x))
+  return { address, isDefault, canRead: recorded && scopes.includes(GMAIL_READ_SCOPE), canSend: sendOk, canCal, ...(calFull ? { calFull: true } : {}) }
+}
+
+/**
+ * Settings → "Turn off calendar" for one address: Juno stops reading and adding events there. The
+ * Google grant stays while the address still sends (Google has no per-scope revoke); a
+ * calendar-only address is disconnected outright (revoked at Google, as disconnectGmail does).
+ */
+export async function calendarOff(userEmail: string, address: string): Promise<{ removed: boolean; disconnected: boolean }> {
+  const lower = userEmail.toLowerCase()
+  const r = await row(lower, address)
+  if (!r) return { removed: false, disconnected: false }
+  const left = (Array.isArray(r.scopes) ? r.scopes : [GMAIL_SEND_SCOPE]).filter((x) => !CAL_SCOPES.includes(x))
+  if (!left.includes(GMAIL_SEND_SCOPE)) {
+    await disconnectGmail(lower, r.address)
+    return { removed: true, disconnected: true }
+  }
+  const { error } = await supabaseAdmin.from('pen_gmail').update({ scopes: left }).eq('id', r.id)
+  if (error) throw new Error(error.message)
+  return { removed: true, disconnected: false }
 }
 
 const cache = new Map<string, { token: string; until: number }>()

@@ -85,6 +85,7 @@ export function cleanProfile(raw: unknown): AgentProfile {
     timeZoneCheckedAt: instant(r.timeZoneCheckedAt),
     calendarApp: r.calendarApp === 'apple' || r.calendarApp === 'google' || r.calendarApp === 'outlook' ? r.calendarApp : undefined,
     calendarAppSource: r.calendarAppSource === 'said' || r.calendarAppSource === 'guess' ? r.calendarAppSource : undefined,
+    calendarDefault: typeof r.calendarDefault === 'string' && (r.calendarDefault === 'gcal' || /^[^\s@]{1,64}@[^\s@]{1,190}$/.test(r.calendarDefault)) ? r.calendarDefault.toLowerCase() : undefined,
     mailApp: r.mailApp === 'gmail' || r.mailApp === 'outlook' || r.mailApp === 'yahoo' || r.mailApp === 'other' || r.mailApp === 'none' ? r.mailApp : undefined,
     mailAppSource: r.mailAppSource === 'said' || r.mailAppSource === 'guess' ? r.mailAppSource : undefined,
     proactive: (() => {
@@ -102,7 +103,7 @@ export function cleanProfile(raw: unknown): AgentProfile {
 const PROACTIVE_KINDS: string[] = ['offers', 'meeting_brief', 'nudges', 'morning_brief', 'notion']
 
 /** App-set fields the Profile form never sends; a form save keeps the stored ones. */
-const APP_ZONE_KEYS = ['timeZone', 'timeZoneSeenAt', 'timeZoneSaid', 'timeZoneSaidAt', 'timeZoneUntil', 'timeZoneBefore', 'timeZoneChecked', 'timeZoneCheckedAt', 'calendarApp', 'calendarAppSource', 'mailApp', 'mailAppSource'] as const
+const APP_ZONE_KEYS = ['timeZone', 'timeZoneSeenAt', 'timeZoneSaid', 'timeZoneSaidAt', 'timeZoneUntil', 'timeZoneBefore', 'timeZoneChecked', 'timeZoneCheckedAt', 'calendarApp', 'calendarAppSource', 'calendarDefault', 'mailApp', 'mailAppSource'] as const
 
 export async function getProfile(email: string): Promise<AgentProfile> {
   const { data, error } = await supabaseAdmin

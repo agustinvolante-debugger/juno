@@ -275,15 +275,30 @@ export async function accessToken(email: string): Promise<string> {
   return t.access_token
 }
 
-async function gcal<T>(email: string, path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
-  const token = await accessToken(email)
+/**
+ * Which connected calendar a call goes to (lib/pen/calendars.ts, 20 Oct): the pen_gcal connection
+ * (the default when none is given, as before), or a connected Google account's own token from
+ * pen_gmail (Settings → Email: one Google connection per address covers mail and calendar).
+ */
+export type CalSrc = { kind: 'gcal' } | { kind: 'gmail'; address: string }
+
+async function tokenFor(email: string, src?: CalSrc): Promise<string> {
+  if (src?.kind === 'gmail') {
+    const { accessToken: gmailToken } = await import('./gmail')
+    return gmailToken(email, src.address)
+  }
+  return accessToken(email)
+}
+
+async function gcal<T>(email: string, path: string, init: { method?: string; body?: unknown } = {}, src?: CalSrc): Promise<T> {
+  const token = await tokenFor(email, src)
   const res = await fetch(`${API}/${path}`, {
     method: init.method ?? (init.body ? 'POST' : 'GET'),
     headers: { Authorization: `Bearer ${token}`, ...(init.body ? { 'Content-Type': 'application/json' } : {}) },
     ...(init.body ? { body: JSON.stringify(init.body) } : {}),
   })
   const j = (await res.json().catch(() => ({}))) as T & { error?: { message?: string } }
-  if (res.status === 401) cache.delete(email.toLowerCase())
+  if (res.status === 401 && src?.kind !== 'gmail') cache.delete(email.toLowerCase())
   if (!res.ok) throw Object.assign(new Error(j.error?.message ?? `Google Calendar ${path.split('?')[0]} failed (${res.status})`), { status: res.status })
   return j
 }
@@ -303,6 +318,8 @@ type GEvent = {
   hangoutLink?: string
   start?: { dateTime?: string; date?: string; timeZone?: string }
   end?: { dateTime?: string; date?: string }
+  iCalUID?: string
+  organizer?: { email?: string; displayName?: string; self?: boolean }
   attendees?: { email?: string; displayName?: string; self?: boolean; resource?: boolean; organizer?: boolean; responseStatus?: string }[]
   conferenceData?: { entryPoints?: { entryPointType?: string; uri?: string }[] }
   extendedProperties?: { private?: Record<string, string> }
@@ -338,30 +355,30 @@ export function eventBody(ev: CalEvent, o: { attendees?: Attendee[]; meet?: bool
 }
 
 /** Adds one event the user said yes to. With attendees, Google emails them the invite. */
-export async function createEvent(email: string, ev: CalEvent, o: { attendees?: Attendee[]; meet?: boolean; ref?: string } = {}): Promise<CreatedEvent> {
+export async function createEvent(email: string, ev: CalEvent, o: { attendees?: Attendee[]; meet?: boolean; ref?: string } = {}, src?: CalSrc): Promise<CreatedEvent> {
   const body = eventBody(ev, o)
   const invite = Boolean((body.attendees as unknown[] | undefined)?.length)
   const q = new URLSearchParams({ conferenceDataVersion: '1', sendUpdates: invite ? 'all' : 'none' })
-  const e = await gcal<GEvent>(email, `calendars/primary/events?${q}`, { body })
+  const e = await gcal<GEvent>(email, `calendars/primary/events?${q}`, { body }, src)
   return { id: e.id, link: e.htmlLink ?? null, meet: meetOf(e) }
 }
 
 /** Puts a Google Meet link on an event Juno added (after the user's yes to the offer). */
-export async function addMeet(email: string, eventId: string): Promise<CreatedEvent> {
+export async function addMeet(email: string, eventId: string, src?: CalSrc): Promise<CreatedEvent> {
   const q = new URLSearchParams({ conferenceDataVersion: '1', sendUpdates: 'all' })
-  const e = await gcal<GEvent>(email, `calendars/primary/events/${encodeURIComponent(eventId)}?${q}`, { method: 'PATCH', body: { conferenceData: meetRequest() } })
+  const e = await gcal<GEvent>(email, `calendars/primary/events/${encodeURIComponent(eventId)}?${q}`, { method: 'PATCH', body: { conferenceData: meetRequest() } }, src)
   return { id: e.id, link: e.htmlLink ?? null, meet: meetOf(e) }
 }
 
 /** Adds a guest to an event; Google sends them the invite from the user. */
-export async function addAttendee(email: string, eventId: string, who: Attendee): Promise<CreatedEvent> {
+export async function addAttendee(email: string, eventId: string, who: Attendee, src?: CalSrc): Promise<CreatedEvent> {
   const path = `calendars/primary/events/${encodeURIComponent(eventId)}`
-  const cur = await gcal<GEvent>(email, `${path}?fields=attendees`)
+  const cur = await gcal<GEvent>(email, `${path}?fields=attendees`, {}, src)
   const have = (cur.attendees ?? []).filter((a) => a.email).map((a) => ({ email: a.email!, ...(a.displayName ? { displayName: a.displayName } : {}) }))
   const add = cleanAttendees([who])
   if (!add.length) throw new Error('that email address does not look right')
   const attendees = have.some((a) => a.email.toLowerCase() === add[0].email) ? have : [...have, ...add]
-  const e = await gcal<GEvent>(email, `${path}?sendUpdates=all`, { method: 'PATCH', body: { attendees } })
+  const e = await gcal<GEvent>(email, `${path}?sendUpdates=all`, { method: 'PATCH', body: { attendees } }, src)
   return { id: e.id, link: e.htmlLink ?? null, meet: meetOf(e) }
 }
 
@@ -380,6 +397,15 @@ export type UpcomingEvent = {
   /** Set on events Juno added: the pen_suggestions id it came from, if any. */
   junoRef: string | null
   juno: boolean
+  /** The iCalendar UID: the same meeting on two of the user's calendars shares it (calendars.ts de-dups on it). */
+  uid?: string | null
+  /** The user organised it (their copy is the one to change). */
+  organizerSelf?: boolean
+  organizer?: { email: string; name: string | null } | null
+  /** Which of the user's calendars it was read from (lib/pen/calendars.ts: 'gcal' or an address); set when reading all of them. */
+  cal?: string
+  /** Every connected calendar it is on, when the same meeting is on more than one. */
+  cals?: string[]
 }
 
 export function toUpcoming(e: GEvent): UpcomingEvent {
@@ -397,11 +423,16 @@ export function toUpcoming(e: GEvent): UpcomingEvent {
     link: e.htmlLink ?? null,
     junoRef: e.extendedProperties?.private?.juno_ref ?? null,
     juno: e.extendedProperties?.private?.juno === '1',
+    uid: e.iCalUID ?? null,
+    organizerSelf: e.organizer?.self === true,
+    organizer: e.organizer?.email ? { email: e.organizer.email.toLowerCase(), name: e.organizer.displayName?.trim() || null } : null,
   }
 }
 
+const EVENT_FIELDS = 'id,status,summary,location,htmlLink,hangoutLink,start,end,iCalUID,organizer(email,displayName,self),attendees(email,displayName,self,resource,responseStatus),conferenceData(entryPoints(entryPointType,uri)),extendedProperties'
+
 /** The user's events from now to `days` ahead (at most READ_DAYS), soonest first. Never stored. */
-export async function upcomingEvents(email: string, days = READ_DAYS, now = new Date()): Promise<UpcomingEvent[]> {
+export async function upcomingEvents(email: string, days = READ_DAYS, now = new Date(), src?: CalSrc): Promise<UpcomingEvent[]> {
   const span = Math.min(READ_DAYS, Math.max(0, days))
   const q = new URLSearchParams({
     timeMin: now.toISOString(),
@@ -409,15 +440,15 @@ export async function upcomingEvents(email: string, days = READ_DAYS, now = new 
     singleEvents: 'true',
     orderBy: 'startTime',
     maxResults: '100',
-    fields: 'items(id,status,summary,location,htmlLink,hangoutLink,start,end,attendees(email,displayName,self,resource,responseStatus),conferenceData(entryPoints(entryPointType,uri)),extendedProperties)',
+    fields: `items(${EVENT_FIELDS})`,
   })
-  const j = await gcal<{ items?: GEvent[] }>(email, `calendars/primary/events?${q}`)
+  const j = await gcal<{ items?: GEvent[] }>(email, `calendars/primary/events?${q}`, {}, src)
   return (j.items ?? []).filter((e) => e.status !== 'cancelled').map(toUpcoming)
 }
 
 /** Events matching what the user named ("the sample meeting test"), from yesterday to 60 days
  *  ahead, soonest first. Only on the user's request, to change or delete one; never stored. */
-export async function findEvents(email: string, query: string, now = new Date()): Promise<UpcomingEvent[]> {
+export async function findEvents(email: string, query: string, now = new Date(), src?: CalSrc): Promise<UpcomingEvent[]> {
   const q = new URLSearchParams({
     q: query.slice(0, 100),
     timeMin: new Date(now.getTime() - 86_400_000).toISOString(),
@@ -425,17 +456,35 @@ export async function findEvents(email: string, query: string, now = new Date())
     singleEvents: 'true',
     orderBy: 'startTime',
     maxResults: '10',
-    fields: 'items(id,status,summary,location,htmlLink,hangoutLink,start,end,attendees(email,displayName,self,resource,responseStatus),conferenceData(entryPoints(entryPointType,uri)),extendedProperties)',
+    fields: `items(${EVENT_FIELDS})`,
   })
-  const j = await gcal<{ items?: GEvent[] }>(email, `calendars/primary/events?${q}`)
+  const j = await gcal<{ items?: GEvent[] }>(email, `calendars/primary/events?${q}`, {}, src)
+  return (j.items ?? []).filter((e) => e.status !== 'cancelled').map(toUpcoming)
+}
+
+/**
+ * Every event in [from, to) on one calendar, soonest first ("what's on tomorrow?", "my meetings
+ * this week", a meeting looked up by day and person). Optional `q` = Google's free-text match
+ * (title, description, location, attendees). Only on the user's request; never stored.
+ */
+export async function eventsInRange(email: string, from: Date, to: Date, o: { q?: string; max?: number } = {}, src?: CalSrc): Promise<UpcomingEvent[]> {
+  const q = new URLSearchParams({
+    timeMin: from.toISOString(),
+    timeMax: to.toISOString(),
+    singleEvents: 'true',
+    orderBy: 'startTime',
+    maxResults: String(Math.min(250, Math.max(1, o.max ?? 100))),
+    fields: `items(${EVENT_FIELDS})`,
+  })
+  if (o.q?.trim()) q.set('q', o.q.trim().slice(0, 100))
+  const j = await gcal<{ items?: GEvent[] }>(email, `calendars/primary/events?${q}`, {}, src)
   return (j.items ?? []).filter((e) => e.status !== 'cancelled').map(toUpcoming)
 }
 
 /** One event by id (to see whether it has guests before changing it), or null if it is gone. */
-export async function getEvent(email: string, eventId: string): Promise<UpcomingEvent | null> {
-  const fields = 'id,status,summary,location,htmlLink,hangoutLink,start,end,attendees(email,displayName,self,resource,responseStatus),conferenceData(entryPoints(entryPointType,uri)),extendedProperties'
+export async function getEvent(email: string, eventId: string, src?: CalSrc): Promise<UpcomingEvent | null> {
   try {
-    const e = await gcal<GEvent>(email, `calendars/primary/events/${encodeURIComponent(eventId)}?fields=${encodeURIComponent(fields)}`)
+    const e = await gcal<GEvent>(email, `calendars/primary/events/${encodeURIComponent(eventId)}?fields=${encodeURIComponent(EVENT_FIELDS)}`, {}, src)
     return e.status === 'cancelled' ? null : toUpcoming(e)
   } catch (err) {
     if ((err as { status?: number }).status === 404 || (err as { status?: number }).status === 410) return null
@@ -444,21 +493,21 @@ export async function getEvent(email: string, eventId: string): Promise<Upcoming
 }
 
 /** Deletes an event the user asked to delete; guests, if any, get Google's cancellation. */
-export async function deleteEvent(email: string, eventId: string): Promise<void> {
-  await gcal(email, `calendars/primary/events/${encodeURIComponent(eventId)}?sendUpdates=all`, { method: 'DELETE' })
+export async function deleteEvent(email: string, eventId: string, src?: CalSrc): Promise<void> {
+  await gcal(email, `calendars/primary/events/${encodeURIComponent(eventId)}?sendUpdates=all`, { method: 'DELETE' }, src)
 }
 
 /** Moves an event to a new start (same length unless given); guests get Google's update. */
-export async function moveEvent(email: string, eventId: string, startIso: string, tz: string, durationMin?: number): Promise<CreatedEvent> {
+export async function moveEvent(email: string, eventId: string, startIso: string, tz: string, durationMin?: number, src?: CalSrc): Promise<CreatedEvent> {
   const path = `calendars/primary/events/${encodeURIComponent(eventId)}`
-  const cur = await gcal<GEvent>(email, `${path}?fields=start,end`)
+  const cur = await gcal<GEvent>(email, `${path}?fields=start,end`, {}, src)
   const oldLen = cur.start?.dateTime && cur.end?.dateTime ? Date.parse(cur.end.dateTime) - Date.parse(cur.start.dateTime) : 30 * 60000
   const len = durationMin ? durationMin * 60000 : oldLen
   const start = Date.parse(startIso)
   const e = await gcal<GEvent>(email, `${path}?sendUpdates=all`, {
     method: 'PATCH',
     body: { start: { dateTime: new Date(start).toISOString(), timeZone: tz }, end: { dateTime: new Date(start + len).toISOString(), timeZone: tz } },
-  })
+  }, src)
   return { id: e.id, link: e.htmlLink ?? null, meet: meetOf(e) }
 }
 

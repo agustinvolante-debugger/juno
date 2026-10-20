@@ -16,7 +16,7 @@ import {
 } from '../../timezone'
 import { getProfileRaw } from '../../profile'
 import { moveReminder } from '../../reminders'
-import { moveEvent } from '../../google-calendar'
+import { moveByRef } from '../../calendars'
 import { calendarPref, linksMessage } from '../../calendar-pref'
 import type { CalEvent } from '../../calendar'
 
@@ -123,7 +123,7 @@ async function rezone(ctx: Ctx, tz: string): Promise<unknown[]> {
       if (i.kind === 'reminder') {
         moved.push((await moveReminder(ctx.email, i.id, at)) ? { reminder: i.text, ...when } : { reminder: i.text, error: 'already sent or cancelled' })
       } else if (i.kind === 'event') {
-        await moveEvent(ctx.email, i.id, at.toISOString(), tz)
+        await moveByRef(ctx.email, i.id, at.toISOString(), tz)
         moved.push({ event: i.title, ...when })
       } else {
         // A tap-to-add link can't be changed once sent: a new one, for the new time.

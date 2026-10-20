@@ -486,3 +486,5 @@ alter table public.pen_segments enable row level security;  -- service role only
 
 -- 2026-10-19, Gmail READING for the team test (lib/pen/gmail-read.ts, PEN_GMAIL_READ=1 + PEN_GMAIL_READ_USERS). Which Google scopes each connected address's token carries; null = send only (every row from before). Until it runs, reading stays off for everyone and sending works as before. Run after the pen_gmail table above.
 -- alter table public.pen_gmail add column if not exists scopes text[];
+
+-- 2026-10-20, one Google connection per address covers email AND calendar; up to 5 calendars (lib/pen/calendars.ts). NO DDL: an address's calendar is recorded in pen_gmail.scopes (the column above, already run): the calendar.events.owned scope. A calendar-only address is a pen_gmail row whose scopes lack gmail.send (never shown as a From). The old Settings → Google connection (pen_gcal) is read as one of the calendars, unchanged. The default calendar for new events is pen_profiles.profile.calendarDefault (an address, or 'gcal'). Undo for reminders/events Juno set lives in pen_whatsapp_messages.payload.undo (no column).

@@ -20,7 +20,8 @@
 
 import { linksMessage, calendarPref } from './calendar-pref'
 import type { CalEvent } from './calendar'
-import { createEvent, driveConnected, gcalConfigured, gcalConnected } from './google-calendar'
+import { driveConnected, gcalConfigured } from './google-calendar'
+import { anyCalendar, createOn } from './calendars'
 import { addReminder, maxAheadMs } from './reminders'
 import { createDocPage, notionConfigured, notionConnected } from './notion'
 import { planToDoc } from './google-exports'
@@ -69,10 +70,11 @@ export async function acceptMeeting(ctx: AcceptCtx, s: Suggestion, tzIn: string,
     description: s.quote ? `“${s.quote}”` : undefined,
     alarmMin: 30,
   }
-  if (await gcalConnected(ctx.email)) {
+  if (await anyCalendar(ctx.email)) {
     try {
-      const e = await createEvent(ctx.email, ev, { ref: s.id })
-      await decideSuggestion(ctx.email, s.id, 'done', { local, tz, gcal_event_id: e.id, gcal_link: e.link }, { starts_at: start.toISOString() })
+      // The default calendar (lib/pen/calendars.ts); the kept id says which calendar it is on.
+      const e = await createOn(ctx.email, ev, { ref: s.id })
+      await decideSuggestion(ctx.email, s.id, 'done', { local, tz, gcal_event_id: e.ref, gcal_link: e.link }, { starts_at: start.toISOString() })
       return {
         ok: true,
         added_to: 'Google Calendar',
@@ -81,7 +83,8 @@ export async function acceptMeeting(ctx: AcceptCtx, s: Suggestion, tzIn: string,
         time_zone: `${tz} (${ZONE_NOTE})`,
         tz,
         start_utc: start.toISOString(),
-        event_id: e.id,
+        event_id: e.ref,
+        ...(e.calendarAddress ? { calendar: e.calendarAddress } : {}),
         note:
           'Say "Added to your Google Calendar:" with the title and when, in one line (it has a 30-minute alert). Then offer in one ' +
           `line a Google Meet link (on yes: add_meet_link with event_id) and to invite ${s.person ?? 'the other person'} (needs their ` +

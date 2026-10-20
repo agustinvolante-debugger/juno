@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
 import { getSession } from '@/lib/pen/store'
 import { calendarLinks, type CalEvent } from '@/lib/pen/calendar'
-import { createEvent, gcalConnected } from '@/lib/pen/google-calendar'
+import { anyCalendar, createOn } from '@/lib/pen/calendars'
 import { userZone, validZone, zonedToUtc } from '@/lib/pen/suggestions'
 
 export const dynamic = 'force-dynamic'
@@ -38,9 +38,9 @@ export async function POST(req: Request) {
     description: s.title ? `From “${s.title}” (Juno Pen)` : undefined,
     alarmMin: 0,
   }
-  if (await gcalConnected(email)) {
+  if (await anyCalendar(email)) {
     try {
-      const e = await createEvent(email, ev, { ref: `todo:${s.id}:${index}` })
+      const e = await createOn(email, ev, { ref: `todo:${s.id}:${index}` })
       return NextResponse.json({ added: 'google', link: e.link })
     } catch (err) {
       // Revoked or down: the links still work.
