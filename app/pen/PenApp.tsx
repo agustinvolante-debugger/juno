@@ -20,6 +20,7 @@ import GetWhatsApp, { WaChatSheet } from './GetWhatsApp'
 import { speakersIn, type SpeakerMap } from '@/lib/pen/speakers'
 import ChatView from './ChatView'
 import CalendarView from './calendar/CalendarView'
+import MiniCalendar from './calendar/MiniCalendar'
 import DocView from './DocView'
 import Overview from './Overview'
 import { JunoNoticed, DateChip } from './JunoNoticed'
@@ -258,6 +259,8 @@ export default function PenApp({
   // recording folds it for reading room unless they unfold it while there, and leaving the
   // recording goes back to their choice (16 Oct).
   const [sidePref, setSidePref] = useState<'open' | 'collapsed'>('open')
+  // The sidebar mini month's last pick: the Calendar page jumps to that day's week; n re-triggers it.
+  const [calGoTo, setCalGoTo] = useState<{ date: string; n: number } | null>(null)
   const [recUnfold, setRecUnfold] = useState(false)
   const [sideAnim, setSideAnim] = useState(false)
   useEffect(() => {
@@ -1559,6 +1562,16 @@ export default function PenApp({
       )}
 
       {!sideCollapsed && (
+        <MiniCalendar
+          onPick={(date) => {
+            setCalGoTo((g) => ({ date, n: (g?.n ?? 0) + 1 }))
+            setView({ k: 'calendar' })
+            setNavOpen(false)
+          }}
+        />
+      )}
+
+      {!sideCollapsed && (
         <div className="pen-side-meter">
           <UsageBar allowance={allowance} />
         </div>
@@ -1690,6 +1703,8 @@ export default function PenApp({
         <section className="pen-shell-main min-w-0" id="pen-main" tabIndex={-1}>
           {view.k === 'calendar' ? (
             <CalendarView
+              // goTo is CalendarView's new prop (other worktree); spread until the merge. Clean up then.
+              {...({ goTo: calGoTo ?? undefined } as Record<string, unknown>)}
               onOpenRecording={(id) => {
                 openSession(id)
                 setTab('note')
