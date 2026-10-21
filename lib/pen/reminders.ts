@@ -6,6 +6,8 @@
 // than that needs the Meta-approved utility template `user_reminder` ("Here is the reminder you
 // asked me for: {{1}}…"): once it is in PEN_WA_TEMPLATES, reminders go up to 30 days ahead and
 // one due outside the window is sent as that template. iMessage has no window at all.
+// A WhatsApp reminder that can't get through at the due time (window closed and no approved
+// template, or Meta refuses it for the window / template) is emailed instead (21 Oct, undeliverable).
 //
 // Firing: Supabase pg_cron runs every minute and calls /api/pen/reminders only when a row is
 // due (the check is in SQL, so an idle minute costs no function call). See schema.sql.
@@ -109,6 +111,29 @@ export async function emailReminder(email: string, text: string, lang: Lang): Pr
   return sendEmailResult({ to: email, subject, html, text: `${L.intro}\n\n${text}\n\n${L.foot}` })
 }
 
+const NO_WINDOW = 'outside the 24-hour window and user_reminder is not approved'
+
+/**
+ * A WhatsApp send that can't get through at this time, as opposed to an outage: the 24-hour window
+ * is closed (Meta 131047, old 470), the template is missing / not approved / paused (1320xx), or
+ * the provider can't send templates at all. Those reminders are emailed instead.
+ */
+export function undeliverable(msg: string): boolean {
+  return msg === NO_WINDOW || /templates need the Meta Cloud API|"code"\s*:\s*(131047|470|1320\d\d)\b|re-?engagement message|more than 24 hours/i.test(msg)
+}
+
+/**
+ * Emails a reminder WhatsApp can't deliver, and records it on the row: phone cleared (it is an
+ * emailed reminder now, as one set on the web without a phone), so nothing sends it on WhatsApp
+ * again. The row was already claimed (sent_at) before any of this, so no run sends it twice.
+ */
+async function emailInstead(r: { id: string; user_email: string; text: string; lang: Lang }, why: string): Promise<void> {
+  const m = await emailReminder(r.user_email, r.text, r.lang ?? 'en')
+  if (!m.ok) throw new Error(`WhatsApp: ${why.slice(0, 200)}; email: ${m.error ?? 'not sent'}`)
+  await supabaseAdmin.from('pen_reminders').update({ phone: null }).eq('id', r.id).then(() => {}, () => {})
+  console.info(`pen reminders: ${r.id} emailed instead of WhatsApp (${why.slice(0, 120)})`)
+}
+
 /** Sends every due reminder once. The claim (sent_at set where null) makes overlapping runs safe. */
 export async function fireDue(): Promise<{ sent: number; failed: number }> {
   // A test script with every send refused: leave them due rather than claim and lose them.
@@ -135,11 +160,18 @@ export async function fireDue(): Promise<{ sent: number; failed: number }> {
       // Outside WhatsApp's 24-hour window only the template gets through. User-asked reminders
       // don't count toward the proactive daily max or quiet hours: the user picked the time.
       const ch = isImessage(r.phone) ? null : await channelFor(r.user_email).catch(() => null)
-      if (ch && !ch.imessage && !ch.window) {
-        if (!templateApproved(REMINDER_TEMPLATE, r.lang ?? 'en')) throw new Error('outside the 24-hour window and user_reminder is not approved')
-        await sendTemplate(ch.to, REMINDER_TEMPLATE, r.lang ?? 'en', [r.text], [`reminder:done:${r.id}`, `reminder:snooze:${r.id}`])
-      } else {
-        await sendText(r.phone, `${PREFIX[r.lang] ?? PREFIX.en}: ${r.text}`)
+      try {
+        if (ch && !ch.imessage && !ch.window) {
+          if (!templateApproved(REMINDER_TEMPLATE, r.lang ?? 'en')) throw new Error(NO_WINDOW)
+          await sendTemplate(ch.to, REMINDER_TEMPLATE, r.lang ?? 'en', [r.text], [`reminder:done:${r.id}`, `reminder:snooze:${r.id}`])
+        } else {
+          await sendText(r.phone, `${PREFIX[r.lang] ?? PREFIX.en}: ${r.text}`)
+        }
+      } catch (e) {
+        // WhatsApp can't reach them now (window closed, no approved template, or Meta refused it
+        // for that): emailed instead (founder, 21 Oct). iMessage never gets here (no window).
+        if (isImessage(r.phone) || !undeliverable((e as Error).message)) throw e
+        await emailInstead(r, (e as Error).message)
       }
       sent++
     } catch (e) {

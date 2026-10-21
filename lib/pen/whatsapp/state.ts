@@ -24,6 +24,8 @@ export type UndoClaim = { undo: Undo } | { nothing: true; already?: boolean }
 
 export interface AgentStore {
   kind: 'phone' | 'web'
+  /** Web: the thread (a connect link started here confirms in it: lib/pen/connect-link.ts viaOfCtx). */
+  chatId?: string
   getDraft(): Promise<Draft | null>
   setDraft(d: Draft | null): Promise<void>
   getPending(): Promise<Pending | null>
@@ -100,6 +102,7 @@ export function webStore(email: string, chatId: string): AgentStore {
   const undos = (s: WebAgentState) => (s.undo ?? {}) as Record<string, Undo>
   return {
     kind: 'web',
+    chatId,
     getDraft: async () => {
       const d = ((await read()).draft ?? null) as Draft | null
       if (!d || Date.now() - new Date(d.createdAt).getTime() > DRAFT_TTL_MS) return null

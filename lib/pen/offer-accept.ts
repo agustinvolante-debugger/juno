@@ -26,14 +26,14 @@ import { addReminder, maxAheadMs } from './reminders'
 import { createDocPage, notionConfigured, notionConnected } from './notion'
 import { planToDoc } from './google-exports'
 import { supabaseAdmin } from '@/lib/supabase'
-import { connectLink, viaOf } from './connect-link'
+import { connectLink, viaOfCtx } from './connect-link'
 import { draftDoc } from './suggestion-docs'
 import { addDatedTodos, decideSuggestion, todayIn, userZone, validZone, whenText, zonedToUtc } from './suggestions'
 import type { Suggestion } from './suggestions-types'
 import type { Lang } from './currency'
 
 /** Who is saying yes. `phone`: the linked WhatsApp number, for reminders (null: none linked). */
-export type AcceptCtx = { email: string; lang: Lang; phone?: string | null }
+export type AcceptCtx = { email: string; lang: Lang; phone?: string | null; channel?: string; store?: { chatId?: string } }
 
 const base = () => (process.env.PEN_PUBLIC_URL || 'https://www.tryjunoapp.com').replace(/\/$/, '')
 
@@ -211,8 +211,8 @@ export async function acceptNotion(ctx: AcceptCtx, s: Suggestion, plain: boolean
         ? {
             notion_connected: notionOn,
             google_docs_connected: driveOn,
-            ...(offerNotion ? { notion_connect_link: connectLink(ctx.email, 'notion', undefined, viaOf(ctx.phone)) } : {}),
-            ...(offerGoogle ? { google_docs_connect_link: connectLink(ctx.email, 'gdrive', undefined, viaOf(ctx.phone)) } : {}),
+            ...(offerNotion ? { notion_connect_link: connectLink(ctx.email, 'notion', undefined, viaOfCtx(ctx)) } : {}),
+            ...(offerGoogle ? { google_docs_connect_link: connectLink(ctx.email, 'gdrive', undefined, viaOfCtx(ctx)) } : {}),
             note:
               `${wanted ? DEST_NAME[wanted] : 'Neither Notion nor Google Docs'} is not connected. Say so in one line and give the one-tap ` +
               'link(s) above, each on its own line, to connect where they want the page (each works once, 15 minutes; Juno confirms here ' +

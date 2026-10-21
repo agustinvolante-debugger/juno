@@ -3,7 +3,7 @@ import { connectionsHref } from '@/lib/pen/settings-paths'
 import { cookies } from 'next/headers'
 import { authedEmail } from '@/lib/news/auth'
 import { readOnlyRefusal } from '@/lib/pen/access'
-import { announceConnected, connectedPage, readChatState } from '@/lib/pen/connect-link'
+import { announceConnected, announceFromSettings, connectedPage, readChatState, type Via } from '@/lib/pen/connect-link'
 import { STATE_COOKIE, connectGcal, stateWant, verifyState, type GoogleWant } from '@/lib/pen/google-calendar'
 import { GMAIL_STATE_PREFIX, GmailError, connectGmail, gmailReadAllowed, gmailStateWantsCal, gmailStateWantsRead, verifyGmailState } from '@/lib/pen/gmail'
 
@@ -48,6 +48,7 @@ export async function GET(req: Request) {
   try {
     await connectGcal(email, code, u.origin, want)
     if (chat) await announceConnected(email, app, chat.via)
+    else await announceFromSettings(email, want === 'drive' ? 'gdrive' : 'gcal')
     return back(`connected=${want}`)
   } catch (e) {
     console.warn(`pen gcal connect: ${(e as Error).message}`)
@@ -55,7 +56,7 @@ export async function GET(req: Request) {
   }
 }
 
-async function gmailCallback(req: Request, u: URL, state: string | null, nonce: string | undefined, chat: { email: string; via: 'wa' | 'im' } | null) {
+async function gmailCallback(req: Request, u: URL, state: string | null, nonce: string | undefined, chat: { email: string; via: Via } | null) {
   const email = chat?.email ?? (await authedEmail())
   if (!email) return NextResponse.redirect(new URL('/pen', req.url))
   const back = async (q: Record<string, string>) => {
@@ -71,7 +72,9 @@ async function gmailCallback(req: Request, u: URL, state: string | null, nonce: 
     const r = await connectGmail(email, code, u.origin)
     // Reading was asked (allowlisted users: always from the chat, "Let Juno read" in Settings): say whether Google gave it.
     const wantRead = chat ? await gmailReadAllowed(email) : gmailStateWantsRead(state)
-    if (chat) await announceConnected(email, 'gmail', chat.via, r.address, { canRead: r.canRead, canSend: r.canSend, canCal: r.canCal, calFull: r.calFull })
+    const said = { canRead: r.canRead, canSend: r.canSend, canCal: r.canCal, calFull: r.calFull }
+    if (chat) await announceConnected(email, 'gmail', chat.via, r.address, said)
+    else await announceFromSettings(email, 'gmail', r.address, said)
     // Calendar (20 Oct): asked on every connect; say whether it came (and the 5-calendar cap).
     const wantCal = chat ? true : gmailStateWantsCal(state)
     return back({ connected: r.address, ...(wantRead ? { read: r.canRead ? 'on' : 'denied' } : {}), ...(wantCal ? { cal: r.canCal ? 'on' : r.calFull ? 'full' : 'denied' } : {}) })

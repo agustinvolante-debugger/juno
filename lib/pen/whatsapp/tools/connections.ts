@@ -18,7 +18,7 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import type { Ctx } from '../agent'
 import { str, type ToolModule } from './types'
-import { APP_NAME, COPY, connectLink, viaOf, type ConnectApp } from '../../connect-link'
+import { APP_NAME, COPY, connectLink, viaOfCtx, type ConnectApp } from '../../connect-link'
 import { abilities, disconnectGoogle, gcalConfigured, getGcalConnection } from '../../google-calendar'
 import { disconnect as disconnectNotion, getConnection, notionConfigured } from '../../notion'
 import { disconnect as disconnectGranola, getConnection as getGranola, granolaAvailable } from '../../granola'
@@ -124,7 +124,7 @@ async function connectApp(ctx: Ctx, input: Record<string, unknown>): Promise<unk
   if (s.connected && input.reconnect !== true && app !== 'gmail') {
     return { already_connected: true, ...s, note: 'Say it is already connected (with the account/workspace) in one line. Offer to connect again only if they want another account.' }
   }
-  const url = connectLink(ctx.email, app, undefined, viaOf(ctx.phone))
+  const url = connectLink(ctx.email, app, undefined, viaOfCtx(ctx))
   return {
     ok: true,
     message: COPY[ctx.lang].tap(APP_NAME[ctx.lang][app], url),
@@ -143,7 +143,7 @@ async function connectOutlookLink(ctx: Ctx, input: Record<string, unknown>): Pro
     return { already_connected: true, account: hit.address, ...(hit.can_cal ? { calendar: true } : {}), ...(hit.can_send ? { sending: true } : {}), note: 'Say in one line it is already connected. Offer to connect another Outlook account if they want.' }
   }
   const hint = hit?.address ?? (said && /^[^\s@]+@[^\s@]+$/.test(said) ? said.toLowerCase() : null)
-  const url = connectLink(ctx.email, 'outlook', undefined, viaOf(ctx.phone), { hint, cal: input.calendar === true && Boolean(hit) })
+  const url = connectLink(ctx.email, 'outlook', undefined, viaOfCtx(ctx), { hint, cal: input.calendar === true && Boolean(hit) })
   return {
     ok: true,
     message: COPY[ctx.lang].tap(APP_NAME[ctx.lang].outlook, url),
@@ -170,7 +170,7 @@ async function connectCalendar(ctx: Ctx, input: Record<string, unknown>): Promis
   // exactly one address lacking its calendar, with no calendar at all yet: that one.
   const lacking = accounts.filter((a) => !a.can_cal)
   const target = hit && !hit.can_cal ? hit.address : !said && !cals.length && lacking.length === 1 ? lacking[0].address : named
-  const url = connectLink(ctx.email, 'gmail', undefined, viaOf(ctx.phone), { hint: target, cal: true })
+  const url = connectLink(ctx.email, 'gmail', undefined, viaOfCtx(ctx), { hint: target, cal: true })
   return {
     ok: true,
     message: COPY[ctx.lang].tap(APP_NAME[ctx.lang].gcal, url),

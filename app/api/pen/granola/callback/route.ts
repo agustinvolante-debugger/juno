@@ -3,7 +3,7 @@ import { connectionsHref } from '@/lib/pen/settings-paths'
 import { cookies } from 'next/headers'
 import { authedEmail } from '@/lib/news/auth'
 import { readOnlyRefusal } from '@/lib/pen/access'
-import { announceConnected, connectedPage, readChatState } from '@/lib/pen/connect-link'
+import { announceConnected, announceFromSettings, connectedPage, readChatState } from '@/lib/pen/connect-link'
 import { STATE_COOKIE, connectOAuth, readAttempt } from '@/lib/pen/granola'
 
 export const dynamic = 'force-dynamic'
@@ -33,6 +33,7 @@ export async function GET(req: Request) {
   try {
     await connectOAuth(email, code, attempt.verifier, u.origin)
     if (chat) await announceConnected(email, 'granola', chat.via)
+    else await announceFromSettings(email, 'granola')
     return back('connected=1')
   } catch (e) {
     console.warn(`pen granola callback: ${(e as Error).message}`)

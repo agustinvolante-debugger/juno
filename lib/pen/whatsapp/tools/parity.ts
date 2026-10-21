@@ -556,8 +556,8 @@ async function toNotion(ctx: Ctx, id: string): Promise<unknown> {
   if (!s) return { error: 'no such recording' }
   const { getConnection, sendToNotion } = await import('../../notion')
   if (!(await getConnection(ctx.email))) {
-    const { connectLink, viaOf } = await import('../../connect-link')
-    return { error: 'Notion is not connected', connect_link: connectLink(ctx.email, 'notion', undefined, viaOf(ctx.phone)), next: 'say so in one line with this one-tap link (works once, 15 minutes); Juno confirms here when it is connected, then try again' }
+    const { connectLink, viaOfCtx } = await import('../../connect-link')
+    return { error: 'Notion is not connected', connect_link: connectLink(ctx.email, 'notion', undefined, viaOfCtx(ctx)), next: 'say so in one line with this one-tap link (works once, 15 minutes); Juno confirms here when it is connected, then try again' }
   }
   if (!s.notes?.summary && !s.notes?.actions?.length) return { error: 'there are no notes to send yet' }
   const r = await sendToNotion(ctx.email, s)
