@@ -655,3 +655,249 @@
   .pen-root .pen-cal-spin { animation: pen-cal-breathe 1.2s ease-in-out infinite alternate; }
   .pen-root .pen-cal-loading { animation: none; }
 }
+
+/* ======================================================================================
+   PHONE, APPLE-CALENDAR LAYOUT (PhoneCalendar.tsx, WeekStrip.tsx, PhoneDay.tsx, PhoneMonth.tsx)
+   Apple's iOS day view is the layout and interaction reference; the skin stays Pen's: Inter,
+   the light paper, glass pills, hairlines, the app blue where Apple uses red. The calendar takes
+   the whole content area between the app's top bar and its tab bar and scrolls inside itself,
+   so the header, the strip and the floating pills stay put.
+   ====================================================================================== */
+.pen-root .pen-m-body:has(> .pen-cal[data-pview]) {
+  padding: 0; overflow: hidden; display: flex; flex-direction: column;
+}
+.pen-root .pen-cal[data-pview] {
+  --gut: 58px;
+  position: relative; flex: 1 1 auto; min-height: 0; gap: 0;
+}
+.pen-root .pen-cal[data-pview] :is(button, [role='tab']):focus-visible { outline: 2px solid var(--sk-blue-hi); outline-offset: 2px; }
+
+/* ---- header: "‹ October" (or the month and its arrows) · the pill with list and + */
+.pen-root .pen-cal-ph {
+  flex: none; display: flex; align-items: center; gap: 6px; min-height: 56px; padding: 6px 12px 4px 4px;
+}
+.pen-root .pen-cal-ph-back {
+  display: inline-flex; align-items: center; gap: 1px; height: 44px; padding: 0 10px 0 4px; border: 0; border-radius: 12px;
+  background: none; cursor: pointer; font: 600 17px/1 var(--ui); letter-spacing: -0.012em; color: var(--accent);
+  -webkit-tap-highlight-color: transparent;
+}
+.pen-root .pen-cal-ph-back:active { background: var(--accent-wash); }
+.pen-root .pen-cal-ph-month { display: flex; align-items: center; gap: 0; min-width: 0; padding-left: 12px; }
+.pen-root .pen-cal-ph-title {
+  margin: 0 6px 0 0; font-size: 22px; line-height: 1.1; font-weight: 650; letter-spacing: -0.024em; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pen-root .pen-cal-ph-arrow {
+  flex: none; display: grid; place-items: center; width: 40px; height: 44px; border: 0; border-radius: 12px;
+  background: none; color: var(--accent); cursor: pointer;
+}
+.pen-root .pen-cal-ph-arrow:active { background: var(--accent-wash); }
+.pen-root .pen-cal-ph-busy { flex: 1 1 auto; display: flex; justify-content: center; min-width: 0; }
+.pen-root .pen-cal-ph-pill {
+  flex: none; display: inline-flex; align-items: center; height: 44px; padding: 0 2px; border-radius: 999px;
+  background: var(--g-pill); border: 1px solid var(--g-pill-line); box-shadow: var(--g-pill-shadow);
+}
+.pen-root .pen-cal-ph-btn {
+  display: grid; place-items: center; width: 44px; height: 40px; border: 0; border-radius: 999px;
+  background: none; color: var(--ink); cursor: pointer; transition: background .15s ease, color .15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.pen-root .pen-cal-ph-btn:active { background: rgba(29, 29, 31, .06); }
+.pen-root .pen-cal-ph-btn[aria-pressed='true'] { background: var(--accent-wash); color: var(--accent-ink); }
+.pen-root .pen-cal-ph-btn:disabled { color: var(--dim); opacity: .5; cursor: default; }
+.pen-root .pen-cal-ph-sep { width: 1px; height: 20px; background: var(--hair); }
+
+/* ---- week strip */
+.pen-root .pen-cal-strip { flex: none; padding: 0 8px 6px; touch-action: pan-y; overflow: hidden; user-select: none; -webkit-user-select: none; }
+.pen-root .pen-cal-strip-dows,
+.pen-root .pen-cal-strip-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.pen-root .pen-cal-strip-dows span {
+  height: 20px; display: grid; place-items: center;
+  font-size: 11px; font-weight: 600; letter-spacing: .02em; color: var(--soft); text-transform: uppercase;
+}
+.pen-root .pen-cal-strip-dows span[data-weekend] { color: var(--dim); }
+.pen-root .pen-cal-strip-day {
+  display: grid; place-items: center; height: 46px; padding: 0; border: 0; background: none; cursor: pointer;
+  color: var(--ink); -webkit-tap-highlight-color: transparent;
+}
+.pen-root .pen-cal-strip-day:focus-visible { outline: none; }
+.pen-root .pen-cal-strip-day:focus-visible .pen-cal-strip-n { outline: 2px solid var(--sk-blue-hi); outline-offset: 2px; }
+.pen-root .pen-cal-strip-n {
+  display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%;
+  font-size: 19px; font-weight: 500; letter-spacing: -0.01em; line-height: 1;
+  transition: background .2s ease, color .2s ease;
+}
+.pen-root .pen-cal-strip-day[data-weekend] { color: var(--dim); }
+.pen-root .pen-cal-strip-day[data-today] { color: var(--accent); }
+.pen-root .pen-cal-strip-day[data-today] .pen-cal-strip-n { font-weight: 650; }
+.pen-root .pen-cal-strip-day[aria-selected='true'] .pen-cal-strip-n { background: var(--accent); color: #fff; font-weight: 650; }
+.pen-root .pen-cal-strip-day:active:not([aria-selected='true']) .pen-cal-strip-n { background: rgba(29, 29, 31, .06); }
+
+/* ---- the date title and the all-day row */
+.pen-root .pen-cal-pdate { flex: none; padding: 9px 12px 8px; border-top: 1px solid var(--hair); }
+.pen-root .pen-cal-pdate-t {
+  margin: 0; text-align: center; font-size: 15px; line-height: 1.3; font-weight: 600; letter-spacing: -0.01em; color: var(--ink);
+}
+.pen-root .pen-cal-pallday { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.pen-root .pen-cal-pchip {
+  position: relative; display: flex; align-items: center; gap: 10px; width: 100%; min-height: 38px; padding: 0 12px;
+  border: 0; border-radius: 9px; cursor: pointer; text-align: left;
+  background: var(--c-wash); color: var(--c-ink); font-family: var(--ui);
+}
+.pen-root .pen-cal-pchip::before { content: ''; position: absolute; inset: -3px 0; }
+.pen-root .pen-cal-pchip:active { background: color-mix(in srgb, var(--c-wash), var(--c) 14%); }
+.pen-root .pen-cal-pchip-k { flex: none; min-width: calc(var(--gut) - 22px); white-space: nowrap; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .02em; }
+.pen-root .pen-cal-pchip-t { min-width: 0; font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pen-root .pen-cal-pchip[data-declined] { background: #fff; color: var(--dim); box-shadow: inset 0 0 0 1px var(--c-line); }
+.pen-root .pen-cal-pchip[data-declined] .pen-cal-pchip-t { text-decoration: line-through; }
+.pen-root .pen-cal-pchip-more {
+  height: 36px; padding: 0 12px; border: 0; border-radius: 9px; background: none; cursor: pointer;
+  font: 600 13.5px/1 var(--ui); color: var(--accent-ink);
+}
+
+.pen-root .pen-cal[data-pview] > .pen-cal-warn { flex: none; margin: 0 16px 8px; }
+
+/* ---- the day timeline */
+.pen-root .pen-cal-pday {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch; touch-action: pan-y;
+  border-top: 1px solid var(--hair);
+  /* The floating pills never cover the last hours for good. */
+  padding-bottom: 84px;
+}
+.pen-root .pen-cal-pday-body { position: relative; }
+.pen-root .pen-cal-pday-hours { position: absolute; left: 0; right: 0; pointer-events: none; }
+.pen-root .pen-cal-pday-hour { position: absolute; left: 0; right: 0; height: 0; }
+.pen-root .pen-cal-pday-hour::after {
+  content: ''; position: absolute; left: var(--gut); right: 0; top: 0; height: 1px; background: var(--hair);
+}
+.pen-root .pen-cal-pday-hour > span {
+  position: absolute; left: 0; width: calc(var(--gut) - 10px); top: 0; translate: 0 -50%;
+  text-align: right; font-size: 11.5px; font-weight: 500; line-height: 1; color: var(--dim); white-space: nowrap;
+}
+.pen-root .pen-cal-pday-hour > span[data-hide] { visibility: hidden; }
+.pen-root .pen-cal-pday-grid { position: absolute; left: calc(var(--gut) + 2px); right: 8px; }
+
+.pen-root .pen-cal-pev {
+  position: absolute; display: flex; flex-direction: column; gap: 2px; padding: 5px 8px; overflow: hidden;
+  border: 0; border-radius: 8px; cursor: pointer; text-align: left;
+  background: var(--c-wash); color: var(--c-ink); font-family: var(--ui);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .95);
+  transition: background .15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.pen-root .pen-cal-pev { align-items: stretch; }
+.pen-root .pen-cal-pev > :not(.pen-cal-pev-mark) { flex: none; min-width: 0; max-width: 100%; }
+.pen-root .pen-cal-pev[data-short] > .pen-cal-pev-t { flex: 0 1 auto; }
+.pen-root .pen-cal-pev:active { background: color-mix(in srgb, var(--c-wash), var(--c) 16%); }
+.pen-root .pen-cal-pev:focus-visible { z-index: 6; }
+.pen-root .pen-cal-pev-t {
+  font-size: 14px; line-height: 1.32; font-weight: 650; letter-spacing: -0.012em;
+  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; padding-right: 20px;
+}
+.pen-root .pen-cal-pev-sub { display: flex; flex-direction: column; gap: 1px; font-size: 12.5px; line-height: 1.3; font-weight: 500; min-width: 0; }
+.pen-root .pen-cal-pev-sub, .pen-root .pen-cal-pev-loc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pen-root .pen-cal-pev[data-mid] .pen-cal-pev-t { display: block; white-space: nowrap; text-overflow: ellipsis; }
+.pen-root .pen-cal-pev[data-short] { flex-direction: row; align-items: center; gap: 6px; padding-block: 0; }
+.pen-root .pen-cal-pev[data-short] .pen-cal-pev-t { display: block; flex: 0 1 auto; min-width: 0; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; padding-right: 0; }
+.pen-root .pen-cal-pev-inline { flex: 0 1000 auto; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 12.5px; font-weight: 500; }
+.pen-root .pen-cal-pev[data-short]:has(.pen-cal-pev-mark) { padding-right: 26px; }
+.pen-root .pen-cal-pev-mark {
+  position: absolute; top: 5px; right: 5px; display: grid; place-items: center; width: 17px; height: 17px;
+  border-radius: 999px; background: rgba(255, 255, 255, .85); color: var(--c-ink);
+}
+.pen-root .pen-cal-pev[data-short] .pen-cal-pev-mark { top: 50%; translate: 0 -50%; }
+.pen-root .pen-cal-pev[data-past] { background: color-mix(in srgb, var(--c-wash) 55%, #fff); }
+.pen-root .pen-cal-pev[data-declined] { background: rgba(255, 255, 255, .85); color: var(--dim); box-shadow: inset 0 0 0 1px var(--c-line), 0 0 0 1px rgba(255, 255, 255, .95); }
+.pen-root .pen-cal-pev[data-declined] .pen-cal-pev-t { text-decoration: line-through; text-decoration-color: rgba(110, 110, 115, .6); }
+
+.pen-root .pen-cal-pnow {
+  position: absolute; left: -2px; right: 0; height: 2px; translate: 0 -1px; z-index: 5; pointer-events: none;
+  background: var(--accent);
+}
+.pen-root .pen-cal-pnow::before {
+  content: ''; position: absolute; left: -4px; top: -3.5px; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 0 2px #fff;
+}
+.pen-root .pen-cal-pnow-t {
+  position: absolute; right: calc(100% + 7px); top: 50%; translate: 0 -50%;
+  padding: 3px 5px; border-radius: 999px; background: var(--accent); color: #fff;
+  font-size: 11px; font-weight: 650; line-height: 1; white-space: nowrap;
+}
+
+/* ---- month */
+.pen-root .pen-cal-pmonth {
+  flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 0 8px 76px;
+  touch-action: none; overflow: hidden; user-select: none; -webkit-user-select: none;
+}
+.pen-root .pen-cal-pmonth-dows { flex: none; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.pen-root .pen-cal-pmonth-dows span {
+  height: 26px; display: grid; place-items: center; font-size: 11px; font-weight: 600; letter-spacing: .02em; color: var(--soft); text-transform: uppercase;
+}
+.pen-root .pen-cal-pmonth-dows span[data-weekend] { color: var(--dim); }
+.pen-root .pen-cal-pmonth-grid { flex: 1 1 auto; min-height: 0; display: grid; }
+.pen-root .pen-cal-pmonth-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid var(--hair); }
+.pen-root .pen-cal-pmonth-cell, .pen-root .pen-cal-pmonth-blank { display: flex; justify-content: center; align-items: flex-start; padding-top: 4px; min-width: 0; }
+.pen-root .pen-cal-pmonth-day {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; width: 100%; max-width: 52px; min-height: 48px; padding: 0;
+  border: 0; border-radius: 12px; background: none; cursor: pointer; color: var(--ink);
+  -webkit-tap-highlight-color: transparent;
+}
+.pen-root .pen-cal-pmonth-n {
+  display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%;
+  font-size: 18px; font-weight: 500; line-height: 1; letter-spacing: -0.01em;
+}
+.pen-root .pen-cal-pmonth-day[data-weekend] { color: var(--dim); }
+.pen-root .pen-cal-pmonth-day[data-today] { color: var(--accent); }
+.pen-root .pen-cal-pmonth-day[data-today] .pen-cal-pmonth-n { font-weight: 650; }
+.pen-root .pen-cal-pmonth-day[data-sel] .pen-cal-pmonth-n { background: var(--accent); color: #fff; font-weight: 650; }
+.pen-root .pen-cal-pmonth-day:active:not([data-sel]) .pen-cal-pmonth-n { background: rgba(29, 29, 31, .06); }
+.pen-root .pen-cal-pmonth-day:focus-visible { outline: none; }
+.pen-root .pen-cal-pmonth-day:focus-visible .pen-cal-pmonth-n { outline: 2px solid var(--sk-blue-hi); outline-offset: 2px; }
+.pen-root .pen-cal-pmonth-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--dim); opacity: .6; visibility: hidden; }
+.pen-root .pen-cal-pmonth-dot[data-on] { visibility: visible; }
+
+/* ---- list */
+.pen-root .pen-cal-pscroll {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+  padding: 14px 16px 96px; border-top: 1px solid var(--hair);
+}
+.pen-root .pen-cal .pen-btn.pen-cal-earlier { margin-bottom: -4px; }
+
+/* ---- floating pills, above the app's tab bar (the content area ends where the tabs start) */
+.pen-root .pen-cal-pfloat {
+  position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 30;
+  display: flex; align-items: center; justify-content: space-between; pointer-events: none;
+}
+.pen-root .pen-cal-pfloat-btn {
+  pointer-events: auto; display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 18px;
+  border-radius: 999px; cursor: pointer;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .97), rgba(255, 255, 255, .86));
+  -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+  border: 1px solid var(--g-pill-line);
+  box-shadow: inset 0 1px 0 #fff, 0 1px 2px rgba(29, 29, 31, .06), 0 10px 24px -10px rgba(29, 29, 31, .28);
+  font: 600 15px/1 var(--ui); letter-spacing: -0.01em; color: var(--ink);
+  -webkit-tap-highlight-color: transparent;
+}
+.pen-root .pen-cal-pfloat-btn:active { background: #fff; }
+.pen-root .pen-cal-pfloat-cals { padding: 0 14px 0 16px; gap: 9px; }
+.pen-root .pen-cal-pfloat-warn { display: inline-flex; margin-left: -2px; color: var(--warn); }
+
+/* ---- slide-in after a swipe or a pick */
+@keyframes pen-cal-in-next { from { transform: translateX(32px); opacity: .2; } }
+@keyframes pen-cal-in-prev { from { transform: translateX(-32px); opacity: .2; } }
+@keyframes pen-cal-in-up { from { transform: translateY(28px); opacity: .2; } }
+@keyframes pen-cal-in-down { from { transform: translateY(-28px); opacity: .2; } }
+.pen-root :is(.pen-cal-pday-body, .pen-cal-strip-days)[data-slide='next'] { animation: pen-cal-in-next .34s cubic-bezier(.16, 1, .3, 1); }
+.pen-root :is(.pen-cal-pday-body, .pen-cal-strip-days)[data-slide='prev'] { animation: pen-cal-in-prev .34s cubic-bezier(.16, 1, .3, 1); }
+.pen-root .pen-cal-pmonth-grid[data-slide='next'] { animation: pen-cal-in-up .36s cubic-bezier(.16, 1, .3, 1); }
+.pen-root .pen-cal-pmonth-grid[data-slide='prev'] { animation: pen-cal-in-down .36s cubic-bezier(.16, 1, .3, 1); }
+
+/* The toast clears the floating pills and the tab bar. */
+.pen-root:has(.pen-cal[data-pview]) .pen-cal-toast { bottom: calc(env(safe-area-inset-bottom) + 136px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .pen-root [data-slide] { animation: none !important; }
+  .pen-root :is(.pen-cal-pday-body, .pen-cal-strip-days, .pen-cal-pmonth-grid) { transform: none !important; }
+  .pen-root :is(.pen-cal-strip-n, .pen-cal-pev, .pen-cal-ph-btn) { transition: none; }
+}

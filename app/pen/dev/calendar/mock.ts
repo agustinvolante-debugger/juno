@@ -20,6 +20,7 @@ export function buildMock(): CalRange {
   const mon = startOfWeek(new Date())
   const at = (day: number, h: number, m = 0) => new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + day, h, m).toISOString()
   const date = (day: number) => ymd(addDays(mon, day))
+  const td = (new Date().getDay() + 6) % 7
   let n = 0
   const ev = (p: Partial<CalViewEvent> & Pick<CalViewEvent, 'title' | 'start' | 'cal'>): CalViewEvent => ({
     ref: `${p.ref ?? `ev${++n}`}|${p.cal}`,
@@ -83,6 +84,15 @@ export function buildMock(): CalRange {
     ev({ cal: WORK, title: 'Acme Realty check-in', start: at(9, 11), end: at(9, 11, 30), meet, guests: [me, dana], organizer: me }),
     ev({ cal: GMAIL, title: 'Haircut', start: at(10, 17), end: at(10, 17, 45) }),
     ev({ cal: WORK, title: 'Month close', start: date(11), end: date(12), allDay: true }),
+    // Today, whatever day that is (the phone's day view): an early start, a recorded meeting
+    // that's over, an overlap, and with ?clock=8:45 the board prep (brief) still ahead.
+    ev({ cal: GMAIL, title: 'Morning run', start: at(td, 6), end: at(td, 6, 45), location: 'Crissy Field' }),
+    ev({
+      cal: WORK, title: 'LumenPay pilot kickoff', start: at(td, 7, 45), end: at(td, 8, 30), meet, guests: [me, ana, marco], organizer: me,
+      recording: { id: 'rec-lumen-2', title: 'LumenPay pilot kickoff' },
+    }),
+    ev({ cal: OUTLOOK, title: 'Coffee with Priya', start: at(td, 16), end: at(td, 16, 30), location: 'Sightglass, 270 7th St', guests: [priya, me], organizer: priya, editable: false, declined: true, link: 'https://outlook.office.com/calendar/view/week' }),
+    ev({ cal: WORK, title: 'Write investor update', start: at(td, 17), end: at(td, 18, 30), juno: true }),
     // Last week (for month view)
     ev({ cal: WORK, title: 'Customer interviews', start: at(-4, 10), end: at(-4, 12), recording: { id: 'rec-int-1', title: 'Customer interviews' } }),
     ev({ cal: GMAIL, title: 'Climbing', start: at(-2, 9), end: at(-2, 11) }),
