@@ -96,18 +96,31 @@ export function buildMock(): CalRange {
       { key: BROKEN, address: 'agustin@caerusai.com', provider: 'outlook', broken: true, isDefault: false },
     ],
     events,
-    todos: [
-      { ref: 'rec-lumen-1#0', sessionId: 'rec-lumen-1', text: 'Send Ana the reconciliation demo', date: date(1), done: true },
-      { ref: 'rec-lumen-1#1', sessionId: 'rec-lumen-1', text: 'Draft LumenPay pilot terms', date: date(3), done: false },
-      { ref: 'rec-int-1#0', sessionId: 'rec-int-1', text: 'Write up interview notes for Chris', date: date(2), done: false },
-    ],
-    reminders: [
-      { id: 'r1', text: 'Call Ana about the pilot', dueAt: at(1, 16, 30), sent: false },
-      { id: 'r2', text: 'Book flights for the offsite', dueAt: at(3, 11, 30), sent: false },
-    ],
+    // Meetings only (founder, 20 Oct): the API may still send these; the page ignores them.
+    todos: [],
+    reminders: [],
     failed: [],
     tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
   }
+}
+
+/** Edge cases on top of the normal week: a very long title, a 20-event day, five all-day items,
+ *  and a broken read for one calendar (?stress=1). */
+export function buildStress(): CalRange {
+  const base = buildMock()
+  const mon = startOfWeek(new Date())
+  const at = (day: number, h: number, m = 0) => new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + day, h, m).toISOString()
+  const date = (day: number) => ymd(addDays(mon, day))
+  const one = base.events[0]
+  const mk = (i: number, p: Partial<CalViewEvent>): CalViewEvent => ({ ...one, ref: `stress${i}|${p.cal ?? WORK}`, cal: p.cal ?? WORK, cals: [p.cal ?? WORK], recording: null, hasBrief: false, guests: [], meet: null, location: null, description: null, recurring: false, ...p } as CalViewEvent)
+  const extra: CalViewEvent[] = [
+    mk(1, { title: 'Quarterly business review with the LumenPay finance, operations and compliance leadership team (in person)', start: at(4, 13), end: at(4, 14, 30), location: 'LumenPay HQ, 1455 Market St, 10th floor, San Francisco' }),
+    ...Array.from({ length: 20 }, (_, i) =>
+      mk(10 + i, { cal: [WORK, GMAIL, OUTLOOK][i % 3], title: ['Open house walkthrough', 'Buyer call', 'Listing photos', 'Escrow check', 'Showing'][i % 5] + ` ${i + 1}`, start: at(5, 8 + Math.floor(i / 2), (i % 2) * 30), end: at(5, 8 + Math.floor(i / 2), (i % 2) * 30 + 30) }),
+    ),
+    ...['Offsite: Tahoe', 'Mom’s birthday', 'Conference: SaaStr', 'Out of office', 'Payroll day'].map((t, i) => mk(40 + i, { cal: [GMAIL, WORK, OUTLOOK][i % 3], title: t, start: date(4), end: date(5), allDay: true })),
+  ]
+  return { ...base, events: [...base.events, ...extra], failed: [OUTLOOK] }
 }
 
 export function mockBrief(ref: string): CalBrief {

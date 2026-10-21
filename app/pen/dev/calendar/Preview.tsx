@@ -5,18 +5,18 @@ import { LangProvider } from '@/app/pen/LangContext'
 import type { Lang } from '@/lib/pen/i18n'
 import type { CalRange } from '@/lib/pen/calendar-view'
 import CalendarView from '@/app/pen/calendar/CalendarView'
-import { buildMock, mockBrief } from './mock'
+import { buildMock, buildStress, mockBrief } from './mock'
 
-export default function Preview({ phone, lang, empty }: { phone: boolean; lang: Lang; empty: boolean }) {
+export default function Preview({ phone, lang, empty, stress, goto }: { phone: boolean; lang: Lang; empty: boolean; stress?: boolean; goto?: string }) {
   // Built after mount: "today" is the browser's today, and server and client never disagree.
   const [mock, setMock] = useState<CalRange | null>(null)
   useEffect(() => {
-    const m = buildMock()
+    const m = stress ? buildStress() : buildMock()
     setMock(empty ? { ...m, calendars: [], events: [], todos: [], reminders: [] } : m)
-  }, [empty])
+  }, [empty, stress])
   const log = (what: string) => (id: string) => console.info(`[calendar preview] ${what}`, id)
   const view = mock && (
-    <CalendarView phone={phone} mock={mock} mockBrief={mockBrief} onOpenRecording={log('open recording')} onOpenConnections={() => log('open connections')('')} />
+    <CalendarView phone={phone} goTo={goto ? { date: goto, n: 1 } : undefined} mock={mock} mockBrief={mockBrief} onOpenRecording={log('open recording')} onOpenConnections={() => log('open connections')('')} />
   )
 
   return (

@@ -9,10 +9,11 @@ export function timeLabel(d: Date, lang: Lang): string {
   return d.toLocaleTimeString(LOCALE[lang], { hour: 'numeric', minute: '2-digit' })
 }
 
-/** "9 AM" / "9" / "09:00" for the grid's hour gutter. */
+/** "9 AM" in English; in 24-hour locales the same shape as the events' times ("7:00", "07:00"). */
 export function hourLabel(h: number, lang: Lang): string {
   const d = new Date(2000, 0, 1, h)
-  return d.toLocaleTimeString(LOCALE[lang], { hour: 'numeric' })
+  const twelve = new Intl.DateTimeFormat(LOCALE[lang], { hour: 'numeric' }).resolvedOptions().hour12
+  return twelve ? d.toLocaleTimeString(LOCALE[lang], { hour: 'numeric' }) : timeLabel(d, lang)
 }
 
 function fmtRange(a: Date, b: Date, lang: Lang, opts: Intl.DateTimeFormatOptions): string {

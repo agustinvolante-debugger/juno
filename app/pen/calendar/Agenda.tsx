@@ -7,40 +7,31 @@ import { useEffect, useRef } from 'react'
 import Icon from '../Icon'
 import { useCopy, useLang } from '../LangContext'
 import { LOCALE } from '@/lib/pen/i18n'
-import type { CalReminder, CalTodo, CalViewEvent } from '@/lib/pen/calendar-view'
+import type { CalViewEvent } from '@/lib/pen/calendar-view'
 import { CAL } from './cal-copy'
 import { agendaDay, timeLabel } from './cal-format'
 import { addDays, evSpan, hueVars, overlaps, sameDay, startOfDay, ymd, type Hue } from './cal-utils'
 import { PinIcon, VideoIcon } from './EventDetail'
 
-type Item =
-  | { k: 'ev'; ev: CalViewEvent; t: number }
-  | { k: 'todo'; todo: CalTodo; t: number }
-  | { k: 'rem'; rem: CalReminder; t: number }
+type Item = { ev: CalViewEvent; t: number }
 
 export default function Agenda({
   from,
   to,
   events,
-  todos,
-  reminders,
   hues,
   now,
   loading,
   onOpenEvent,
-  onOpenTodo,
   onLoadMore,
 }: {
   from: Date
   to: Date
   events: CalViewEvent[]
-  todos: CalTodo[]
-  reminders: CalReminder[]
   hues: Record<string, Hue>
   now: Date
   loading: boolean
   onOpenEvent: (ev: CalViewEvent) => void
-  onOpenTodo: (sessionId: string) => void
   onLoadMore: () => void
 }) {
   const T = useCopy(CAL)
@@ -61,11 +52,9 @@ export default function Agenda({
   for (let d = startOfDay(from); d < to; d = addDays(d, 1)) {
     const d1 = addDays(d, 1)
     const items: Item[] = [
-      ...events.filter((e) => overlaps(evSpan(e), d, d1)).map((ev): Item => ({ k: 'ev', ev, t: ev.allDay ? -2 : Math.max(-1, evSpan(ev).s.getTime() - d.getTime()) })),
-      ...todos.filter((x) => x.date === ymd(d)).map((todo): Item => ({ k: 'todo', todo, t: -1.5 })),
-      ...reminders.filter((r) => sameDay(new Date(r.dueAt), d)).map((rem): Item => ({ k: 'rem', rem, t: new Date(rem.dueAt).getTime() - d.getTime() })),
+      ...events.filter((e) => overlaps(evSpan(e), d, d1)).map((ev): Item => ({ ev, t: ev.allDay ? -2 : Math.max(-1, evSpan(ev).s.getTime() - d.getTime()) })),
     ].sort((a, b) => a.t - b.t)
-    if (items.length || sameDay(d, now)) days.push({ d, items })
+    if (items.length || sameDay(d, now) || sameDay(d, from)) days.push({ d, items })
   }
 
   return (
@@ -73,7 +62,7 @@ export default function Agenda({
       {days.map(({ d, items }) => {
         const today = sameDay(d, now)
         return (
-          <section key={d.getTime()} className="pen-cal-aday" data-today={today || undefined} aria-label={agendaDay(d, lang, T, now)}>
+          <section key={d.getTime()} className="pen-cal-aday" data-day={ymd(d)} data-today={today || undefined} aria-label={agendaDay(d, lang, T, now)}>
             <h3 className="pen-cal-aday-h">
               <span>{agendaDay(d, lang, T, now)}</span>
               {today && <span className="pen-cal-aday-date">{d.toLocaleDateString(LOCALE[lang], { day: 'numeric', month: 'short' }).replace(/\./g, '')}</span>}
@@ -81,32 +70,6 @@ export default function Agenda({
             {!items.length && <p className="pen-cal-aday-empty">{T.noEvents}</p>}
             <ul className="pen-cal-alist">
               {items.map((it) => {
-                if (it.k === 'todo') {
-                  return (
-                    <li key={it.todo.ref}>
-                      <button type="button" className="pen-cal-arow pen-cal-arow-todo" data-done={it.todo.done || undefined} onClick={() => onOpenTodo(it.todo.sessionId)}>
-                        <span className="pen-cal-arow-time"><span className="pen-cal-todo-box" aria-hidden>{it.todo.done && <Icon name="check" size={10} />}</span></span>
-                        <span className="pen-cal-arow-main">
-                          <span className="pen-cal-sr">{T.todo}: </span>
-                          <span className="pen-cal-arow-t">{it.todo.text}</span>
-                        </span>
-                      </button>
-                    </li>
-                  )
-                }
-                if (it.k === 'rem') {
-                  const due = new Date(it.rem.dueAt)
-                  return (
-                    <li key={it.rem.id} className="pen-cal-arem" data-sent={it.rem.sent || undefined}>
-                      <span className="pen-cal-arow-time">{timeLabel(due, lang)}</span>
-                      <span className="pen-cal-arem-body">
-                        <Icon name="bell" size={13} />
-                        <span className="pen-cal-sr">{T.reminder}: </span>
-                        {it.rem.text}
-                      </span>
-                    </li>
-                  )
-                }
                 const ev = it.ev
                 const { s, e } = evSpan(ev)
                 const past = e < now

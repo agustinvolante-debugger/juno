@@ -5,7 +5,7 @@
 
 import { getJson } from '@/lib/pen/http'
 import type { CalBrief, CalCreate, CalPatch, CalRange, CalViewEvent } from '@/lib/pen/calendar-view'
-import { evSpan, overlaps, ymd } from './cal-utils'
+import { evSpan, overlaps } from './cal-utils'
 
 export type MutResult<T> = { ok: true; value: T } | { needsConfirm: true; guests: number } | { readOnly: true }
 
@@ -60,8 +60,9 @@ export function mockApi(seed: CalRange, brief: (ref: string) => CalBrief): CalAp
       return {
         ...db,
         events: db.events.filter((e) => overlaps(evSpan(e), from, to)),
-        todos: db.todos.filter((t) => t.date >= ymd(from) && t.date < ymd(to)),
-        reminders: db.reminders.filter((r) => overlaps({ s: new Date(r.dueAt), e: new Date(r.dueAt) }, from, new Date(to.getTime() + 1))),
+        // Meetings only: the page shows no to-dos or reminders.
+        todos: [],
+        reminders: [],
       }
     },
     async brief(ref) {

@@ -4,7 +4,7 @@
 // recording of a past meeting, the brief before an upcoming one). Same body on desktop (floating
 // panel) and phone (bottom sheet).
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Icon from '../Icon'
 import { useCopy, useLang } from '../LangContext'
 import { shortDate } from '@/lib/pen/i18n'
@@ -71,6 +71,17 @@ export default function EventDetail({
   const lang = useLang()
   const [asking, setAsking] = useState(false)
   const [busy, setBusy] = useState(false)
+  // The trash button goes away when it asks; keep the keyboard on the question (and back on the
+  // trash button if the answer is no).
+  const cancelRef = useRef<HTMLButtonElement>(null)
+  const trashRef = useRef<HTMLButtonElement>(null)
+  const askedOnce = useRef(false)
+  useEffect(() => {
+    if (asking) {
+      askedOnce.current = true
+      cancelRef.current?.focus()
+    } else if (askedOnce.current) trashRef.current?.focus()
+  }, [asking])
   const cal = cals.find((c) => c.key === ev.cal)
   const provider = cal?.provider ?? 'google'
   const onCals = (ev.cals.length ? ev.cals : [ev.cal]).map((k) => cals.find((c) => c.key === k)).filter(Boolean) as CalAccount[]
@@ -182,7 +193,7 @@ export default function EventDetail({
               <Icon name="pen" size={15} />
               {T.edit}
             </button>
-            <button type="button" className="pen-btn pen-btn-quiet pen-cal-sm" onClick={() => setAsking(true)} aria-label={T.del}>
+            <button ref={trashRef} type="button" className="pen-btn pen-btn-quiet pen-cal-sm" onClick={() => setAsking(true)} aria-label={T.del} title={T.del}>
               <Icon name="trash" size={15} />
             </button>
           </span>
@@ -190,7 +201,7 @@ export default function EventDetail({
         {asking && (
           <span className="pen-cal-delask" role="group" aria-label={T.deleteAsk}>
             <span>{T.deleteAsk}</span>
-            <button type="button" className="pen-btn pen-cal-sm" onClick={() => setAsking(false)} disabled={busy}>{T.cancel}</button>
+            <button ref={cancelRef} type="button" className="pen-btn pen-cal-sm" onClick={() => setAsking(false)} disabled={busy}>{T.cancel}</button>
             <button
               type="button"
               className="pen-btn pen-cal-sm pen-cal-danger"

@@ -16,6 +16,23 @@ function Portal({ children }: { children: React.ReactNode }) {
   return host ? createPortal(children, host) : null
 }
 
+/** Keep Tab inside a modal surface (the phone sheet, the confirm). */
+function trapTab(e: KeyboardEvent, root: HTMLElement | null) {
+  if (e.key !== 'Tab' || !root) return
+  const els = Array.from(root.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter((el) => el.offsetParent !== null)
+  if (!els.length) return
+  const first = els[0]
+  const last = els[els.length - 1]
+  const a = document.activeElement
+  if (e.shiftKey && (a === first || !root.contains(a))) {
+    e.preventDefault()
+    last.focus()
+  } else if (!e.shiftKey && (a === last || !root.contains(a))) {
+    e.preventDefault()
+    first.focus()
+  }
+}
+
 const W = 360
 const GAP = 12
 
@@ -103,6 +120,12 @@ export function Sheet({ label, onClose, children }: { label: string; onClose: ()
   useEffect(() => {
     // The form focuses its own title first; only take focus when nothing inside has it.
     if (!ref.current?.contains(document.activeElement)) ref.current?.focus({ preventScroll: true })
+    const key = (e: KeyboardEvent) => {
+      // The confirm dialog, when open on top, keeps Tab to itself.
+      if (!document.querySelector('.pen-cal-confirm')) trapTab(e, ref.current)
+    }
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
   }, [])
   return (
     <Portal>
@@ -131,22 +154,27 @@ export function ConfirmDialog({
   onAnswer: (ok: boolean) => void
 }) {
   const yesRef = useRef<HTMLButtonElement>(null)
+  const boxRef = useRef<HTMLDivElement>(null)
+  // The parent re-renders every 30 s (the clock) and on refresh; focus "Send" once, never again,
+  // or a keyboard user resting on "Don't send" would be moved back to "Send".
+  const answer = useRef(onAnswer)
+  answer.current = onAnswer
   useEffect(() => {
     yesRef.current?.focus()
     const key = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation()
-        onAnswer(false)
-      }
+        answer.current(false)
+      } else trapTab(e, boxRef.current)
     }
     window.addEventListener('keydown', key, true)
     return () => window.removeEventListener('keydown', key, true)
-  }, [onAnswer])
+  }, [])
   return (
     <Portal>
       <div className="pen-cal-confirm-wrap">
         <div className="pen-cal-confirm-scrim" aria-hidden onClick={() => onAnswer(false)} />
-        <div className="pen-cal-confirm" role="alertdialog" aria-modal="true" aria-labelledby="pen-cal-confirm-t" aria-describedby="pen-cal-confirm-b">
+        <div ref={boxRef} className="pen-cal-confirm" role="alertdialog" aria-modal="true" aria-labelledby="pen-cal-confirm-t" aria-describedby="pen-cal-confirm-b">
           <span className="pen-cal-confirm-ic" aria-hidden>
             <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
               <rect x="2.8" y="4.6" width="14.4" height="10.8" rx="2" />
