@@ -705,6 +705,7 @@
 .pen-root .pen-cal-sheet .pen-cal-row-top > .pen-cal-fact-ic { margin-top: 12px; }
 .pen-root .pen-cal-sheet .pen-cal-hasvideo { min-height: 44px; }
 
+/* ======================================================================================
    PHONE, APPLE-CALENDAR LAYOUT (PhoneCalendar.tsx, WeekStrip.tsx, PhoneDay.tsx, PhoneMonth.tsx)
    Apple's iOS day view is the layout and interaction reference; the skin stays Pen's: Inter,
    the light paper, glass pills, hairlines, the app blue where Apple uses red. The calendar takes
