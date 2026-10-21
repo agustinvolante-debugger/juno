@@ -1,22 +1,21 @@
 // The Calendar page's reads and writes (22 Oct), behind app/api/pen/calendar/*. Events are read
 // live from every connected Google and Outlook calendar (lib/pen/calendars.ts) for the range on
 // screen and never stored; the Juno extras are computed on each read: the recording of a past
-// meeting (calendar-match.ts), dated to-dos, WhatsApp reminders, and on demand a guest brief from
+// meeting (calendar-match.ts) and on demand a guest brief from
 // what Pen already knows (personBriefFor, no model call). The decisions (who may change what,
 // when guests must be confirmed) are pure, in calendar-page.ts.
 
 import { supabaseAdmin } from '@/lib/supabase'
-import type { CalAccount, CalBrief, CalCreate, CalPatch, CalRange, CalReminder, CalTodo, CalViewEvent } from './calendar-view'
+import type { CalAccount, CalBrief, CalCreate, CalPatch, CalRange, CalViewEvent } from './calendar-view'
 import { createOn, defaultCalendar, deleteByRef, eventsBetween, getEventByRef, listCalendars, moveByRef, providerOf, updateByRef, type Calendar } from './calendars'
 import { matchRecordings, type MatchRecording } from './calendar-match'
-import { briefPerson, changeGate, datedTodos, localDay, ownAddresses, toViewEvent, type BriefSource, type Gate, type TodoSession } from './calendar-page'
+import { briefPerson, changeGate, ownAddresses, toViewEvent, type BriefSource, type Gate } from './calendar-page'
 import { isDay, type EventPatch } from './calendar-edit'
 import type { UpcomingEvent } from './google-calendar'
 import { userZone } from './timezone'
 
 const DAY = 86_400_000
 /** How far back a recording's to-dos can still be due on the days shown. */
-const TODO_LOOKBACK_DAYS = 180
 
 const validTz = (tz: unknown): tz is string => {
   if (typeof tz !== 'string' || !tz.includes('/')) return tz === 'UTC'
@@ -29,33 +28,6 @@ const validTz = (tz: unknown): tz is string => {
 }
 
 /* ---------------------------------------------------------------- reads */
-
-async function todosIn(email: string, from: Date, to: Date, tz: string): Promise<CalTodo[]> {
-  const { data, error } = await supabaseAdmin
-    .from('pen_sessions')
-    .select('id,source_channel,storage_path,merge_index,notes,action_meta,action_done')
-    .eq('user_email', email)
-    .or('merge_index.is.null,merge_index.eq.0')
-    .gte('created_at', new Date(from.getTime() - TODO_LOOKBACK_DAYS * DAY).toISOString())
-    .lt('created_at', to.toISOString())
-    .order('created_at', { ascending: false })
-    .limit(500)
-  if (error) throw new Error(error.message)
-  return datedTodos((data ?? []) as unknown as TodoSession[], localDay(from.getTime(), tz), localDay(to.getTime() - 1, tz))
-}
-
-async function remindersIn(email: string, from: Date, to: Date): Promise<CalReminder[]> {
-  const { data, error } = await supabaseAdmin
-    .from('pen_reminders')
-    .select('id,text,due_at,sent_at')
-    .eq('user_email', email)
-    .gte('due_at', from.toISOString())
-    .lt('due_at', to.toISOString())
-    .order('due_at', { ascending: true })
-    .limit(200)
-  if (error) throw new Error(error.message)
-  return ((data ?? []) as { id: string; text: string; due_at: string; sent_at: string | null }[]).map((r) => ({ id: r.id, text: r.text, dueAt: r.due_at, sent: Boolean(r.sent_at) }))
-}
 
 type RecRow = { id: string; title: string | null; source_name: string | null; source_channel: string | null; storage_path: string | null; recorded_at: string | null; duration_sec: number | null }
 
@@ -99,11 +71,9 @@ export async function readRange(email: string, from: Date, to: Date, tzHint?: st
   const [cals, zone] = await Promise.all([listCalendars(email).catch((): Calendar[] => []), userZone(email).catch(() => null)])
   const tz = zone?.tz ?? (validTz(tzHint) ? tzHint : 'UTC')
   const pastEnd = from < now
-  const [def, read, todos, reminders, recordings] = await Promise.all([
+  const [def, read, recordings] = await Promise.all([
     defaultCalendar(email, cals),
     eventsBetween(email, from, to, undefined, { max: 250, cals }),
-    soft('to-dos', todosIn(email, from, to, tz), [] as CalTodo[]),
-    soft('reminders', remindersIn(email, from, to), [] as CalReminder[]),
     pastEnd ? soft('recordings', recordingsIn(email, from, to), [] as MatchRecording[]) : Promise.resolve([] as MatchRecording[]),
   ])
   const own = ownAddresses(email, cals)
@@ -113,8 +83,9 @@ export async function readRange(email: string, from: Date, to: Date, tzHint?: st
   return {
     calendars,
     events: keyed.map(({ e, key }) => toViewEvent(e, { own, now, recording: match.get(key) ?? null })),
-    todos,
-    reminders,
+    // Meetings only (founder, 22 Oct): to-dos and reminders stay on Home and WhatsApp.
+    todos: [],
+    reminders: [],
     failed: read.failed,
     tz,
   }

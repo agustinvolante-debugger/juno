@@ -6,15 +6,11 @@
 //     connected addresses; it has a brief when it is upcoming, timed, with guests and not declined.
 //   · changeGate: the one place that says no. An event the user didn't organise → 403 readOnly;
 //     a change that would email guests without confirm → 409 needsConfirm (the page asks first).
-//   · datedTodos: the user's own to-dos with a due date on the days shown (the Home rule from
-//     lib/pen/proactive.ts dueOn: labels used only when they line up with the actions).
 //   · providerError: what a Google / Microsoft failure becomes for the browser.
 
 import type { UpcomingEvent } from './google-calendar'
-import type { CalBrief, CalTodo, CalViewEvent } from './calendar-view'
+import type { CalBrief, CalViewEvent } from './calendar-view'
 import { eventRef } from './calendar-merge'
-import { isDay } from './calendar-edit'
-import { isMine, type ActionMeta } from './todo-labels'
 
 export const MAX_SPAN_DAYS = 42
 
@@ -79,46 +75,6 @@ export function changeGate(kind: 'create' | 'patch' | 'delete', o: { guests: num
   if (kind !== 'create' && o.editable === false) return { status: 403, body: { readOnly: true, error: 'someone else organised this event: change it in Google Calendar or Outlook' } }
   if (o.guests > 0 && !o.confirm) return { status: 409, body: { needsConfirm: true, guests: o.guests } }
   return null
-}
-
-/** 'YYYY-MM-DD' of an instant in a zone (UTC when the zone is unknown or bad). */
-export function localDay(ms: number, tz: string | null | undefined): string {
-  try {
-    return new Intl.DateTimeFormat('en-CA', { timeZone: tz || 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms))
-  } catch {
-    return new Date(ms).toISOString().slice(0, 10)
-  }
-}
-
-export type TodoSession = {
-  id: string
-  source_channel?: string | null
-  storage_path?: string | null
-  merge_index?: number | null
-  notes: { actions?: { action: string }[] } | null
-  action_meta: ActionMeta[] | null
-  action_done: number[] | null
-}
-
-/** The user's own to-dos due on a day in [fromDay, toDay] (inclusive, 'YYYY-MM-DD'), done ones too. */
-export function datedTodos(sessions: TodoSession[], fromDay: string, toDay: string): CalTodo[] {
-  const out: CalTodo[] = []
-  for (const s of sessions) {
-    // The sample recording is nobody's; a merged day's later parts repeat the first's notes.
-    if (s.source_channel === 'sample' || String(s.storage_path ?? '').startsWith('sample')) continue
-    if (s.merge_index != null && s.merge_index > 0) continue
-    const acts = s.notes?.actions ?? []
-    const meta = Array.isArray(s.action_meta) && s.action_meta.length === acts.length ? s.action_meta : null
-    if (!meta) continue
-    const done = new Set(Array.isArray(s.action_done) ? s.action_done : [])
-    acts.forEach((a, i) => {
-      const d = meta[i]?.due_date
-      if (!isMine(meta[i]) || !isDay(d) || d < fromDay || d > toDay) return
-      const text = String(a?.action ?? '').trim()
-      if (text) out.push({ ref: `${s.id}#${i}`, sessionId: s.id, text, date: d, done: done.has(i) })
-    })
-  }
-  return out.sort((a, b) => a.date.localeCompare(b.date))
 }
 
 /** A Google / Graph failure → status + message for the browser. */
