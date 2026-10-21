@@ -21,6 +21,8 @@ import { speakersIn, type SpeakerMap } from '@/lib/pen/speakers'
 import ChatView from './ChatView'
 import CalendarView from './calendar/CalendarView'
 import MiniCalendar from './calendar/MiniCalendar'
+import ChatsPage, { chatWhen, questionLine } from './ChatsPage'
+import type { ChatPreview } from '@/app/api/pen/chats/preview'
 import DocView from './DocView'
 import Overview from './Overview'
 import { JunoNoticed, DateChip } from './JunoNoticed'
@@ -68,6 +70,8 @@ type View =
   | { k: 'chat'; id: string | null }
   | { k: 'doc'; id: string }
   | { k: 'calendar' }
+  /** Every chat with a preview of each (21 Oct). */
+  | { k: 'chats' }
 
 // The File System Access API isn't in the default TS lib.
 type FsHandle = { kind: 'file' | 'directory'; name: string; getFile?: () => Promise<File> }
@@ -247,6 +251,9 @@ export default function PenApp({
   const [railAll, setRailAll] = useState(false)
   const [chatSeed, setChatSeed] = useState<{ text: string; mentions: Mention[] } | null>(null)
   const [chats, setChats] = useState<ChatSummary[]>([])
+  // The Chats page's list, with previews (GET /api/pen/chats?preview=1). null until first loaded.
+  const [previews, setPreviews] = useState<ChatPreview[] | null>(null)
+  const [previewsFailed, setPreviewsFailed] = useState(false)
   const [docs, setDocs] = useState<DocSummary[]>([])
   const [catFilter, setCatFilter] = useState<string | null>(null)
   // Recent recordings: by recording date (default) or by when they were added. Per browser.
@@ -351,6 +358,20 @@ export default function PenApp({
       // A sidebar that can't list threads shouldn't take the app down with it.
     }
   }, [])
+  const refreshPreviews = useCallback(async () => {
+    try {
+      setPreviews((await getJson<{ chats: ChatPreview[] }>('/api/pen/chats?preview=1')).chats)
+      setPreviewsFailed(false)
+    } catch {
+      setPreviewsFailed(true)
+    }
+  }, [])
+  // Fetched when the Chats page or the phone's History drawer opens, so a thread asked a minute
+  // ago is there; what was loaded before shows meanwhile.
+  useEffect(() => {
+    if (view.k === 'chats' || mHist) void refreshPreviews()
+  }, [view.k, mHist, refreshPreviews])
+  const refreshAllChats = useCallback(() => { void refreshChats(); void refreshPreviews() }, [refreshChats, refreshPreviews])
   const refreshDocs = useCallback(async () => {
     try {
       setDocs((await getJson<{ docs: DocSummary[] }>('/api/pen/docs')).docs)
@@ -1014,6 +1035,7 @@ export default function PenApp({
   if (isPhone) {
     const openChat = (id: string | null) => { setChatSeed(null); setView({ k: 'chat', id }); setMHist(false) }
     const sessionTitle = (x: PenSession) => x.title || x.client_name || x.source_name || T.untitled
+    const previewById = new Map((previews ?? []).map((p) => [p.id, p]))
     const chatTitle = view.k === 'chat' && view.id ? (chats.find((c) => c.id === view.id)?.title ?? T.untitledChat) : T.newChat
 
     const banners = (
@@ -1311,11 +1333,19 @@ export default function PenApp({
               {chats.length === 0 ? (
                 <p className="pen-m-empty">{T.chatsEmpty}</p>
               ) : (
-                chats.map((c) => (
-                  <button type="button" key={c.id} className="pen-m-hist-item" data-on={view.k === 'chat' && view.id === c.id} onClick={() => openChat(c.id)}>
-                    {c.title ?? T.untitledChat}
-                  </button>
-                ))
+                chats.map((c) => {
+                  const answer = previewById.get(c.id)?.lastAnswer
+                  return (
+                    <button type="button" key={c.id} className={answer ? 'pen-m-hist-item pen-m-hist-prev' : 'pen-m-hist-item'} data-on={view.k === 'chat' && view.id === c.id} onClick={() => openChat(c.id)}>
+                      {answer ? (
+                        <>
+                          <span>{c.title ?? T.untitledChat}</span>
+                          <span className="pen-m-hist-prev-a">{answer}</span>
+                        </>
+                      ) : (c.title ?? T.untitledChat)}
+                    </button>
+                  )
+                })
               )}
               {docs.length > 0 && (
                 <>
@@ -1526,6 +1556,17 @@ export default function PenApp({
           </button>
           <button
             className="pen-cat"
+            data-active={view.k === 'chats'}
+            aria-current={view.k === 'chats' ? 'page' : undefined}
+            aria-label={sideCollapsed ? T.chats : undefined}
+            data-tip={sideCollapsed ? T.chats : undefined}
+            onClick={() => { setView({ k: 'chats' }); setNavOpen(false) }}
+          >
+            <Icon name="chat" size={19} />
+            <span className="pen-cat-label">{T.chats}</span>
+          </button>
+          <button
+            className="pen-cat"
             data-active={catFilter === null && view.k === 'session'}
             aria-pressed={railAll && catFilter === null}
             data-tour="recordings"
@@ -1536,7 +1577,7 @@ export default function PenApp({
               setRailAll(true)
               setNavOpen(false)
               // The Calendar page hides the rail: go where the list is.
-              if (view.k === 'calendar') setView({ k: 'archive' })
+              if (view.k === 'calendar' || view.k === 'chats') setView({ k: 'archive' })
             }}
           >
             <Icon name="recordings" size={19} />
@@ -1564,12 +1605,12 @@ export default function PenApp({
           <button
             type="button"
             className="pen-cat"
-            data-active={view.k === 'chat'}
+            data-active={view.k === 'chat' && view.id === null}
             aria-label={T.newChat}
             data-tip={T.newChat}
             onClick={() => { setChatSeed(null); setView({ k: 'chat', id: null }) }}
           >
-            <Icon name="chat" size={19} />
+            <Icon name="plus" size={19} />
           </button>
         </nav>
       ) : (
@@ -1604,10 +1645,10 @@ export default function PenApp({
                   setView({ k: 'chat', id: c.id })
                   setNavOpen(false)
                 }}
-                onRenamed={() => void refreshChats()}
+                onRenamed={refreshAllChats}
                 onDeleted={() => {
                   if (view.k === 'chat' && view.id === c.id) setView({ k: 'archive' })
-                  void refreshChats()
+                  refreshAllChats()
                 }}
               />
             ))}
@@ -1746,7 +1787,25 @@ export default function PenApp({
         />
 
         <section className="pen-shell-main min-w-0" id="pen-main" tabIndex={-1}>
-          {view.k === 'calendar' ? (
+          {view.k === 'chats' ? (
+            <ChatsPage
+              chats={previews}
+              failed={previewsFailed}
+              onRetry={() => void refreshPreviews()}
+              onNew={() => { setChatSeed(null); setView({ k: 'chat', id: null }) }}
+              row={(c, when) => (
+                <ChatRow
+                  chat={c}
+                  T={T}
+                  active={false}
+                  preview={{ when, question: questionLine(c), answer: c.lastAnswer }}
+                  onOpen={() => { setChatSeed(null); setView({ k: 'chat', id: c.id }) }}
+                  onRenamed={refreshAllChats}
+                  onDeleted={refreshAllChats}
+                />
+              )}
+            />
+          ) : view.k === 'calendar' ? (
             <CalendarView
               goTo={calGoTo ?? undefined}
               onOpenRecording={(id) => {
@@ -4241,10 +4300,13 @@ function ChatRow({
   onOpen,
   onRenamed,
   onDeleted,
+  preview,
 }: {
   chat: ChatSummary
   T: AppCopy
   active: boolean
+  /** The Chats page's roomier row: date, the question (when it isn't the title) and the answer. */
+  preview?: { when: string; question: string; answer: string }
   onOpen: () => void
   onRenamed: () => void
   onDeleted: () => void
@@ -4319,10 +4381,21 @@ function ChatRow({
   }
 
   return (
-    <div className="pen-chatrow" data-active={active} ref={m.wrap}>
+    <div className={preview ? 'pen-chatrow pen-chatcard' : 'pen-chatrow'} data-active={active} ref={m.wrap}>
+      {preview ? (
+        <button type="button" className="pen-chatcard-open" onClick={onOpen} disabled={busy}>
+          <span className="pen-chatcard-top">
+            <span className="pen-chatcard-title">{title}</span>
+            {preview.when && <span className="pen-chatcard-when">{preview.when}</span>}
+          </span>
+          {preview.question && <span className="pen-chatcard-q">{preview.question}</span>}
+          {preview.answer && <span className="pen-chatcard-a"><span className="pen-chatcard-who">Juno</span> · {preview.answer}</span>}
+        </button>
+      ) : (
       <button type="button" className="pen-cat pen-chatrow-open" data-active={active} onClick={onOpen} title={title} disabled={busy}>
         <span className="pen-cat-label">{title}</span>
       </button>
+      )}
       <button
         ref={m.btn}
         type="button"
