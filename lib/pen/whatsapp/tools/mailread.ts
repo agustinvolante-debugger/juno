@@ -37,7 +37,8 @@ import { readThread, searchThreads, threadHeaders, ReadError, MAX_THREADS } from
 import { localDate, localToUtc, whenLabel } from '../../timezone'
 import { mailProvider } from '../../mail-pref'
 import { matchAccount } from '../../mail-compose'
-import { setDraft, type Draft } from '../store'
+import type { Draft } from '../store'
+import { stateOf } from '../state'
 
 const TOOLS: Anthropic.Tool[] = [
   {
@@ -273,7 +274,7 @@ async function replyInThread(ctx: Ctx, input: Record<string, unknown>): Promise<
     lang: ctx.lang,
     thread: target.thread,
   }
-  await setDraft(ctx.email, draft)
+  await stateOf(ctx).setDraft(draft)
   ctx.drafted = draft
   remember(ctx, { thread_id: id, account: r.account, from: target.name ?? target.address })
   return { ok: true, shown_to_user: true, reply_to: `${draft.toName} <${draft.toEmail}>`, from: r.account, via: r.provider === 'outlook' ? 'Outlook' : 'Gmail', subject: draft.subject, note: 'Not sent. At most one short intro line; the draft and how to send it are shown below automatically.' }

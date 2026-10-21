@@ -33,7 +33,7 @@ import type { Suggestion } from './suggestions-types'
 import type { Lang } from './currency'
 
 /** Who is saying yes. `phone`: the linked WhatsApp number, for reminders (null: none linked). */
-export type AcceptCtx = { email: string; lang: Lang; phone: string | null }
+export type AcceptCtx = { email: string; lang: Lang; phone?: string | null }
 
 const base = () => (process.env.PEN_PUBLIC_URL || 'https://www.tryjunoapp.com').replace(/\/$/, '')
 

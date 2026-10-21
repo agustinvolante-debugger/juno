@@ -28,9 +28,31 @@ export function maxAheadMs(lang?: Lang): number {
   return templateApproved(REMINDER_TEMPLATE, lang) ? MAX_AHEAD_TEMPLATE_MS : MAX_AHEAD_MS
 }
 
+/**
+ * Where a turn's reminders can go. WhatsApp / iMessage turns: their phone, as always. The web chat
+ * (no phone of its own, lib/pen/agent-io.ts): the linked WhatsApp / iMessage when it can reach the
+ * user at the due time (iMessage always; WhatsApp inside the 24-hour window from their last
+ * message, or with the template approved), else by email (phone left empty: fireDue emails it).
+ */
+export type ReminderReach = { channel: 'whatsapp' | 'imessage' | 'web'; phone?: string; lang: Lang; reach?: { imessage: boolean; lastInbound: number | null } | null }
+
+/** How far ahead set_reminder accepts for this turn. Phone turns: unchanged (maxAheadMs). Web: 30 days (email has no window). */
+export function reminderAhead(ctx: ReminderReach): number {
+  return ctx.channel === 'web' ? MAX_AHEAD_TEMPLATE_MS : maxAheadMs(ctx.lang)
+}
+
+/** The phone a reminder due at `due` is sent to, or null for an emailed one (web only). */
+export function reminderPhone(ctx: ReminderReach, due: Date): string | null {
+  if (ctx.channel !== 'web') return ctx.phone ?? null
+  if (!ctx.phone) return null
+  if (ctx.reach?.imessage || templateApproved(REMINDER_TEMPLATE, ctx.lang)) return ctx.phone
+  const last = ctx.reach?.lastInbound ?? null
+  return last != null && due.getTime() < last + MAX_AHEAD_MS ? ctx.phone : null
+}
+
 export type Reminder = { id: string; text: string; due_at: string }
 
-export async function addReminder(opts: { email: string; phone: string; text: string; dueAt: Date; lang: Lang }): Promise<Reminder> {
+export async function addReminder(opts: { email: string; phone: string | null; text: string; dueAt: Date; lang: Lang }): Promise<Reminder> {
   const { data, error } = await supabaseAdmin
     .from('pen_reminders')
     .insert({ user_email: opts.email, phone: opts.phone, text: opts.text.slice(0, 500), lang: opts.lang, due_at: opts.dueAt.toISOString() })
@@ -68,6 +90,25 @@ export async function moveReminder(email: string, id: string, dueAt: Date): Prom
 
 const PREFIX: Record<Lang, string> = { en: '⏰ Reminder', es: '⏰ Recordatorio', pt: '⏰ Lembrete' }
 
+const MAIL: Record<Lang, { intro: string; foot: string }> = {
+  en: { intro: 'Here is the reminder you asked Juno Pen for:', foot: 'You set this in the Juno Pen chat. Questions? Just reply to this email.' },
+  es: { intro: 'Este es el recordatorio que le pediste a Juno Pen:', foot: 'Lo pediste en el chat de Juno Pen. ¿Dudas? Responde este correo.' },
+  pt: { intro: 'Aqui está o lembrete que você pediu ao Juno Pen:', foot: 'Você pediu isso no chat do Juno Pen. Dúvidas? É só responder este e-mail.' },
+}
+
+const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+/** A reminder by email (Resend; Reply-To is the support inbox, as on all customer mail). */
+export async function emailReminder(email: string, text: string, lang: Lang): Promise<{ ok: boolean; error?: string }> {
+  const { sendEmailResult } = await import('@/lib/news/email')
+  const L = MAIL[lang] ?? MAIL.en
+  const subject = `${PREFIX[lang] ?? PREFIX.en}: ${text.replace(/\s+/g, ' ').slice(0, 120)}`
+  const html =
+    `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5;color:#1F1D18;max-width:520px">` +
+    `<p>${esc(L.intro)}</p><p style="font-size:17px"><strong>${esc(text)}</strong></p><p style="color:#514E45">${esc(L.foot)}</p></div>`
+  return sendEmailResult({ to: email, subject, html, text: `${L.intro}\n\n${text}\n\n${L.foot}` })
+}
+
 /** Sends every due reminder once. The claim (sent_at set where null) makes overlapping runs safe. */
 export async function fireDue(): Promise<{ sent: number; failed: number }> {
   // A test script with every send refused: leave them due rather than claim and lose them.
@@ -82,8 +123,15 @@ export async function fireDue(): Promise<{ sent: number; failed: number }> {
   if (error) throw new Error(error.message)
   let sent = 0
   let failed = 0
-  for (const r of (data ?? []) as { id: string; user_email: string; phone: string; text: string; lang: Lang }[]) {
+  for (const r of (data ?? []) as { id: string; user_email: string; phone: string | null; text: string; lang: Lang }[]) {
     try {
+      // Set in the web chat with no WhatsApp / iMessage that could reach them (reminderPhone): by email.
+      if (!r.phone) {
+        const m = await emailReminder(r.user_email, r.text, r.lang ?? 'en')
+        if (!m.ok) throw new Error(`email: ${m.error ?? 'not sent'}`)
+        sent++
+        continue
+      }
       // Outside WhatsApp's 24-hour window only the template gets through. User-asked reminders
       // don't count toward the proactive daily max or quiet hours: the user picked the time.
       const ch = isImessage(r.phone) ? null : await channelFor(r.user_email).catch(() => null)

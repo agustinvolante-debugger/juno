@@ -17,6 +17,7 @@
 import { supabaseAdmin } from '@/lib/supabase'
 import { groupSessions, joinSegments, splitGroup } from '../merge'
 import { getSession } from '../store'
+import type { AgentStore } from './state'
 
 export const UNDO_TTL_MS = 24 * 60 * 60 * 1000
 
@@ -30,7 +31,7 @@ export type Undo =
   /** set: reminder ids and calendar event refs (lib/pen/calendars.ts eventRef) made by one message. */
   | { kind: 'set'; reminders: string[]; events: { ref: string; title: string }[]; title: string; at: string; done?: boolean }
 
-type UndoIn<U = Undo> = U extends Undo ? Omit<U, 'at'> : never
+export type UndoIn<U = Undo> = U extends Undo ? Omit<U, 'at'> : never
 
 type Row = { id: string; payload: Record<string, unknown> | null; created_at: string }
 
@@ -87,19 +88,33 @@ export async function addSetUndo(email: string, msgId: string, add: { reminder?:
   await supabaseAdmin.from('pen_whatsapp_messages').update({ payload: { ...payload, undo: next } }).eq('id', msgId)
 }
 
-/** Runs the latest undo. The result goes to the model, which says it in one line. */
-export async function runUndo(email: string): Promise<Record<string, unknown>> {
+/** Claims the account's latest undo on the phone (marked done first, so two "undo"s in a row can't both run it). */
+export async function claimPhoneUndo(email: string): Promise<{ undo: Undo } | { nothing: true; already?: boolean }> {
   const l = await latest(email)
-  if (!l) return { nothing_to_undo: true, note: 'Say in one line there is nothing to undo (undo covers reminders and calendar events Juno just set, and combining or separating recordings, for a day).' }
+  if (!l) return { nothing: true }
   const { row, undo } = l
-  // Claimed first, so two "undo"s in a row can't both run it.
   const { data: claimed } = await supabaseAdmin
     .from('pen_whatsapp_messages')
     .update({ payload: { ...(row.payload ?? {}), undo: { ...undo, done: true } } })
     .eq('id', row.id)
     .is('payload->undo->>done', null)
     .select('id')
-  if (!claimed?.length) return { nothing_to_undo: true, note: 'Say in one line it was already undone.' }
+  if (!claimed?.length) return { nothing: true, already: true }
+  return { undo }
+}
+
+/**
+ * Runs the latest undo. The result goes to the model, which says it in one line. `store`: where
+ * the undo lives (the web chat's thread: state.ts); `turn`: that turn's undo (the web Undo button).
+ */
+export async function runUndo(email: string, opts: { store?: AgentStore; turn?: string } = {}): Promise<Record<string, unknown>> {
+  const c = opts.store ? await opts.store.claimUndo(opts.turn) : await claimPhoneUndo(email)
+  if ('nothing' in c) {
+    return c.already
+      ? { nothing_to_undo: true, note: 'Say in one line it was already undone.' }
+      : { nothing_to_undo: true, note: 'Say in one line there is nothing to undo (undo covers reminders and calendar events Juno just set, and combining or separating recordings, for a day).' }
+  }
+  const { undo } = c
 
   if (undo.kind === 'set') {
     const { cancelReminder } = await import('../reminders')

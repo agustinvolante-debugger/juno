@@ -33,7 +33,7 @@ import { localDate, localIso, localToUtc, localWhen, validZone, whenLabel, zoneT
 import { isPerson, type PersonVariants } from '../../person-match'
 import { eventPeople, resolvePerson } from '../../person-resolve'
 import { calendarWindows } from '../../search-widen'
-import { addSetUndo } from '../undo'
+import { turnAddSetUndo } from '../state'
 import { supabaseAdmin } from '@/lib/supabase'
 import { foldName } from '../../speakers'
 
@@ -221,7 +221,7 @@ async function confirmGcalAdd(ctx: Ctx, args: Record<string, unknown>): Promise<
     const tz = ev.tz ?? 'UTC'
     const several = (await listCalendars(ctx.email).catch((): Calendar[] => [])).length > 1
     const name = added.provider === 'outlook' ? 'Outlook calendar' : 'Google Calendar'
-    await addSetUndo(ctx.email, ctx.msgId, { event: { ref: added.event_id, title: ev.title }, title: ev.title }).catch(() => {})
+    await turnAddSetUndo(ctx, { event: { ref: added.event_id, title: ev.title }, title: ev.title }).catch(() => {})
     return {
       ok: true,
       added_to: several ? `${name} (${added.calendar})` : name,

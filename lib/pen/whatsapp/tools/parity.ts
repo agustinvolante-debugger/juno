@@ -35,10 +35,8 @@ import { getProfile, saveProfile, LANGUAGES } from '../../profile'
 import { COMMON_TYPES } from '../../categories'
 import { fmtHours } from '../../plan'
 import type { Lang } from '../../currency'
-import { sendText } from '../provider'
-import { getLinkByEmail, setChat } from '../store'
 import { askConfirm } from '../confirm'
-import { setUndo, undone } from '../undo'
+import { stateOf, turnSetUndo } from '../state'
 import type { Ctx } from '../agent'
 import { str, type ToolModule } from './types'
 
@@ -200,9 +198,14 @@ async function findPerson(ctx: Ctx, name: string): Promise<{ person: PenPerson }
 
 /** A message from Juno after the reply (a job finished or failed), kept in the chat history. */
 async function tell(ctx: Ctx, text: string): Promise<void> {
-  await sendText(ctx.phone, text)
-  const link = await getLinkByEmail(ctx.email).catch(() => null)
-  if (link) await setChat(ctx.email, [...(link.chat ?? []), { role: 'assistant', content: text, ts: Date.now() }]).catch(() => {})
+  await ctx.notify(text)
+}
+
+/** The new briefing after a combine: on the phone as before (sendWhatsAppBriefing); on the web, a note in the thread. */
+async function briefingOut(ctx: Ctx, session: PenSession): Promise<void> {
+  const { sendWhatsAppBriefing, briefingText } = await import('../bot')
+  if (ctx.channel !== 'web') return sendWhatsAppBriefing(session, { ask: false })
+  await ctx.notify(briefingText(session, ctx.lang))
 }
 
 const S: Record<Lang, {
@@ -337,7 +340,7 @@ async function doCombine(ctx: Ctx, a: Record<string, unknown>): Promise<unknown>
   const rows = (await Promise.all(ids.map((id) => own(ctx, id)))).filter((s): s is PenSession => !!s)
   if (rows.length !== ids.length || rows.some((s) => s.merge_group)) return { error: 'those recordings changed since I asked; nothing was combined' }
   const title = titleOf(rows[0])
-  await setUndo(ctx.email, ctx.msgId, { kind: 'separate', ids, title })
+  await turnSetUndo(ctx, { kind: 'separate', ids, title })
   ctx.later.push(async () => {
     try {
       const { writeNotes } = await import('../../pipeline')
@@ -348,15 +351,14 @@ async function doCombine(ctx: Ctx, a: Record<string, unknown>): Promise<unknown>
         if ((await writeNotes({ email: ctx.email, session: s, claim: false })) === 'taken') throw new Error('notes busy')
       }
       // "Undo" arrived while the parts were being written up: nothing is joined.
-      if (await undone(ctx.msgId)) return
+      if (await stateOf(ctx).undone(ctx.msgId)) return
       const group = await joinSegments(ctx.email, ids)
       const primary = (await groupSessions(ctx.email, group))[0]
       await updateSession(primary.id, { briefing_sent_at: null })
       const fresh = await getSession(ctx.email, primary.id)
       const r = fresh ? await writeNotes({ email: ctx.email, session: fresh, claim: false }) : 'taken'
       if (r === 'taken' || !r.session) throw new Error('combined notes not written')
-      const { sendWhatsAppBriefing } = await import('../bot')
-      await sendWhatsAppBriefing(r.session, { ask: false })
+      await briefingOut(ctx, r.session)
     } catch (e) {
       console.warn(`pen whatsapp: combine failed: ${(e as Error).message}`)
       await tell(ctx, S[ctx.lang].combineFailed(title)).catch(() => {})
@@ -377,7 +379,7 @@ async function separate(ctx: Ctx, id: string): Promise<unknown> {
   const parts = await groupSessions(ctx.email, s.merge_group)
   await splitGroup(ctx.email, s.merge_group)
   const title = titleOf(parts[0] ?? s)
-  await setUndo(ctx.email, ctx.msgId, { kind: 'combine', ids: parts.map((p) => p.id), title, event: parts.some((p) => p.event_mode) })
+  await turnSetUndo(ctx, { kind: 'combine', ids: parts.map((p) => p.id), title, event: parts.some((p) => p.event_mode) })
   return {
     ok: true,
     separated: title,
@@ -412,17 +414,16 @@ async function doDay(ctx: Ctx, a: Record<string, unknown>): Promise<unknown> {
   if (now.ids.length !== ids.length || now.ids.some((id) => !ids.includes(id))) return changed()
   const segments = await joinAsEvent(ctx.email, ids)
   const primary = segments[0]
-  await setUndo(ctx.email, ctx.msgId, { kind: 'separate', ids: segments.map((x) => x.id), title: titleOf(primary) })
+  await turnSetUndo(ctx, { kind: 'separate', ids: segments.map((x) => x.id), title: titleOf(primary) })
   ctx.later.push(async () => {
     try {
       const { finishEvent } = await import('../../event-day')
       await finishEvent(ctx.email, primary.id)
       // Undone while the event was being written up: no briefing for an event that is gone.
-      if (await undone(ctx.msgId)) return
+      if (await stateOf(ctx).undone(ctx.msgId)) return
       const fresh = await getSession(ctx.email, primary.id)
       if (!fresh?.notes || !Object.keys(fresh.notes).length) throw new Error('event notes not written')
-      const { sendWhatsAppBriefing } = await import('../bot')
-      await sendWhatsAppBriefing(fresh, { ask: false })
+      await briefingOut(ctx, fresh)
     } catch (e) {
       console.warn(`pen whatsapp: event day failed: ${(e as Error).message}`)
       await tell(ctx, S[ctx.lang].dayFailed(titleOf(primary))).catch(() => {})

@@ -495,3 +495,8 @@ alter table public.pen_segments enable row level security;  -- service role only
 -- alter table public.pen_outlook enable row level security;  -- service role only
 
 -- 2026-10-21, Outlook READING (team test, lib/pen/outlook-read.ts). NO DDL: an address that may be read has 'Mail.Read' in pen_outlook.scopes (the column above, already run), recorded only for accounts on PEN_GMAIL_READ_USERS with PEN_GMAIL_READ=1. Nothing read from the inbox is stored.
+
+-- 2026-10-22, one assistant for the web chat too (lib/pen/agent-io.ts, PEN_WEB_AGENT=1). agent_state = the web thread's pending yes/no, email draft and undo per turn (lib/pen/whatsapp/state.ts webStore). Until it runs the web agent still answers, but a draft's Send / a question's Yes in a LATER turn finds nothing waiting (one console warning). ONE line each.
+-- alter table public.pen_chats add column if not exists agent_state jsonb;
+-- Reminders set in the web chat by someone with no WhatsApp / iMessage that can reach them are emailed at the due time: no phone (lib/pen/reminders.ts reminderPhone / fireDue). Until it runs, those inserts fail and set_reminder returns the error.
+-- alter table public.pen_reminders alter column phone drop not null;

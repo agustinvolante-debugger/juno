@@ -190,6 +190,28 @@ export async function releaseLock(phone: string, token: string): Promise<void> {
   await supabaseAdmin.from('pen_whatsapp_messages').delete().eq('id', key).eq('payload->>token', token)
 }
 
+/**
+ * The web chat's turn lock: one turn at a time per thread, the same lease row as takeLock with id
+ * `lock:chat:<chat id>` (no texts to put back when a stale one is taken over). Null = held.
+ */
+export async function takeChatLock(chatId: string, now = Date.now()): Promise<string | null> {
+  const key = `lock:chat:${chatId}`
+  const token = crypto.randomBytes(9).toString('base64url')
+  const payload = { token, until: new Date(now + LOCK_LEASE_MS).toISOString() }
+  const { error } = await supabaseAdmin.from('pen_whatsapp_messages').insert({ id: key, phone: key, email: null, kind: 'lock', state: 'lock', payload })
+  if (!error) return token
+  if (error.code !== '23505') throw new Error(error.message)
+  const { data } = await supabaseAdmin.from('pen_whatsapp_messages').select('payload').eq('id', key).maybeSingle()
+  const held = (data?.payload ?? null) as { token?: string; until?: string } | null
+  if (!held?.token || Date.parse(held.until ?? '') > now) return null
+  const { data: took } = await supabaseAdmin.from('pen_whatsapp_messages').update({ payload }).eq('id', key).eq('payload->>token', held.token).select('id')
+  return took?.length ? token : null
+}
+
+export async function releaseChatLock(chatId: string, token: string): Promise<void> {
+  await supabaseAdmin.from('pen_whatsapp_messages').delete().eq('id', `lock:chat:${chatId}`).eq('payload->>token', token)
+}
+
 /* ----------------------------------------------------------------- drafts */
 
 /**
@@ -235,7 +257,9 @@ export async function getDraftById(id: string): Promise<Draft | null> {
   const { data, error } = await supabaseAdmin.from('pen_whatsapp_links').select('draft').eq('draft->>id', id).maybeSingle()
   if (error) throw new Error(error.message)
   const d = (data?.draft ?? null) as Draft | null
-  if (!d || Date.now() - new Date(d.createdAt).getTime() > DRAFT_TTL_MS) return null
+  // Not on a phone link: the web chat's draft (pen_chats.agent_state, state.ts).
+  if (!d) return (await import('./state')).webDraftById(id)
+  if (Date.now() - new Date(d.createdAt).getTime() > DRAFT_TTL_MS) return null
   return d
 }
 

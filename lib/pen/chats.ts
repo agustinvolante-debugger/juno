@@ -119,3 +119,14 @@ export async function adoptLegacyChat(userEmail: string): Promise<void> {
     .from('pen_chats')
     .insert({ user_email: userEmail, title: titleFromQuestion(first), messages: msgs.slice(-40) })
 }
+
+/**
+ * One turn added to the end of a thread, read fresh first: the web assistant's after-reply notes
+ * ("the combined notes are ready…", lib/pen/whatsapp/agent.ts Ctx.notify). A thread deleted
+ * meanwhile is left alone.
+ */
+export async function appendToChat(userEmail: string, id: string, turn: ArchiveTurn): Promise<void> {
+  const chat = await getChat(userEmail, id)
+  if (!chat) return
+  await setMessages(userEmail, id, [...(Array.isArray(chat.messages) ? chat.messages : []), turn])
+}
