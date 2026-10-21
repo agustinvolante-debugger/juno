@@ -14,7 +14,7 @@
 import type { EventPatch, NewEvent } from './calendar-edit'
 import type { Attendee, CreatedEvent, UpcomingEvent } from './google-calendar'
 import { graph, type GraphError } from './outlook'
-import { EVENT_EXPAND, EVENT_SELECT, fromGraph, graphEventBody, graphMoveBody, graphPatchBody, pickMeetingProvider, providerLabel, textHit, withAttendee, type GraphEvent, type MeetingProvider } from './outlook-graph'
+import { EVENT_EXPAND, EVENT_SELECT, fromGraph, graphEventBody, graphMoveBody, graphPatchBody, pickMeetingProvider, providerLabel, textHit, withAttendee, withAttendees, type GraphEvent, type MeetingProvider } from './outlook-graph'
 
 const READ_DAYS = 7
 const enc = encodeURIComponent
@@ -119,6 +119,13 @@ export async function outlookAddVideo(email: string, address: string, id: string
 export async function outlookAddAttendee(email: string, address: string, id: string, who: Attendee): Promise<OutlookCreated> {
   const cur = await graph<GraphEvent>(email, address, `me/events/${enc(id)}?$select=attendees`)
   const e = await graph<GraphEvent>(email, address, `me/events/${enc(id)}`, { method: 'PATCH', body: { attendees: withAttendee(cur?.attendees, who) } })
+  return created(e, false)
+}
+
+/** Sets the whole guest list (Calendar page); Outlook emails the added and the removed. */
+export async function outlookSetAttendees(email: string, address: string, id: string, list: Attendee[]): Promise<OutlookCreated> {
+  const cur = await graph<GraphEvent>(email, address, `me/events/${enc(id)}?$select=attendees`)
+  const e = await graph<GraphEvent>(email, address, `me/events/${enc(id)}`, { method: 'PATCH', body: { attendees: withAttendees(cur?.attendees, list) } })
   return created(e, false)
 }
 

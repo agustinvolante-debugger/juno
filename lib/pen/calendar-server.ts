@@ -7,10 +7,10 @@
 
 import { supabaseAdmin } from '@/lib/supabase'
 import type { CalAccount, CalBrief, CalCreate, CalPatch, CalRange, CalViewEvent } from './calendar-view'
-import { createOn, defaultCalendar, deleteByRef, eventsBetween, getEventByRef, listCalendars, moveByRef, providerOf, updateByRef, type Calendar } from './calendars'
+import { addMeetByRef, createOn, defaultCalendar, deleteByRef, eventsBetween, getEventByRef, listCalendars, moveByRef, providerOf, setGuestsByRef, updateByRef, type Calendar } from './calendars'
 import { matchRecordings, type MatchRecording } from './calendar-match'
-import { briefPerson, changeGate, ownAddresses, toViewEvent, type BriefSource, type Gate } from './calendar-page'
-import { isDay, type EventPatch } from './calendar-edit'
+import { briefPerson, changeGate, guestDiff, ownAddresses, patchGate, toViewEvent, type BriefSource, type PatchGate } from './calendar-page'
+import { isDay, type EventPatch, type NewEvent } from './calendar-edit'
 import type { UpcomingEvent } from './google-calendar'
 import { userZone } from './timezone'
 
@@ -113,7 +113,7 @@ export async function readBrief(email: string, ref: string): Promise<CalBrief | 
 /* --------------------------------------------------------------- writes */
 
 export type Outcome<T> = { ok: true; value: T } | { ok: false; status: number; body: Record<string, unknown> }
-const refuse = (g: NonNullable<Gate>): Outcome<never> => ({ ok: false, status: g.status, body: g.body })
+const refuse = (g: NonNullable<PatchGate>): Outcome<never> => ({ ok: false, status: g.status, body: g.body })
 const bad = (error: string, status = 400): Outcome<never> => ({ ok: false, status, body: { error } })
 
 async function fresh(email: string, ref: string, cals?: Calendar[]): Promise<CalViewEvent | null> {
@@ -162,17 +162,18 @@ export async function createFromPage(email: string, b: Partial<CalCreate>): Prom
 /**
  * PATCH /api/pen/calendar/events. Start and end travel together: the missing one comes from the
  * event (same length when only the start moves). A time-only change to a timed event is a move
- * (moveByRef, the chat's path); anything else is an update.
+ * (moveByRef, the chat's path); other fields are an update. Then the guest list (the whole list,
+ * absent = unchanged), then a video link (none yet only). A move to another calendar (`cal`) is
+ * last and replaces all of that: the event, with the changes, is created there and this one deleted
+ * (moveToCalendar). Who may do what is patchGate (calendar-page.ts).
  */
-export async function patchFromPage(email: string, b: Partial<CalPatch>): Promise<Outcome<CalViewEvent>> {
+export async function patchFromPage(email: string, b: Partial<CalPatch>, ops: MoveOps = DEFAULT_MOVE_OPS): Promise<Outcome<CalViewEvent>> {
   if (typeof b.ref !== 'string' || !b.ref) return bad('ref required')
   const tz = validTz(b.tz) ? b.tz : 'UTC'
   const cals = await listCalendars(email).catch((): Calendar[] => [])
   const got = await getEventByRef(email, b.ref)
   if (!got) return bad('that event is gone', 404)
   const e = got.event
-  const gate = changeGate('patch', { guests: e.others.length, editable: toViewEvent(e, { own: ownAddresses(email, cals) }).editable, confirm: b.confirm === true })
-  if (gate) return refuse(gate)
 
   const patch: EventPatch = { tz }
   if (typeof b.title === 'string') patch.title = b.title
@@ -185,14 +186,86 @@ export async function patchFromPage(email: string, b: Partial<CalPatch>): Promis
     patch.start = t.start
     patch.end = t.end
   }
-  if (!timeChange && patch.title === undefined && patch.location === undefined && patch.description === undefined) return bad('nothing to change')
+  const fieldChange = timeChange || patch.title !== undefined || patch.location !== undefined || patch.description !== undefined
+  // Guests: only when the list really differs; video: only when there is no link yet.
+  const after = b.guests === undefined ? undefined : cleanGuests(b.guests)
+  if (b.guests !== undefined && !Array.isArray(b.guests)) return bad('guests must be a list')
+  const diff = after ? guestDiff(e.others, after) : null
+  const guestChange = Boolean(diff && (diff.added.length || diff.removed.length))
+  const video = b.video === true && !e.meet
+  const key = typeof b.cal === 'string' && b.cal.trim() ? b.cal.trim().toLowerCase() : null
+  const move = Boolean(key && key !== got.cal.key)
+  if (!fieldChange && b.guests === undefined && b.video === undefined && !key) return bad('nothing to change')
 
-  const onlyTime = timeChange && patch.title === undefined && patch.location === undefined && patch.description === undefined
-  const res = onlyTime && !e.allDay && !isDay(patch.start)
-    ? await moveByRef(email, b.ref, patch.start!, tz, Math.max(5, Math.round((Date.parse(patch.end!) - Date.parse(patch.start!)) / 60000)))
-    : await updateByRef(email, b.ref, patch, e.others.length > 0)
-  const view = await fresh(email, res.ref, cals)
+  const editable = toViewEvent(e, { own: ownAddresses(email, cals) }).editable
+  const gate = patchGate({ editable, before: e.others, after: guestChange ? after : undefined, otherChange: fieldChange || video, move, recurring: e.recurring, confirm: b.confirm === true })
+  if (gate) return refuse(gate)
+  if (move && !cals.some((c) => c.key === key && !c.broken)) return bad('that calendar is not connected (or needs reconnecting)')
+  // Nothing actually changes (same list, a link already there, the same calendar): the event as it is.
+  if (!fieldChange && !guestChange && !video && !move) {
+    const view = toViewEvent(e, { own: ownAddresses(email, cals) })
+    return { ok: true, value: view }
+  }
+
+  let ref = b.ref
+  if (move) {
+    ref = (await moveToCalendar(email, e, b.ref, key!, { ...patch, video }, ops)).ref
+  } else {
+    if (fieldChange) {
+      const onlyTime = timeChange && patch.title === undefined && patch.location === undefined && patch.description === undefined
+      const res = onlyTime && !e.allDay && !isDay(patch.start)
+        ? await moveByRef(email, ref, patch.start!, tz, Math.max(5, Math.round((Date.parse(patch.end!) - Date.parse(patch.start!)) / 60000)))
+        : await updateByRef(email, ref, patch, e.others.length > 0)
+      ref = res.ref
+    }
+    if (guestChange) ref = (await setGuestsByRef(email, ref, after!)).ref
+    if (video) await addMeetByRef(email, ref)
+  }
+  const view = await fresh(email, ref, cals)
   return view ? { ok: true, value: view } : bad('changed, but the calendar did not send it back', 502)
+}
+
+/** How a move creates and deletes (injectable for tests). */
+export type MoveOps = {
+  create: (email: string, ev: NewEvent, o: { meet?: boolean }, cal: string) => Promise<{ ref: string }>
+  remove: (email: string, ref: string) => Promise<void>
+}
+const DEFAULT_MOVE_OPS: MoveOps = { create: (email, ev, o, cal) => createOn(email, ev, o, cal), remove: deleteByRef }
+
+const goneAlready = (err: unknown) => [404, 410].includes((err as { status?: number })?.status ?? 0)
+
+/**
+ * Moves an event (no guests: the gate refuses those) to another connected calendar: the same event,
+ * with the change applied, is created there (title, time, place, notes, a video link if it had one
+ * or one was asked for), then this one is deleted. If that delete fails, the new copy is deleted
+ * again and the move fails: never two copies without saying so.
+ */
+export async function moveToCalendar(email: string, e: UpcomingEvent, fromRef: string, target: string, p: EventPatch & { video?: boolean }, ops: MoveOps = DEFAULT_MOVE_OPS): Promise<{ ref: string }> {
+  const start = p.start ?? e.start
+  const allDay = p.start ? isDay(p.start) : e.allDay
+  const end = p.end ?? e.end ?? undefined
+  const location = p.location !== undefined ? p.location : e.location
+  const description = p.description !== undefined ? p.description : e.description ?? null
+  const title = p.title ?? (e.title === '(no title)' ? '' : e.title)
+  const ev: NewEvent = {
+    title: title || 'Meeting', start, ...(end ? { end } : {}), allDay, tz: p.tz,
+    ...(location?.trim() ? { location } : {}), ...(description?.trim() ? { description } : {}),
+  }
+  const made = await ops.create(email, ev, { meet: Boolean(e.meet) || p.video === true }, target)
+  try {
+    await ops.remove(email, fromRef)
+  } catch (err) {
+    if (goneAlready(err)) return made
+    const why = (err as Error)?.message || 'the calendar did not answer'
+    try {
+      await ops.remove(email, made.ref)
+    } catch (err2) {
+      console.warn(`pen calendar move: ${email}: original ${fromRef} and copy ${made.ref} both left: ${(err2 as Error).message}`)
+      throw Object.assign(new Error(`It is now on both calendars: the original could not be removed (${why}). Delete one of them.`), { status: 502 })
+    }
+    throw Object.assign(new Error(`Not moved: the original could not be removed (${why}).`), { status: 502 })
+  }
+  return made
 }
 
 /** The new [start, end] for a change that gives one or both; all-day dates or ISO instants, never mixed. */

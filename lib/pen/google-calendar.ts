@@ -392,6 +392,33 @@ export async function addAttendee(email: string, eventId: string, who: Attendee,
   return { id: e.id, link: e.htmlLink ?? null, meet: meetOf(e) }
 }
 
+/**
+ * The attendee list for events.patch when the Calendar page sets the whole guest list (exported for
+ * tests): the user's own entry and rooms stay as they are, kept guests keep their answer, new ones
+ * are added, anyone not in `list` is dropped.
+ */
+export function attendeesBody(cur: GEvent['attendees'], list: Attendee[]): Record<string, unknown>[] {
+  const want = cleanAttendees(list).filter((a, i, all) => all.findIndex((b) => b.email === a.email) === i)
+  const have = (cur ?? []).filter((a) => a.email)
+  const fixed = have.filter((a) => a.self || a.resource).map((a) => ({ ...a }))
+  const fixedMail = new Set(fixed.map((a) => a.email!.toLowerCase()))
+  const guests = want
+    .filter((a) => !fixedMail.has(a.email))
+    .map((a) => {
+      const old = have.find((h) => h.email!.toLowerCase() === a.email)
+      return old ? { ...old, ...(a.displayName && !old.displayName ? { displayName: a.displayName } : {}) } : a
+    })
+  return [...fixed, ...guests]
+}
+
+/** Sets an event's whole guest list (Calendar page); Google emails the added and the removed. */
+export async function setAttendees(email: string, eventId: string, list: Attendee[], src?: CalSrc): Promise<CreatedEvent> {
+  const path = `calendars/primary/events/${encodeURIComponent(eventId)}`
+  const cur = await gcal<GEvent>(email, `${path}?fields=attendees`, {}, src)
+  const e = await gcal<GEvent>(email, `${path}?sendUpdates=all`, { method: 'PATCH', body: { attendees: attendeesBody(cur.attendees, list) } }, src)
+  return { id: e.id, link: e.htmlLink ?? null, meet: meetOf(e) }
+}
+
 export type UpcomingEvent = {
   id: string
   title: string

@@ -79,6 +79,36 @@ export function changeGate(kind: 'create' | 'patch' | 'delete', o: { guests: num
   return null
 }
 
+/** Who a new guest list adds and removes (emails compared lower-cased). */
+export function guestDiff(before: { email: string }[], after: { email: string }[]): { added: string[]; removed: string[]; kept: string[] } {
+  const b = new Set(before.map((g) => g.email.toLowerCase()))
+  const a = new Set(after.map((g) => g.email.toLowerCase()))
+  return { added: [...a].filter((x) => !b.has(x)), removed: [...b].filter((x) => !a.has(x)), kept: [...a].filter((x) => b.has(x)) }
+}
+
+export const MOVE_WITH_GUESTS = "Meetings with guests can't move between calendars; create it on the other calendar instead."
+export const MOVE_AND_INVITE = 'Move it to the other calendar first, then add the guests.'
+export const MOVE_RECURRING = "One time of a repeating event can't move between calendars here; change it in Google Calendar or Outlook."
+
+export type PatchGate = Gate | { status: 400; body: { error: string } }
+
+/**
+ * Whether a change from the Calendar page may go ahead (pure). In order: someone else's event →
+ * 403; a move to another calendar is refused for an event with guests (it would cancel and re-invite
+ * everyone), for adding guests in the same change, and for one time of a repeating event → 400;
+ * then anyone who would be emailed without confirm → 409 with how many: the added and the removed,
+ * plus the guests who stay when anything else changes too (they get the update).
+ */
+export function patchGate(o: { editable: boolean; before: { email: string }[]; after?: { email: string }[]; otherChange: boolean; move: boolean; recurring?: boolean; confirm?: boolean }): PatchGate {
+  if (!o.editable) return changeGate('patch', { guests: 0, editable: false })
+  if (o.move && o.before.length) return { status: 400, body: { error: MOVE_WITH_GUESTS } }
+  if (o.move && o.after?.length) return { status: 400, body: { error: MOVE_AND_INVITE } }
+  if (o.move && o.recurring) return { status: 400, body: { error: MOVE_RECURRING } }
+  const d = o.after ? guestDiff(o.before, o.after) : { added: [], removed: [], kept: o.before.map((g) => g.email) }
+  const emailed = d.added.length + d.removed.length + (o.otherChange ? d.kept.length : 0)
+  return emailed > 0 && !o.confirm ? { status: 409, body: { needsConfirm: true, guests: emailed } } : null
+}
+
 /** A Google / Graph failure → status + message for the browser. */
 export function providerError(e: unknown): { status: number; error: string } {
   const msg = (e as Error)?.message || 'the calendar did not answer'

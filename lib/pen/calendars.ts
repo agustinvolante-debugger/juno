@@ -21,10 +21,10 @@
 
 import { supabaseAdmin } from '@/lib/supabase'
 import type { EventPatch, NewEvent } from './calendar-edit'
-import { addAttendee, addMeet, createEvent, deleteEvent, eventsInRange, getEvent, getGcalConnection, hasCalendar, moveEvent, updateEvent, upcomingEvents, READ_DAYS, type Attendee, type CalSrc, type CreatedEvent, type UpcomingEvent } from './google-calendar'
+import { addAttendee, addMeet, createEvent, deleteEvent, eventsInRange, getEvent, getGcalConnection, hasCalendar, moveEvent, setAttendees, updateEvent, upcomingEvents, READ_DAYS, type Attendee, type CalSrc, type CreatedEvent, type UpcomingEvent } from './google-calendar'
 import { chooseDefault, eventRef, mergeEvents, parseEventRef, pickCalendar, type CalInfo } from './calendar-merge'
 import { cleanProfile, getProfileRaw } from './profile'
-import { outlookAddAttendee, outlookAddVideo, outlookCreate, outlookDelete, outlookGet, outlookMove, outlookRange, outlookUpcoming, outlookUpdate } from './outlook-calendar'
+import { outlookAddAttendee, outlookAddVideo, outlookCreate, outlookDelete, outlookGet, outlookMove, outlookRange, outlookSetAttendees, outlookUpcoming, outlookUpdate } from './outlook-calendar'
 
 export { eventRef, parseEventRef, pickCalendar, type CalInfo } from './calendar-merge'
 
@@ -176,6 +176,15 @@ export async function addAttendeeByRef(email: string, ref: string, who: Attendee
   if (!r.cal || !r.id) throw new Error(r.error ?? 'no calendar is connected')
   const src = r.cal.src
   const e = src.kind === 'outlook' ? await outlookAddAttendee(email, src.address, r.id, who) : await addAttendee(email, r.id, who, src)
+  return { ...e, ref: eventRef(e.id, r.cal.key) }
+}
+
+/** Sets an event's whole guest list (the Calendar page); the added and the removed are emailed. */
+export async function setGuestsByRef(email: string, ref: string, list: Attendee[]): Promise<CreatedEvent & { ref: string }> {
+  const r = await resolveCalendar(email, { ref })
+  if (!r.cal || !r.id) throw new Error(r.error ?? 'no calendar is connected')
+  const src = r.cal.src
+  const e = src.kind === 'outlook' ? await outlookSetAttendees(email, src.address, r.id, list) : await setAttendees(email, r.id, list, src)
   return { ...e, ref: eventRef(e.id, r.cal.key) }
 }
 

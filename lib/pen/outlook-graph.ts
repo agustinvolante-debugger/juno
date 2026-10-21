@@ -351,6 +351,19 @@ export function withAttendee(cur: GraphEvent['attendees'], who: MsAttendee): Rec
   return have.some((a) => a.emailAddress.address.toLowerCase() === add[0].emailAddress.address) ? have : [...have, ...add]
 }
 
+/** The whole attendee list for PATCH (Calendar page): kept guests keep their type, new ones are required, the rest dropped. */
+export function withAttendees(cur: GraphEvent['attendees'], list: MsAttendee[]): Record<string, unknown>[] {
+  const have = (cur ?? []).filter((a) => a.emailAddress?.address)
+  return cleanAttendees(list)
+    .filter((a, i, all) => all.findIndex((b) => b.emailAddress.address === a.emailAddress.address) === i)
+    .map((a) => {
+      const old = have.find((h) => h.emailAddress!.address!.toLowerCase() === a.emailAddress.address)
+      if (!old) return a
+      const name = old.emailAddress?.name || (a.emailAddress as { name?: string }).name
+      return { emailAddress: { address: a.emailAddress.address, ...(name ? { name } : {}) }, type: old.type ?? 'required' }
+    })
+}
+
 /** Graph's free-text match isn't offered on calendarView, so "find X" filters the window here. */
 export function textHit(e: UpcomingEvent, q: string | null | undefined): boolean {
   const words = (q ?? '').toLowerCase().split(/\s+/).filter(Boolean)
