@@ -8,7 +8,7 @@
 //   GET    /api/pen/calendar?from=<ISO>&to=<ISO>        → CalRange   (span ≤ 42 days)
 //   GET    /api/pen/calendar/brief?ref=<event ref>      → { brief: CalBrief }
 //   POST   /api/pen/calendar/events   CalCreate         → { event: CalViewEvent }
-//   PATCH  /api/pen/calendar/events   CalPatch          → { event: CalViewEvent }
+//   PATCH  /api/pen/calendar/events   CalPatch          → { event: CalViewEvent }  (a calendar move returns the event's new ref)
 //   DELETE /api/pen/calendar/events?ref=<ref>[&confirm=1] → { ok: true }
 // A change that would email guests (create with guests, or patch/delete of an event with guests)
 // without confirm → 409 { needsConfirm: true, guests: <count> }; the page asks, then resends with
@@ -105,6 +105,12 @@ export type CalPatch = {
   end?: string
   location?: string | null
   description?: string | null
+  /** The full guest list after the edit (absent = unchanged). Adding or removing anyone emails them → 409 needsConfirm first. */
+  guests?: CalGuest[]
+  /** true = add a Meet / Teams link (no removal: Outlook can't take one off reliably). */
+  video?: boolean
+  /** Move it to another connected calendar (create there, delete here). Refused (400) for an event with guests: it would cancel and re-invite everyone. */
+  cal?: string
   tz: string
   confirm?: boolean
 }
