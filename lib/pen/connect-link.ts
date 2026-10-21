@@ -48,12 +48,12 @@ function secret(): string {
 
 const hmac = (domain: string, body: string) => crypto.createHmac('sha256', secret()).update(`${domain}.${body}`).digest('base64url')
 
-function sealPayload(domain: string, p: Record<string, unknown>): string {
+export function sealPayload(domain: string, p: Record<string, unknown>): string {
   const body = Buffer.from(JSON.stringify(p)).toString('base64url')
   return `${body}.${hmac(domain, body)}`
 }
 
-function openPayload(domain: string, token: string): Record<string, unknown> | null {
+export function openPayload(domain: string, token: string): Record<string, unknown> | null {
   const [body, sig, extra] = token.split('.')
   if (!body || !sig || extra !== undefined) return null
   const want = hmac(domain, body)
@@ -317,6 +317,13 @@ async function connectedText(email: string, app: ConnectApp, account: string | n
       : L.connected[app](who)
 }
 
+/** WhatsApp's 24-hour window: the user's latest WhatsApp message (not iMessage) is under a day old. */
+export async function waWindowOpen(email: string, now = Date.now()): Promise<boolean> {
+  const { data } = await supabaseAdmin.from('pen_whatsapp_messages').select('created_at').eq('email', email.toLowerCase()).not('phone', 'like', 'im:%').order('created_at', { ascending: false }).limit(1)
+  const last = data?.[0]?.created_at ? Date.parse(data[0].created_at as string) : 0
+  return now - last <= WINDOW_MS
+}
+
 /** A short assistant note at the end of a web chat thread (the web agent's notify). */
 async function noteInThread(email: string, chatId: string, text: string): Promise<{ sent: boolean; reason?: string }> {
   const { getChat, appendToChat } = await import('./chats')
@@ -333,11 +340,7 @@ async function deliver(email: string, via: Via, text: () => Promise<string>): Pr
   const { getLinkByEmail, setChat } = await import('./whatsapp/store')
   const link = await getLinkByEmail(email)
   if (!link?.phone || !link.linked_at) return { sent: false, reason: 'no linked phone' }
-  if (via === 'wa') {
-    const { data } = await supabaseAdmin.from('pen_whatsapp_messages').select('created_at').eq('email', email.toLowerCase()).not('phone', 'like', 'im:%').order('created_at', { ascending: false }).limit(1)
-    const last = data?.[0]?.created_at ? Date.parse(data[0].created_at as string) : 0
-    if (Date.now() - last > WINDOW_MS) return { sent: false, reason: 'outside the 24-hour window' }
-  }
+  if (via === 'wa' && !(await waWindowOpen(email))) return { sent: false, reason: 'outside the 24-hour window' }
   const t = await text()
   const { sendText } = await import('./whatsapp/provider')
   await sendText(via === 'im' ? `im:${link.phone}` : link.phone, t)
