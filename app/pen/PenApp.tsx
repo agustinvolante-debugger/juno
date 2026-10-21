@@ -228,8 +228,9 @@ export default function PenApp({
   }, [])
   useEffect(() => {
     const u = new URL(window.location.href)
-    if (u.searchParams.get('view') !== 'calendar') return
-    setView({ k: 'calendar' })
+    const v = u.searchParams.get('view')
+    if (v !== 'calendar' && v !== 'chats') return
+    setView({ k: v })
     u.searchParams.delete('view')
     window.history.replaceState(null, '', u.toString())
   }, [])

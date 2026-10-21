@@ -17,14 +17,15 @@ export default async function ConnectedPage({ searchParams }: { searchParams: Pr
   const L = COPY[lang]
   const error = one('error')
   const wa = botNumber()
+  const button = { display: 'inline-block', background: 'var(--accent)', color: '#fff', textDecoration: 'none', padding: '12px 20px', borderRadius: 999, fontFamily: 'var(--font-ui), system-ui, sans-serif', fontSize: 15 }
   const back =
-    one('c') === 'im' ? (
+    // Started in the website chat: "Connected ✓" is posted in that thread; this goes back to it.
+    one('c') === 'web' ? (
+      <a href="/pen?view=chats" style={button}>{L.backWeb}</a>
+    ) : one('c') === 'im' ? (
       <p style={{ color: 'var(--soft)', margin: 0 }}>{L.backIm}</p>
     ) : wa ? (
-      <a
-        href={`https://wa.me/${wa}`}
-        style={{ display: 'inline-block', background: 'var(--accent)', color: '#fff', textDecoration: 'none', padding: '12px 20px', borderRadius: 999, fontFamily: 'var(--font-ui), system-ui, sans-serif', fontSize: 15 }}
-      >
+      <a href={`https://wa.me/${wa}`} style={button}>
         {L.backWa}
       </a>
     ) : (

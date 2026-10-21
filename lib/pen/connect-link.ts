@@ -185,6 +185,7 @@ export const COPY = {
     pageLine: (app: string) => `${app} is connected. You can go back to the chat.`,
     backWa: 'Go back to WhatsApp',
     backIm: 'You can close this page and go back to Messages.',
+    backWeb: 'Back to your chat',
     failTitle: 'Not connected',
     errors: {
       cancelled: 'You cancelled on the consent screen, so nothing was connected.',
@@ -223,6 +224,7 @@ export const COPY = {
     pageLine: (app: string) => `${app} quedó conectado. Ya puedes volver al chat.`,
     backWa: 'Volver a WhatsApp',
     backIm: 'Puedes cerrar esta página y volver a Mensajes.',
+    backWeb: 'Volver a tu chat',
     failTitle: 'No se conectó',
     errors: {
       cancelled: 'Cancelaste en la pantalla de permisos, así que no se conectó nada.',
@@ -261,6 +263,7 @@ export const COPY = {
     pageLine: (app: string) => `O ${app} está conectado. Já pode voltar para o chat.`,
     backWa: 'Voltar para o WhatsApp',
     backIm: 'Pode fechar esta página e voltar para o Mensagens.',
+    backWeb: 'Voltar para o seu chat',
     failTitle: 'Não conectado',
     errors: {
       cancelled: 'Você cancelou na tela de permissões, então nada foi conectado.',
