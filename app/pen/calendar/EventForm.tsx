@@ -122,6 +122,7 @@ export default function EventForm({
         placeholder={T.titlePh}
         autoComplete="off"
         aria-invalid={err === T.needTitle || undefined}
+        aria-describedby={err === T.needTitle ? `${id}-err` : undefined}
       />
 
       <div className="pen-cal-when">
@@ -197,7 +198,7 @@ export default function EventForm({
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder={T.descriptionPh} rows={2} />
       </label>
 
-      {err && <p className="pen-cal-form-err" role="alert">{err}</p>}
+      {err && <p id={`${id}-err`} className="pen-cal-form-err" role="alert">{err}</p>}
 
       <footer className="pen-cal-form-foot">
         <button type="button" className="pen-btn pen-cal-sm" onClick={onCancel}>{T.cancel}</button>

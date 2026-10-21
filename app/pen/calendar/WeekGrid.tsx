@@ -1,18 +1,24 @@
 'use client'
 
-// The desktop week: seven day columns on a 24-hour grid, an all-day row (all-day events and the
-// day's to-dos) above it, reminders as hairline markers, and the current-time line in today's
-// column. Drag an empty slot to create, drag an event to move it, drag its foot to resize; all on
-// a 15-minute snap.
+// The desktop week: seven day columns on a 24-hour grid, an all-day row above it, and the
+// current-time line in today's column. Drag an empty slot to create, drag an event to move it,
+// drag its foot to resize; all on a 15-minute snap.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Icon from '../Icon'
 import { useCopy, useLang } from '../LangContext'
-import type { CalReminder, CalTodo, CalViewEvent } from '@/lib/pen/calendar-view'
+import { LOCALE } from '@/lib/pen/i18n'
+import type { CalViewEvent } from '@/lib/pen/calendar-view'
 import { CAL } from './cal-copy'
 import { dayHead, hourLabel, shortSpan, timeLabel, zoneShort } from './cal-format'
-import { addDays, DAY_MS, evSpan, HOUR_PX, hueVars, layoutDay, minutesOfDay, sameDay, snap, startOfDay, SNAP_MIN, ymd, type Hue } from './cal-utils'
+import { addDays, DAY_MS, evSpan, HOUR_PX, hueVars, layoutDay, minutesOfDay, sameDay, snap, startOfDay, SNAP_MIN, ymd, type Hue, type Placed } from './cal-utils'
 import type { Anchor } from './CalPanels'
+
+/** Two overlapping events that start closer than this (px) sit side by side; further apart, the
+ *  later one cascades over the earlier, whose title is already visible above it. */
+const NEAR_PX = 24
+/** All-day rows shown before "+N more". */
+const ALLDAY_ROWS = 3
 
 type Drag =
   | { k: 'create'; day: number; a: number; b: number; moved: boolean }
@@ -22,8 +28,6 @@ type Drag =
 export default function WeekGrid({
   days,
   events,
-  todos,
-  reminders,
   hues,
   now,
   draft,
@@ -31,12 +35,9 @@ export default function WeekGrid({
   onOpenEvent,
   onCreate,
   onChange,
-  onOpenTodo,
 }: {
   days: Date[]
   events: CalViewEvent[]
-  todos: CalTodo[]
-  reminders: CalReminder[]
   hues: Record<string, Hue>
   now: Date
   draft: { start: Date; end: Date; allDay: boolean } | null
@@ -44,13 +45,13 @@ export default function WeekGrid({
   onOpenEvent: (ev: CalViewEvent, anchor: Anchor) => void
   onCreate: (start: Date, end: Date, anchor: Anchor) => void
   onChange: (ev: CalViewEvent, start: Date, end: Date) => void
-  onOpenTodo: (sessionId: string) => void
 }) {
   const T = useCopy(CAL)
   const lang = useLang()
   const scrollRef = useRef<HTMLDivElement>(null)
   const colsRef = useRef<HTMLDivElement>(null)
   const [drag, setDrag] = useState<Drag | null>(null)
+  const [allDayOpen, setAllDayOpen] = useState(false)
   const dragRef = useRef<Drag | null>(null)
   const suppressClick = useRef(false)
   const offsetRef = useRef(0)
@@ -65,10 +66,17 @@ export default function WeekGrid({
     if (!el) return
     const done = scrolled.current
     if (done && done.key === weekKey && (done.withEvents || !hasEvents)) return
+    // Open at the hour of the week's first event, never later than 8:00; and if now is in this
+    // week, in the working day, and would sit below the fold, far enough down that the now line
+    // shows. (In the evening the day's meetings matter more than the empty hours left.)
     const firsts = events.filter((e) => !e.allDay).map((e) => evSpan(e).s).filter((s) => s >= days[0] && s < addDays(days[0], 7)).map(minutesOfDay)
-    const first = firsts.length ? Math.min(...firsts) : 450
-    const target = Math.min(first, 450) - 20
-    el.scrollTop = Math.max(0, (target / 60) * HOUR_PX)
+    let target = Math.floor(Math.min(firsts.length ? Math.min(...firsts) : 480, 480) / 60) * 60
+    const viewMin = (el.clientHeight / HOUR_PX) * 60
+    if (now >= days[0] && now < addDays(days[0], 7)) {
+      const nm = minutesOfDay(now)
+      if (nm < 19 * 60 && nm > target + viewMin - 60) target = Math.floor((nm - viewMin + 120) / 60) * 60
+    }
+    el.scrollTop = Math.max(0, (target / 60) * HOUR_PX - 8)
     scrolled.current = { key: weekKey, withEvents: hasEvents }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekKey, hasEvents])
@@ -128,22 +136,26 @@ export default function WeekGrid({
       if (cur.k === 'move') onChange(cur.ev, at(cur.day, cur.start), at(cur.day, cur.start + cur.dur))
       else onChange(cur.ev, at(cur.day, cur.start), at(cur.day, cur.end))
     }
-    const key = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
-      e.stopPropagation()
+    // Esc, or the browser taking the pointer (a touch scroll): drop the drag, change nothing.
+    const cancel = () => {
       cleanup()
       dragRef.current = null
       setDrag(null)
     }
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.stopPropagation()
+      cancel()
+    }
     const cleanup = () => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
-      window.removeEventListener('pointercancel', up)
+      window.removeEventListener('pointercancel', cancel)
       window.removeEventListener('keydown', key, true)
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
-    window.addEventListener('pointercancel', up)
+    window.addEventListener('pointercancel', cancel)
     window.addEventListener('keydown', key, true)
   }
 
@@ -194,8 +206,28 @@ export default function WeekGrid({
       return { ev, a, b: Math.max(b, a + 1) }
     })
     .filter(Boolean) as { ev: CalViewEvent; a: number; b: number }[]
-  const weekTodos = todos.filter((t) => t.date >= ymd(week0) && t.date < ymd(week1))
-  const hasAllDay = allDay.length > 0 || weekTodos.length > 0
+  const hasAllDay = allDay.length > 0
+
+  // The all-day row, packed into lines (an event spanning days keeps one line). Past three lines,
+  // the third becomes "+N more" per day until it is opened.
+  type Slot = { key: string; a: number; b: number; row: number; ev: CalViewEvent }
+  const slots: Slot[] = []
+  {
+    const raw = allDay
+      .map((x) => ({ key: x.ev.ref, a: x.a, b: x.b, row: 0, ev: x.ev }))
+      .sort((x, y) => x.a - y.a || y.b - y.a - (x.b - x.a))
+    const ends: number[] = []
+    for (const r of raw) {
+      let row = ends.findIndex((end) => end <= r.a)
+      if (row < 0) row = ends.length
+      ends[row] = r.b
+      slots.push({ ...r, row })
+    }
+  }
+  const allDayRows = slots.reduce((m, x) => Math.max(m, x.row + 1), 0)
+  const folded = allDayRows > ALLDAY_ROWS && !allDayOpen
+  const hiddenPerDay = days.map((_, i) => (folded ? slots.filter((x) => x.row >= ALLDAY_ROWS - 1 && x.a <= i && x.b > i).length : 0))
+  const dayName = (d: Date) => d.toLocaleDateString(LOCALE[lang], { weekday: 'long', day: 'numeric', month: 'long' })
 
   const ghost = drag?.k === 'create'
     ? { day: drag.day, a: Math.min(drag.a, drag.b), b: drag.moved ? Math.max(drag.a, drag.b) : Math.min(drag.a, drag.b) + 30 }
@@ -223,40 +255,45 @@ export default function WeekGrid({
       </div>
 
       {hasAllDay && (
-        <div className="pen-cal-allday">
-          <span className="pen-cal-allday-k">{T.allDay}</span>
+        <div className="pen-cal-allday" data-open={allDayOpen && allDayRows > ALLDAY_ROWS ? true : undefined}>
+          <span className="pen-cal-allday-k">
+            {T.allDay}
+            {allDayOpen && allDayRows > ALLDAY_ROWS && (
+              <button type="button" className="pen-cal-allday-less" onClick={() => setAllDayOpen(false)}>{T.showLess}</button>
+            )}
+          </span>
           <div className="pen-cal-allday-grid">
-            {allDay.map(({ ev, a, b }) => (
-              <button
-                key={ev.ref}
-                type="button"
-                className="pen-cal-chip"
-                data-active={activeRef === ev.ref || undefined}
-                data-declined={ev.declined || undefined}
-                style={{ ...hueVars(hues[ev.cal]), gridColumn: `${a + 1} / ${b + 1}` }}
-                onClick={(e) => onOpenEvent(ev, (e.currentTarget as HTMLElement).getBoundingClientRect())}
-              >
-                <span className="pen-cal-chip-t">{ev.title || T.untitled}</span>
-              </button>
-            ))}
-            {weekTodos.map((t) => {
-              const i = days.findIndex((d) => ymd(d) === t.date)
-              return (
+            {slots
+              .filter((x) => !folded || x.row < ALLDAY_ROWS - 1)
+              .map((x) => (
                 <button
-                  key={t.ref}
+                  key={x.key}
                   type="button"
-                  className="pen-cal-todo"
-                  data-done={t.done || undefined}
-                  style={{ gridColumn: `${i + 1} / ${i + 2}` }}
-                  onClick={() => onOpenTodo(t.sessionId)}
-                  title={t.text}
+                  className="pen-cal-chip"
+                  data-active={activeRef === x.ev.ref || undefined}
+                  data-declined={x.ev.declined || undefined}
+                  style={{ ...hueVars(hues[x.ev.cal]), gridColumn: `${x.a + 1} / ${x.b + 1}`, gridRow: x.row + 1 }}
+                  title={x.ev.title || T.untitled}
+                  onClick={(e) => onOpenEvent(x.ev, (e.currentTarget as HTMLElement).getBoundingClientRect())}
                 >
-                  <span className="pen-cal-todo-box" aria-hidden>{t.done && <Icon name="check" size={10} />}</span>
-                  <span className="pen-cal-sr">{T.todo}: </span>
-                  <span className="pen-cal-todo-t">{t.text}</span>
+                  <span className="pen-cal-chip-t">{x.ev.title || T.untitled}</span>
+                  {x.ev.declined && <span className="pen-cal-sr">, {T.declined}</span>}
                 </button>
-              )
-            })}
+              ))}
+            {hiddenPerDay.map((n, i) =>
+              n > 0 ? (
+                <button
+                  key={`more-${i}`}
+                  type="button"
+                  className="pen-cal-allday-more"
+                  style={{ gridColumn: `${i + 1} / ${i + 2}`, gridRow: ALLDAY_ROWS }}
+                  aria-label={`${T.more(n)} · ${dayName(days[i])}`}
+                  onClick={() => setAllDayOpen(true)}
+                >
+                  {T.more(n)}
+                </button>
+              ) : null,
+            )}
           </div>
         </div>
       )}
@@ -271,6 +308,7 @@ export default function WeekGrid({
           <div className="pen-cal-cols" ref={colsRef} onPointerDown={onColsDown} style={{ ['--hour' as string]: `${HOUR_PX}px` }}>
             {days.map((d, di) => {
               const placed = layoutDay(shown, d)
+              const geo = placeOverlaps(placed)
               const today = sameDay(d, now)
               const wkend = d.getDay() === 0 || d.getDay() === 6
               return (
@@ -282,6 +320,13 @@ export default function WeekGrid({
                     const past = evSpan(ev).e < now
                     const dragging = drag && drag.k !== 'create' && drag.moved && drag.ev.ref === ev.ref
                     const canDrag = ev.editable && !p.startsBefore && !p.endsAfter
+                    const g = geo.get(ev.ref)!
+                    const label = [
+                      ev.title || T.untitled,
+                      `${dayName(d)}, ${shortSpan(ev, lang)}`,
+                      ev.declined ? T.declined : '',
+                      ev.recording ? T.recorded : ev.hasBrief ? T.briefReady : '',
+                    ].filter(Boolean).join(', ')
                     return (
                       <button
                         key={ev.ref}
@@ -300,24 +345,23 @@ export default function WeekGrid({
                           height: Math.max(18, p.height - 2),
                           // Overlaps cascade: each event is wider than its share and the later
                           // one sits on top, so titles stay readable (Google/Apple do the same).
-                          left: `calc(${(p.col / p.cols) * 100}% + 2px)`,
-                          width: `calc(${(p.col === p.cols - 1 ? 1 / p.cols : Math.min(1.7 / p.cols, 1 - p.col / p.cols)) * 100}% - ${p.cols > 1 ? 3 : 6}px)`,
+                          left: `calc(${g.left * 100}% + 2px)`,
+                          width: `calc(${g.width * 100}% - ${p.cols > 1 ? 4 : 6}px)`,
                           zIndex: p.cols > 1 ? 1 + p.col : undefined,
                         }}
+                        aria-label={label}
                         onPointerDown={canDrag ? (e) => onEvDown(e, ev, di, false) : undefined}
                         onClick={(e) => {
                           if (suppressClick.current) return
                           onOpenEvent(ev, (e.currentTarget as HTMLElement).getBoundingClientRect())
                         }}
                       >
-                        <span className="pen-cal-ev-t">
-                          {ev.title || T.untitled}
-                          {short && <span className="pen-cal-ev-time-inline">, {timeLabel(evSpan(ev).s, lang)}</span>}
-                        </span>
+                        <span className="pen-cal-ev-t">{ev.title || T.untitled}</span>
+                        {short && <span className="pen-cal-ev-time-inline">{timeLabel(evSpan(ev).s, lang)}</span>}
                         {!short && <span className="pen-cal-ev-time">{shortSpan(ev, lang)}</span>}
                         {!short && p.height > 70 && ev.location && <span className="pen-cal-ev-loc">{ev.location}</span>}
                         {(ev.recording || ev.hasBrief) && (
-                          <span className="pen-cal-ev-mark" aria-label={ev.recording ? T.recorded : T.briefReady} title={ev.recording ? T.recorded : T.briefReady}>
+                          <span className="pen-cal-ev-mark" aria-hidden title={ev.recording ? T.recorded : T.briefReady}>
                             <Icon name={ev.recording ? 'mic' : 'sparkle'} size={11} />
                           </span>
                         )}
@@ -327,27 +371,6 @@ export default function WeekGrid({
                       </button>
                     )
                   })}
-
-                  {reminders
-                    .filter((r) => sameDay(new Date(r.dueAt), d))
-                    .map((r) => {
-                      const due = new Date(r.dueAt)
-                      return (
-                        <div
-                          key={r.id}
-                          className="pen-cal-rem"
-                          data-sent={r.sent || undefined}
-                          style={{ top: (minutesOfDay(due) / 60) * HOUR_PX }}
-                          role="note"
-                          aria-label={`${T.reminder} ${timeLabel(due, lang)}: ${r.text}`}
-                        >
-                          <span className="pen-cal-rem-pill">
-                            <Icon name="bell" size={11} />
-                            <span className="pen-cal-rem-t">{r.text}</span>
-                          </span>
-                        </div>
-                      )
-                    })}
 
                   {ghost && ghost.day === di && (
                     <div
@@ -370,4 +393,27 @@ export default function WeekGrid({
       </div>
     </div>
   )
+}
+
+/** Where each overlapping event sits across its day column, as fractions of the column. Events
+ *  that start within NEAR_PX of each other share the width; a later one cascades over an earlier
+ *  one, indented, so both titles stay readable. */
+function placeOverlaps(placed: Placed[]): Map<string, { left: number; width: number }> {
+  const out = new Map<string, { left: number; width: number }>()
+  const over = (a: Placed, b: Placed) => a.top < b.top + b.height && b.top < a.top + a.height
+  for (const p of [...placed].sort((a, b) => a.col - b.col)) {
+    if (p.cols === 1) {
+      out.set(p.ev.ref, { left: 0, width: 1 })
+      continue
+    }
+    const share = 1 / p.cols
+    const lower = placed.filter((q) => q.cols === p.cols && q.col < p.col && over(p, q))
+    const higher = placed.filter((q) => q.cols === p.cols && q.col > p.col && over(p, q))
+    const split = lower.some((q) => p.top - q.top < NEAR_PX)
+    const left = Math.min(1 - share, split || !lower.length ? p.col * share : Math.max(...lower.map((q) => (out.get(q.ev.ref)?.left ?? 0) + Math.min(0.25, share * 0.44))))
+    const nextNear = higher.filter((q) => q.top - p.top < NEAR_PX).reduce((m, q) => Math.min(m, q.col), Infinity)
+    const right = Number.isFinite(nextNear) ? nextNear * share : 1
+    out.set(p.ev.ref, { left, width: Math.min(1 - left, Math.max(share, right - left)) })
+  }
+  return out
 }

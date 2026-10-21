@@ -1,8 +1,9 @@
 'use client'
 
 // The Calendar page (22 Oct): every connected Google and Outlook calendar in one place, with
-// Juno's own things on it (the notes of a past meeting, the brief before the next one, dated
-// to-dos, WhatsApp reminders). Desktop: week (default) and month. Phone: an agenda.
+// Juno's own layer on its meetings (the notes of a past meeting, the brief before the next one).
+// Meetings only: to-dos and reminders live elsewhere (founder, 20 Oct). Desktop: week (default)
+// and month. Phone: an agenda.
 //
 // Events are read live for the range on screen (GET /api/pen/calendar), refreshed every 90 s while
 // the tab is visible, on focus, and after every change. Old data stays on screen while it
@@ -10,7 +11,7 @@
 // Types and routes: lib/pen/calendar-view.ts.
 
 import './calendar.css'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Icon from '../Icon'
 import { useCopy, useLang } from '../LangContext'
 import { errMessage } from '@/lib/pen/http'
@@ -18,7 +19,7 @@ import type { CalBrief, CalCreate, CalPatch, CalRange, CalViewEvent } from '@/li
 import { liveApi, mockApi, type CalApi, type MutResult } from './cal-api'
 import { CAL } from './cal-copy'
 import { monthTitle, weekTitle } from './cal-format'
-import { addDays, browserZone, calLabel, evSpan, hueVars, huesFor, startOfDay, startOfMonth, startOfWeek, ymd } from './cal-utils'
+import { addDays, browserZone, calLabel, evSpan, hueVars, huesFor, parseYmd, startOfDay, startOfMonth, startOfWeek, ymd } from './cal-utils'
 import { ConfirmDialog, Floating, Sheet, Toast, type Anchor } from './CalPanels'
 import WeekGrid from './WeekGrid'
 import MonthGrid from './MonthGrid'
@@ -32,6 +33,9 @@ export type CalendarViewProps = {
   onOpenRecording: (sessionId: string) => void
   /** Settings → Connections, to connect or reconnect a calendar. */
   onOpenConnections: () => void
+  /** Jump to the week holding this date (the sidebar's mini calendar). A new `n` jumps again,
+   *  even to the same date. Desktop switches to week; phone scrolls the agenda to that day. */
+  goTo?: { date: string /* 'YYYY-MM-DD' */; n: number }
   /** Dev preview only: answer from this range in memory instead of the API. */
   mock?: CalRange
   mockBrief?: (ref: string) => CalBrief
@@ -67,20 +71,16 @@ function writeLS(key: string, v: string) {
 function merge(parts: CalRange[]): CalRange | null {
   if (!parts.length) return null
   const ev = new Map<string, CalViewEvent>()
-  const todos = new Map<string, CalRange['todos'][number]>()
-  const rems = new Map<string, CalRange['reminders'][number]>()
   const failed = new Set<string>()
   for (const p of parts) {
     p.events.forEach((e) => ev.set(e.ref, e))
-    p.todos.forEach((t) => todos.set(t.ref, t))
-    p.reminders.forEach((r) => rems.set(r.id, r))
     p.failed.forEach((f) => failed.add(f))
   }
   const last = parts[parts.length - 1]
-  return { calendars: last.calendars, tz: last.tz, events: [...ev.values()], todos: [...todos.values()], reminders: [...rems.values()], failed: [...failed] }
+  return { calendars: last.calendars, tz: last.tz, events: [...ev.values()], todos: [], reminders: [], failed: [...failed] }
 }
 
-export default function CalendarView({ phone, onOpenRecording, onOpenConnections, mock, mockBrief }: CalendarViewProps) {
+export default function CalendarView({ phone, onOpenRecording, onOpenConnections, goTo, mock, mockBrief }: CalendarViewProps) {
   const T = useCopy(CAL)
   const lang = useLang()
   const api: CalApi = useMemo(
@@ -94,6 +94,9 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
   const [anchor, setAnchor] = useState(() => startOfDay(new Date()))
   const [now, setNow] = useState(() => new Date())
   const [agendaSteps, setAgendaSteps] = useState(1)
+  // Phone: the agenda starts today, or at the day the mini calendar jumped to.
+  const [agendaFrom, setAgendaFrom] = useState<Date | null>(null)
+  const pendingDay = useRef<string | null>(null)
   const [hidden, setHidden] = useState<Set<string>>(new Set())
   const [cache, setCache] = useState<Record<string, CalRange>>({})
   const [busy, setBusy] = useState(false)
@@ -105,6 +108,11 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
   const [confirm, setConfirm] = useState<{ guests: number; resolve: (ok: boolean) => void } | null>(null)
   const [toast, setToast] = useState<{ text: string; tone: 'ok' | 'bad'; n: number } | null>(null)
   const returnFocus = useRef<HTMLElement | null>(null)
+  const [calSheet, setCalSheet] = useState(false)
+  // Desktop: the page fills the window below wherever the shell puts it (search bar or not).
+  const rootRef = useRef<HTMLElement>(null)
+  const [fitH, setFitH] = useState<number | null>(null)
+  const inflight = useRef(0)
   const today = startOfDay(now)
 
   // Remembered per browser: which calendars are hidden, week or month.
@@ -119,6 +127,27 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
     if (v === 'week' || v === 'month') setMode(v)
   }, [])
 
+  // The sidebar's mini calendar: show the week (or agenda day) holding goTo.date.
+  useEffect(() => {
+    if (!goTo || !/^\d{4}-\d{2}-\d{2}$/.test(goTo.date)) return
+    const d = parseYmd(goTo.date)
+    if (!phone) {
+      setAnchor(d)
+      setMode('week')
+      writeLS(VIEW_KEY, 'week')
+      return
+    }
+    const from = agendaFrom ?? startOfDay(new Date())
+    const loadedTo = addDays(from, agendaSteps * AGENDA_STEP)
+    if (d >= from && d < loadedTo) scrollToDay(goTo.date)
+    else {
+      pendingDay.current = goTo.date
+      setAgendaFrom(d)
+      setAgendaSteps(1)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [goTo?.n])
+
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 30_000)
     return () => window.clearInterval(id)
@@ -127,11 +156,12 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
   // ------------------------------------------------------------------ the range on screen
   const weekStart = startOfWeek(anchor)
   const monthStart = startOfWeek(startOfMonth(anchor))
+  const agendaStart = agendaFrom ?? today
   const chunks: Chunk[] = useMemo(() => {
-    if (phone) return Array.from({ length: agendaSteps }, (_, i) => chunk(addDays(today, i * AGENDA_STEP), addDays(today, (i + 1) * AGENDA_STEP)))
+    if (phone) return Array.from({ length: agendaSteps }, (_, i) => chunk(addDays(agendaStart, i * AGENDA_STEP), addDays(agendaStart, (i + 1) * AGENDA_STEP)))
     return mode === 'week' ? [chunk(weekStart, addDays(weekStart, 7))] : [chunk(monthStart, addDays(monthStart, 42))]
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phone, agendaSteps, mode, weekStart.getTime(), monthStart.getTime(), today.getTime()])
+  }, [phone, agendaSteps, mode, weekStart.getTime(), monthStart.getTime(), agendaStart.getTime()])
   const chunkKeys = chunks.map((c) => c.key).join(',')
 
   const chunksRef = useRef(chunks)
@@ -142,6 +172,7 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
     async (only?: Chunk[]) => {
       const list = only ?? chunksRef.current
       lastLoad.current = Date.now()
+      inflight.current += 1
       setBusy(true)
       const res = await Promise.allSettled(list.map((c) => api.load(c.from, c.to)))
       const got: Record<string, CalRange> = {}
@@ -153,7 +184,8 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
       setCache((prev) => ({ ...prev, ...got }))
       setLoadErr(err ? errMessage(err, T.loadError) : null)
       if (Object.keys(got).length) setUpdatedAt(Date.now())
-      setBusy(false)
+      inflight.current -= 1
+      if (inflight.current <= 0) setBusy(false)
       return !err
     },
     [api, T.loadError],
@@ -185,7 +217,25 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
     }
   }, [])
 
-  const data = merge(chunks.map((c) => cache[c.key]).filter(Boolean))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const data = useMemo(() => merge(chunks.map((c) => cache[c.key]).filter(Boolean)), [cache, chunkKeys])
+
+  /** Phone: bring the agenda's day (or the next day with something on it) to the top. */
+  function scrollToDay(day: string) {
+    const list = Array.from(document.querySelectorAll<HTMLElement>('.pen-cal-aday[data-day]'))
+    const el = list.find((x) => (x.dataset.day ?? '') >= day) ?? list[list.length - 1]
+    const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    el?.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'start' })
+  }
+  // After a jump outside the loaded agenda, scroll once the new range is on screen.
+  const agendaReady = !!(phone && data)
+  useEffect(() => {
+    if (!agendaReady || !pendingDay.current) return
+    const day = pendingDay.current
+    pendingDay.current = null
+    requestAnimationFrame(() => scrollToDay(day))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agendaReady, chunkKeys, data?.events.length])
   const loadingFirst = !data && !loadErr
   const cals = data?.calendars ?? []
   const hues = useMemo(() => huesFor(cals), [cals.map((c) => c.key).join(',')]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -200,7 +250,7 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
     }
     return [...m.values()]
   }, [data, local])
-  const events = allEvents.filter((e) => (e.cals.length ? e.cals : [e.cal]).some((k) => !hidden.has(k)))
+  const events = useMemo(() => allEvents.filter((e) => (e.cals.length ? e.cals : [e.cal]).some((k) => !hidden.has(k))), [allEvents, hidden])
 
   const toggleCal = (key: string) => {
     setHidden((h) => {
@@ -225,16 +275,20 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
     const el = returnFocus.current
     returnFocus.current = null
     if (el && document.contains(el)) el.focus({ preventScroll: true })
+    // The event it came from is gone (deleted): land on "New event", not on the page's start.
+    else requestAnimationFrame(() => document.querySelector<HTMLElement>('.pen-cal-new')?.focus({ preventScroll: true }))
   }, [])
 
   useEffect(() => {
-    if (!panel) return
+    if (!panel && !calSheet) return
     const key = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close()
+      if (e.key !== 'Escape') return
+      if (panel) close()
+      else setCalSheet(false)
     }
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
-  }, [panel, close])
+  }, [panel, calSheet, close])
 
   const panelEv = panel && panel.k !== 'create' ? allEvents.find((e) => e.ref === panel.ref) ?? null : null
   // The event went away under an open panel (deleted elsewhere): close it.
@@ -337,6 +391,8 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
       const saved = r.value
       setLocal((l) => ({ ...l, [ev.ref]: saved }))
       setPanel({ k: 'detail', ref: ev.ref, anchor: panel?.anchor ?? null })
+      // The form (and the focus inside it) is gone; keep focus in the panel.
+      requestAnimationFrame(() => document.querySelector<HTMLElement>('.pen-cal-float, .pen-cal-sheet')?.focus({ preventScroll: true }))
       say(T.saved)
       void settle(ev.ref)
       return null
@@ -380,7 +436,12 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
   }
   const goToday = () => {
     setAnchor(startOfDay(new Date()))
-    if (phone) document.querySelector('.pen-cal-aday[data-today]')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    if (!phone) return
+    if (agendaFrom) {
+      pendingDay.current = ymd(new Date())
+      setAgendaFrom(null)
+      setAgendaSteps(1)
+    } else scrollToDay(ymd(new Date()))
   }
 
   const wt = weekTitle(weekStart, lang)
@@ -389,7 +450,7 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
   const failedNames = (data?.failed ?? []).map((k) => calLabel(cals.find((c) => c.key === k)) || k)
 
   const status = (
-    <span className="pen-cal-status" aria-live="polite">
+    <span className="pen-cal-status">
       {busy ? (
         <>
           <span className="pen-cal-spin" aria-hidden />
@@ -427,7 +488,14 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
               <span className="pen-cal-leg-name">{calLabel(c)}</span>
             </button>
             {c.broken && (
-              <button type="button" className="pen-cal-reconnect" onClick={onOpenConnections}>
+              <button
+                type="button"
+                className="pen-cal-reconnect"
+                onClick={() => {
+                  setCalSheet(false)
+                  onOpenConnections()
+                }}
+              >
                 <Icon name="alert" size={13} />
                 {T.reconnect}
               </button>
@@ -444,6 +512,43 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
       {failedNames.length > 0 ? T.failed(failedNames.join(', ')) : loadErr}
     </p>
   )
+
+  useLayoutEffect(() => {
+    if (phone) return
+    const fit = () => {
+      const el = rootRef.current
+      if (!el) return
+      const top = el.getBoundingClientRect().top + window.scrollY
+      setFitH(Math.max(540, Math.round(window.innerHeight - top - 24)))
+    }
+    fit()
+    window.addEventListener('resize', fit)
+    return () => window.removeEventListener('resize', fit)
+  }, [phone, !!data])
+
+  // Desktop keys, when nothing else has them: T today, ← → previous/next, W week, M month,
+  // N new event.
+  const keysRef = useRef<(e: KeyboardEvent) => void>(() => {})
+  keysRef.current = (e: KeyboardEvent) => {
+    if (phone || panel || confirm || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return
+    const t = e.target as HTMLElement | null
+    if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return
+    if (!rootRef.current || !document.contains(rootRef.current)) return
+    const k = e.key.toLowerCase()
+    if (k === 't') goToday()
+    else if (e.key === 'ArrowLeft') step(-1)
+    else if (e.key === 'ArrowRight') step(1)
+    else if (k === 'w') setView('week')
+    else if (k === 'm') setView('month')
+    else if (k === 'n' && defaultCal) document.querySelector<HTMLButtonElement>('.pen-cal-new')?.click()
+    else return
+    e.preventDefault()
+  }
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => keysRef.current(e)
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
+  }, [])
 
   // --------------------------------------------------------------------- empty / error
   if (data && cals.length === 0) {
@@ -552,6 +657,8 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
       type="button"
       className="pen-btn pen-btn-accent pen-cal-new"
       disabled={!defaultCal}
+      title={phone ? undefined : `${T.newEvent} (N)`}
+      aria-keyshortcuts={phone ? undefined : 'n'}
       onClick={(e) => {
         const { start, end } = newEventAt()
         open({ k: 'create', start, end, allDay: false, anchor: phone ? null : (e.currentTarget as HTMLElement).getBoundingClientRect() })
@@ -564,7 +671,7 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
 
   // ------------------------------------------------------------------------ phone
   if (phone) {
-    const end = addDays(today, agendaSteps * AGENDA_STEP)
+    const end = addDays(agendaStart, agendaSteps * AGENDA_STEP)
     return (
       <section className="pen-cal" data-phone aria-label={T.calendar}>
         <div className="pen-cal-pbar">
@@ -572,7 +679,37 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
           {status}
           {newBtn}
         </div>
-        {legend}
+        {cals.length > 0 && (
+          <button type="button" className="pen-cal-calbtn" aria-haspopup="dialog" onClick={() => setCalSheet(true)}>
+            <span className="pen-cal-calbtn-dots" aria-hidden>
+              {cals.slice(0, 4).map((c) => (
+                <span key={c.key} className="pen-cal-dot" data-off={hidden.has(c.key) || undefined} style={hueVars(hues[c.key])} />
+              ))}
+            </span>
+            <span className="pen-cal-calbtn-k">{T.calendars}</span>
+            <span className="pen-cal-calbtn-n">{T.shownOf(cals.filter((c) => !hidden.has(c.key)).length, cals.length)}</span>
+            {cals.some((c) => c.broken) && (
+              <span className="pen-cal-calbtn-warn">
+                <Icon name="alert" size={14} />
+                <span className="pen-cal-sr">{T.reconnect}</span>
+              </span>
+            )}
+            <Icon name="chevron" size={15} className="pen-cal-calbtn-chev" />
+          </button>
+        )}
+        {calSheet && (
+          <Sheet label={T.calendars} onClose={() => setCalSheet(false)}>
+            <div className="pen-cal-calsheet">
+              <header className="pen-cal-form-head">
+                <h2 className="pen-cal-calsheet-h">{T.calendars}</h2>
+                <button type="button" className="pen-cal-x" onClick={() => setCalSheet(false)} aria-label={T.close}>
+                  <Icon name="close" size={18} />
+                </button>
+              </header>
+              {legend}
+            </div>
+          </Sheet>
+        )}
         {warn}
         {loadingFirst ? (
           <div className="pen-cal-skel pen-cal-skel-agenda" aria-label={T.loading}>
@@ -580,16 +717,13 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
           </div>
         ) : (
           <Agenda
-            from={today}
+            from={agendaStart}
             to={end}
             events={events}
-            todos={data?.todos ?? []}
-            reminders={data?.reminders ?? []}
             hues={hues}
             now={now}
             loading={busy}
             onOpenEvent={(ev) => open({ k: 'detail', ref: ev.ref, anchor: null })}
-            onOpenTodo={onOpenRecording}
             onLoadMore={() => {
               if (!busy && agendaSteps < 13) setAgendaSteps((n) => n + 1)
             }}
@@ -603,7 +737,7 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
   // ---------------------------------------------------------------------- desktop
   const activeRef = panel && panel.k !== 'create' ? panel.ref : null
   return (
-    <section className="pen-cal" aria-label={T.calendar}>
+    <section ref={rootRef} className="pen-cal" aria-label={T.calendar} style={fitH ? { height: fitH } : undefined}>
       <header className="pen-cal-bar">
         <div className="pen-cal-bar-l">
           <h2 className="pen-cal-h">
@@ -613,18 +747,18 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
           {status}
         </div>
         <div className="pen-cal-bar-r">
-          <button type="button" className="pen-btn pen-cal-today" onClick={goToday}>{T.today}</button>
+          <button type="button" className="pen-btn pen-cal-today" onClick={goToday} title={`${T.today} (T)`} aria-keyshortcuts="t">{T.today}</button>
           <span className="pen-cal-nav">
-            <button type="button" className="pen-cal-navbtn" onClick={() => step(-1)} aria-label={T.prev}>
+            <button type="button" className="pen-cal-navbtn" onClick={() => step(-1)} aria-label={T.prev} title={`${T.prev} (←)`} aria-keyshortcuts="ArrowLeft">
               <Icon name="chevron" size={16} className="pen-cal-flip" />
             </button>
-            <button type="button" className="pen-cal-navbtn" onClick={() => step(1)} aria-label={T.next}>
+            <button type="button" className="pen-cal-navbtn" onClick={() => step(1)} aria-label={T.next} title={`${T.next} (→)`} aria-keyshortcuts="ArrowRight">
               <Icon name="chevron" size={16} />
             </button>
           </span>
           <span className="pen-cal-seg" role="group" aria-label={T.view}>
-            <button type="button" aria-pressed={mode === 'week'} onClick={() => setView('week')}>{T.week}</button>
-            <button type="button" aria-pressed={mode === 'month'} onClick={() => setView('month')}>{T.month}</button>
+            <button type="button" aria-pressed={mode === 'week'} onClick={() => setView('week')} title={`${T.week} (W)`} aria-keyshortcuts="w">{T.week}</button>
+            <button type="button" aria-pressed={mode === 'month'} onClick={() => setView('month')} title={`${T.month} (M)`} aria-keyshortcuts="m">{T.month}</button>
           </span>
           {newBtn}
         </div>
@@ -636,12 +770,16 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
         </div>
       )}
       <div className="pen-cal-surface" aria-busy={loadingFirst || undefined}>
+        {loadingFirst && (
+          <div className="pen-cal-loading" role="status">
+            <span className="pen-cal-spin" aria-hidden />
+            {T.loading}
+          </div>
+        )}
         {mode === 'week' ? (
           <WeekGrid
             days={Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))}
             events={events}
-            todos={data?.todos ?? []}
-            reminders={data?.reminders ?? []}
             hues={hues}
             now={now}
             draft={draft}
@@ -649,14 +787,12 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
             onOpenEvent={(ev, a) => open({ k: 'detail', ref: ev.ref, anchor: a })}
             onCreate={(start, end, a) => open({ k: 'create', start, end, allDay: false, anchor: a })}
             onChange={(ev, s, e) => void moveEvent(ev, s, e)}
-            onOpenTodo={onOpenRecording}
           />
         ) : (
           <MonthGrid
             start={monthStart}
             month={anchor.getMonth()}
             events={events}
-            todos={data?.todos ?? []}
             hues={hues}
             now={now}
             activeRef={activeRef}
