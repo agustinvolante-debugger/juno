@@ -285,7 +285,9 @@ export default function ChatView({
     abort.current?.abort()
     const ctl = new AbortController()
     abort.current = ctl
-    const j = await runChat(transport.current ?? httpTransport(lang), body, (label) => setSteps((s) => [...s, label]), ctl.signal, lang)
+    // Each step once: a tool that runs again ("Working on it…" twice) adds no new line (founder, 22 Oct).
+    const step = (label: string) => setSteps((s) => (s.includes(label) ? s : [...s, label]))
+    const j = await runChat(transport.current ?? httpTransport(lang), body, step, ctl.signal, lang)
     setMessages(j.chat.messages)
     setId(j.chat.id)
     // The mock thread is not a real chat: refreshing the sidebar would fetch it by id.
