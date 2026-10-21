@@ -5,16 +5,30 @@ import { askArchive } from '@/lib/pen/archive'
 import { briefFor } from '@/lib/pen/profile'
 import { createChat, getChat, listChats, setMessages, titleFromQuestion } from '@/lib/pen/chats'
 import type { ArchiveTurn } from '@/lib/pen/store'
+import { supabaseAdmin } from '@/lib/supabase'
+import { PREVIEW_CAP, previewOf } from './preview'
 
 export const dynamic = 'force-dynamic'
 // Two Opus calls (select, then answer) over a growing archive. At 60s this was returning a
 // plain-text gateway timeout that the client tried to JSON.parse, which is the crash we saw.
 export const maxDuration = 300
 
-export async function GET() {
+export async function GET(req: Request) {
   const email = await authedEmail()
   if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   try {
+    // ?preview=1 (the Chats page): each thread's first question and the start of Juno's latest
+    // answer, plain text, cut here so the page never ships whole threads. One query, no model.
+    if (new URL(req.url).searchParams.get('preview') === '1') {
+      const { data, error } = await supabaseAdmin
+        .from('pen_chats')
+        .select('id,title,updated_at,messages')
+        .eq('user_email', email)
+        .order('updated_at', { ascending: false })
+        .limit(PREVIEW_CAP)
+      if (error) throw new Error(error.message)
+      return NextResponse.json({ chats: (data ?? []).map(previewOf) })
+    }
     return NextResponse.json({ chats: await listChats(email) })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })

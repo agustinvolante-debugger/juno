@@ -1,0 +1,154 @@
+/* The Chats page (21 Oct). An extension of the app skin (app-skin.css) and the Calendar page's
+   header (calendar.css .pen-cal-bar): a 30px tight heading with a quiet count beside it, the one
+   blue for the primary action, and the list on a single glass surface with hairline rows, not a
+   card per chat. Previews are plain text: the title leads, the question is soft, the answer dim.
+
+   Prefixed with .pen-root .pen-chats (and .pen-chatcard for the row) so these outrank the skin's
+   nested sidebar rules for .pen-chatrow-*. */
+
+.pen-root .pen-chats {
+  display: flex; flex-direction: column; gap: 14px; min-width: 0;
+  max-width: 880px; padding-bottom: 32px;
+  font-family: var(--ui); color: var(--ink);
+}
+
+/* ------------------------------------------------------------------------------- header */
+.pen-root .pen-chats-bar {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 20px;
+  padding: 2px 2px 0;
+}
+.pen-root .pen-chats-h {
+  margin: 0; display: flex; align-items: baseline; gap: 12px; min-width: 0;
+  font-size: 30px; line-height: 1.1; font-weight: 600; letter-spacing: -0.032em; color: var(--ink);
+}
+.pen-root .pen-chats-count {
+  font-size: 15px; font-weight: 400; letter-spacing: -0.01em; color: var(--dim);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.pen-root .pen-chats .pen-btn.pen-chats-new {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 18px; font-size: 14.5px;
+}
+
+/* ------------------------------------------------------------------------------- filter */
+.pen-root .pen-chats-filter {
+  position: relative; display: flex; align-items: center;
+}
+.pen-root .pen-chats-filter-ic { position: absolute; left: 16px; color: var(--dim); pointer-events: none; }
+.pen-root .pen-chats-filter input {
+  width: 100%; height: 46px; padding: 0 46px 0 44px; border-radius: 9999px;
+  border: 1px solid var(--g-edge); background: var(--g-fill-solid);
+  box-shadow: inset 0 1px 0 #fff, 0 1px 2px rgba(29, 29, 31, .04);
+  font: 400 15.5px/1 var(--ui); letter-spacing: -0.01em; color: var(--ink);
+  caret-color: var(--accent);
+  transition: border-color .15s ease, box-shadow .15s ease;
+  -webkit-appearance: none; appearance: none;
+}
+.pen-root .pen-chats-filter input::-webkit-search-cancel-button { display: none; }
+.pen-root .pen-chats-filter input::placeholder { color: var(--dim); }
+.pen-root .pen-chats-filter input:focus {
+  outline: none; border-color: var(--sk-blue-hi); box-shadow: 0 0 0 4px rgba(0, 113, 227, .15);
+}
+.pen-root .pen-chats-clear {
+  position: absolute; right: 4px; display: grid; place-items: center;
+  width: 38px; height: 38px; border: 0; border-radius: 9999px; background: none; color: var(--dim); cursor: pointer;
+}
+.pen-root .pen-chats-clear:hover { background: var(--sunk); color: var(--ink); }
+
+/* ------------------------------------------------------------------------------- list */
+.pen-root .pen-chats-list {
+  margin: 0; padding: 6px; list-style: none;
+  border-radius: var(--sk-r-card);
+  background: var(--g-fill-solid);
+  -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+  border: 1px solid var(--g-edge); box-shadow: var(--g-shadow);
+}
+.pen-root .pen-chats-list > li + li { border-top: 1px solid var(--hair); }
+/* The hairline disappears beside a hovered or focused row, so the row reads as one shape. */
+.pen-root .pen-chats-list > li:hover + li,
+.pen-root .pen-chats-list > li:has(:focus-visible) + li { border-top-color: transparent; }
+
+.pen-root .pen-chats .pen-chatcard { position: relative; display: block; }
+.pen-root .pen-chats .pen-chatcard-open {
+  display: flex; flex-direction: column; gap: 4px; width: 100%; min-height: 56px;
+  padding: 13px 60px 14px 16px; border: 0; border-radius: 12px; background: none;
+  text-align: left; color: var(--ink); font-family: var(--ui); cursor: pointer;
+  transition: background .15s ease;
+}
+.pen-root .pen-chats .pen-chatcard-open:hover { background: rgba(29, 29, 31, .04); }
+.pen-root .pen-chats .pen-chatcard[data-active='true'] .pen-chatcard-open { background: var(--accent-wash); }
+.pen-root .pen-chats .pen-chatcard-open:focus-visible { outline: 2px solid var(--sk-blue-hi); outline-offset: -2px; }
+.pen-root .pen-chats .pen-chatcard-open:disabled { opacity: .55; cursor: default; }
+
+.pen-root .pen-chatcard-top { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+.pen-root .pen-chatcard-title {
+  flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-size: 16px; line-height: 1.35; font-weight: 600; letter-spacing: -0.015em;
+}
+.pen-root .pen-chatcard-when {
+  flex: none; font-size: 13px; color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.pen-root .pen-chatcard-q,
+.pen-root .pen-chatcard-a {
+  display: block; max-width: 72ch; font-size: 14.5px; line-height: 1.45; text-wrap: pretty;
+}
+.pen-root .pen-chatcard-q { color: var(--soft); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.pen-root .pen-chatcard-a {
+  color: var(--dim);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+}
+.pen-root .pen-chatcard-who { font-weight: 600; color: var(--soft); }
+
+/* The "⋯" sits on the title line, right of the date's column, always 44px to hit. */
+.pen-root .pen-chats .pen-chatcard .pen-chatrow-more {
+  top: 7px; right: 8px; transform: none; width: 44px; height: 44px; opacity: 1; color: var(--dim);
+}
+@media (hover: hover) {
+  .pen-root .pen-chats .pen-chatcard .pen-chatrow-more { opacity: 0; }
+  .pen-root .pen-chats .pen-chatcard:hover .pen-chatrow-more,
+  .pen-root .pen-chats .pen-chatcard .pen-chatrow-more:focus-visible,
+  .pen-root .pen-chats .pen-chatcard .pen-chatrow-more[aria-expanded='true'],
+  .pen-root .pen-chats .pen-chatcard[data-active='true'] .pen-chatrow-more { opacity: 1; }
+}
+.pen-root .pen-chats .pen-chatcard .pen-menu { top: 52px; right: 8px; z-index: 20; }
+.pen-root .pen-chats .pen-chatcard .pen-chatrow-err { display: block; padding: 0 16px 10px; }
+.pen-root .pen-chats .pen-chatrow-edit { padding: 10px; }
+.pen-root .pen-chats .pen-chatrow-input { min-height: 44px; font-size: 16px; }
+
+/* ------------------------------------------------------------------------------- states */
+.pen-root .pen-chats-state {
+  display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;
+  padding: 56px 24px; border-radius: var(--sk-r-card);
+  background: var(--g-fill); border: 1px solid var(--g-edge); box-shadow: var(--g-shadow);
+}
+.pen-root .pen-chats-state p { margin: 0; max-width: 40ch; font-size: 16px; line-height: 1.5; color: var(--soft); text-wrap: balance; }
+.pen-root .pen-chats-state-ic {
+  display: grid; place-items: center; width: 48px; height: 48px; border-radius: 9999px;
+  background: var(--accent-wash); color: var(--accent);
+}
+.pen-root .pen-chats-state .pen-btn { min-height: 40px; padding: 0 18px; }
+
+.pen-root .pen-chats-skel { display: flex; flex-direction: column; gap: 9px; padding: 16px; }
+.pen-root .pen-chats-skel + .pen-chats-skel { border-top: 1px solid var(--hair); }
+.pen-root .pen-chats-skel i {
+  display: block; height: 11px; border-radius: 6px; background: var(--sunk);
+  animation: pen-chats-breathe 1.1s ease-in-out infinite alternate;
+}
+.pen-root .pen-chats-skel i:nth-child(1) { width: 42%; height: 13px; }
+.pen-root .pen-chats-skel i:nth-child(2) { width: 68%; }
+.pen-root .pen-chats-skel i:nth-child(3) { width: 84%; }
+@keyframes pen-chats-breathe { from { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .pen-root .pen-chats-skel i { animation: none; } }
+
+/* ------------------------------------------------------------------------------- phone */
+@media (max-width: 640px) {
+  .pen-root .pen-chats-h { font-size: 26px; }
+  .pen-root .pen-chats .pen-chatcard-open { padding: 12px 52px 13px 12px; }
+  .pen-root .pen-chats .pen-chatcard .pen-chatrow-more { right: 2px; top: 4px; }
+  .pen-root .pen-chatcard-top { flex-direction: column; gap: 1px; }
+  .pen-root .pen-chatcard-title { width: 100%; }
+}
+
+/* The phone History drawer (PenApp .pen-m-hist): a title line and one dim line of the answer. */
+.pen-root .pen-m-hist-item.pen-m-hist-prev { white-space: normal; display: flex; flex-direction: column; gap: 2px; }
+.pen-root .pen-m-hist-prev > span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.pen-root .pen-m-hist-prev-a { font-size: 13.5px; line-height: 1.4; color: var(--dim); }
