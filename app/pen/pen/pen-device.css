@@ -1,0 +1,238 @@
+/* The Juno Pen as a drive (21 Oct): Home's pen card, the picture guide, the free-up-space question,
+   the toast, the by-hand help, and Settings → Pen. Part of the app skin: glass cards, Inter, the
+   one blue, pill controls. Written for older eyes and hands: 17px body, 52px main buttons,
+   44px+ for every target, one obvious action per surface.
+
+   Prefixed with .pen-root so these outrank the skin's generic rules (imported after them). */
+
+/* ------------------------------------------------------------------ Home card */
+.pen-root .pdv-card {
+  display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; align-items: center; column-gap: 18px;
+  margin: 0 0 22px; padding: 22px 24px; border-radius: var(--sk-r-card, 18px);
+  background: var(--g-fill, var(--panel)); -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+  border: 1px solid var(--g-edge, var(--line)); box-shadow: var(--g-shadow, var(--lift-2));
+}
+.pen-root .pdv-card[data-state='on'] { box-shadow: inset 0 0 0 1.5px var(--accent-line), var(--g-shadow, var(--lift-2)); }
+.pen-root .pdv-mark {
+  display: grid; place-items: center; width: 52px; height: 52px; border-radius: 15px;
+  background: var(--accent-wash); color: var(--accent-ink);
+}
+.pen-root .pdv-card[data-state='on'] .pdv-mark { background: var(--accent); color: #fff; box-shadow: 0 6px 14px -8px rgba(0, 85, 170, .7); }
+.pen-root .pdv-card-text { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.pen-root .pdv-card-title {
+  margin: 0; font-family: var(--ui); font-size: 19px; line-height: 1.3; font-weight: 600; letter-spacing: -0.015em; color: var(--ink);
+  text-wrap: balance;
+}
+.pen-root .pdv-card-sub { margin: 0; font-size: 17px; line-height: 1.45; color: var(--soft); font-variant-numeric: tabular-nums; }
+.pen-root .pdv-card-sub[data-new='true'] { color: var(--ink); font-weight: 500; }
+.pen-root .pdv-clock {
+  margin: 4px 0 0; font-size: 14.5px; line-height: 1.45; color: var(--dim); max-width: 62ch;
+}
+.pen-root .pdv-clock svg { display: inline-block; vertical-align: -3px; margin-right: 5px; color: var(--good); }
+.pen-root .pdv-clock strong { font-weight: 600; color: var(--good); }
+.pen-root .pdv-clock[data-bad='true'] { color: var(--warn); }
+
+.pen-root .pdv-big {
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  min-height: 52px; padding: 0 26px; font-size: 17px; font-weight: 600; white-space: nowrap;
+}
+
+/* In the phone's Add sheet: the same card, flatter, inside the sheet. */
+.pen-root .pdv-card[data-compact='true'] {
+  margin: 4px 0 6px; padding: 16px; background: var(--sunk); box-shadow: none; border-color: transparent;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+
+@media (max-width: 640px) {
+  .pen-root .pdv-card { grid-template-columns: 44px minmax(0, 1fr); column-gap: 14px; row-gap: 14px; padding: 18px; margin-bottom: 16px; }
+  .pen-root .pdv-mark { width: 44px; height: 44px; border-radius: 13px; align-self: start; }
+  .pen-root .pdv-card .pdv-big { grid-column: 1 / -1; width: 100%; }
+  .pen-root .pdv-card-title { font-size: 18px; }
+}
+
+/* ------------------------------------------------------------------ dialog */
+.pen-root .pdv-wrap {
+  position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; padding: 24px 16px;
+  background: rgba(10, 20, 40, .38); overflow-y: auto;
+  animation: pdv-fade .2s ease-out both;
+}
+.pen-root .pdv-dialog {
+  position: relative; width: min(520px, 100%); display: flex; flex-direction: column; gap: 16px;
+  padding: 30px 30px 26px; border-radius: 22px;
+  background: var(--panel); color: var(--ink);
+  box-shadow: 0 2px 6px rgba(29, 29, 31, .08), 0 28px 60px -18px rgba(10, 30, 70, .38);
+  animation: pdv-pop .32s cubic-bezier(.16, 1, .3, 1) both;
+}
+.pen-root .pdv-dialog[data-wide='true'] { width: min(640px, 100%); }
+.pen-root .pdv-x {
+  position: absolute; top: 14px; right: 14px; width: 44px; height: 44px; border-radius: 999px;
+  display: grid; place-items: center; border: 0; background: var(--sunk); color: var(--soft); cursor: pointer;
+}
+.pen-root .pdv-x:hover { color: var(--ink); background: var(--hair); }
+.pen-root .pdv-title {
+  margin: 0; padding-right: 52px; font-family: var(--ui); font-size: 25px; line-height: 1.2; font-weight: 600;
+  letter-spacing: -0.025em; color: var(--ink); text-wrap: balance;
+}
+.pen-root .pdv-lede { margin: 0; font-size: 17px; line-height: 1.5; color: var(--soft); max-width: 60ch; text-wrap: pretty; }
+.pen-root .pdv-lede strong { color: var(--ink); font-weight: 600; }
+.pen-root .pdv-fine { margin: 0; font-size: 14px; line-height: 1.45; color: var(--dim); }
+.pen-root .pdv-err {
+  margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--warn-wash); color: var(--warn);
+  font-size: 16px; line-height: 1.45; font-weight: 500;
+}
+.pen-root .pdv-acts { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin-top: 4px; }
+.pen-root .pdv-acts-row { flex-direction: row; flex-wrap: wrap; gap: 10px; }
+.pen-root .pdv-acts-row .pdv-big { flex: 1 1 180px; }
+.pen-root .pdv-link {
+  align-self: center; min-height: 44px; padding: 0 12px; border: 0; background: none; cursor: pointer;
+  font-family: var(--ui); font-size: 16px; font-weight: 600; color: var(--accent-ink);
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px;
+}
+.pen-root .pdv-link:hover { text-decoration-thickness: 2px; }
+.pen-root .pdv-check {
+  display: flex; align-items: center; gap: 12px; min-height: 44px; cursor: pointer;
+  font-size: 16.5px; font-weight: 500; color: var(--ink);
+}
+.pen-root .pdv-check input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); flex: none; }
+
+/* The four steps: the drawing, then the step in words. A real sequence, so it's numbered. */
+.pen-root .pdv-steps { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; }
+.pen-root .pdv-step {
+  display: grid; grid-template-columns: 132px 30px minmax(0, 1fr); align-items: center; column-gap: 14px;
+  padding: 12px 0; border-top: 1px solid var(--hair);
+}
+.pen-root .pdv-step:first-child { border-top: 0; padding-top: 2px; }
+.pen-root .pdv-step-art { display: grid; place-items: center; height: 84px; border-radius: 14px; background: var(--sunk); color: var(--dim); }
+.pen-root .pdv-art { width: 120px; height: 76px; }
+.pen-root .pdv-art-hi { stroke: var(--accent); fill: var(--accent-wash); }
+.pen-root .pdv-art-ok { stroke: var(--good); stroke-width: 2.2; }
+.pen-root .pdv-art-fill { fill: var(--accent); stroke: var(--accent); }
+.pen-root .pdv-art-dim { stroke: var(--line); stroke-width: 3; }
+.pen-root .pdv-art-cursor { fill: #fff; stroke: var(--ink); stroke-width: 1.4; }
+.pen-root .pdv-art-text { fill: #fff; stroke: none; font: 600 7px/1 var(--ui); letter-spacing: .04em; }
+.pen-root .pdv-step-n {
+  display: grid; place-items: center; width: 30px; height: 30px; border-radius: 999px;
+  background: var(--ink); color: #fff; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.pen-root .pdv-step-t { font-size: 17px; line-height: 1.45; color: var(--ink); text-wrap: pretty; }
+
+@media (max-width: 640px) {
+  .pen-root .pdv-wrap { place-items: end stretch; padding: 0; }
+  .pen-root .pdv-dialog, .pen-root .pdv-dialog[data-wide='true'] {
+    width: 100%; max-height: 92dvh; overflow-y: auto; border-radius: 24px 24px 0 0;
+    padding: 24px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+    animation-name: pdv-rise;
+  }
+  .pen-root .pdv-title { font-size: 22px; }
+  .pen-root .pdv-step { grid-template-columns: 30px minmax(0, 1fr); row-gap: 10px; }
+  .pen-root .pdv-step-art { grid-column: 1 / -1; height: 76px; }
+  .pen-root .pdv-acts-row { flex-direction: column; }
+  .pen-root .pdv-acts-row .pdv-big { flex: none; width: 100%; }
+}
+
+@keyframes pdv-fade { from { opacity: 0; } }
+@keyframes pdv-pop { from { opacity: 0; transform: translateY(8px) scale(.985); } }
+@keyframes pdv-rise { from { transform: translateY(100%); } }
+
+/* ------------------------------------------------------------------ toast */
+.pen-root .pdv-toast-host {
+  position: fixed; left: 50%; bottom: 24px; z-index: 950; translate: -50% 0; width: max-content; max-width: calc(100vw - 32px);
+}
+.pen-root .pdv-toast {
+  display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 6px 8px 6px 18px; border-radius: 999px;
+  background: var(--ink); color: #fff; font-size: 16px; font-weight: 500; line-height: 1.35;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .12), 0 18px 36px -14px rgba(0, 0, 0, .45);
+  animation: pdv-pop .32s cubic-bezier(.16, 1, .3, 1) both;
+}
+.pen-root .pdv-toast > svg { flex: none; color: #7ee2a0; }
+.pen-root .pdv-toast[data-bad='true'] > svg { color: #ffd08a; }
+.pen-root .pdv-toast-x {
+  flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 999px; border: 0;
+  background: rgba(255, 255, 255, .12); color: #fff; cursor: pointer;
+}
+@media (max-width: 900px) {
+  .pen-root .pdv-toast-host { bottom: calc(86px + env(safe-area-inset-bottom, 0px)); }
+  .pen-root .pdv-toast { border-radius: 18px; }
+}
+
+/* --------------------------------------------- by hand (phones, Safari): help */
+.pen-root .pdv-help { border-top: 1px solid var(--hair); padding-top: 4px; }
+.pen-root .pdv-help > summary {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; cursor: pointer; list-style: none;
+  font-size: 15px; font-weight: 600; color: var(--accent-ink);
+}
+.pen-root .pdv-help > summary::-webkit-details-marker { display: none; }
+.pen-root .pdv-help > summary::after {
+  content: ''; width: 7px; height: 7px; margin-left: 2px; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor;
+  rotate: 45deg; translate: 0 -2px; transition: rotate .25s cubic-bezier(.16, 1, .3, 1);
+}
+.pen-root .pdv-help[open] > summary::after { rotate: 225deg; translate: 0 2px; }
+.pen-root .pdv-help ul { margin: 2px 0 8px; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; }
+.pen-root .pdv-help li, .pen-root .pdv-help p { font-size: 14.5px; line-height: 1.5; color: var(--soft); }
+.pen-root .pdv-help p { margin: 0 0 4px; color: var(--dim); }
+
+@media (prefers-reduced-motion: reduce) {
+  .pen-root .pdv-wrap, .pen-root .pdv-dialog, .pen-root .pdv-toast { animation: none; }
+  .pen-root .pdv-help > summary::after { transition: none; }
+}
+
+/* ------------------------------------------------------------ Settings → Pen */
+.pen-root .psx-pen {
+  margin: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; padding: 12px 16px; border-radius: 14px;
+  background: var(--sunk); color: var(--soft); font-size: 15.5px; line-height: 1.4;
+}
+.pen-root .psx-pen > svg { flex: none; }
+.pen-root .psx-pen[data-on='true'] { background: var(--good-wash); color: var(--good); font-weight: 600; }
+.pen-root .psx-pen-btn { margin-left: auto; min-height: 44px; padding: 0 20px; font-size: 15.5px; }
+.pen-root .psx-loading { height: 280px; border-radius: 14px; background: var(--sunk); }
+.pen-root .psx-rows { display: flex; flex-direction: column; border-top: 1px solid var(--hair); }
+.pen-root .psx-row { margin: 0; padding: 20px 0; border: 0; border-bottom: 1px solid var(--hair); min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.pen-root .psx-row:last-child { border-bottom: 0; padding-bottom: 4px; }
+.pen-root .psx-label { padding: 0; font-family: var(--ui); font-size: 17px; line-height: 1.35; font-weight: 600; color: var(--ink); letter-spacing: -0.01em; }
+.pen-root .psx-hint { margin: 0; font-size: 15px; line-height: 1.5; color: var(--dim); max-width: 60ch; }
+.pen-root .psx-sublabel { font-size: 15px; font-weight: 600; color: var(--soft); }
+
+.pen-root .psx-opts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.pen-root .psx-opts[data-tiles='true'] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pen-root .psx-opt {
+  position: relative; display: inline-flex; flex-direction: column; justify-content: center; gap: 2px;
+  min-height: 48px; padding: 10px 20px; border-radius: 999px; cursor: pointer;
+  background: var(--panel); border: 1.5px solid var(--line); color: var(--soft);
+  transition: border-color .15s ease, background .15s ease, color .15s ease;
+}
+.pen-root .psx-opts[data-tiles='true'] .psx-opt { border-radius: 16px; padding: 14px 18px; min-height: 76px; }
+.pen-root .psx-opt:hover { border-color: var(--accent-line); color: var(--ink); }
+.pen-root .psx-opt[data-on='true'] { background: var(--accent-wash); border-color: var(--accent); color: var(--accent-ink); }
+.pen-root .psx-opt input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.pen-root .psx-opt:has(input:focus-visible) { outline: 2px solid var(--sk-blue-hi, var(--accent)); outline-offset: 2px; }
+.pen-root .psx-opt-label { font-size: 16px; font-weight: 600; line-height: 1.3; }
+.pen-root .psx-opt-sub { font-size: 14px; line-height: 1.4; color: var(--dim); font-variant-numeric: tabular-nums; }
+.pen-root .psx-opt[data-on='true'] .psx-opt-sub { color: var(--accent-ink); }
+
+.pen-root .psx-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.pen-root .psx-switch-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; cursor: pointer; }
+.pen-root .psx-slider { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; padding: 14px 16px 12px; border-radius: 14px; background: var(--sunk); }
+.pen-root .psx-slider input[type='range'] { width: 100%; height: 44px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.pen-root .psx-slider-ends { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--dim); }
+
+.pen-root .psx-status { margin: 0; min-height: 1.5em; display: flex; align-items: center; gap: 7px; font-size: 15.5px; line-height: 1.45; color: var(--good); font-weight: 500; }
+.pen-root .psx-status[data-kind='saving'] { color: var(--dim); font-weight: 400; }
+.pen-root .psx-status[data-kind='failed'] { color: var(--bad); }
+.pen-root .psx-status svg { flex: none; }
+.pen-root .psx-only { margin-top: -10px; font-size: 14px; color: var(--dim); }
+
+@media (max-width: 640px) {
+  .pen-root .psx-opts[data-tiles='true'] { grid-template-columns: minmax(0, 1fr); }
+  .pen-root .psx-opt { flex: 1 1 auto; }
+  .pen-root .psx-pen-btn { margin-left: 0; width: 100%; justify-content: center; }
+}
+
+/* A fieldset row stacks as a block: in a flex fieldset the legend sits outside the gap and the
+   options drifted 30px below their label. */
+.pen-root fieldset.psx-row { display: block; }
+/* A legend sits in the fieldset's top padding; floated, it flows like a heading inside it. */
+.pen-root fieldset.psx-row > legend { float: left; width: 100%; margin-bottom: 12px; }
+.pen-root fieldset.psx-row > legend + .psx-hint { margin: -8px 0 0; }
+.pen-root fieldset.psx-row > legend + * { clear: both; }
+.pen-root fieldset.psx-row > .psx-hint { margin-top: 4px; }
+.pen-root fieldset.psx-row > .psx-opts { margin-top: 12px; }
