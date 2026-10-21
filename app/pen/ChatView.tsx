@@ -188,7 +188,9 @@ export default function ChatView({
       setMessages(MOCK_THREAD)
       setId('mock-thread')
     }
-    return () => abort.current?.abort()
+    // No abort on unmount: React mounts this twice in development, and aborting here cancelled
+    // the header question's request on the second mount (it never reached the route). A reply
+    // that lands after a real unmount only sets state on a gone component, which is harmless.
   }, [])
 
   useEffect(() => {
@@ -196,6 +198,9 @@ export default function ChatView({
     setActs({})
     setAnswers({})
     if (!chatId) {
+      // A header question already on its way stays on screen (this effect runs again on the
+      // development remount, after the seed was asked).
+      if (inFlight.current) return
       setMessages([])
       setError(null)
       return
