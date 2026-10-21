@@ -26,7 +26,9 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { BUCKET, partPaths, PARTS_PREFIX } from './store'
 import { getProfileRaw, cleanProfile } from './profile'
 import { cleanPenSettings, withDefaults } from './pen-settings'
-import type { PenFileInfo, PenFilesState, PenSettings } from './pen-device'
+import type { PenFileInfo, PenFilesState, PenSettings, PenSettingsGet, PenSettingsPut } from './pen-device'
+import { activeConference, effectiveSettings, eventPrepOn, presetOf, upcomingConferences } from './event-prep'
+import { userZone } from './timezone'
 
 /* ---------------------------------------------------------------- settings */
 
@@ -46,6 +48,53 @@ export async function savePenSettings(email: string, raw: unknown, now = new Dat
     .upsert({ user_email: email.toLowerCase(), profile, updated_at: savedAt }, { onConflict: 'user_email' })
   if (error) throw new Error(error.message)
   return { settings, savedAt }
+}
+
+/** An IANA zone the runtime knows, or null. */
+function knownZone(tz: unknown): string | null {
+  if (typeof tz !== 'string' || !tz || tz.length > 64) return null
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz })
+    return tz
+  } catch {
+    return null
+  }
+}
+
+/** The calendar read never holds up a pen connection longer than this. */
+const PRESET_READ_MS = 4000
+
+/**
+ * The saved settings, and what to write onto the pen now: with a conference coming (from 18:00
+ * the day before) or on, the conference set-up over the saved ones (lib/pen/event-prep.ts, only
+ * with PEN_EVENT_PREP=1). `tz`: the browser's zone (the computer the pen is plugged into), else
+ * the user's known one. The profile is never written here.
+ */
+export async function effectivePen(email: string, saved: PenSettings, o: { now?: Date; tz?: string | null } = {}): Promise<{ effective: PenSettings; preset: PenSettingsGet['preset'] }> {
+  if (!eventPrepOn()) return { effective: saved, preset: null }
+  const now = o.now ?? new Date()
+  const tz = knownZone(o.tz) ?? knownZone((await userZone(email).catch(() => null))?.tz) ?? 'UTC'
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const confs = await Promise.race([
+    upcomingConferences(email, now, tz),
+    new Promise<never[]>((res) => { timer = setTimeout(() => res([]), PRESET_READ_MS) }),
+  ]).finally(() => clearTimeout(timer))
+  const preset = presetOf(activeConference(confs, now, tz))
+  return { effective: effectiveSettings(saved, preset), preset }
+}
+
+/** GET /api/pen/pen-settings. */
+export async function penSettingsGet(email: string, o: { now?: Date; tz?: string | null } = {}): Promise<PenSettingsGet> {
+  const { settings: saved, savedAt } = await readPenSettings(email)
+  const { effective, preset } = await effectivePen(email, saved, o)
+  return { settings: effective, saved, savedAt, preset }
+}
+
+/** PUT /api/pen/pen-settings: saves, then says what to write onto the pen now. */
+export async function penSettingsPut(email: string, raw: unknown, o: { now?: Date; tz?: string | null } = {}): Promise<PenSettingsPut> {
+  const r = await savePenSettings(email, raw, o.now)
+  const { effective, preset } = await effectivePen(email, r.settings, o)
+  return { ...r, effective, preset }
 }
 
 /* ------------------------------------------------------------------- files */

@@ -103,7 +103,7 @@ export function cleanProfile(raw: unknown): AgentProfile {
 }
 
 /** ProactiveKind (suggestions-types.ts), as data for cleaning. */
-const PROACTIVE_KINDS: string[] = ['offers', 'meeting_brief', 'nudges', 'morning_brief', 'notion', 'pen_upload']
+const PROACTIVE_KINDS: string[] = ['offers', 'meeting_brief', 'nudges', 'morning_brief', 'notion', 'pen_upload', 'pen_event_prep']
 
 /** App-set fields the Profile form never sends; a form save keeps the stored ones. */
 const APP_ZONE_KEYS = ['timeZone', 'timeZoneSeenAt', 'timeZoneSaid', 'timeZoneSaidAt', 'timeZoneUntil', 'timeZoneBefore', 'timeZoneChecked', 'timeZoneCheckedAt', 'calendarApp', 'calendarAppSource', 'calendarDefault', 'mailApp', 'mailAppSource', 'pen', 'penSavedAt'] as const

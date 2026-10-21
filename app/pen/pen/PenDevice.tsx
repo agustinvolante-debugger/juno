@@ -161,6 +161,9 @@ export function PenCard({ flow, compact }: { flow: PenFlow; compact?: boolean })
         ) : drive.clock ? (
           <p className="pdv-clock"><Icon name="check" size={15} /><strong>{T.clockSet}.</strong> {T.clockNote}</p>
         ) : null}
+        {drive.preset && !drive.recordOnly && (
+          <p className="pdv-clock">{T.presetPre}<strong>{drive.preset.event}</strong>{T.presetPost(presetWhen(drive.preset.start))}</p>
+        )}
       </div>
       {n > 0 && (
         <button type="button" className="pen-btn pen-btn-accent pdv-big" onClick={flow.uploadNew}>
@@ -169,6 +172,13 @@ export function PenCard({ flow, compact }: { flow: PenFlow; compact?: boolean })
       )}
     </section>
   )
+}
+
+/** 'today' once the event has started or starts today here, else 'tomorrow' (it's set up from 18:00 the day before). */
+function presetWhen(start: string): 'today' | 'tomorrow' {
+  const s = new Date(start)
+  const now = new Date()
+  return s.getTime() <= now.getTime() || s.toDateString() === now.toDateString() ? 'today' : 'tomorrow'
 }
 
 /* ------------------------------------------------- phones and Safari: by hand */
@@ -275,9 +285,9 @@ export function usePenFlow(drive: PenDrive, { onUpload, onPickFiles, locked, lan
     const names = ask ?? []
     setAsk(null)
     if (always && drive.settings) {
-      const next = { ...drive.settings, autoClear: yes }
-      drive.setSettings(next)
-      void putPenSettings(next)
+      drive.setSettings({ ...drive.settings, autoClear: yes })
+      // The user's own choices, never a temporary event set-up (drive.settings may be one).
+      void putPenSettings({ ...(drive.saved ?? drive.settings), autoClear: yes })
     }
     if (yes) await remove(names)
   }, [always, ask, drive, remove])

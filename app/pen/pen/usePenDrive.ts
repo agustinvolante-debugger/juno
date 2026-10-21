@@ -12,7 +12,7 @@
 // Settings → Pen uses it too (files: false), to write a change to the pen straight away.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { PEN_DEFAULTS, type PenFileInfo, type PenFilesState, type PenSettings } from '@/lib/pen/pen-device'
+import { PEN_DEFAULTS, type PenFileInfo, type PenFilesState, type PenPreset, type PenSettings, type PenSettingsGet, type PenSettingsPut } from '@/lib/pen/pen-device'
 import {
   askPermission, canUsePenDrive, forgetPick, listRecordings, loadPick, permissionOf, pickDrive, readSettingsFile,
   removeRecordings, savePick, writeSettingsFile, type PenPick, type PenRecording,
@@ -35,24 +35,53 @@ export function lastClockSet(): number | null {
   }
 }
 
-export async function fetchPenSettings(): Promise<PenSettings | null> {
+/** ?tz=<this computer's zone>: a conference set-up (lib/pen/event-prep.ts) starts at 18:00 here. */
+function tzQuery(): string {
   try {
-    const r = await fetch('/api/pen/pen-settings', { cache: 'no-store' })
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+    return tz ? `?tz=${encodeURIComponent(tz)}` : ''
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * GET: `settings` = what to write onto the pen now (a temporary event set-up over the saved ones
+ * while `preset` is set), `saved` = the user's own choices (what a form edits).
+ */
+export async function fetchPenSettingsState(): Promise<{ settings: PenSettings; saved: PenSettings; preset: PenPreset | null } | null> {
+  try {
+    const r = await fetch(`/api/pen/pen-settings${tzQuery()}`, { cache: 'no-store' })
     if (!r.ok) return null
-    return { ...PEN_DEFAULTS, ...((await r.json()) as { settings: PenSettings }).settings }
+    const j = (await r.json()) as PenSettingsGet
+    const settings = { ...PEN_DEFAULTS, ...j.settings }
+    return { settings, saved: { ...PEN_DEFAULTS, ...(j.saved ?? j.settings) }, preset: j.preset ?? null }
   } catch {
     return null
   }
 }
 
-export async function putPenSettings(s: PenSettings): Promise<PenSettings | null> {
+/** What to write onto the pen now. */
+export async function fetchPenSettings(): Promise<PenSettings | null> {
+  return (await fetchPenSettingsState())?.settings ?? null
+}
+
+/** Saves the user's own choices; `effective` = what to write onto the pen now. */
+export async function putPenSettingsState(s: PenSettings): Promise<{ saved: PenSettings; effective: PenSettings; preset: PenPreset | null } | null> {
   try {
-    const r = await fetch('/api/pen/pen-settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(s) })
+    const r = await fetch(`/api/pen/pen-settings${tzQuery()}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(s) })
     if (!r.ok) return null
-    return { ...PEN_DEFAULTS, ...((await r.json()) as { settings: PenSettings }).settings }
+    const j = (await r.json()) as PenSettingsPut
+    const saved = { ...PEN_DEFAULTS, ...j.settings }
+    return { saved, effective: { ...PEN_DEFAULTS, ...(j.effective ?? j.settings) }, preset: j.preset ?? null }
   } catch {
     return null
   }
+}
+
+/** Saves the user's own choices (returns them as saved). */
+export async function putPenSettings(s: PenSettings): Promise<PenSettings | null> {
+  return (await putPenSettingsState(s))?.saved ?? null
 }
 
 export async function fetchPenFiles(files: PenRecording[]): Promise<PenFilesState | null> {
@@ -74,7 +103,11 @@ export function usePenDrive({ files: wantFiles = true }: { files?: boolean } = {
   const [recordings, setRecordings] = useState<PenRecording[]>([])
   /** Names Juno already has; null until asked (or when the question failed). */
   const [uploaded, setUploaded] = useState<string[] | null>(null)
+  /** What is (or will be) on the pen: the saved settings, or a temporary event set-up over them. */
   const [settings, setSettings] = useState<PenSettings | null>(null)
+  /** The user's own choices, and the event set-up in force (null = none). */
+  const [saved, setSaved] = useState<PenSettings | null>(null)
+  const [preset, setPreset] = useState<PenPreset | null>(null)
   /** This connection's clock write: when it happened, or 'failed' (locked / read-only). */
   const [clock, setClock] = useState<number | 'failed' | null>(null)
   const pickRef = useRef<PenPick | null>(null)
@@ -126,9 +159,12 @@ export function usePenDrive({ files: wantFiles = true }: { files?: boolean } = {
   const onConnected = useCallback(async (p: PenPick) => {
     set('connected')
     await refreshFiles(p)
-    const s = settingsRef.current ?? (await fetchPenSettings())
+    // Asked again on every connection: an event set-up starts or ends between two of them.
+    const st = await fetchPenSettingsState()
+    const s = st?.settings ?? settingsRef.current
     settingsRef.current = s
     setSettings(s)
+    if (st) { setSaved(st.saved); setPreset(st.preset) }
     await writePen(p, s)
   }, [refreshFiles, set, writePen])
 
@@ -222,6 +258,16 @@ export function usePenDrive({ files: wantFiles = true }: { files?: boolean } = {
     known: uploaded !== null,
     settings,
     setSettings: (s: PenSettings) => { settingsRef.current = s; setSettings(s) },
+    /** The user's own choices (null until asked); change them with putPenSettings, never from `settings`. */
+    saved,
+    /** A temporary event set-up on the pen (Juno restores the saved settings after `end`). */
+    preset,
+    setSettingsState: (st: { settings: PenSettings; saved: PenSettings; preset: PenPreset | null }) => {
+      settingsRef.current = st.settings
+      setSettings(st.settings)
+      setSaved(st.saved)
+      setPreset(st.preset)
+    },
     clock,
     check,
     connectFirst,

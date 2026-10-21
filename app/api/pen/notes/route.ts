@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { autoToNotion } from '@/lib/pen/notion'
 import { authedEmail } from '@/lib/news/auth'
 import { readOnlyRefusal } from '@/lib/pen/access'
@@ -44,6 +44,10 @@ export async function POST(req: Request) {
       if (r.session.source_channel === 'whatsapp') await briefOnce({ email, session: r.session }).catch(() => {})
       else await briefBatch(email, r.session).catch(() => {})
       await autoToNotion(email, r.session)
+      // The suggestions and the WhatsApp / iMessage after-upload message, as the unattended
+      // path does (that path never ran for these notes).
+      const id = r.session.id
+      after(async () => (await import('@/lib/pen/unattended')).afterNotesFollowUps(email, id))
     }
     return NextResponse.json({ session: r.session, category: r.category })
   } catch (e) {

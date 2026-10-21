@@ -35,6 +35,6 @@ export type Suggestion = {
 }
 
 /** Proactive message types, each can be turned off on its own (profile.proactive.off). */
-export type ProactiveKind = 'offers' | 'meeting_brief' | 'nudges' | 'morning_brief' | 'notion' | 'pen_upload'
-/** Every kind Juno can send ('pen_upload' sends only behind PEN_PEN_NUDGE). */
+export type ProactiveKind = 'offers' | 'meeting_brief' | 'nudges' | 'morning_brief' | 'notion' | 'pen_upload' | 'pen_event_prep'
+/** Every kind Juno can send ('pen_upload' sends only behind PEN_PEN_NUDGE, 'pen_event_prep' behind PEN_EVENT_PREP). */
 export type ProactiveSendKind = ProactiveKind

@@ -1,7 +1,11 @@
 // Messages Juno sends first, on WhatsApp or iMessage (plan 15 Oct, sections C, D, I).
 //
-//   offers         after a recording is written up: the 1–3 best things Juno can help with
-//                  (renderOffers + markOffered, lib/pen/suggestions.ts)
+//   offers         after a recording is written up. For an upload (web or phone): ONE message
+//                  with its title, a 2–3 sentence summary, the user's open to-dos from it and
+//                  the 1–3 best things Juno can help with (lib/pen/after-upload.ts). WhatsApp
+//                  recordings (already briefed in the chat) and imports: the offers alone
+//                  (renderOffers + markOffered, lib/pen/suggestions.ts). Outside the window the
+//                  notes_ready template, whose Summary button gets the same message (bot.ts)
 //   meeting_brief  the evening before an accepted meeting (18:00 local), or the morning of it:
 //                  last time with that person, open promises both ways. With Google Calendar
 //                  connected, also its timed events with at least one other guest (not all-day,
@@ -14,6 +18,11 @@
 //                  "plug it in". From 10:00 local, at most once per 7 days, at most PEN_NUDGE_MAX
 //                  times per silence (penNudgeDue). Outside the WhatsApp window only with the
 //                  template pen_upload_reminder approved (draft: .pentest/pen-upload-template.md)
+//   pen_event_prep (behind PEN_EVENT_PREP=1, off by default) a pen owner with a conference-like
+//                  event tomorrow on their calendar (lib/pen/event-prep.ts): "plug the pen in
+//                  tonight, I'll set it up for a big room", 18:00–20:00 local, once per event.
+//                  Outside the window only with template pen_event_prep ({{1}} = the event;
+//                  draft: .pentest/pen-event-prep-template.md)
 //
 // Rules, every send: the user hasn't said STOP (all, or that kind); quiet hours 7:30–20:00 in
 // their zone; at most 3 a local day and an hour apart; each (kind, ref) once ever; whatever is due
@@ -39,7 +48,7 @@
 // and a later real run sends the item. Ignored in production. In a test script the provider
 // refuses every send instead, so the real path can be tested (provider.ts).
 
-import { renderOffers, markOffered, validZone as validSuggestionZone, zonedToUtc } from './suggestions'
+import { markOffered, OFFER_FOOT, validZone as validSuggestionZone, zonedToUtc } from './suggestions'
 import type { UpcomingEvent } from './google-calendar'
 import { anyCalendar, upcomingAll } from './calendars'
 import { userZone, localToUtc } from './timezone'
@@ -55,8 +64,10 @@ import { getLinkByEmail } from './whatsapp/store'
 import { sendText, sendTemplate, proactiveDry, dryRun } from './whatsapp/provider'
 import * as imessage from './imessage/sendblue'
 import { PEN_NAME_RE } from './pen-device'
+import { afterUploadMessage } from './after-upload'
+import { detectConferences, eventPrepOn, prepMessageDue, PREP_COPY } from './event-prep'
 
-export const PROACTIVE_KINDS: ProactiveKind[] = ['offers', 'meeting_brief', 'nudges', 'morning_brief', 'notion', 'pen_upload']
+export const PROACTIVE_KINDS: ProactiveKind[] = ['offers', 'meeting_brief', 'nudges', 'morning_brief', 'notion', 'pen_upload', 'pen_event_prep']
 
 const MIN = 60 * 1000
 const HOUR = 60 * MIN
@@ -727,7 +738,7 @@ export function penNudgeDue(lastPenUpload: number | null, lastNudge: number | nu
 }
 
 /** Newest upload of a pen-named file (ms), or null: the user owns no pen. Samples don't count. */
-async function lastPenUploadAt(email: string): Promise<number | null> {
+export async function lastPenUploadAt(email: string): Promise<number | null> {
   const { data, error } = await supabaseAdmin
     .from('pen_sessions')
     .select('source_name,source_channel,created_at')
@@ -878,6 +889,23 @@ export async function dueFor(email: string, now: Date, tz: string, lang: Lang, p
       })
     }
   }
+  // (f) A conference tomorrow (PEN_EVENT_PREP=1 only): plug the pen in tonight, 18:00–20:00, once
+  // per event. Pen owners with a calendar only; the calendar is read only in that slot.
+  if (eventPrepOn() && kindOn(prefs, 'pen_event_prep') && mins >= 18 * 60 && mins < QUIET.end) {
+    const owns = (await lastPenUploadAt(email).catch(() => null)) != null
+    const events = owns && (await anyCalendar(email).catch(() => false)) ? await upcomingAll(email, 2, now).catch(() => [] as UpcomingEvent[]) : []
+    const c = events.length ? prepMessageDue(detectConferences(events, now, tz), now, tz) : null
+    if (c) {
+      parts.push({
+        kind: 'pen_event_prep',
+        ref: c.ref,
+        text: PREP_COPY[lang](c.title),
+        template: { name: 'pen_event_prep', vars: [c.title] },
+        order: 5,
+        staleAt: zonedTime(today, QUIET.end, tz).getTime(),
+      })
+    }
+  }
   return parts.filter((p) => t < p.staleAt).sort((a, b) => a.order - b.order)
 }
 
@@ -893,7 +921,7 @@ async function allowedUser(email: string): Promise<boolean> {
  * One user's tick: what's due, bundled into one message, through sendProactive's rules. The cron
  * and the after-notes hook (unattended.ts) both come here, so both skip inactive accounts.
  */
-export async function runForUser(email: string, opts: { now?: Date; dry?: boolean } = {}): Promise<UserRun> {
+export async function runForUser(email: string, opts: { now?: Date; dry?: boolean; justNoted?: string } = {}): Promise<UserRun> {
   const now = opts.now ?? new Date()
   const ch = await channelFor(email, now)
   const zone = await zoneFor(email, ch?.to)
@@ -934,25 +962,38 @@ export async function runForUser(email: string, opts: { now?: Date; dry?: boolea
   const carried: Item[] = []
   const empty: Item[] = []
   const offered: { id: string; no: number }[] = []
+  // After an upload: per recording its title, summary, to-dos and offers (after-upload.ts).
   // Offers from several recordings share one numbering ("yes to 3") and one footer. Rendered
   // only: they are marked offered by sendProactive once the message has really gone out.
   const offerParts = parts.filter((p) => p.kind === 'offers')
+  const multi = offerParts.length > 1
+  const rendered = new Map<string, Awaited<ReturnType<typeof afterUploadMessage>>>()
   let nextNo = 1
+  for (const p of offerParts) {
+    const c = await afterUploadMessage(email, p.ref, lang, multi ? { bundle: { from: nextNo, footer: false } } : {}).catch(() => null)
+    nextNo += c?.ids.length ?? 0
+    rendered.set(p.ref, c)
+  }
+  let lastOffers = -1
   for (const p of parts) {
     // Already in this bundle (the morning brief carries the day's to-dos).
     if (carried.some((c) => c.kind === p.kind && c.ref === p.ref)) continue
     let text = p.text
     if (p.kind === 'offers') {
-      const last = p === offerParts[offerParts.length - 1]
-      const c = await renderOffers(email, p.ref, lang, offerParts.length > 1 ? { from: nextNo, footer: last } : undefined).catch(() => null)
-      nextNo += c?.ids.length ?? 0
-      offered.push(...(c?.offered ?? []))
-      text = c?.text ?? ''
-      // Nothing to offer: done with it, but only once the suggestions have had time to land.
-      if (!text) {
-        if (p.notedAt && now.getTime() - p.notedAt > 30 * MIN) empty.push({ kind: p.kind, ref: p.ref })
+      const c = rendered.get(p.ref) ?? null
+      // The suggestions may still be on their way (the 15-minute tick can run between the notes
+      // and the suggestion scan): wait up to 30 minutes for them, unless this run comes right
+      // after that scan (unattended.ts passes justNoted).
+      const settling = p.ref !== opts.justNoted && !!p.notedAt && now.getTime() - p.notedAt <= 30 * MIN
+      if (!c?.ids.length && settling) continue
+      // Nothing to say at all: done with it.
+      if (!c) {
+        empty.push({ kind: p.kind, ref: p.ref })
         continue
       }
+      offered.push(...c.offered)
+      text = c.text
+      lastOffers = texts.length
     }
     if (!text) continue
     texts.push(text)
@@ -960,6 +1001,8 @@ export async function runForUser(email: string, opts: { now?: Date; dry?: boolea
   }
   if (empty.length) await noteSkipped(email, empty, 'empty')
   if (!texts.length) return run
+  // Several recordings' offers: one footer, after the last recording's block.
+  if (multi && offered.length && lastOffers >= 0) texts[lastOffers] += `\n${OFFER_FOOT[lang]}`
   const [lead, ...rest] = carried
   run.result = await sendProactive(email, { kind: lead.kind, ref: lead.ref, text: texts.join('\n\n'), also: rest, offered }, { now, dry: opts.dry, tz: zone })
   return run

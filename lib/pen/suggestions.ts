@@ -422,7 +422,7 @@ const HEAD: Record<Lang, (t: string) => string> = {
   es: (t) => `De "${t}":`,
   pt: (t) => `De "${t}":`,
 }
-const FOOT: Record<Lang, string> = {
+export const OFFER_FOOT: Record<Lang, string> = {
   en: 'Reply e.g. "yes to 1, no to 2".',
   es: 'Responde por ejemplo "sí a la 1, no a la 2".',
   pt: 'Responda por exemplo "sim para 1, não para 2".',
@@ -441,6 +441,8 @@ export async function renderOffers(
   /** Several recordings in one message: numbers run on across them (`from`) and the bundle
    *  carries one footer. */
   bundle?: { from: number; footer: boolean },
+  /** head false: no "From <title>:" line (the after-upload message already starts with the title). */
+  o: { head?: boolean } = {},
 ): Promise<{ text: string; ids: string[]; offered: { id: string; no: number }[] } | null> {
   const pick = (await listSuggestions(email, { sessionId, states: ['suggested'] })).sort(rank).slice(0, MAX_OFFERS)
   if (!pick.length) return null
@@ -450,7 +452,7 @@ export async function renderOffers(
   const numbered = !!bundle || pick.length > 1
   const lines = pick.map((x, i) => (numbered ? `${from + i}. ${offerLine(x, lang)}` : offerLine(x, lang)))
   const footer = bundle ? bundle.footer : pick.length > 1
-  const text = [title ? HEAD[lang](title) : '', ...lines, footer ? FOOT[lang] : ''].filter(Boolean).join('\n')
+  const text = [title && o.head !== false ? HEAD[lang](title) : '', ...lines, footer ? OFFER_FOOT[lang] : ''].filter(Boolean).join('\n')
   return { text, ids: pick.map((x) => x.id), offered: pick.map((x, i) => ({ id: x.id, no: from + i })) }
 }
 

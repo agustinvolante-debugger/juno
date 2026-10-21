@@ -10,7 +10,7 @@ import { LOCALE } from '@/lib/pen/i18n'
 import { PEN_DEFAULTS, type PenQuality, type PenSensitivity, type PenSettings } from '@/lib/pen/pen-device'
 import { PEN_DEVICE_COPY } from '../../pen/pen-device.copy'
 import { canUsePenDrive } from '../../pen/pen-drive'
-import { fetchPenSettings, lastClockSet, putPenSettings, usePenDrive } from '../../pen/usePenDrive'
+import { fetchPenSettingsState, lastClockSet, putPenSettingsState, usePenDrive } from '../../pen/usePenDrive'
 
 const QUALITIES: PenQuality[] = ['high', 'standard']
 const SENS: PenSensitivity[] = ['soft', 'normal', 'loud']
@@ -64,10 +64,12 @@ export default function PenSettingsForm() {
   useEffect(() => {
     setSupported(canUsePenDrive())
     setClockAt(lastClockSet())
-    void fetchPenSettings().then((v) => {
+    // The form edits the user's own choices (saved); the pen gets `settings`, which is a
+    // temporary event set-up over them while one is on (lib/pen/event-prep.ts).
+    void fetchPenSettingsState().then((v) => {
       if (!v) setLoadErr(true)
-      setS(v ?? PEN_DEFAULTS)
-      if (v) drive.setSettings(v)
+      setS(v?.saved ?? PEN_DEFAULTS)
+      if (v) drive.setSettingsState(v)
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -83,11 +85,12 @@ export default function PenSettingsForm() {
     // Waits for the slider to settle before saving.
     timer.current = window.setTimeout(async () => {
       const n = ++seq.current
-      const saved = await putPenSettings(next)
+      const r = await putPenSettingsState(next)
       if (n !== seq.current) return
-      if (!saved) return setStatus({ kind: 'failed' })
+      if (!r) return setStatus({ kind: 'failed' })
       setLoadErr(false)
-      const onPen = await drive.applySettings(saved)
+      drive.setSettingsState({ settings: r.effective, saved: r.saved, preset: r.preset })
+      const onPen = await drive.applySettings(r.effective)
       if (n === seq.current) setStatus({ kind: onPen ? 'pen' : 'later' })
     }, 450)
   }
@@ -119,6 +122,7 @@ export default function PenSettingsForm() {
           <p className="pen-set-lede">{T.setLede}</p>
         </div>
         {pen}
+        {drive.preset && <p className="psx-pen" role="note"><Icon name="usb" size={18} />{T.presetNote(drive.preset.event)}</p>}
         {loadErr && <div className="pen-su-err" role="alert">{T.loadFailed}</div>}
 
         {!s ? (

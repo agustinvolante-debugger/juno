@@ -14,8 +14,14 @@
 // and phones upload by picking files and can't set the clock, change settings or delete.
 //
 // Routes:
-//   GET  /api/pen/pen-settings                 → { settings: PenSettings, savedAt: string | null }
-//   PUT  /api/pen/pen-settings   PenSettings   → { settings: PenSettings, savedAt: string }
+//   GET  /api/pen/pen-settings                 → PenSettingsGet: { settings (EFFECTIVE: what to write
+//                                                onto the pen now), saved?, savedAt, preset? }
+//   PUT  /api/pen/pen-settings   PenSettings   → PenSettingsPut: { settings (SAVED), savedAt,
+//                                                effective?, preset? }
+//     While a conference on the user's calendar is coming (from 18:00 the day before) or on,
+//     `preset` is set and the effective settings are the saved ones with the conference set-up
+//     over them (lib/pen/event-prep.ts, behind PEN_EVENT_PREP=1). The saved ones never change:
+//     after the event, effective = saved again. Settings forms edit `saved`, never `settings`.
 //   POST /api/pen/pen-files      { files: PenFileInfo[] } → PenFilesState
 //     Which of the pen's files Juno already has (skip them) and which are SAFE to delete from the
 //     pen (the audio is stored in Juno with the same size, and not failed).
@@ -42,6 +48,20 @@ export const PEN_DEFAULTS: PenSettings = { quality: 'high', sensitivity: 'normal
 
 export const BIT_OF: Record<PenQuality, number> = { standard: 3, high: 4 }
 export const GAIN_OF: Record<PenSensitivity, number> = { soft: 7, normal: 5, loud: 3 }
+
+/** A temporary set-up Juno puts on the pen for an event (the saved settings come back after `end`). */
+export type PenPreset = { kind: 'conference'; event: string; start: string; end: string }
+
+export type PenSettingsGet = {
+  /** What to write onto the pen now (the saved settings, or the preset over them). */
+  settings: PenSettings
+  /** The user's own choices (what Settings → Your pen shows and edits). Absent on older servers: = settings. */
+  saved?: PenSettings
+  savedAt: string | null
+  preset?: PenPreset | null
+}
+
+export type PenSettingsPut = { settings: PenSettings; savedAt: string; effective?: PenSettings; preset?: PenPreset | null }
 
 /** One recording on the pen, as the browser sees it. */
 export type PenFileInfo = { name: string; size: number; lastModified: number }

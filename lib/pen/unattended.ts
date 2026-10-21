@@ -32,9 +32,20 @@ export async function runUnattended(sessionId: string, email: string) {
     scanSuggestions(email, sessionId),
     namesAndConversations(email, sessionId).catch(() => {}),
   ])
-  // The offers go out now rather than at the next 15-minute tick; the scheduler's rules
-  // (STOP, quiet hours, daily max, the 24-hour window) still decide.
-  await import('./proactive').then((m) => m.runForUser(email)).catch((e) => console.warn(`pen proactive after notes: ${(e as Error).message}`))
+  // The after-upload message (summary, to-dos, offers) goes out now rather than at the next
+  // 15-minute tick; the scheduler's rules (STOP, quiet hours, daily max, the 24-hour window)
+  // still decide. justNoted: the suggestions for it are in, no need to wait for them.
+  await import('./proactive').then((m) => m.runForUser(email, { justNoted: sessionId })).catch((e) => console.warn(`pen proactive after notes: ${(e as Error).message}`))
+}
+
+/**
+ * The same follow-ups for notes written outside runUnattended (the browser's fallback through
+ * /api/pen/notes when the webhook and the poll both missed): the suggestions, then the
+ * after-upload message. Never throws.
+ */
+export async function afterNotesFollowUps(email: string, sessionId: string): Promise<void> {
+  await scanSuggestions(email, sessionId).catch(() => {})
+  await import('./proactive').then((m) => m.runForUser(email, { justNoted: sessionId })).catch((e) => console.warn(`pen proactive after notes: ${(e as Error).message}`))
 }
 
 /**

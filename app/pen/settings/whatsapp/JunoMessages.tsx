@@ -14,7 +14,7 @@ import type { ProactiveKind } from '@/lib/pen/suggestions-types'
 
 export type Prefs = { off: boolean; offKinds: ProactiveKind[] }
 
-const KINDS: ProactiveKind[] = ['offers', 'meeting_brief', 'nudges', 'morning_brief', 'notion', 'pen_upload']
+const KINDS: ProactiveKind[] = ['offers', 'meeting_brief', 'nudges', 'morning_brief', 'notion', 'pen_upload', 'pen_event_prep']
 
 type KindCopy = Record<ProactiveKind, { label: string; desc: string }>
 
@@ -31,6 +31,7 @@ const JM_EN = {
     morning_brief: { label: 'Morning brief', desc: 'Today’s meetings and to-dos, only when there is something.' },
     notion: { label: 'Notion page offers', desc: 'A prep page, plan or memo Juno could write for you in Notion.' },
     pen_upload: { label: 'Pen reminders', desc: 'If you haven’t uploaded from your Juno Pen in a week, a reminder to plug it in.' },
+    pen_event_prep: { label: 'Pen set-up before an event', desc: 'The evening before a conference on your calendar, a reminder to plug in your pen so Juno sets it up for a big room.' },
   } as KindCopy,
 }
 
@@ -49,6 +50,7 @@ const JM: Copy<typeof JM_EN> = {
       morning_brief: { label: 'Resumen de la mañana', desc: 'Las reuniones y pendientes del día, solo si hay algo.' },
       notion: { label: 'Ofertas de páginas en Notion', desc: 'Una página de preparación, un plan o un memo que Juno podría escribir en Notion.' },
       pen_upload: { label: 'Recordatorios del lápiz', desc: 'Si no has subido nada de tu Juno Pen en una semana, un recordatorio para conectarlo.' },
+      pen_event_prep: { label: 'Preparar el lápiz antes de un evento', desc: 'La tarde antes de una conferencia en tu calendario, un recordatorio para conectar tu lápiz y que Juno lo deje listo para una sala grande.' },
     },
   },
   pt: {
@@ -64,6 +66,7 @@ const JM: Copy<typeof JM_EN> = {
       morning_brief: { label: 'Resumo da manhã', desc: 'As reuniões e tarefas do dia, só quando houver algo.' },
       notion: { label: 'Ofertas de páginas no Notion', desc: 'Uma página de preparação, um plano ou um memorando que o Juno poderia escrever no Notion.' },
       pen_upload: { label: 'Lembretes da caneta', desc: 'Se você não enviou nada da sua Juno Pen em uma semana, um lembrete para conectá-la.' },
+      pen_event_prep: { label: 'Preparar a caneta antes de um evento', desc: 'Na noite antes de uma conferência na sua agenda, um lembrete para conectar sua caneta e o Juno deixá-la pronta para uma sala grande.' },
     },
   },
 }

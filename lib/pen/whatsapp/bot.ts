@@ -85,7 +85,7 @@ const EN = {
   stopKind: (what: string) => `Done, no more ${what}. Reply START to turn everything back on. You can still ask me anything.`,
   startAll: 'Done, I\'ll text you reminders and briefs from your meetings again. Reply STOP anytime.',
   startKind: (what: string) => `Done, ${what} are back on. Reply STOP anytime.`,
-  kinds: { offers: 'suggestions after your recordings', meeting_brief: 'meeting briefs', nudges: 'to-do reminders', morning_brief: 'morning briefs', notion: 'Notion offers', pen_upload: 'Juno Pen reminders' } as Record<ProactiveKind, string>,
+  kinds: { offers: 'suggestions after your recordings', meeting_brief: 'meeting briefs', nudges: 'to-do reminders', morning_brief: 'morning briefs', notion: 'Notion offers', pen_upload: 'Juno Pen reminders', pen_event_prep: 'pen set-up before events' } as Record<ProactiveKind, string>,
   empty: 'That file arrived without its contents. Could you send it again?',
   notAudio: (name: string) => `${name} doesn't look like a recording. Send me the WAV file from your pen.`,
   yourRecording: 'your recording',
@@ -152,7 +152,7 @@ const BOT: Record<Lang, typeof EN> = {
     stopKind: (what) => `Listo, no más ${what}. Responde START para volver a activar todo. Puedes seguir preguntándome lo que quieras.`,
     startAll: 'Listo, te volveré a escribir recordatorios y resúmenes de tus reuniones. Responde STOP cuando quieras.',
     startKind: (what) => `Listo, volví a activar ${what}. Responde STOP cuando quieras.`,
-    kinds: { offers: 'sugerencias después de tus grabaciones', meeting_brief: 'resúmenes antes de reuniones', nudges: 'recordatorios de tareas', morning_brief: 'resúmenes de la mañana', notion: 'ofertas de Notion', pen_upload: 'recordatorios del Juno Pen' },
+    kinds: { offers: 'sugerencias después de tus grabaciones', meeting_brief: 'resúmenes antes de reuniones', nudges: 'recordatorios de tareas', morning_brief: 'resúmenes de la mañana', notion: 'ofertas de Notion', pen_upload: 'recordatorios del Juno Pen', pen_event_prep: 'preparación del lápiz antes de eventos' },
     empty: 'Ese archivo llegó vacío. ¿Me lo mandas otra vez?',
     notAudio: (name) => `${name} no parece una grabación. Mándame el archivo WAV de tu lápiz.`,
     yourRecording: 'tu grabación',
@@ -216,7 +216,7 @@ const BOT: Record<Lang, typeof EN> = {
     stopKind: (what) => `Pronto, sem mais ${what}. Responda START para ativar tudo de novo. Você ainda pode me perguntar qualquer coisa.`,
     startAll: 'Pronto, vou voltar a te mandar lembretes e resumos das suas reuniões. Responda STOP quando quiser.',
     startKind: (what) => `Pronto, ${what} ativados de novo. Responda STOP quando quiser.`,
-    kinds: { offers: 'sugestões depois das suas gravações', meeting_brief: 'resumos antes das reuniões', nudges: 'lembretes de tarefas', morning_brief: 'resumos da manhã', notion: 'ofertas do Notion', pen_upload: 'lembretes da Juno Pen' },
+    kinds: { offers: 'sugestões depois das suas gravações', meeting_brief: 'resumos antes das reuniões', nudges: 'lembretes de tarefas', morning_brief: 'resumos da manhã', notion: 'ofertas do Notion', pen_upload: 'lembretes da Juno Pen', pen_event_prep: 'preparação da caneta antes de eventos' },
     empty: 'Esse arquivo chegou vazio. Pode mandar de novo?',
     notAudio: (name) => `${name} não parece uma gravação. Me mande o arquivo WAV da sua caneta.`,
     yourRecording: 'sua gravação',
@@ -383,6 +383,13 @@ export async function handleInbound(msg: Inbound, opts: { at?: number } = {}): P
   // A tap on a proactive template's quick reply ("Yes, brief me", "Remind me later") carries a
   // proactive:/reminder: payload, not a file id: it is the user answering, so the agent reads
   // the button text with the chat history (where the proactive message was written).
+  // "Summary" on the notes_ready template: the after-upload message itself (title, summary, to-dos,
+  // offers; lib/pen/after-upload.ts), no model turn. Falls through to the agent if it can't be made.
+  if (msg.kind === 'reply' && /^proactive:summary:./.test(msg.replyId ?? '')) {
+    let sent = false
+    await inTurn(msg.from, deadline, async () => { sent = await onSummaryButton(msg, link) }).catch(() => {})
+    if (sent) return
+  }
   if (msg.kind === 'reply' && /^(proactive|reminder):/.test(msg.replyId ?? '') && msg.text.trim()) return inTurn(msg.from, deadline, () => onText({ ...msg, kind: 'text' }, link, L, { sentAt: at }))
   if (msg.kind === 'reply') return onReply(msg, link, L)
   // iMessage has no buttons: a "yes" right after a recording is the consent tap.
@@ -506,6 +513,7 @@ const START_WORDS = 'start|empezar|activar|iniciar|reanudar|come[cç]ar|voltar|a
 const KIND_WORDS: [ProactiveKind, string][] = [
   ['morning_brief', 'morning briefs?|morning|resumen(es)? (de la )?ma[ñn]ana|resumen(es)? matutinos?|resumos? da manh[ãa]'],
   ['meeting_brief', 'meeting briefs?|briefs?|resumen(es)? (de|antes de) (las )?reuniones|resumos? (das|antes das) reuni[õo]es'],
+  ['pen_event_prep', '(pen |juno pen )?(event prep|event set-?up|set-?up)( before events?)?|pen set-?up( before events?)?|preparaci[óo]n (del l[áa]piz|para eventos?)( antes de eventos?)?|prepara[çc][ãa]o (da caneta|para eventos?)( antes de eventos?)?'],
   ['pen_upload', '(juno )?pen( reminders?)?|(recordatorios? del )?(juno pen|l[áa]piz)|(lembretes? da )?(juno pen|caneta)'],
   ['nudges', 'reminders?|nudges?|follow[- ]?ups?|recordatorios?|lembretes?'],
   ['offers', 'offers?|suggestions?|sugerencias?|sugest[õo]es'],
@@ -594,6 +602,28 @@ async function onReply(msg: Inbound, link: Link, L: typeof EN): Promise<void> {
     console.warn(`pen whatsapp: file ${file.id} failed: ${(e as Error).message}`)
     await sendText(msg.from, L.failed)
   }
+}
+
+/**
+ * The notes_ready template's Summary button: the recording's after-upload message, sent as is.
+ * False (the agent answers instead) when there is nothing to send.
+ */
+async function onSummaryButton(msg: Inbound, link: Link): Promise<boolean> {
+  const id = (msg.replyId ?? '').slice('proactive:summary:'.length)
+  const { afterUploadMessage } = await import('../after-upload')
+  const c = await afterUploadMessage(link.email, id, await userLang(link.email)).catch(() => null)
+  if (!c?.text) return false
+  await sendText(msg.from, c.text)
+  const at = new Date().toISOString()
+  // A "yes to 1" from here on answers these offers, not a question asked before.
+  await setPending(link.email, null).catch(() => {})
+  if (c.offered.length) {
+    const { markOffered } = await import('../suggestions')
+    await markOffered(link.email, c.offered, at).catch((e) => console.warn(`pen whatsapp: mark offered: ${(e as Error).message}`))
+  }
+  await remember(link, msg.text.trim() || '[Summary]', c.text)
+  await moveMessage(msg.id, 'received', 'done').catch(() => false)
+  return true
 }
 
 /** For rows recorded before the parser read audio.name. */

@@ -293,7 +293,28 @@ export async function isEventLike(email: string, s: PenSession): Promise<boolean
   if (parts.some((p) => p.event_mode)) return true
   const total = parts.reduce((t, p) => t + (p.duration_sec ?? 0), 0)
   const voices = Math.max(0, ...parts.map((p) => new Set((p.transcript?.utterances ?? []).map((u) => u.speaker)).size))
-  return total >= AUTO_MIN_SEC && voices >= SUGGEST_MIN_SPEAKERS
+  if (total >= AUTO_MIN_SEC && voices >= SUGGEST_MIN_SPEAKERS) return true
+  return recordedAtConference(email, parts, total, voices)
+}
+
+/** Recorded during a conference on the user's calendar: this long and this many voices at least. */
+export const CAL_MIN_SEC = 15 * 60
+export const CAL_MIN_SPEAKERS = 2
+
+/**
+ * Was this recording made during a conference-like event on the user's calendars
+ * (lib/pen/event-prep.ts, PEN_EVENT_PREP=1 only)? One calendar read, only for recordings the
+ * rule above didn't already settle. The file's time may be its start (the pen) or its end (a
+ * phone), so the window is widened by the recording's length either side. False on any failure.
+ */
+async function recordedAtConference(email: string, parts: PenSession[], total: number, voices: number): Promise<boolean> {
+  const { eventPrepOn, duringConference } = await import('./event-prep')
+  if (!eventPrepOn() || total < CAL_MIN_SEC || voices < CAL_MIN_SPEAKERS) return false
+  const at = Date.parse(parts[0]?.recorded_at ?? parts[0]?.created_at ?? '')
+  if (!Number.isFinite(at)) return false
+  const { userZone } = await import('./timezone')
+  const tz = (await userZone(email).catch(() => null))?.tz || 'UTC'
+  return duringConference(email, new Date(at - total * 1000), new Date(at + total * 1000), tz)
 }
 
 /**
