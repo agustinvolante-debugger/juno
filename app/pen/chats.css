@@ -3,10 +3,9 @@
    blue for the primary action, and the list on a single glass surface with hairline rows, not a
    card per chat. Previews are plain text: the title leads, the question is soft, the answer dim.
 
-   Width (21 Oct): the page fills its column, open sidebar or folded to icons, and the recordings
-   rail steps aside as it does on the Calendar (assistant-first.css): a list of chats has nothing
-   to say about recent recordings, and at 1280 the rail fell below the list anyway. The list grows
-   with the window; only the preview lines are held to a reading measure (~75ch).
+   Width (21 Oct): the page fills its column, open sidebar or folded to icons, next to the
+   recordings rail; the preview lines use the full row width too (founder: no wrapping short of
+   the edge when the sidebar is folded).
 
    Prefixed with .pen-root .pen-chats (and .pen-chatcard for the row) so these outrank the skin's
    nested sidebar rules for .pen-chatrow-*. */
@@ -94,7 +93,7 @@
 }
 .pen-root .pen-chatcard-q,
 .pen-root .pen-chatcard-a {
-  display: block; max-width: 75ch; font-size: 14.5px; line-height: 1.45; text-wrap: pretty;
+  display: block; font-size: 14.5px; line-height: 1.45; text-wrap: pretty;
 }
 .pen-root .pen-chatcard-q { color: var(--soft); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .pen-root .pen-chatcard-a {
