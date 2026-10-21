@@ -201,3 +201,21 @@
   .pen-root .pen-gacc-side { grid-column: 2; justify-content: flex-start; }
   .pen-root .pen-lnk { padding: 16px; }
 }
+
+/* "Back to Home" (BackHome.tsx): the arrow becomes a spinner while Home loads, so a click that
+   takes a moment reads as working instead of ignored. */
+.pen-root .pen-back-home { white-space: nowrap; }
+.pen-root .pen-back-home:has(.pen-back-spin) { color: var(--accent-ink); }
+.pen-root .pen-back-spin {
+  flex: none; width: 15px; height: 15px; margin: 1px; border-radius: 50%;
+  border: 2px solid var(--accent-line); border-top-color: var(--sk-blue);
+  animation: pen-spin .8s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) { .pen-root .pen-back-spin { animation-duration: 2.4s; } }
+
+/* Settings nav: "Configurações da sua Juno Pen" / "Ajustes de tu Juno Pen" are longer than the
+   column at laptop widths; they wrap to a second line instead of losing "Pen" to an ellipsis. */
+@media (min-width: 901px) {
+  .pen-root .pen-set-nav .pen-cat { height: auto; min-height: 42px; }
+  .pen-root .pen-set-nav .pen-cat-label { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.3; padding-block: 2px; }
+}

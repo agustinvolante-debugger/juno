@@ -484,8 +484,10 @@
 /* ===================================================== Calendar page (22 Oct) */
 /* The Calendar takes the whole width: a week grid next to the 336px recordings rail would be
    cramped, so the rail steps aside on that page (All recordings in the sidebar goes Home). */
-.pen-root:has(.pen-page) .pen-shell[data-view='calendar'] { grid-template-columns: minmax(0, 1fr); }
-.pen-root:has(.pen-page) .pen-shell[data-view='calendar'] > .pen-rail { display: none; }
+/* Chats (21 Oct) gets the same full width: the list fills the column the rail and a folded
+   sidebar leave free (chats.css). */
+.pen-root:has(.pen-page) .pen-shell:is([data-view='calendar'], [data-view='chats']) { grid-template-columns: minmax(0, 1fr); }
+.pen-root:has(.pen-page) .pen-shell:is([data-view='calendar'], [data-view='chats']) > .pen-rail { display: none; }
 
 .pen-root:has(.pen-m) {
   /* Recordings on a phone: the Add pill heads the list (the Upload tab became Calendar). */
