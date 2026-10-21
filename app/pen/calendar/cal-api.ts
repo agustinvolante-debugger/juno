@@ -84,13 +84,34 @@ export function mockApi(seed: CalRange, brief: (ref: string) => CalBrief): CalAp
       const ev = db.events.find((e) => e.ref === body.ref)
       if (!ev) throw new Error('That event is gone.')
       if (!ev.editable) return { readOnly: true }
-      if (ev.guests.length && !body.confirm) return { needsConfirm: true, guests: ev.guests.length }
-      if (body.title !== undefined) ev.title = body.title
-      if (body.start !== undefined) ev.start = body.start
-      if (body.end !== undefined) ev.end = body.end
-      if (body.location !== undefined) ev.location = body.location
-      if (body.description !== undefined) ev.description = body.description
-      return { ok: true, value: ev }
+      // The same rules as lib/pen/calendar-page.ts patchGate.
+      const move = !!body.cal && body.cal !== ev.cal
+      if (move && ev.guests.length) throw new Error('Meetings with guests can’t move between calendars; create it on the other calendar instead.')
+      if (move && body.guests?.length) throw new Error('Move it to the other calendar first, then add the guests.')
+      const before = new Set(ev.guests.map((g) => g.email))
+      const after = new Set((body.guests ?? ev.guests).map((g) => g.email))
+      const added = [...after].filter((m) => !before.has(m)).length
+      const removed = [...before].filter((m) => !after.has(m)).length
+      const kept = [...after].filter((m) => before.has(m)).length
+      const other = ['title', 'start', 'end', 'location', 'description'].some((k) => k in body) || (body.video && !ev.meet)
+      const emailed = added + removed + (other ? kept : 0)
+      if (emailed && !body.confirm) return { needsConfirm: true, guests: emailed }
+      // A new object: the page holds the old one (and compares refs after a move).
+      const next: CalViewEvent = { ...ev }
+      if (body.title !== undefined) next.title = body.title
+      if (body.start !== undefined) next.start = body.start
+      if (body.end !== undefined) next.end = body.end
+      if (body.location !== undefined) next.location = body.location
+      if (body.description !== undefined) next.description = body.description
+      if (body.guests !== undefined) next.guests = body.guests
+      if (body.video && !ev.meet) next.meet = 'https://meet.google.com/new-link-abc'
+      if (move) {
+        next.ref = `mock-moved-${++n}|${body.cal}`
+        next.cal = body.cal!
+        next.cals = [body.cal!]
+      }
+      db.events = db.events.map((e) => (e === ev ? next : e))
+      return { ok: true, value: next }
     },
     async remove(ref, confirm) {
       await wait(250)

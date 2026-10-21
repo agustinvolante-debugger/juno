@@ -655,3 +655,52 @@
   .pen-root .pen-cal-spin { animation: pen-cal-breathe 1.2s ease-in-out infinite alternate; }
   .pen-root .pen-cal-loading { animation: none; }
 }
+
+/* ======================================================================================
+   Edit an event: calendar move, guests as chips, video link (cal-api branch, 22 Oct).
+   Kept as one block at the end so the phone-view work elsewhere in this file merges cleanly.
+   ====================================================================================== */
+.pen-root .pen-cal-calpick { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.pen-root .pen-cal-form .pen-cal-calpick select:disabled:disabled { background: var(--sunk); color: var(--soft); cursor: not-allowed; opacity: 1; }
+.pen-root .pen-cal-form-hint { font-size: 12.5px; line-height: 1.4; color: var(--dim); text-wrap: pretty; }
+.pen-root .pen-cal-form-hint[data-k='bad'] { color: var(--bad); }
+.pen-root .pen-cal-row-top { align-items: start; }
+.pen-root .pen-cal-row-top > .pen-cal-fact-ic { margin-top: 9px; }
+.pen-root .pen-cal-guestbox-wrap { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.pen-root .pen-cal-guestbox {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 38px; padding: 5px 6px;
+  border: 1px solid var(--line); border-radius: 10px; background: #fff; cursor: text;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.pen-root .pen-cal-guestbox:focus-within { border-color: var(--sk-blue-hi); box-shadow: 0 0 0 4px rgba(0, 113, 227, .15); }
+.pen-root .pen-cal-guestbox[data-bad] { border-color: var(--bad); }
+.pen-root .pen-cal-chips { display: contents; list-style: none; margin: 0; padding: 0; }
+.pen-root .pen-cal-chip {
+  display: inline-flex; align-items: center; gap: 2px; max-width: 100%; height: 26px; padding: 0 2px 0 10px;
+  border-radius: 999px; background: var(--sunk); box-shadow: inset 0 0 0 1px var(--hair);
+  font-size: 13.5px; font-weight: 500; color: var(--ink);
+}
+.pen-root .pen-cal-chip-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pen-root .pen-cal-chip button {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+  border: 0; border-radius: 50%; background: transparent; color: var(--dim); cursor: pointer;
+}
+.pen-root .pen-cal-chip button:hover { background: rgba(29, 29, 31, .08); color: var(--ink); }
+.pen-root .pen-cal-chip button:focus-visible { outline: 2px solid var(--sk-blue-hi); outline-offset: 0; }
+.pen-root .pen-cal-form .pen-cal-guestbox input.pen-cal-guest-in.pen-cal-guest-in {
+  flex: 1 1 80px; width: auto; height: 26px; padding: 0 5px; border: 0; border-radius: 0; background: transparent; box-shadow: none;
+}
+.pen-root .pen-cal-form .pen-cal-guestbox input.pen-cal-guest-in.pen-cal-guest-in:focus { border: 0; box-shadow: none; }
+.pen-root .pen-cal-hasvideo { margin-top: 12px; }
+.pen-root .pen-cal-hasvideo-body { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 2px; min-width: 0; font-size: 14px; color: var(--soft); }
+.pen-root .pen-cal-hasvideo-body a {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 13.5px; font-weight: 600; color: var(--accent-ink); text-decoration: none;
+}
+.pen-root .pen-cal-hasvideo-body a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.pen-root .pen-cal-sheet .pen-cal-guestbox { min-height: 44px; padding: 6px 7px; }
+.pen-root .pen-cal-sheet .pen-cal-form .pen-cal-guestbox input.pen-cal-guest-in.pen-cal-guest-in { height: 30px; font-size: 16px; }
+.pen-root .pen-cal-sheet .pen-cal-chip { height: 30px; font-size: 14.5px; }
+.pen-root .pen-cal-sheet .pen-cal-chip button { width: 28px; height: 28px; }
+.pen-root .pen-cal-sheet .pen-cal-row-top > .pen-cal-fact-ic { margin-top: 12px; }
+.pen-root .pen-cal-sheet .pen-cal-hasvideo { min-height: 44px; }

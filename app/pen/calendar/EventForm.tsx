@@ -6,7 +6,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import Icon from '../Icon'
 import { useCopy } from '../LangContext'
-import type { CalAccount } from '@/lib/pen/calendar-view'
+import type { CalAccount, CalGuest } from '@/lib/pen/calendar-view'
 import { CAL } from './cal-copy'
 import { addDays, calLabel, hm, hueVars, parseEmails, parseYmd, withTime, ymd, type Hue } from './cal-utils'
 import { VideoIcon, PinIcon } from './EventDetail'
@@ -20,7 +20,7 @@ export type FormValues = {
   cal: string
   location: string
   description: string
-  guests: string[]
+  guests: CalGuest[]
   video: boolean
 }
 
@@ -33,6 +33,8 @@ export default function EventForm({
   onCancel,
   onDraftChange,
   readOnlyAllDay,
+  meet,
+  recurring,
 }: {
   mode: 'create' | 'edit'
   initial: FormValues
@@ -43,6 +45,10 @@ export default function EventForm({
   /** The week grid redraws its ghost as the times change. */
   onDraftChange?: (start: Date, end: Date, allDay: boolean) => void
   readOnlyAllDay?: boolean
+  /** Edit: the event's video link, if it has one (shown instead of the toggle). */
+  meet?: string | null
+  /** Edit: one time of a repeating event (it can't move to another calendar). */
+  recurring?: boolean
 }) {
   const T = useCopy(CAL)
   const id = useId()
@@ -56,11 +62,14 @@ export default function EventForm({
   const [cal, setCal] = useState(initial.cal)
   const [location, setLocation] = useState(initial.location)
   const [description, setDescription] = useState(initial.description)
-  const [guests, setGuests] = useState(initial.guests.join(', '))
+  const [guests, setGuests] = useState<CalGuest[]>(initial.guests)
+  const [guestText, setGuestText] = useState('')
   const [video, setVideo] = useState(initial.video)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const usable = cals.filter((c) => !c.broken)
+  // Edit: a meeting with guests (or one time of a repeating event) stays on its calendar.
+  const calLock = mode !== 'edit' ? null : guests.length || guestText.trim() ? T.calLockedGuests : recurring ? T.calLockedRecurring : null
 
   useEffect(() => {
     titleRef.current?.focus()
@@ -92,12 +101,23 @@ export default function EventForm({
       titleRef.current?.focus()
       return
     }
+    // Whatever is still typed in the guest box counts, when it is an address.
+    const typed = parseEmails(guestText).filter((m) => !guests.some((g) => g.email === m))
+    if (guestText.trim() && !typed.length) {
+      setErr(T.badEmail(guestText.trim()))
+      return
+    }
+    const allGuests = [...guests, ...typed.map((email) => ({ email, name: null }))]
+    if (typed.length) {
+      setGuests(allGuests)
+      setGuestText('')
+    }
     const s = span()
     setBusy(true)
     setErr(null)
     const msg = await onSubmit({
       title: title.trim(), allDay, start: s.start, end: s.end, cal, location: location.trim(),
-      description: description.trim(), guests: parseEmails(guests), video,
+      description: description.trim(), guests: allGuests, video,
     })
     setBusy(false)
     if (msg) setErr(msg)
@@ -160,16 +180,19 @@ export default function EventForm({
         </div>
       </div>
 
-      {mode === 'create' && usable.length > 1 && (
-        <label className="pen-cal-row-in">
+      {usable.length > 1 && (
+        <div className="pen-cal-row-in pen-cal-row-top">
           <span className="pen-cal-fact-ic" style={hueVars(hues[cal])}><span className="pen-cal-dot" aria-hidden /></span>
-          <span className="pen-cal-sr">{T.cal}</span>
-          <select value={cal} onChange={(e) => setCal(e.target.value)}>
-            {usable.map((c) => (
-              <option key={c.key} value={c.key}>{calLabel(c)}</option>
-            ))}
-          </select>
-        </label>
+          <span className="pen-cal-calpick">
+            <label className="pen-cal-sr" htmlFor={`${id}-c`}>{T.cal}</label>
+            <select id={`${id}-c`} value={cal} onChange={(e) => setCal(e.target.value)} disabled={!!calLock} aria-describedby={calLock ? `${id}-cl` : undefined}>
+              {(usable.some((c) => c.key === cal) ? usable : [...cals.filter((c) => c.key === cal), ...usable]).map((c) => (
+                <option key={c.key} value={c.key}>{calLabel(c)}</option>
+              ))}
+            </select>
+            {calLock && <span id={`${id}-cl`} className="pen-cal-form-hint">{calLock}</span>}
+          </span>
+        </div>
       )}
 
       <label className="pen-cal-row-in">
@@ -178,19 +201,33 @@ export default function EventForm({
         <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder={T.locationPh} autoComplete="off" />
       </label>
 
-      {mode === 'create' && (
-        <>
-          <label className="pen-cal-row-in">
-            <span className="pen-cal-fact-ic"><Icon name="people" size={16} /></span>
-            <span className="pen-cal-sr">{T.guestsLabel}</span>
-            <input value={guests} onChange={(e) => setGuests(e.target.value)} placeholder={T.guestsPh} inputMode="email" autoComplete="off" />
-          </label>
-          <label className="pen-cal-check pen-cal-check-row">
-            <span className="pen-cal-fact-ic"><VideoIcon /></span>
-            <input type="checkbox" checked={video} onChange={(e) => setVideo(e.target.checked)} />
-            <span>{T.addVideo}</span>
-          </label>
-        </>
+      <div className="pen-cal-row-in pen-cal-row-top">
+        <span className="pen-cal-fact-ic"><Icon name="people" size={16} /></span>
+        <GuestsEditor
+          id={`${id}-g`}
+          guests={guests}
+          text={guestText}
+          onText={setGuestText}
+          onChange={(g) => {
+            setGuests(g)
+            if (err && err !== T.needTitle) setErr(null)
+          }}
+        />
+      </div>
+      {mode === 'edit' && meet ? (
+        <div className="pen-cal-row-in pen-cal-hasvideo">
+          <span className="pen-cal-fact-ic"><VideoIcon /></span>
+          <span className="pen-cal-hasvideo-body">
+            <span>{T.hasVideo}</span>
+            <a href={meet} target="_blank" rel="noreferrer">{linkLabel(meet)}</a>
+          </span>
+        </div>
+      ) : (
+        <label className="pen-cal-check pen-cal-check-row">
+          <span className="pen-cal-fact-ic"><VideoIcon /></span>
+          <input type="checkbox" checked={video} onChange={(e) => setVideo(e.target.checked)} />
+          <span>{T.addVideo}</span>
+        </label>
       )}
 
       <label className="pen-cal-row-in pen-cal-row-area">
@@ -207,5 +244,93 @@ export default function EventForm({
         </button>
       </footer>
     </form>
+  )
+}
+
+/** "https://meet.google.com/abc-defg-hij" → "meet.google.com/abc-defg-hij" (long Teams links shortened). */
+function linkLabel(url: string): string {
+  try {
+    const u = new URL(url)
+    const t = `${u.host}${u.pathname === '/' ? '' : u.pathname}`
+    return t.length > 42 ? `${t.slice(0, 40)}…` : t
+  } catch {
+    return url
+  }
+}
+
+/** Guests as chips: type or paste addresses (Enter, comma, space or leaving the box adds them), × or Backspace removes. */
+function GuestsEditor({ id, guests, text, onText, onChange }: { id: string; guests: CalGuest[]; text: string; onText: (s: string) => void; onChange: (g: CalGuest[]) => void }) {
+  const T = useCopy(CAL)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [bad, setBad] = useState<string | null>(null)
+  const take = (raw: string): boolean => {
+    const found = parseEmails(raw).filter((m) => !guests.some((g) => g.email === m))
+    if (!raw.trim()) return true
+    if (!parseEmails(raw).length) {
+      setBad(T.badEmail(raw.trim()))
+      return false
+    }
+    onChange([...guests, ...found.map((email) => ({ email, name: null }))])
+    onText('')
+    setBad(null)
+    return true
+  }
+  const remove = (email: string) => {
+    onChange(guests.filter((g) => g.email !== email))
+    inputRef.current?.focus()
+  }
+  return (
+    <div className="pen-cal-guestbox-wrap">
+      <div className="pen-cal-guestbox" data-bad={bad ? true : undefined} onClick={(e) => e.target === e.currentTarget && inputRef.current?.focus()}>
+        {guests.length > 0 && (
+          <ul className="pen-cal-chips" aria-label={T.guestsLabel}>
+            {guests.map((g) => (
+              <li key={g.email} className="pen-cal-chip" title={g.email}>
+                <span className="pen-cal-chip-t">{g.name || g.email}</span>
+                <button type="button" onClick={() => remove(g.email)} aria-label={T.removeGuest(g.name || g.email)}>
+                  <Icon name="close" size={12} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <label className="pen-cal-sr" htmlFor={id}>{T.guestsLabel}</label>
+        <input
+          id={id}
+          ref={inputRef}
+          className="pen-cal-guest-in"
+          value={text}
+          onChange={(e) => {
+            const v = e.target.value
+            if (bad) setBad(null)
+            // A pasted list, or a separator after an address: turn it into chips.
+            if (/[,;\s]$/.test(v) && parseEmails(v).length) take(v)
+            else onText(v)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && text.trim()) {
+              e.preventDefault()
+              take(text)
+            } else if (e.key === 'Backspace' && !text && guests.length) {
+              onChange(guests.slice(0, -1))
+            }
+          }}
+          onBlur={() => text.trim() && take(text)}
+          onPaste={(e) => {
+            const p = e.clipboardData.getData('text')
+            if (parseEmails(p).length > 1) {
+              e.preventDefault()
+              take(`${text} ${p}`)
+            }
+          }}
+          placeholder={guests.length ? '' : T.addGuestPh}
+          inputMode="email"
+          autoComplete="off"
+          aria-invalid={bad ? true : undefined}
+          aria-describedby={bad ? `${id}-bad` : undefined}
+        />
+      </div>
+      {bad && <span id={`${id}-bad`} className="pen-cal-form-hint" data-k="bad" role="alert">{bad}</span>}
+    </div>
   )
 }

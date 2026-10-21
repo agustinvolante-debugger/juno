@@ -355,7 +355,7 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
       allDay: v.allDay || undefined,
       location: v.location || undefined,
       description: v.description || undefined,
-      guests: v.guests.length ? v.guests.map((email) => ({ email, name: null })) : undefined,
+      guests: v.guests.length ? v.guests : undefined,
       video: v.video || undefined,
       tz,
     }
@@ -375,26 +375,36 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
   }
 
   const editEvent = async (ev: CalViewEvent, v: FormValues): Promise<string | null> => {
+    // Only what changed: the server asks before emailing guests, and a move is create + delete.
+    const sp = evSpan(ev)
+    const start = ev.allDay ? ymd(v.start) : v.start.toISOString()
+    const end = ev.allDay ? ymd(v.end) : v.end.toISOString()
+    const timeChanged = v.start.getTime() !== sp.s.getTime() || v.end.getTime() !== sp.e.getTime()
+    const mails = (g: { email: string }[]) => g.map((x) => x.email.toLowerCase()).sort().join(',')
+    const move = !!v.cal && v.cal !== ev.cal
     const body: CalPatch = {
       ref: ev.ref,
-      title: v.title,
-      start: ev.allDay ? ymd(v.start) : v.start.toISOString(),
-      end: ev.allDay ? ymd(v.end) : v.end.toISOString(),
-      location: v.location || null,
-      description: v.description || null,
+      ...(v.title !== ev.title ? { title: v.title } : {}),
+      ...(timeChanged ? { start, end } : {}),
+      ...(v.location !== (ev.location ?? '') ? { location: v.location || null } : {}),
+      ...(v.description !== (ev.description ?? '') ? { description: v.description || null } : {}),
+      ...(mails(v.guests) !== mails(ev.guests) ? { guests: v.guests } : {}),
+      ...(v.video && !ev.meet ? { video: true } : {}),
+      ...(move ? { cal: v.cal } : {}),
       tz,
     }
     try {
-      const r = await run((c) => api.patch(c ? { ...body, confirm: true } : body))
+      const r = Object.keys(body).length > 2 ? await run((c) => api.patch(c ? { ...body, confirm: true } : body)) : { ok: true as const, value: ev }
       if ('cancelled' in r) return ''
       if (!('ok' in r)) return T.readOnlyToast
       const saved = r.value
-      setLocal((l) => ({ ...l, [ev.ref]: saved }))
-      setPanel({ k: 'detail', ref: ev.ref, anchor: panel?.anchor ?? null })
+      // A move comes back with a new ref: the panel follows it.
+      setLocal((l) => (saved.ref === ev.ref ? { ...l, [ev.ref]: saved } : { ...l, [ev.ref]: null, [saved.ref]: saved }))
+      setPanel({ k: 'detail', ref: saved.ref, anchor: panel?.anchor ?? null })
       // The form (and the focus inside it) is gone; keep focus in the panel.
       requestAnimationFrame(() => document.querySelector<HTMLElement>('.pen-cal-float, .pen-cal-sheet')?.focus({ preventScroll: true }))
-      say(T.saved)
-      void settle(ev.ref)
+      say(saved.ref !== ev.ref ? T.moved(calLabel(cals.find((c) => c.key === saved.cal))) : T.saved)
+      void settle(ev.ref, saved.ref)
       return null
     } catch (e) {
       return T.failedSave(errMessage(e))
@@ -601,7 +611,9 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
           key={`e-${panelEv.ref}`}
           mode="edit"
           readOnlyAllDay
-          initial={{ title: panelEv.title, allDay: panelEv.allDay, start: sp.s, end: sp.e, cal: panelEv.cal, location: panelEv.location ?? '', description: panelEv.description ?? '', guests: [], video: false }}
+          initial={{ title: panelEv.title, allDay: panelEv.allDay, start: sp.s, end: sp.e, cal: panelEv.cal, location: panelEv.location ?? '', description: panelEv.description ?? '', guests: panelEv.guests, video: false }}
+          meet={panelEv.meet}
+          recurring={!!panelEv.recurring}
           cals={cals}
           hues={hues}
           onSubmit={(v) => editEvent(panelEv, v)}
