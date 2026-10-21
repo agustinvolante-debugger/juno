@@ -57,15 +57,18 @@ import { replyViaOutlook } from '../outlook-read'
 import { chooseFrom, PROVIDER_NAME, type MailApp } from '../mail-compose'
 import { mailProvider, setMailApp } from '../mail-pref'
 import { getProfile } from '../profile'
-import { addReminder, cancelReminder, pendingReminders, MAX_AHEAD_MS, maxAheadMs } from '../reminders'
+import { addReminder, cancelReminder, pendingReminders, MAX_AHEAD_MS, maxAheadMs, reminderAhead, reminderPhone } from '../reminders'
 import type { Lang } from '../currency'
 import { isMine, type ActionMeta, type Mine } from '../todo-labels'
-import { getDraft, setDraft, type Draft } from './store'
+import { getLinkByEmail, setChat, type Draft } from './store'
+import { phoneStore, stateOf, turnAddSetUndo, type AgentStore } from './state'
+import { sendText } from './provider'
+import type { AgentChannel, AgentDraft, AgentLink, AgentParts } from '../agent-io'
 import { MODULES } from './tools'
 import { localDate, localIso, markZoneChecked, userZone, zonePromptLine, type Zone } from '../timezone'
-import { getPending, setPending, dropIfUnanswered, confirmPending, BARE_YES, BARE_NO, type Pending } from './confirm'
+import { dropIfUnanswered, confirmPending, BARE_YES, BARE_NO, type Pending } from './confirm'
 import { finishZoneTurn, timeFields, zoneAskLine, type ZoneTurn } from './tools/timezone'
-import { UNDO, runUndo, addSetUndo } from './undo'
+import { UNDO, runUndo } from './undo'
 import { unseen } from './burst'
 
 const anthropic = penAnthropic('whatsapp-agent')
@@ -77,7 +80,7 @@ const MAX_ROUNDS = 8
 
 /** `redo`: a recording whose notes the user asked to rewrite. Too slow for the reply, so the
  *  caller does it after sending the text, and sends the new briefing when it is done. */
-export type AgentResult = { text: string; citations: Citation[]; redo?: { sessionId: string; type?: string }; split?: string; after?: () => Promise<void>; memo?: string }
+export type AgentResult = { text: string; citations: Citation[]; redo?: { sessionId: string; type?: string }; split?: string; after?: () => Promise<void>; memo?: string; parts?: AgentParts }
 
 export type Ctx = {
   email: string
@@ -87,7 +90,23 @@ export type Ctx = {
   agentBrief?: string
   recent: string | null
   userName: string | null
-  phone: string
+  /** Where the turn runs (lib/pen/agent-io.ts): formatting, confirms and where state is kept. */
+  channel: AgentChannel
+  /** The WhatsApp / iMessage sender. Web: the linked phone a reminder can go to, or none. */
+  phone?: string
+  /** Web: whether that phone can be reached later (reminders.ts reminderPhone). */
+  reach?: { imessage: boolean; lastInbound: number | null } | null
+  /** A message after the reply (a job finished or failed). Phone: sent and kept in the chat
+   *  history (phoneNotify); web: a short assistant note added to the thread. */
+  notify: (text: string) => Promise<void>
+  /** Draft / pending question / undo storage (state.ts); absent = the phone's (by email). */
+  store?: AgentStore
+  /** Docs, sheets, events, connect links… this turn made or opened (web: cards). */
+  links?: AgentLink[]
+  /** The yes/no question asked this turn (askConfirm, or the zone check). */
+  asked?: { kind: string; summary: string }
+  /** This turn recorded something "undo" can reverse (state.ts turnSetUndo). */
+  undoable?: boolean
   lang: Lang
   /** Set by search_recordings; the last search's citations become the sources footer. */
   citations: Citation[]
@@ -533,6 +552,12 @@ const TOOLS: Anthropic.Tool[] = [
 ]
 
 function system(ctx: Ctx, pending: Draft | null, asked: Pending | null, askedUnseen = false): string {
+  const wa = waSystem(ctx, pending, asked, askedUnseen)
+  return ctx.channel === 'web' ? webSystem(wa) : wa
+}
+
+/** The WhatsApp / iMessage prompt, unchanged (snapshot-tested: .pentest/web-agent-unit.mts). */
+function waSystem(ctx: Ctx, pending: Draft | null, asked: Pending | null, askedUnseen = false): string {
   const today = localDate(ctx.zone?.tz)
   return (
     `You are Juno Pen on WhatsApp: the user's assistant for their own recorded meetings. Today is ${today}` +
@@ -611,6 +636,53 @@ function system(ctx: Ctx, pending: Draft | null, asked: Pending | null, askedUns
     (askedUnseen && asked
       ? `\nJust asked the user (they have NOT seen it yet; nothing in their message answers it, so never call confirm_pending this turn): ${asked.summary}\n`
       : asked?.kind === 'zone_check' ? zoneAskLine(asked) : asked ? `\nWaiting for the user's yes (asked earlier): ${asked.summary}\n` : '')
+  )
+}
+
+/**
+ * The web chat's prompt: the same rules with the WhatsApp-only parts swapped (formatting, the
+ * "reply send it" hints, Meta's §4.7 limit, the 24-hour reminder window), plus the buttons.
+ */
+export function webSystem(wa: string): string {
+  return (
+    wa
+      .replace('You are Juno Pen on WhatsApp: ', 'You are Juno Pen in the chat of the Juno Pen web app: ')
+      .replace('with no other recording named means the one they sent here last:', 'with no other recording named means the one they tagged:')
+      .replace(
+        'WhatsApp. Nothing else: you are not a general chatbot. If asked for something outside that, say briefly that you only help with their calls.',
+        'WhatsApp. Keep to that work (their meetings, contacts, to-dos, email, calendar and documents); for anything unrelated, say in one line what you can help with.',
+      )
+      .replace(
+        /- Reminders can be [^\n]*?For a clock time with no timezone given, /,
+        '- Reminders can be up to 30 days ahead: they arrive on WhatsApp / iMessage when it is linked and can reach them, otherwise by email ' +
+          '(set_reminder says which in delivered_by; say it in a few words). For later ones, add it as a to-do with that due date instead ' +
+          '(add_todo, on the recording it relates to) and say so in one line; don\'t ask first. For a clock time with no timezone given, ',
+      )
+      .replace(
+        '- WhatsApp formatting: short paragraphs, *bold* sparingly, "• " for lists. No headings, no markdown links.\n',
+        '- Formatting: short paragraphs, **bold** sparingly, "- " for lists, links as plain URLs on their own line. No headings, no tables.\n',
+      )
+      .replace('The draft and a "reply send it" hint are shown below your reply automatically.', 'The draft and a Send button are shown below your reply automatically.')
+      .replace('never "reply yes to confirm". Say what was set in one line; "undo" cancels it.', 'never "reply yes to confirm". Say what was set in one line; an Undo button is shown under your reply.') +
+    '\nWeb chat: under your reply the user sees Yes / No buttons for a question a tool asked, a Send button under a draft, an Undo ' +
+    'button when what you did can be undone, and cards for the docs, sheets, events and connect links you made. Never write "reply yes", ' +
+    '"reply send it" or "say undo": ask the question, or say what was done, in one line. Still put any link in the text as a plain URL.\n'
+  )
+}
+
+/** The tools as the web chat sees them: set_reminder isn't WhatsApp-only there. */
+function toolsFor(ctx: Ctx, tools: Anthropic.Tool[]): Anthropic.Tool[] {
+  if (ctx.channel !== 'web') return tools
+  return tools.map((t) =>
+    t.name === 'set_reminder'
+      ? {
+          ...t,
+          description:
+            'Set a reminder for the user (on WhatsApp / iMessage when linked and reachable, else by email). Give either in_minutes (for "in 15 min", ' +
+            '"in 2 hours") or at (an ISO 8601 time WITH offset, for clock times). Only up to 30 days ahead. Write the reminder text as the user will want ' +
+            'to read it, in their language.',
+        }
+      : t,
   )
 }
 
@@ -774,7 +846,7 @@ async function saveDraft(
     provider: await mailProvider(ctx.email, picked.from).catch(() => null),
     lang: ctx.lang,
   }
-  await setDraft(ctx.email, draft)
+  await stateOf(ctx).setDraft(draft)
   ctx.drafted = draft
   const from = draft.from
     ? { will_send_from: draft.from, from_why: picked.why, from_note: 'Not sent: it goes from this address only when they say send.' }
@@ -809,14 +881,14 @@ async function pickFrom(ctx: Ctx, toEmail: string | null, said?: string): Promis
 }
 
 async function setDraftFrom(ctx: Ctx, said: string): Promise<unknown> {
-  const d = await getDraft(ctx.email)
+  const d = await stateOf(ctx).getDraft()
   if (!d) return { error: 'no draft is pending' }
   // A reply in a thread lives in one mailbox: it goes from the address that received it.
   if (d.thread && d.from) return { error: `this is a reply in a thread, so it goes from ${d.from}, the address that received it`, next: 'say so in one line; to write from another address, they can ask for a new email instead of a reply' }
   const picked = await pickFrom(ctx, d.toEmail, said || ' ')
   if ('error' in picked) return picked
   const draft: Draft = { ...d, id: crypto.randomBytes(12).toString('base64url'), msgId: ctx.msgId, createdAt: new Date().toISOString(), from: picked.from, provider: await mailProvider(ctx.email, picked.from).catch(() => null), lang: ctx.lang }
-  await setDraft(ctx.email, draft)
+  await stateOf(ctx).setDraft(draft)
   ctx.drafted = draft
   return { ok: true, shown_to_user: true, from: picked.from, note: 'Say in one line that it will go from this address; the draft is shown below. Not sent: wait for "send it".' }
 }
@@ -824,10 +896,10 @@ async function setDraftFrom(ctx: Ctx, said: string): Promise<unknown> {
 async function setMailAppTool(ctx: Ctx, app: string): Promise<unknown> {
   if (!['gmail', 'outlook', 'yahoo', 'other'].includes(app)) return { error: 'app must be gmail, outlook, yahoo or other' }
   await setMailApp(ctx.email, app as MailApp)
-  const d = ctx.drafted ?? (await getDraft(ctx.email).catch(() => null))
+  const d = ctx.drafted ?? (await stateOf(ctx).getDraft().catch(() => null))
   if (!d) return { ok: true, note: 'Confirm in one line; their next drafts will open in it.' }
   const draft: Draft = { ...d, id: crypto.randomBytes(12).toString('base64url'), msgId: ctx.msgId, createdAt: new Date().toISOString(), provider: await mailProvider(ctx.email, d.from).catch(() => null) }
-  await setDraft(ctx.email, draft)
+  await stateOf(ctx).setDraft(draft)
   ctx.drafted = draft
   return { ok: true, shown_to_user: true, note: 'Confirm in one line; the draft is shown again below with the new link.' }
 }
@@ -876,7 +948,7 @@ function gmailLine(ctx: Ctx): string {
 }
 
 async function sendDraft(ctx: Ctx): Promise<unknown> {
-  const d = await getDraft(ctx.email)
+  const d = await stateOf(ctx).getDraft()
   if (!d) return { error: 'no draft to send (none saved, or it is over a day old)' }
   if (d.msgId === ctx.msgId || ctx.drafted || unseen(d.createdAt, ctx.sentAt)) {
     return { error: 'the user has not seen this version yet; show it and wait for them to say send' }
@@ -899,7 +971,7 @@ async function sendDraft(ctx: Ctx): Promise<unknown> {
         }
       }
       ctx.sent = true
-      await setDraft(ctx.email, null)
+      await stateOf(ctx).setDraft(null)
       return { ok: true, sent_from: d.from, via: 'Outlook', in_thread: true, sent_to: `${d.toName} <${d.toEmail}>`, subject: d.subject, note: 'It is in their Outlook Sent Items, in the same conversation.' }
     }
     const o = await sendViaOutlook({ userEmail: ctx.email, from: d.from, to: d.toEmail, toName: d.toName, subject: d.subject, body: d.body, sessionId: d.sessionId })
@@ -911,7 +983,7 @@ async function sendDraft(ctx: Ctx): Promise<unknown> {
       }
     }
     ctx.sent = true
-    await setDraft(ctx.email, null)
+    await stateOf(ctx).setDraft(null)
     return { ok: true, sent_from: d.from, via: 'Outlook', sent_to: `${d.toName} <${d.toEmail}>`, subject: d.subject, note: 'It is in their Outlook Sent Items; replies come to that address.' }
   }
   if (d.from && d.thread?.provider === 'outlook') return { error: 'a reply in an Outlook conversation can only go from the Outlook address it came to' }
@@ -926,13 +998,13 @@ async function sendDraft(ctx: Ctx): Promise<unknown> {
       }
     }
     ctx.sent = true
-    await setDraft(ctx.email, null)
+    await stateOf(ctx).setDraft(null)
     return { ok: true, sent_from: d.from, sent_to: `${d.toName} <${d.toEmail}>`, subject: d.subject, ...(d.thread ? { in_thread: true } : {}), note: 'It is in their Gmail Sent folder; replies come to that address.' }
   }
   const r = await sendFollowUp({ userEmail: ctx.email, toEmail: d.toEmail, subject: d.subject, body: d.body, sessionId: d.sessionId })
   if (!r.ok) return { error: `not sent: ${r.error}` }
   ctx.sent = true
-  await setDraft(ctx.email, null)
+  await stateOf(ctx).setDraft(null)
   return { ok: true, sent_to: `${d.toName} <${d.toEmail}>`, subject: d.subject, note: 'A copy went to the user by BCC; replies go to their inbox.' }
 }
 
@@ -948,12 +1020,14 @@ async function setReminder(ctx: Ctx, i: { text: string; in_minutes: number; at: 
   }
   if (Number.isNaN(due.getTime())) return { error: 'could not read that time' }
   if (due.getTime() < Date.now() + 30 * 1000) return { error: 'that time has already passed' }
-  if (due.getTime() - Date.now() > maxAheadMs(ctx.lang)) {
-    return { error: maxAheadMs(ctx.lang) > MAX_AHEAD_MS ? 'more than 30 days ahead; reminders go up to 30 days' : 'more than 23 hours ahead; WhatsApp only allows reminders within a day' }
+  if (due.getTime() - Date.now() > reminderAhead(ctx)) {
+    return { error: reminderAhead(ctx) > MAX_AHEAD_MS ? 'more than 30 days ahead; reminders go up to 30 days' : 'more than 23 hours ahead; WhatsApp only allows reminders within a day' }
   }
-  const r = await addReminder({ email: ctx.email, phone: ctx.phone, text, dueAt: due, lang: ctx.lang })
+  // Phone turns: their phone, as always. Web: the linked phone if it can reach them then, else email.
+  const phone = reminderPhone(ctx, due)
+  const r = await addReminder({ email: ctx.email, phone, text, dueAt: due, lang: ctx.lang })
   // Set at once (never "reply yes"): "undo" cancels it (undo.ts), with anything else this message set.
-  await addSetUndo(ctx.email, ctx.msgId, { reminder: r.id, title: text }).catch(() => {})
+  await turnAddSetUndo(ctx, { reminder: r.id, title: text }).catch(() => {})
   const zone = ctx.zone?.tz
   // A clock time is kept for a "no, I'm in SF" (same local time there); "in 20 minutes" is not.
   const item = zone && i.at.trim() ? { kind: 'reminder' as const, id: r.id, local: localIso(r.due_at, zone), text } : undefined
@@ -963,6 +1037,7 @@ async function setReminder(ctx: Ctx, i: { text: string; in_minutes: number; at: 
     due_utc: r.due_at,
     ...(zone ? await timeFields(ctx, zone, r.due_at, item, { check: Boolean(item) }) : {}),
     undo: 'the user can say "undo" to cancel it',
+    ...(ctx.channel === 'web' ? { delivered_by: phone ? (phone.startsWith('im:') ? 'iMessage' : 'WhatsApp') : 'email' } : {}),
   }
 }
 
@@ -1311,8 +1386,8 @@ export type PersonBrief = {
 /** person_brief outside a chat turn: the proactive meeting brief (lib/pen/proactive.ts). */
 export async function personBriefFor(email: string, name: string): Promise<PersonBrief> {
   const ctx: Ctx = {
-    email, msgId: 'proactive', question: '', history: [], recent: null, userName: null, phone: '', lang: 'en',
-    citations: [], drafted: null, sent: false, enrich: new Set(), later: [],
+    email, msgId: 'proactive', question: '', history: [], recent: null, userName: null, channel: 'whatsapp', phone: '', lang: 'en',
+    citations: [], drafted: null, sent: false, enrich: new Set(), later: [], notify: async () => {},
   }
   return (await personBrief(ctx, name)) as PersonBrief
 }
@@ -1542,8 +1617,12 @@ export function draftLinks(d: Draft, lang: Lang = 'en'): string {
   return [d.provider ? `${h.openIn(PROVIDER_NAME[d.provider])}: ${mailLink(d, 'w')}` : null, `${h.app}: ${mailLink(d, 'a')}`].filter(Boolean).join('\n')
 }
 
-export function draftPreview(d: Draft, lang: Lang = 'en'): string {
+export function draftPreview(d: Draft, lang: Lang = 'en', channel: AgentChannel = 'whatsapp'): string {
   const h = HINT[lang]
+  // Web: markdown-light, no "reply send it" and no links (the Send button and the draft card carry them).
+  if (channel === 'web') {
+    return `✉️ ${d.thread ? `${h.inThread}\n` : ''}${d.from ? `**${h.from}:** ${d.from}\n` : ''}**${h.to}:** ${d.toName}${d.toEmail ? ` <${d.toEmail}>` : ''}\n**${h.subject}:** ${d.subject}\n\n${d.body}`
+  }
   return (
     `✉️ ${d.thread ? `${h.inThread}\n` : ''}${d.from ? `*${h.from}:* ${d.from}\n` : ''}*${h.to}:* ${d.toName}${d.toEmail ? ` <${d.toEmail}>` : ''}\n*${h.subject}:* ${d.subject}\n\n${d.body}\n\n` +
     `_${d.toEmail ? h.send : h.noEmail}_\n` +
@@ -1639,12 +1718,27 @@ export async function runAgent(opts: {
   agentBrief?: string
   recent: string | null
   lang: Lang
-  phone: string
+  /** WhatsApp / iMessage: the sender. Web: the linked phone (reminders), or none. */
+  phone?: string
+  /** Default: 'imessage' for an `im:` sender, else 'whatsapp' (bot.ts passes neither). */
+  channel?: AgentChannel
+  /** Web: draft / question / undo kept on the thread (state.ts webStore). Default: the phone's. */
+  store?: AgentStore
+  /** Default (phone): send it and keep it in the WhatsApp chat history (phoneNotify). */
+  notify?: (text: string) => Promise<void>
+  reach?: Ctx['reach']
+  /** Web Undo button: undo that turn's action (its ts) rather than the latest. */
+  undoTurn?: string
+  /** A tool is about to run (web: the progress event). */
+  onTool?: (name: string) => void
   /** A photo the user sent (base64), read alongside the question. */
   image?: { data: string; mime: string }
   /** When the latest message of this turn arrived (Ctx.sentAt). */
   sentAt?: number
 }): Promise<AgentResult> {
+  const channel: AgentChannel = opts.channel ?? (opts.phone?.startsWith('im:') ? 'imessage' : 'whatsapp')
+  const store = opts.store ?? phoneStore(opts.email)
+  const notify = opts.notify ?? phoneNotify(opts.email, opts.phone ?? '')
   const userName = (await getProfile(opts.email).catch(() => null))?.name?.trim() || null
   const recentTitle = opts.recent ? ((await getSession(opts.email, opts.recent).catch(() => null))?.title ?? null) : null
   const zone = await userZone(opts.email, opts.phone).catch((): Zone => ({ tz: null, source: 'none', sure: false }))
@@ -1657,9 +1751,10 @@ export async function runAgent(opts: {
   // Outlook reading: the same allowlist, and an address whose token carries Mail.Read.
   const outlookReadOk = outlookAll.length ? await outlookReadAllowed(opts.email).catch(() => false) : false
   const outlookRead = outlookReadOk ? outlookAll.filter((a) => a.can_read && !a.last_error).map((a) => a.address) : []
-  const ctx: Ctx = { ...opts, userName, recentTitle, citations: [], drafted: null, sent: false, enrich: new Set(), later: [], zone, gmail, outlook, gmailRead, gmailReadOk, outlookRead, outlookReadOk }
-  const pending = await getDraft(opts.email).catch(() => null)
-  const asked = await getPending(opts.email).catch(() => null)
+  const { onTool, undoTurn, ...rest } = opts
+  const ctx: Ctx = { ...rest, channel, store, notify, links: [], userName, recentTitle, citations: [], drafted: null, sent: false, enrich: new Set(), later: [], zone, gmail, outlook, gmailRead, gmailReadOk, outlookRead, outlookReadOk }
+  const pending = await store.getDraft().catch(() => null)
+  const asked = await store.getPending().catch(() => null)
   // Asked, or drafted, after this turn's last message arrived: the user hasn't seen it, so nothing
   // in this message answers it (burst.ts). It stays waiting, untouched.
   const askedUnseen = unseen(asked?.createdAt, opts.sentAt)
@@ -1671,7 +1766,7 @@ export async function runAgent(opts: {
   let stillAsked = asked
   // "Undo": the last thing done without asking (combine / separate, undo.ts), run here in code.
   if (UNDO.test(opts.question)) {
-    const result = await runUndo(opts.email).catch((e) => ({ error: (e as Error).message }))
+    const result = await runUndo(opts.email, { store, ...(undoTurn ? { turn: undoTurn } : {}) }).catch((e) => ({ error: (e as Error).message }))
     answered =
       `(My "${opts.question.slice(0, 40)}" asks to undo your last change, and it has been handled: ${JSON.stringify(result).slice(0, 800)}. ` +
       'Tell me in one line what happened, following any note in it; don\'t ask anything.)'
@@ -1682,7 +1777,7 @@ export async function runAgent(opts: {
     // closes it. The same reply may have offered something else too (a Meet link): a bare yes
     // or no goes to that as well, through the model, never to a stored action.
     if (BARE_YES.test(opts.question)) {
-      await setPending(opts.email, null).catch(() => {})
+      await store.setPending(null).catch(() => {})
       ctx.pendingTouched = true
       stillAsked = null
       answered =
@@ -1692,7 +1787,7 @@ export async function runAgent(opts: {
     } else if (BARE_NO.test(opts.question)) {
       await markZoneChecked(opts.email, null).catch(() => {})
       // Still open for the city they name next, which moves what was set (set_timezone).
-      await setPending(opts.email, { ...asked, msgId: opts.msgId, createdAt: new Date().toISOString() }).catch(() => {})
+      await store.setPending({ ...asked, msgId: opts.msgId, createdAt: new Date().toISOString() }).catch(() => {})
       ctx.pendingTouched = true
       answered =
         `(My "${opts.question.slice(0, 40)}" answers your "${asked.summary}": I'm not there now. Ask in one short line which city ` +
@@ -1702,6 +1797,7 @@ export async function runAgent(opts: {
     const decision = BARE_YES.test(opts.question) ? 'yes' : BARE_NO.test(opts.question) ? 'no' : null
     if (decision) {
       const result = await confirmPending(ctx, decision).catch((e) => ({ error: (e as Error).message }))
+      ctx.links!.push(...linksFrom('confirm_pending', {}, result))
       answered =
         `(My reply "${opts.question.slice(0, 40)}" answers your question "${asked.summary}" and it has been handled: ` +
         `${JSON.stringify(result).slice(0, 1500)}. Tell me in one or two lines what happened, following any note in it; don't ask it again.)`
@@ -1717,12 +1813,12 @@ export async function runAgent(opts: {
       const text = !r.sent_from ? SENT[opts.lang](to, pending.subject)
         : pending.thread ? SENT_REPLY[opts.lang](r.sent_from, to, pending.subject, pending.thread.provider === 'outlook')
           : SENT_GMAIL[opts.lang](r.sent_from, to, pending.subject)
-      return { text, citations: [] }
+      return { text, citations: [], ...(channel === 'web' ? { parts: {} } : {}) }
     }
     // Their Gmail refused it: the plain words and the links, from code, not the model.
     if (r.plain) {
       await dropIfUnanswered(ctx, asked).catch(() => {})
-      return { text: r.plain, citations: [] }
+      return { text: channel === 'web' ? webText(r.plain) : r.plain, citations: [], ...(channel === 'web' ? { parts: {} } : {}) }
     }
     // Not sent (daily cap, provider error): let the model explain it in context.
   }
@@ -1757,7 +1853,7 @@ export async function runAgent(opts: {
       // Medium: a WhatsApp reply should arrive while "typing…" is still showing.
       output_config: { effort: 'medium' },
       system: system(ctx, pending, stillAsked, askedUnseen),
-      tools: [...TOOLS, ...MODULES.flatMap((m) => (!m.when || m.when(ctx) ? m.tools : []))],
+      tools: toolsFor(ctx, [...TOOLS, ...MODULES.flatMap((m) => (!m.when || m.when(ctx) ? m.tools : []))]),
       messages,
     })
     text = res.content.filter((b): b is Anthropic.TextBlock => b.type === 'text').map((b) => b.text).join('\n').trim()
@@ -1784,7 +1880,9 @@ export async function runAgent(opts: {
           results.push({ type: 'tool_result', tool_use_id: c.id, content: JSON.stringify({ error: 'not done: email content was read in this turn, so this action has to be asked for by the user in a new message. Tell them what you would do and let them ask.' }), is_error: true })
           continue
         }
+        onTool?.(c.name)
         const out = await runTool(ctx, c.name, (c.input ?? {}) as Record<string, unknown>)
+        ctx.links!.push(...linksFrom(c.name, (c.input ?? {}) as Record<string, unknown>, out))
         const isError = !!out && typeof out === 'object' && 'error' in out
         if (!isError && (['set_reminder', 'add_todo', 'add_to_calendar'].includes(c.name) || (c.name === 'find_meeting' && ((out as { reminders_set?: unknown[] }).reminders_set?.length ?? 0) > 0))) ranSelf = true
         results.push({ type: 'tool_result', tool_use_id: c.id, content: JSON.stringify(out), ...(isError ? { is_error: true } : {}) })
@@ -1804,7 +1902,8 @@ export async function runAgent(opts: {
   text = await finishZoneTurn(ctx, text)
   // This message wasn't the yes to an earlier ask: that ask is over (confirm.ts).
   await dropIfUnanswered(ctx, asked).catch((e) => console.warn(`pen whatsapp: drop pending: ${(e as Error).message}`))
-  if (ctx.drafted) text = `${text ? `${text}\n\n` : ''}${draftPreview(ctx.drafted, opts.lang)}`
+  // Web: the draft is a card (parts.draft), not text; the model sees it next turn through the memo.
+  if (ctx.drafted && channel !== 'web') text = `${text ? `${text}\n\n` : ''}${draftPreview(ctx.drafted, opts.lang)}`
   // Sources only if the reply actually carries the markers.
   const citations = ctx.citations.filter((c) => text.includes(`[${c.marker}]`))
   const enrich = [...ctx.enrich]
@@ -1813,10 +1912,22 @@ export async function runAgent(opts: {
   const memo = ctx.mailSeen?.length
     ? `[Email threads (ids for read_thread / reply_in_thread; never shown to the user): ${ctx.mailSeen.slice(0, 10).map((t) => `${t.thread_id} in ${t.account}${t.from ? ` from ${t.from}` : ''}`).join('; ')}]`
     : undefined
+  const parts: AgentParts | undefined = channel === 'web'
+    ? {
+        // The buttons say yes / no: a trailing "Reply yes." in the question is for the phone.
+        ask: ctx.asked ? { ...ctx.asked, summary: ctx.asked.summary.replace(/\s*Reply yes\b[^.?!]*[.!]?\s*$/i, '').trim() } : null,
+        draft: ctx.drafted ? agentDraft(ctx.drafted) : null,
+        links: dedupeLinks(ctx.links ?? []),
+        undoable: Boolean(ctx.undoable),
+        // What the model reads back next turn (never shown): the draft as it was shown, and thread ids.
+        ...(ctx.drafted || memo ? { memo: [ctx.drafted ? `[The draft shown under this reply]\n${draftPreview(ctx.drafted, opts.lang, 'web')}` : '', memo ?? ''].filter(Boolean).join('\n\n') } : {}),
+      }
+    : undefined
   return {
     text: text || '…',
     citations,
     ...(memo ? { memo } : {}),
+    ...(parts ? { parts } : {}),
     ...(ctx.redo ? { redo: ctx.redo } : {}),
     ...(ctx.split ? { split: ctx.split } : {}),
     ...(enrich.length || later.length
@@ -1829,3 +1940,80 @@ export async function runAgent(opts: {
       : {}),
   }
 }
+
+/* ------------------------------------------------------------- channels */
+
+/** The phone's after-reply message (tools' tell): sent, and kept in the WhatsApp chat history. */
+export function phoneNotify(email: string, phone: string): (text: string) => Promise<void> {
+  return async (text) => {
+    await sendText(phone, text)
+    const link = await getLinkByEmail(email).catch(() => null)
+    if (link) await setChat(email, [...(link.chat ?? []), { role: 'assistant', content: text, ts: Date.now() }]).catch(() => {})
+  }
+}
+
+/** WhatsApp formatting → the web's markdown-light: *bold* → **bold**, "• " → "- ". Idempotent. */
+export function webText(t: string): string {
+  return t
+    .replace(/(^|[^*\w])\*([^\s*][^*\n]*?[^\s*]|[^\s*])\*(?![*\w])/g, '$1**$2**')
+    .replace(/^(\s*)• /gm, '$1- ')
+}
+
+/** The draft as the web card shows it (lib/pen/agent-io.ts AgentDraft). `to` is "Name <email>", or the name alone while no email is known. */
+export function agentDraft(d: Draft): AgentDraft {
+  return {
+    from: d.from ?? null,
+    to: [d.toEmail ? `${d.toName} <${d.toEmail}>` : d.toName],
+    subject: d.subject,
+    body: d.body,
+    composeUrl: d.provider ? mailLink(d, 'w') : null,
+    mailtoUrl: mailLink(d, 'a'),
+  }
+}
+
+const DOC_TOOLS: Record<string, { kind: AgentLink['kind']; title: string }> = {
+  create_doc: { kind: 'doc', title: 'Google Doc' },
+  send_to_google_docs: { kind: 'doc', title: 'Notes in Google Docs' },
+  create_sheet: { kind: 'sheet', title: 'Google Sheet' },
+  export_todos_sheet: { kind: 'sheet', title: 'To-dos sheet' },
+  export_contacts_sheet: { kind: 'sheet', title: 'Contacts sheet' },
+  send_to_notion: { kind: 'notion', title: 'Notes in Notion' },
+}
+const CONNECT_NAME: Record<string, string> = {
+  google_calendar: 'Google Calendar', google_docs: 'Google Docs & Sheets', notion: 'Notion', granola: 'Granola', gmail: 'Gmail', outlook: 'Outlook',
+}
+const CONNECT_URL = /https?:\/\/\S+\/api\/pen\/connect\/[A-Za-z0-9._~-]+/
+
+/** What a tool result made or opened, as web cards: files, calendar events, connect links, a recording. */
+export function linksFrom(name: string, input: Record<string, unknown>, out: unknown): AgentLink[] {
+  if (!out || typeof out !== 'object') return []
+  const o = out as Record<string, unknown>
+  const s = (k: string) => (typeof o[k] === 'string' ? (o[k] as string) : '')
+  const links: AgentLink[] = []
+  const ok = !('error' in o)
+  const doc = DOC_TOOLS[name]
+  if (doc && ok && /^https?:\/\//.test(s('url'))) {
+    links.push({ kind: doc.kind, title: (typeof input.title === 'string' && input.title.trim()) || s('title') || doc.title, url: s('url') })
+  }
+  if (/^https?:\/\//.test(s('calendar_link'))) {
+    links.push({ kind: 'event', title: s('title') || (typeof input.title === 'string' ? input.title : '') || 'Calendar event', url: s('calendar_link') })
+  }
+  const connect = s('connect_link') || (CONNECT_URL.exec(s('message'))?.[0] ?? '')
+  if (connect && CONNECT_URL.test(connect)) {
+    const app = typeof input.app === 'string' ? input.app : ''
+    const title = CONNECT_NAME[app] ?? (name === 'send_to_notion' ? 'Notion' : doc ? 'Google Docs & Sheets' : 'Connect')
+    links.push({ kind: 'connect', title, url: connect })
+  }
+  if (name === 'get_recording' && ok && typeof o.session_id === 'string') {
+    links.push({ kind: 'recording', title: s('title') || 'Recording', url: `${publicBase()}/pen?open=${encodeURIComponent(o.session_id)}` })
+  }
+  return links
+}
+
+function dedupeLinks(links: AgentLink[]): AgentLink[] {
+  const seen = new Set<string>()
+  return links.filter((l) => (seen.has(l.url) ? false : (seen.add(l.url), true)))
+}
+
+/** For tests (.pentest/web-agent-unit.mts): the system prompt for a turn. */
+export const systemPrompt = system

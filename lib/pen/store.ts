@@ -70,6 +70,8 @@ export type ArchiveTurn = {
   /** Recordings the user tagged with @ in this question, so the chip survives a reload. */
   mentions?: Mention[]
   ts: number
+  /** Web agent turns (lib/pen/agent-io.ts): the ask / draft / links / undo shown with the reply. */
+  parts?: import('./agent-io').AgentParts
 }
 
 /**

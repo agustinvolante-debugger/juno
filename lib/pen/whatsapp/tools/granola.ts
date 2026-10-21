@@ -9,8 +9,6 @@ import { askConfirm } from '../confirm'
 import { str, type ToolModule } from './types'
 import { getConnection, granolaAvailable } from '../../granola'
 import { importMany, listForPicker } from '../../granola-import'
-import { sendText } from '../provider'
-import { getLinkByEmail, setChat } from '../store'
 import type { Lang } from '../../i18n'
 
 const TOOLS: Anthropic.Tool[] = [
@@ -49,10 +47,9 @@ const S: Record<Lang, { done: (n: number, titles: string, notesOnly: number, fai
   },
 }
 
+/** A message after the reply (the import finished): the channel's notify (agent.ts phoneNotify on the phone). */
 async function tell(ctx: Ctx, text: string): Promise<void> {
-  await sendText(ctx.phone, text)
-  const link = await getLinkByEmail(ctx.email).catch(() => null)
-  if (link) await setChat(ctx.email, [...(link.chat ?? []), { role: 'assistant', content: text, ts: Date.now() }]).catch(() => {})
+  await ctx.notify(text)
 }
 
 async function importGranola(ctx: Ctx, input: Record<string, unknown>): Promise<unknown> {

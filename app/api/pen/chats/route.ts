@@ -7,6 +7,7 @@ import { createChat, getChat, listChats, setMessages, titleFromQuestion } from '
 import type { ArchiveTurn } from '@/lib/pen/store'
 import { supabaseAdmin } from '@/lib/supabase'
 import { PREVIEW_CAP, previewOf } from './preview'
+import { webAgentAllowed, webAgentResponse } from '@/lib/pen/web-agent'
 
 export const dynamic = 'force-dynamic'
 // Two Opus calls (select, then answer) over a growing archive. At 60s this was returning a
@@ -35,7 +36,12 @@ export async function GET(req: Request) {
   }
 }
 
-/** Ask a question. Creates the thread when `id` is absent, appends to it when present. */
+/**
+ * Ask a question. Creates the thread when `id` is absent, appends to it when present. With
+ * PEN_WEB_AGENT=1 (and the user on PEN_WEB_AGENT_USERS, when set) the assistant answers with its
+ * tools and the reply streams as Server-Sent Events (lib/pen/web-agent.ts, lib/pen/agent-io.ts);
+ * button presses come as `action`. Otherwise: the archive answer as JSON, as before.
+ */
 export async function POST(req: Request) {
   const email = await authedEmail()
   if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
@@ -43,7 +49,14 @@ export async function POST(req: Request) {
   const ended = await readOnlyRefusal(email)
   if (ended) return NextResponse.json({ error: ended }, { status: 403 })
 
-  const b = (await req.json().catch(() => ({}))) as { id?: string; question?: string; mentions?: unknown }
+  const b = (await req.json().catch(() => ({}))) as { id?: string; question?: string; mentions?: unknown; action?: unknown }
+  if (webAgentAllowed(email)) {
+    try {
+      return await webAgentResponse(email, b, tagsOf(b.mentions))
+    } catch (e) {
+      return NextResponse.json({ error: (e as Error).message }, { status: 500 })
+    }
+  }
   const question = (b.question ?? '').trim()
   if (!question) return NextResponse.json({ error: 'Type a question first.' }, { status: 400 })
   if (question.length > 2000) {
@@ -55,15 +68,7 @@ export async function POST(req: Request) {
     if (!chat) return NextResponse.json({ error: 'That conversation no longer exists.' }, { status: 404 })
 
     const history = Array.isArray(chat.messages) ? chat.messages : []
-    // Tags arrive as {id, kind, label}. Plain id strings are recordings, from before people.
-    const raw = Array.isArray(b.mentions) ? b.mentions : []
-    const tags = raw.flatMap((x) =>
-      typeof x === 'string'
-        ? [{ id: x, kind: 'recording', label: '' }]
-        : x && typeof x === 'object' && typeof (x as { id?: unknown }).id === 'string'
-          ? [{ id: (x as { id: string }).id, kind: (x as { kind?: unknown }).kind === 'person' ? 'person' : 'recording', label: typeof (x as { label?: unknown }).label === 'string' ? (x as { label: string }).label : '' }]
-          : [],
-    )
+    const tags = tagsOf(b.mentions)
     const labels = Object.fromEntries(tags.filter((t) => t.label).map((t) => [t.id, t.label]))
     const { answer, citations, mentioned } = await askArchive({
       userEmail: email,
@@ -85,4 +90,16 @@ export async function POST(req: Request) {
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }
+}
+
+/** Tags arrive as {id, kind, label}. Plain id strings are recordings, from before people. */
+function tagsOf(mentions: unknown): { id: string; kind: 'recording' | 'person'; label: string }[] {
+  const raw = Array.isArray(mentions) ? mentions : []
+  return raw.flatMap((x) =>
+    typeof x === 'string'
+      ? [{ id: x, kind: 'recording' as const, label: '' }]
+      : x && typeof x === 'object' && typeof (x as { id?: unknown }).id === 'string'
+        ? [{ id: (x as { id: string }).id, kind: (x as { kind?: unknown }).kind === 'person' ? ('person' as const) : ('recording' as const), label: typeof (x as { label?: unknown }).label === 'string' ? (x as { label: string }).label : '' }]
+        : [],
+  )
 }

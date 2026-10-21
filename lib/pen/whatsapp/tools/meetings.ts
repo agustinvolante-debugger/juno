@@ -32,11 +32,11 @@ import { buildQuery } from '../../mail-thread'
 import { searchThreads, threadInvites, type FoundInvite } from '../../gmail-read'
 import { conversationInvites, searchOutlook } from '../../outlook-read'
 import { mergeHits, type MailHit, type SearchAsk } from '../../mail-thread'
-import { addReminder, maxAheadMs } from '../../reminders'
+import { addReminder, reminderAhead, reminderPhone } from '../../reminders'
 import { localDate, localWhen, zoneTimeLabel } from '../../timezone'
 import { foldName } from '../../speakers'
 import { supabaseAdmin } from '@/lib/supabase'
-import { addSetUndo } from '../undo'
+import { turnAddSetUndo } from '../state'
 import type { Lang } from '../../currency'
 
 const TOOLS: Anthropic.Tool[] = [
@@ -261,12 +261,12 @@ async function findMeeting(ctx: Ctx, input: Record<string, unknown>): Promise<un
   for (const m of mins) {
     const due = new Date(start - m * 60_000)
     if (due.getTime() < now.getTime() + 30_000) { skipped.push({ minutes_before: m, why: 'that time has already passed' }); continue }
-    if (due.getTime() - now.getTime() > maxAheadMs(ctx.lang)) { skipped.push({ minutes_before: m, why: 'too far ahead for a WhatsApp reminder' }); continue }
+    if (due.getTime() - now.getTime() > reminderAhead(ctx)) { skipped.push({ minutes_before: m, why: 'too far ahead for a WhatsApp reminder' }); continue }
     // The model sometimes sends "" as the text itself: quotes alone count as no text.
     const said = str(input, 'reminder_text').replace(/^["'“”‘’\s]+|["'“”‘’\s]+$/g, '')
     const text = (said || REMIND[ctx.lang](found.title, startClock, m)).slice(0, 500)
-    const r = await addReminder({ email: ctx.email, phone: ctx.phone, text, dueAt: due, lang: ctx.lang })
-    await addSetUndo(ctx.email, ctx.msgId, { reminder: r.id, title: found.title }).catch(() => {})
+    const r = await addReminder({ email: ctx.email, phone: reminderPhone(ctx, due), text, dueAt: due, lang: ctx.lang })
+    await turnAddSetUndo(ctx, { reminder: r.id, title: found.title }).catch(() => {})
     set.push({ minutes_before: m, local_time: clockOnly(r.due_at, zoneName, ctx.lang) })
   }
   return {

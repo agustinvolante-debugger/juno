@@ -9,7 +9,8 @@
 
 import type Anthropic from '@anthropic-ai/sdk'
 import type { Ctx } from '../agent'
-import { getPending, setPending, type Pending } from '../confirm'
+import type { Pending } from '../confirm'
+import { stateOf } from '../state'
 import { str, type ToolModule } from './types'
 import {
   localIso, localToUtc, localWhen, markZoneChecked, setSaidZone, userZone, validZone, zoneCheckQuestion, zoneFreshness, zonePlace, zoneTimeLabel, type Zone,
@@ -80,7 +81,7 @@ export function asksZone(text: string, tz: string): boolean {
 export async function finishZoneTurn(ctx: Ctx, text: string): Promise<string> {
   const t = ctx.zoneTurn
   if (!t?.question || !t.tz || ctx.askedNow) return text
-  await setPending(ctx.email, {
+  await stateOf(ctx).setPending({
     kind: 'zone_check',
     args: { tz: t.tz, items: t.items },
     summary: t.question,
@@ -88,6 +89,7 @@ export async function finishZoneTurn(ctx: Ctx, text: string): Promise<string> {
     createdAt: new Date().toISOString(),
   }).catch((e) => console.warn(`pen zone check pending: ${(e as Error).message}`))
   ctx.pendingTouched = true
+  ctx.asked = { kind: 'zone_check', summary: t.question }
   if (asksZone(text, t.tz)) return text
   const q = t.question.replace(/^(¿?)(\p{L})/u, (_, a: string, b: string) => a + b.toUpperCase())
   return `${text}${text ? '\n\n' : ''}${q}`
@@ -107,10 +109,10 @@ export function zoneAskLine(p: Pending): string {
 
 /** "No, I'm in SF" after the check: what was just set keeps its local clock time, in the new zone. */
 async function rezone(ctx: Ctx, tz: string): Promise<unknown[]> {
-  const asked = await getPending(ctx.email).catch(() => null)
+  const asked = await stateOf(ctx).getPending().catch(() => null)
   if (!asked || asked.kind !== 'zone_check' || asked.msgId === ctx.msgId) return []
   ctx.pendingTouched = true
-  await setPending(ctx.email, null)
+  await stateOf(ctx).setPending(null)
   const moved: unknown[] = []
   for (const i of (asked.args.items ?? []) as ZoneItem[]) {
     const at = localToUtc(i.local, tz)

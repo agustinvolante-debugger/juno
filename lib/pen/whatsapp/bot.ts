@@ -18,7 +18,7 @@ import { ALLOWED_EMAILS } from '@/lib/auth'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getAccount, isActive } from '../accounts'
 import { getAllowance } from '../allowance'
-import { runAgent, SEND_IT, type AgentResult } from './agent'
+import { phoneNotify, runAgent, SEND_IT, type AgentResult } from './agent'
 import { isMine } from '../todo-labels'
 import { askArchive } from '../archive'
 import { uploadStream, submit, fetchTranscript, deleteTranscript } from '../aai'
@@ -125,6 +125,11 @@ const EN = {
   saveCard: (line: string) => `Save ${line} to your contacts?`,
   saveCards: (n: number, lines: string) => `Save these ${n} contacts?\n${lines}`,
 }
+
+export type BotCopy = typeof EN
+
+/** The bot's words in a language (the web chat's after-reply messages reuse them). */
+export const botCopy = (lang: Lang): BotCopy => BOT[lang] ?? BOT.en
 
 const BOT: Record<Lang, typeof EN> = {
   en: EN,
@@ -444,6 +449,7 @@ async function onLocation(msg: Inbound, link: Link, L: typeof EN): Promise<void>
   const { zoneTimeLabel } = await import('../timezone')
   const ctx = {
     email: link.email, msgId: msg.id, question: said, history: [], recent: null, userName: null, phone: msg.from, lang,
+    channel: isImessage(msg.from) ? ('imessage' as const) : ('whatsapp' as const), notify: phoneNotify(link.email, msg.from),
     citations: [], drafted: null, sent: false, enrich: new Set<string>(), later: [],
   }
   const r = (await setTimezone(ctx, { zone: tz })) as { moved?: Record<string, string>[]; error?: string }
@@ -1007,7 +1013,8 @@ async function onText(
 }
 
 /** Splits an event recording (asked for in the chat) and sends the conversations back, numbered. */
-async function splitAndList(email: string, sessionId: string, to: string, L: typeof EN): Promise<void> {
+export async function splitAndList(email: string, sessionId: string, to: string, L: typeof EN, out?: (text: string) => Promise<unknown>): Promise<void> {
+  const send = out ?? ((t: string) => sendText(to, t))
   const { getSession } = await import('../store')
   const session = await getSession(email, sessionId)
   if (!session) return
@@ -1021,15 +1028,16 @@ async function splitAndList(email: string, sessionId: string, to: string, L: typ
     // The number at the END of each line, as a handle for "41 is Pedro"; the time and topic lead.
     const lines = list.map((c, i) => `• ${c.when} · ${c.topic} · ${c.confirmed ? L.convosWith(c.confirmed) : c.likely ? L.convosProbably(c.likely) : L.convosNoName} · ${i + 1}`)
     const { eventName } = await import('../name-hints')
-    await sendText(to, `${L.convosHead(list.length, eventName(title) || title)}\n\n${lines.join('\n')}\n\n${L.convosTail}`)
+    await send(`${L.convosHead(list.length, eventName(title) || title)}\n\n${lines.join('\n')}\n\n${L.convosTail}`)
   } catch (e) {
     console.warn(`pen whatsapp: split ${sessionId} failed: ${(e as Error).message}`)
-    await sendText(to, L.splitFailed(title)).catch(() => {})
+    await send(L.splitFailed(title)).catch(() => {})
   }
 }
 
-/** Rewrites one recording's notes (asked for on WhatsApp) and sends the new briefing here. */
-async function redoNotes(email: string, sessionId: string, type: string | undefined, L: typeof EN): Promise<void> {
+/** Rewrites one recording's notes (asked for on WhatsApp) and sends the new briefing here. `out`:
+ *  the web chat's notify instead (the briefing and any failure go there, not to the phone). */
+export async function redoNotes(email: string, sessionId: string, type: string | undefined, L: typeof EN, out?: (text: string) => Promise<unknown>): Promise<void> {
   const { getSession } = await import('../store')
   const session = await getSession(email, sessionId)
   if (!session) return
@@ -1037,9 +1045,11 @@ async function redoNotes(email: string, sessionId: string, type: string | undefi
     const { writeNotes } = await import('../pipeline')
     const r = await writeNotes({ email, session, forceType: type, claim: false })
     if (r === 'taken' || !r.session) throw new Error('notes not written')
-    await sendWhatsAppBriefing(r.session, { ask: false })
+    if (out) await out(briefingText(r.session, await userLang(email)))
+    else await sendWhatsAppBriefing(r.session, { ask: false })
   } catch (e) {
     console.warn(`pen whatsapp: redo notes ${sessionId} failed: ${(e as Error).message}`)
+    if (out) return void (await out(L.redoFailed(session.title ?? session.source_name ?? L.titleFallback)).catch(() => {}))
     const link = await getLinkByEmail(email)
     if (link?.phone) await sendText(link.phone, L.redoFailed(session.title ?? session.source_name ?? L.titleFallback)).catch(() => {})
   }

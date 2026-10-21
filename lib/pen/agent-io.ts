@@ -46,6 +46,8 @@ export type AgentParts = {
   links?: AgentLink[]
   /** This turn can be undone (web: an Undo button on it). */
   undoable?: boolean
+  /** Never shown: what the assistant reads back with this turn next time (the draft as shown, email thread ids). */
+  memo?: string
 }
 
 /** pen_chats.agent_state: the web thread's pending confirm, draft and undo records. */

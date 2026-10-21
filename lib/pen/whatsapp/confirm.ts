@@ -18,6 +18,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import type { Ctx } from './agent'
 import type { ToolModule } from './tools/types'
 import { unseen } from './burst'
+import { stateOf } from './state'
 
 // "Ask once, only where it can't be undone or reaches other people" (18 Oct). Done at once, said
 // in one line: combining or separating recordings (undo: ./undo.ts), deleting or moving an event
@@ -115,7 +116,8 @@ export async function setPending(email: string, p: Pending | null): Promise<void
 export async function askConfirm(ctx: Ctx, p: { kind: string; args: Record<string, unknown>; summary: string }): Promise<unknown> {
   ctx.pendingTouched = true
   ctx.askedNow = true
-  await setPending(ctx.email, { ...p, msgId: ctx.msgId, createdAt: new Date().toISOString() })
+  await stateOf(ctx).setPending({ ...p, msgId: ctx.msgId, createdAt: new Date().toISOString() })
+  ctx.asked = { kind: p.kind, summary: p.summary }
   return { needs_yes: true, ask_user: p.summary, note: 'Nothing has changed yet. Ask the user exactly this and stop; their yes in the next message runs it (confirm_pending).' }
 }
 
@@ -141,15 +143,15 @@ const TOOLS: Anthropic.Tool[] = [
  */
 export async function dropIfUnanswered(ctx: Ctx, asked: Pending | null): Promise<void> {
   if (!asked || asked.msgId === ctx.msgId || ctx.pendingTouched || unseen(asked.createdAt, ctx.sentAt)) return
-  await supabaseAdmin.from('pen_whatsapp_links').update({ pending: null }).eq('email', ctx.email.toLowerCase()).eq('pending->>createdAt', asked.createdAt)
+  await stateOf(ctx).dropPending(asked.createdAt)
 }
 
 export async function confirmPending(ctx: Ctx, decision: string): Promise<unknown> {
   ctx.pendingTouched = true
-  const p = await getPending(ctx.email)
+  const p = await stateOf(ctx).getPending()
   if (!p) return { error: 'nothing is waiting for a yes (it may have expired after 30 minutes); ask again' }
   if (p.msgId === ctx.msgId || unseen(p.createdAt, ctx.sentAt)) return { error: 'the user has not seen this question yet; ask it and wait for their reply' }
-  await setPending(ctx.email, null)
+  await stateOf(ctx).setPending(null)
   if (decision !== 'yes') return { ok: true, cancelled: p.summary }
   const { MODULES } = await import('./tools')
   const run = MODULES.map((m) => m.confirm?.[p.kind]).find(Boolean)
