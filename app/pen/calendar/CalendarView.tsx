@@ -3,7 +3,7 @@
 // The Calendar page (22 Oct): every connected Google and Outlook calendar in one place, with
 // Juno's own layer on its meetings (the notes of a past meeting, the brief before the next one).
 // Meetings only: to-dos and reminders live elsewhere (founder, 20 Oct). Desktop: week (default)
-// and month. Phone: an agenda.
+// and month. Phone: Apple-Calendar-style day view, month and list (PhoneCalendar.tsx).
 //
 // Events are read live for the range on screen (GET /api/pen/calendar), refreshed every 90 s while
 // the tab is visible, on focus, and after every change. Old data stays on screen while it
@@ -24,6 +24,7 @@ import { ConfirmDialog, Floating, Sheet, Toast, type Anchor } from './CalPanels'
 import WeekGrid from './WeekGrid'
 import MonthGrid from './MonthGrid'
 import Agenda from './Agenda'
+import PhoneCalendar, { type PhoneView } from './PhoneCalendar'
 import EventDetail from './EventDetail'
 import EventForm, { type FormValues } from './EventForm'
 
@@ -97,6 +98,12 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
   // Phone: the agenda starts today, or at the day the mini calendar jumped to.
   const [agendaFrom, setAgendaFrom] = useState<Date | null>(null)
   const pendingDay = useRef<string | null>(null)
+  // Phone: day (default) / month / list; `anchor` is the selected day, pMonth the month shown,
+  // agendaBack the four-week chunks loaded before agendaFrom, pScroll re-aims the timeline.
+  const [pView, setPView] = useState<PhoneView>('day')
+  const [pMonth, setPMonth] = useState(() => startOfMonth(new Date()))
+  const [agendaBack, setAgendaBack] = useState(0)
+  const [pScroll, setPScroll] = useState(0)
   const [hidden, setHidden] = useState<Set<string>>(new Set())
   const [cache, setCache] = useState<Record<string, CalRange>>({})
   const [busy, setBusy] = useState(false)
@@ -137,14 +144,10 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
       writeLS(VIEW_KEY, 'week')
       return
     }
-    const from = agendaFrom ?? startOfDay(new Date())
-    const loadedTo = addDays(from, agendaSteps * AGENDA_STEP)
-    if (d >= from && d < loadedTo) scrollToDay(goTo.date)
-    else {
-      pendingDay.current = goTo.date
-      setAgendaFrom(d)
-      setAgendaSteps(1)
-    }
+    setAnchor(d)
+    setPMonth(startOfMonth(d))
+    setPView('day')
+    setPScroll((n) => n + 1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [goTo?.n])
 
@@ -158,10 +161,21 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
   const monthStart = startOfWeek(startOfMonth(anchor))
   const agendaStart = agendaFrom ?? today
   const chunks: Chunk[] = useMemo(() => {
-    if (phone) return Array.from({ length: agendaSteps }, (_, i) => chunk(addDays(agendaStart, i * AGENDA_STEP), addDays(agendaStart, (i + 1) * AGENDA_STEP)))
+    if (phone) {
+      // Day view: the strip's week. Month: its 6-week grid. List: four-week chunks.
+      if (pView === 'day') return [chunk(weekStart, addDays(weekStart, 7))]
+      if (pView === 'month') {
+        const g = startOfWeek(pMonth)
+        return [chunk(g, addDays(g, 42))]
+      }
+      return Array.from({ length: agendaBack + agendaSteps }, (_, i) => {
+        const f = addDays(agendaStart, (i - agendaBack) * AGENDA_STEP)
+        return chunk(f, addDays(f, AGENDA_STEP))
+      })
+    }
     return mode === 'week' ? [chunk(weekStart, addDays(weekStart, 7))] : [chunk(monthStart, addDays(monthStart, 42))]
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phone, agendaSteps, mode, weekStart.getTime(), monthStart.getTime(), agendaStart.getTime()])
+  }, [phone, agendaSteps, mode, weekStart.getTime(), monthStart.getTime(), agendaStart.getTime(), pView, pMonth.getTime(), agendaBack])
   const chunkKeys = chunks.map((c) => c.key).join(',')
 
   const chunksRef = useRef(chunks)
@@ -218,7 +232,12 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
   }, [])
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const data = useMemo(() => merge(chunks.map((c) => cache[c.key]).filter(Boolean)), [cache, chunkKeys])
+  const fresh = useMemo(() => merge(chunks.map((c) => cache[c.key]).filter(Boolean)), [cache, chunkKeys])
+  // Phone: swiping into a week not read yet keeps the last answer (its calendars, its events) on
+  // screen while the new week loads, instead of flashing a skeleton.
+  const lastData = useRef<CalRange | null>(null)
+  if (fresh) lastData.current = fresh
+  const data = phone ? fresh ?? lastData.current : fresh
 
   /** Phone: bring the agenda's day (or the next day with something on it) to the top. */
   function scrollToDay(day: string) {
@@ -447,11 +466,18 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
   const goToday = () => {
     setAnchor(startOfDay(new Date()))
     if (!phone) return
-    if (agendaFrom) {
-      pendingDay.current = ymd(new Date())
-      setAgendaFrom(null)
+    const t = startOfDay(new Date())
+    setPMonth(startOfMonth(t))
+    setPScroll((n) => n + 1)
+    if (pView !== 'list') return
+    const loadedFrom = addDays(agendaStart, -agendaBack * AGENDA_STEP)
+    if (t >= loadedFrom && t < addDays(agendaStart, agendaSteps * AGENDA_STEP)) scrollToDay(ymd(t))
+    else {
+      pendingDay.current = ymd(t)
+      setAgendaFrom(t)
+      setAgendaBack(0)
       setAgendaSteps(1)
-    } else scrollToDay(ymd(new Date()))
+    }
   }
 
   const wt = weekTitle(weekStart, lang)
@@ -684,31 +710,67 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
   // ------------------------------------------------------------------------ phone
   if (phone) {
     const end = addDays(agendaStart, agendaSteps * AGENDA_STEP)
+    const from = addDays(agendaStart, -agendaBack * AGENDA_STEP)
+    const openList = () => {
+      if (pView === 'list') return setPView('day')
+      pendingDay.current = ymd(anchor)
+      setAgendaFrom(anchor)
+      setAgendaBack(0)
+      setAgendaSteps(1)
+      setPView('list')
+    }
+    const list = loadingFirst ? (
+      <div className="pen-cal-skel pen-cal-skel-agenda" aria-label={T.loading}>
+        <span /><span /><span /><span />
+      </div>
+    ) : (
+      <Agenda
+        from={from}
+        to={end}
+        focusDay={agendaStart}
+        events={events}
+        hues={hues}
+        now={now}
+        loading={busy}
+        onOpenEvent={(ev) => open({ k: 'detail', ref: ev.ref, anchor: null })}
+        onLoadMore={() => {
+          if (!busy && agendaSteps < 13) setAgendaSteps((n) => n + 1)
+        }}
+        onLoadEarlier={agendaBack < 13 ? () => !busy && setAgendaBack((n) => n + 1) : undefined}
+      />
+    )
     return (
-      <section className="pen-cal" data-phone aria-label={T.calendar}>
-        <div className="pen-cal-pbar">
-          <button type="button" className="pen-btn pen-cal-today" onClick={goToday}>{T.today}</button>
-          {status}
-          {newBtn}
-        </div>
-        {cals.length > 0 && (
-          <button type="button" className="pen-cal-calbtn" aria-haspopup="dialog" onClick={() => setCalSheet(true)}>
-            <span className="pen-cal-calbtn-dots" aria-hidden>
-              {cals.slice(0, 4).map((c) => (
-                <span key={c.key} className="pen-cal-dot" data-off={hidden.has(c.key) || undefined} style={hueVars(hues[c.key])} />
-              ))}
-            </span>
-            <span className="pen-cal-calbtn-k">{T.calendars}</span>
-            <span className="pen-cal-calbtn-n">{T.shownOf(cals.filter((c) => !hidden.has(c.key)).length, cals.length)}</span>
-            {cals.some((c) => c.broken) && (
-              <span className="pen-cal-calbtn-warn">
-                <Icon name="alert" size={14} />
-                <span className="pen-cal-sr">{T.reconnect}</span>
-              </span>
-            )}
-            <Icon name="chevron" size={15} className="pen-cal-calbtn-chev" />
-          </button>
-        )}
+      <section className="pen-cal" data-phone data-pview={pView} aria-label={T.calendar} aria-busy={loadingFirst || undefined}>
+        <PhoneCalendar
+          view={pView}
+          now={now}
+          selected={anchor}
+          month={pMonth}
+          events={events}
+          hues={hues}
+          cals={cals}
+          hidden={hidden}
+          busy={busy}
+          loadingFirst={loadingFirst}
+          warn={warn}
+          list={list}
+          canCreate={!!defaultCal}
+          scrollTo={pScroll}
+          onSelect={(d) => {
+            setAnchor(startOfDay(d))
+            if (pView === 'month') setPView('day')
+          }}
+          onMonth={(dir) => setPMonth((m) => new Date(m.getFullYear(), m.getMonth() + dir, 1))}
+          onOpenMonth={() => {
+            setPMonth(startOfMonth(anchor))
+            setPView('month')
+          }}
+          onToggleList={openList}
+          onToday={goToday}
+          onCreate={(start, end) => open({ k: 'create', start, end, allDay: false, anchor: null })}
+          onOpenEvent={(ev) => open({ k: 'detail', ref: ev.ref, anchor: null })}
+          onOpenCalendars={() => setCalSheet(true)}
+        />
         {calSheet && (
           <Sheet label={T.calendars} onClose={() => setCalSheet(false)}>
             <div className="pen-cal-calsheet">
@@ -721,25 +783,6 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
               {legend}
             </div>
           </Sheet>
-        )}
-        {warn}
-        {loadingFirst ? (
-          <div className="pen-cal-skel pen-cal-skel-agenda" aria-label={T.loading}>
-            <span /><span /><span /><span />
-          </div>
-        ) : (
-          <Agenda
-            from={agendaStart}
-            to={end}
-            events={events}
-            hues={hues}
-            now={now}
-            loading={busy}
-            onOpenEvent={(ev) => open({ k: 'detail', ref: ev.ref, anchor: null })}
-            onLoadMore={() => {
-              if (!busy && agendaSteps < 13) setAgendaSteps((n) => n + 1)
-            }}
-          />
         )}
         {overlays}
       </section>

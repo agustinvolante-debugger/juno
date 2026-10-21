@@ -1,9 +1,10 @@
 'use client'
 
-// The phone calendar: an agenda from today forward, one block per day that has something in it.
-// Scrolling to the end loads the next four weeks.
+// The phone calendar's list: an agenda from the selected day forward, one block per day that has
+// something in it. Scrolling to the end loads the next four weeks; "Show earlier days" at the top
+// loads the four before, keeping what's on screen where it was (past meetings and their notes).
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import Icon from '../Icon'
 import { useCopy, useLang } from '../LangContext'
 import { LOCALE } from '@/lib/pen/i18n'
@@ -22,11 +23,17 @@ export default function Agenda({
   hues,
   now,
   loading,
+  focusDay,
   onOpenEvent,
   onLoadMore,
+  onLoadEarlier,
 }: {
   from: Date
   to: Date
+  /** Always shown, even with nothing on it (the day the list was opened from). */
+  focusDay?: Date
+  /** Load the weeks before `from`. */
+  onLoadEarlier?: () => void
   events: CalViewEvent[]
   hues: Record<string, Hue>
   now: Date
@@ -39,6 +46,25 @@ export default function Agenda({
   const sentinel = useRef<HTMLDivElement>(null)
   const more = useRef(onLoadMore)
   more.current = onLoadMore
+  const rootRef = useRef<HTMLDivElement>(null)
+  // Earlier days go in above what's on screen: hold the distance from the bottom, so the list
+  // doesn't jump.
+  const keep = useRef<number | null>(null)
+  const scroller = () => rootRef.current?.closest<HTMLElement>('.pen-cal-pscroll, .pen-m-body') ?? null
+  const earlier = () => {
+    const el = scroller()
+    if (el) keep.current = el.scrollHeight - el.scrollTop
+    onLoadEarlier?.()
+  }
+  const fromKey = from.getTime()
+  useLayoutEffect(() => {
+    const el = scroller()
+    if (el && keep.current !== null) el.scrollTop = el.scrollHeight - keep.current
+    // Hold on until the new days have actually arrived (they render empty until then).
+  }, [fromKey, events.length])
+  useEffect(() => {
+    if (!loading) keep.current = null
+  }, [loading])
 
   useEffect(() => {
     const el = sentinel.current
@@ -54,11 +80,16 @@ export default function Agenda({
     const items: Item[] = [
       ...events.filter((e) => overlaps(evSpan(e), d, d1)).map((ev): Item => ({ ev, t: ev.allDay ? -2 : Math.max(-1, evSpan(ev).s.getTime() - d.getTime()) })),
     ].sort((a, b) => a.t - b.t)
-    if (items.length || sameDay(d, now) || sameDay(d, from)) days.push({ d, items })
+    if (items.length || sameDay(d, now) || sameDay(d, focusDay ?? from)) days.push({ d, items })
   }
 
   return (
-    <div className="pen-cal-agenda">
+    <div className="pen-cal-agenda" ref={rootRef}>
+      {onLoadEarlier && (
+        <button type="button" className="pen-btn pen-cal-more pen-cal-earlier" onClick={earlier} disabled={loading}>
+          {loading && keep.current !== null ? T.loading : T.showEarlier}
+        </button>
+      )}
       {days.map(({ d, items }) => {
         const today = sameDay(d, now)
         return (
