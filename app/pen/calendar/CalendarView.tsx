@@ -16,7 +16,7 @@ import Icon from '../Icon'
 import { useCopy, useLang } from '../LangContext'
 import { errMessage } from '@/lib/pen/http'
 import type { CalBrief, CalCreate, CalPatch, CalRange, CalViewEvent } from '@/lib/pen/calendar-view'
-import { liveApi, mockApi, type CalApi, type MutResult } from './cal-api'
+import { liveApi, mockApi, type CalApi, type CalPerson, type MutResult } from './cal-api'
 import { CAL } from './cal-copy'
 import { monthTitle, weekTitle } from './cal-format'
 import { addDays, browserZone, calLabel, evSpan, hueVars, huesFor, parseYmd, startOfDay, startOfMonth, startOfWeek, ymd } from './cal-utils'
@@ -40,6 +40,8 @@ export type CalendarViewProps = {
   /** Dev preview only: answer from this range in memory instead of the API. */
   mock?: CalRange
   mockBrief?: (ref: string) => CalBrief
+  /** Dev preview only: the saved people the guest box suggests. */
+  mockPeople?: CalPerson[]
 }
 
 type Panel =
@@ -81,11 +83,11 @@ function merge(parts: CalRange[]): CalRange | null {
   return { calendars: last.calendars, tz: last.tz, events: [...ev.values()], failed: [...failed] }
 }
 
-export default function CalendarView({ phone, onOpenRecording, onOpenConnections, goTo, mock, mockBrief }: CalendarViewProps) {
+export default function CalendarView({ phone, onOpenRecording, onOpenConnections, goTo, mock, mockBrief, mockPeople }: CalendarViewProps) {
   const T = useCopy(CAL)
   const lang = useLang()
   const api: CalApi = useMemo(
-    () => (mock ? mockApi(mock, mockBrief ?? (() => ({ people: [] }))) : liveApi),
+    () => (mock ? mockApi(mock, mockBrief ?? (() => ({ people: [] })), mockPeople) : liveApi),
     // The preview's seed is fixed for the page's life.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [!!mock],
@@ -625,6 +627,7 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
           hues={hues}
           onSubmit={createEvent}
           onCancel={close}
+          people={api.people}
           onDraftChange={phone ? undefined : (start, end, allDay) => setDraft({ start, end, allDay })}
         />
       )
@@ -643,6 +646,7 @@ export default function CalendarView({ phone, onOpenRecording, onOpenConnections
           cals={cals}
           hues={hues}
           onSubmit={(v) => editEvent(panelEv, v)}
+          people={api.people}
           onCancel={() => setPanel({ k: 'detail', ref: panelEv.ref, anchor: panel.anchor })}
         />
       )

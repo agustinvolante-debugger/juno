@@ -3,6 +3,7 @@
 
 import type { CSSProperties } from 'react'
 import type { CalAccount, CalViewEvent } from '@/lib/pen/calendar-view'
+import { foldName } from '@/lib/pen/speakers'
 
 export const DAY_MS = 86_400_000
 /** Height of one hour in the week grid, in px. */
@@ -171,4 +172,44 @@ export function layoutDay(events: CalViewEvent[], day: Date): Placed[] {
 /** Emails out of free text ("ana@x.com, Bo <bo@y.io>"). */
 export function parseEmails(s: string): string[] {
   return Array.from(new Set((s.match(/[^\s,;<>()"']+@[^\s,;<>()"']+\.[^\s,;<>()"']+/g) ?? []).map((x) => x.toLowerCase())))
+}
+
+// ------------------------------------------------------------------------- guest suggestions
+
+/**
+ * Saved people for what is typed in the guest box, best first: accent- and case-blind, on the
+ * full name ("titi" finds Chris "titi" Dyas, "martin" finds Martín) and on the email. The name
+ * starting with it beats a word in it starting with it beats it anywhere; ties go to whoever has
+ * the most calls, then the most recent. People with an email come before those without.
+ */
+export function suggestPeople<P extends { name: string; email: string | null; calls: number; lastAt: string | null }>(
+  people: P[],
+  typed: string,
+  skip: Set<string>,
+  max = 6,
+): P[] {
+  const q = foldName(typed).replace(/\s+/g, ' ')
+  if (!q) return []
+  const rank = (p: P): number => {
+    const name = foldName(p.name).replace(/\s+/g, ' ')
+    if (name.startsWith(q)) return 0
+    // Word starts: after a space, a quote, a bracket or a hyphen.
+    if (name.split(/[^\p{L}\p{N}]+/u).some((w, i) => i > 0 && w.startsWith(q)) || name.includes(` ${q}`)) return 1
+    if (name.includes(q) || (p.email ?? '').toLowerCase().includes(q)) return 2
+    return -1
+  }
+  return people
+    .filter((p) => !(p.email && skip.has(p.email.toLowerCase())))
+    .map((p) => ({ p, r: rank(p) }))
+    .filter((x) => x.r >= 0)
+    .sort(
+      (a, b) =>
+        Number(!a.p.email) - Number(!b.p.email) ||
+        a.r - b.r ||
+        b.p.calls - a.p.calls ||
+        (b.p.lastAt ?? '').localeCompare(a.p.lastAt ?? '') ||
+        a.p.name.localeCompare(b.p.name),
+    )
+    .slice(0, max)
+    .map((x) => x.p)
 }

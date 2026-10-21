@@ -3,6 +3,7 @@
 
 import type { CalBrief, CalRange, CalViewEvent } from '@/lib/pen/calendar-view'
 import { addDays, startOfWeek, ymd } from '@/app/pen/calendar/cal-utils'
+import type { CalPerson } from '@/app/pen/calendar/cal-api'
 
 const GMAIL = 'g1'
 const WORK = 'g2'
@@ -159,3 +160,15 @@ export function mockBrief(ref: string): CalBrief {
   }
   return { people: [{ name: 'Priya Natarajan', email: priya.email, lastCall: null, youOwe: [], theyOwe: [] }] }
 }
+
+/** The saved people the guest box suggests: a nickname, an accent, and one without an email. */
+export const mockPeople: CalPerson[] = [
+  { name: 'Chris "titi" Dyas', email: 'chris@example.com', calls: 14, lastAt: '2026-10-18T15:00:00Z' },
+  { name: 'Carlos Volante', email: 'carlos@example.com', calls: 9, lastAt: '2026-10-16T13:00:00Z' },
+  { name: 'Martín Gajardo', email: 'martin.gajardo@example.cl', calls: 4, lastAt: '2026-10-10T18:30:00Z' },
+  { name: 'Ana Souza', email: 'ana.souza@lumenpay.com', calls: 6, lastAt: '2026-10-14T16:00:00Z' },
+  { name: 'Priya Natarajan', email: 'priya@northwind.vc', calls: 2, lastAt: '2026-09-29T17:00:00Z' },
+  { name: 'Carla Méndez', email: null, calls: 3, lastAt: '2026-10-12T14:00:00Z' },
+  { name: 'Marco Rossi', email: 'marco@lumenpay.com', calls: 1, lastAt: '2026-08-21T12:00:00Z' },
+  { name: 'Dana Kim', email: 'dana.kim@acme-realty.com', calls: 0, lastAt: null },
+]

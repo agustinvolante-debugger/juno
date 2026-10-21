@@ -5,7 +5,11 @@
 
 import { getJson } from '@/lib/pen/http'
 import type { CalBrief, CalCreate, CalPatch, CalRange, CalViewEvent } from '@/lib/pen/calendar-view'
+import type { PersonCard } from '@/lib/pen/people'
 import { evSpan, overlaps } from './cal-utils'
+
+/** A saved person, as the guest box suggests them. No email = shown, but can't be invited. */
+export type CalPerson = { name: string; email: string | null; calls: number; lastAt: string | null }
 
 export type MutResult<T> = { ok: true; value: T } | { needsConfirm: true; guests: number } | { readOnly: true }
 
@@ -15,6 +19,8 @@ export type CalApi = {
   create(body: CalCreate): Promise<MutResult<CalViewEvent>>
   patch(body: CalPatch): Promise<MutResult<CalViewEvent>>
   remove(ref: string, confirm: boolean): Promise<MutResult<true>>
+  /** The user's saved people (GET /api/pen/people), for the guest box's suggestions. */
+  people(): Promise<CalPerson[]>
 }
 
 async function send<T>(method: string, url: string, body?: unknown): Promise<MutResult<T>> {
@@ -46,12 +52,16 @@ export const liveApi: CalApi = {
   create: (body) => send<CalViewEvent>('POST', '/api/pen/calendar/events', body),
   patch: (body) => send<CalViewEvent>('PATCH', '/api/pen/calendar/events', body),
   remove: (ref, confirm) => send<true>('DELETE', `/api/pen/calendar/events?ref=${encodeURIComponent(ref)}${confirm ? '&confirm=1' : ''}`),
+  people: async () =>
+    ((await getJson<{ people: PersonCard[] }>('/api/pen/people')).people ?? []).map((p) => ({
+      name: p.name, email: p.email ?? null, calls: p.recordings ?? 0, lastAt: p.lastAt ?? null,
+    })),
 }
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 /** Dev preview only: the same contract, answered from memory. Nothing leaves the browser. */
-export function mockApi(seed: CalRange, brief: (ref: string) => CalBrief): CalApi {
+export function mockApi(seed: CalRange, brief: (ref: string) => CalBrief, people: CalPerson[] = []): CalApi {
   const db: CalRange = JSON.parse(JSON.stringify(seed))
   let n = 0
   return {
@@ -112,6 +122,10 @@ export function mockApi(seed: CalRange, brief: (ref: string) => CalBrief): CalAp
       }
       db.events = db.events.map((e) => (e === ev ? next : e))
       return { ok: true, value: next }
+    },
+    async people() {
+      await wait(300)
+      return people
     },
     async remove(ref, confirm) {
       await wait(250)

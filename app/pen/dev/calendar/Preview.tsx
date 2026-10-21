@@ -6,7 +6,7 @@ import Icon from '@/app/pen/Icon'
 import type { Lang } from '@/lib/pen/i18n'
 import type { CalRange } from '@/lib/pen/calendar-view'
 import CalendarView from '@/app/pen/calendar/CalendarView'
-import { buildMock, buildStress, mockBrief } from './mock'
+import { buildMock, buildStress, mockBrief, mockPeople } from './mock'
 
 /** ?clock=8:45 — the page's clock reads 8:45 today (and keeps ticking), so the phone's day view
  *  shows past, now and upcoming whatever time the screenshots are taken. Dev preview only. */
@@ -39,7 +39,7 @@ export default function Preview({ phone, lang, empty, stress, goto, clock }: { p
   }, [empty, stress, clock])
   const log = (what: string) => (id: string) => console.info(`[calendar preview] ${what}`, id)
   const view = mock && (
-    <CalendarView phone={phone} goTo={goto ? { date: goto, n: 1 } : undefined} mock={mock} mockBrief={mockBrief} onOpenRecording={log('open recording')} onOpenConnections={() => log('open connections')('')} />
+    <CalendarView phone={phone} goTo={goto ? { date: goto, n: 1 } : undefined} mock={mock} mockBrief={mockBrief} mockPeople={mockPeople} onOpenRecording={log('open recording')} onOpenConnections={() => log('open connections')('')} />
   )
 
   return (

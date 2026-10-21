@@ -691,6 +691,33 @@
   flex: 1 1 80px; width: auto; height: 26px; padding: 0 5px; border: 0; border-radius: 0; background: transparent; box-shadow: none;
 }
 .pen-root .pen-cal-form .pen-cal-guestbox input.pen-cal-guest-in.pen-cal-guest-in:focus { border: 0; box-shadow: none; }
+/* Saved-people suggestions under the guest box: in the flow, so no panel or sheet clips them. */
+.pen-root .pen-cal-sugg {
+  list-style: none; margin: 0; padding: 4px; border-radius: 12px;
+  background: #fff; border: 1px solid var(--line);
+  box-shadow: 0 1px 2px rgba(29, 29, 31, .05), 0 10px 24px -14px rgba(29, 29, 31, .28);
+  animation: pen-cal-sugg .18s cubic-bezier(.16, 1, .3, 1);
+}
+.pen-root .pen-cal-sugg[hidden] { display: none; }
+@keyframes pen-cal-sugg { from { opacity: 0; translate: 0 -3px; } }
+.pen-root .pen-cal-sugg > li[role='option'] {
+  display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 5px 8px;
+  border-radius: 8px; cursor: pointer; user-select: none;
+}
+.pen-root .pen-cal-sugg > li[data-active] { background: rgba(0, 113, 227, .09); }
+.pen-root .pen-cal-sugg > li[aria-disabled] { cursor: default; }
+.pen-root .pen-cal-sugg > li[aria-disabled] .pen-cal-avatar { opacity: .55; }
+.pen-root .pen-cal-sugg > li[aria-disabled] .pen-cal-sugg-name { color: var(--dim); }
+.pen-root .pen-cal-sugg > li[aria-disabled] .pen-cal-sugg-mail { font-style: italic; }
+.pen-root .pen-cal-sugg-t { display: flex; flex-direction: column; min-width: 0; }
+.pen-root .pen-cal-sugg-name { font-size: 14px; font-weight: 500; line-height: 1.3; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pen-root .pen-cal-sugg-mail { font-size: 12.5px; line-height: 1.3; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pen-root .pen-cal-sugg > li.pen-cal-sugg-hint { min-height: 34px; padding: 6px 10px; font-size: 13px; color: var(--dim); cursor: default; }
+.pen-root .pen-cal-sheet .pen-cal-sugg > li[role='option'] { min-height: 48px; }
+.pen-root .pen-cal-sheet .pen-cal-sugg-name { font-size: 15.5px; }
+.pen-root .pen-cal-sheet .pen-cal-sugg-mail { font-size: 13.5px; }
+.pen-root .pen-cal-sheet .pen-cal-sugg > li.pen-cal-sugg-hint { min-height: 44px; font-size: 14.5px; }
+@media (prefers-reduced-motion: reduce) { .pen-root .pen-cal-sugg { animation: none; } }
 .pen-root .pen-cal-hasvideo { margin-top: 12px; }
 .pen-root .pen-cal-hasvideo-body { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 2px; min-width: 0; font-size: 14px; color: var(--soft); }
 .pen-root .pen-cal-hasvideo-body a {
