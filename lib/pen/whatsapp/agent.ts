@@ -98,6 +98,8 @@ export type Ctx = {
   userName: string | null
   /** Where the turn runs (lib/pen/agent-io.ts): formatting, confirms and where state is kept. */
   channel: AgentChannel
+  /** A turn that continues an earlier request after a file pick (lib/pen/drive-continue.ts): that request's words. */
+  resumeRequest?: string
   /** The WhatsApp / iMessage sender. Web: the linked phone a reminder can go to, or none. */
   phone?: string
   /** Web: whether that phone can be reached later (reminders.ts reminderPhone). */
@@ -1743,6 +1745,8 @@ export async function runAgent(opts: {
   image?: { data: string; mime: string }
   /** When the latest message of this turn arrived (Ctx.sentAt). */
   sentAt?: number
+  /** Continuing an earlier request after a file pick (Ctx.resumeRequest). */
+  resumeRequest?: string
 }): Promise<AgentResult> {
   const channel: AgentChannel = opts.channel ?? (opts.phone?.startsWith('im:') ? 'imessage' : 'whatsapp')
   const store = opts.store ?? phoneStore(opts.email)

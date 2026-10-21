@@ -25,6 +25,7 @@ import { str, type ToolModule } from './types'
 import { getSession } from '../../store'
 import { connectLink, viaOfCtx } from '../../connect-link'
 import { driveConnected, gcalConfigured } from '../../google-calendar'
+import { pickLink, pickUrl } from '../../drive-continue'
 import type { DocEditMode, DriveUndo, GDocBlock, JunoFile, Resolved, SheetEditMode } from '../../google-drive'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -204,16 +205,20 @@ async function freeSheet(ctx: Ctx, input: Record<string, unknown>): Promise<unkn
  */
 export const driveUndoHook: { save: ((ctx: Ctx, rec: DriveUndo, title: string) => Promise<void>) | null } = { save: null }
 
-const publicBase = () => (process.env.PEN_PUBLIC_URL || process.env.NEXTAUTH_URL || 'https://www.tryjunoapp.com').replace(/\/$/, '')
-/** The page where the user lets Juno edit files of theirs (signed in on the website). */
-export const pickUrl = () => `${publicBase()}/pen/drive/pick`
+export { pickUrl }
 
-const PICK_NEXT =
-  'Put this link in your reply NOW, on its own line, with one line: open it (signed in to Juno), choose the file in Google\'s ' +
-  'window, and Juno can edit it from then on; then they say "try again". Do not ask whether to send it.'
+/** What to say with the pick link: the tokened link continues by itself once they pick. */
+function pickNext(link: string): string {
+  return link.includes('?t=')
+    ? 'Put this link in your reply NOW, on its own line, and say plainly: "Tap the link and choose the file; I\'ll add it as soon as ' +
+      'you do." (in their language; they need to be signed in to Juno). Do not ask them to come back or say anything. Do not ask whether to send it.'
+    : 'Put this link in your reply NOW, on its own line, with one line: open it (signed in to Juno), choose the file in Google\'s ' +
+      'window, and Juno can edit it from then on; then they say "try again". Do not ask whether to send it.'
+}
 
-function pickReply(error: string): Record<string, unknown> {
-  return { error, pick_link: pickUrl(), next: PICK_NEXT }
+async function pickReply(ctx: Ctx, error: string): Promise<Record<string, unknown>> {
+  const link = await pickLink(ctx)
+  return { error, pick_link: link, next: pickNext(link) }
 }
 
 const fileOut = (f: JunoFile) => ({ id: f.id, name: f.name, kind: f.kind, modified: f.modified, url: f.url })
@@ -227,8 +232,8 @@ async function target(ctx: Ctx, input: Record<string, unknown>, kind?: 'doc' | '
   if (r.ok) return { file: r.file }
   if (r.reason === 'ambiguous') return { out: { error: 'several files match: ask which one', matches: r.matches?.map(fileOut) } }
   if (r.reason === 'wrong_kind') return { out: { error: kind === 'doc' ? 'that file is not a Google Doc' : kind === 'sheet' ? 'that file is not a Google Sheet' : 'that file is not a Google Doc or Sheet', ...(r.matches ? { file: fileOut(r.matches[0]) } : {}) } }
-  if (r.reason === 'no_access') return { out: pickReply('Juno can\'t open that file yet: it is not one Juno made, and they haven\'t chosen it for Juno') }
-  return { out: pickReply('no Doc or Sheet Juno can open has that name') }
+  if (r.reason === 'no_access') return { out: await pickReply(ctx, 'Juno can\'t open that file yet: it is not one Juno made, and they haven\'t chosen it for Juno') }
+  return { out: await pickReply(ctx, 'no Doc or Sheet Juno can open has that name') }
 }
 
 async function findFile(ctx: Ctx, input: Record<string, unknown>): Promise<unknown> {
@@ -238,10 +243,11 @@ async function findFile(ctx: Ctx, input: Record<string, unknown>): Promise<unkno
   const { listJunoFiles } = await import('../../google-drive')
   const files = await listJunoFiles(ctx.email, str(input, 'words'), { kind: k === 'doc' || k === 'sheet' ? k : undefined, limit: 10 })
   if (!files.length) {
+    const link = await pickLink(ctx)
     return {
       files: [],
-      note: 'None found. If the file is one they made themselves, give them pick_google_file\'s link so they can let Juno edit it.',
-      pick_link: pickUrl(),
+      note: `None found. If the file is one they made themselves, give them this pick_link so they can let Juno edit it. ${pickNext(link)}`,
+      pick_link: link,
     }
   }
   return { files: files.map(fileOut), note: 'Newest first. Juno sees only files it made or they chose for it.' }
@@ -324,10 +330,13 @@ async function editSheetTool(ctx: Ctx, input: Record<string, unknown>): Promise<
 async function pickFile(ctx: Ctx): Promise<unknown> {
   const need = await needDrive(ctx)
   if (need) return need
+  const link = await pickLink(ctx)
   return {
     ok: true,
-    pick_link: pickUrl(),
-    next: 'Give this link on its own line, with one line: open it signed in to Juno, choose up to 5 Docs or Sheets in Google\'s window, and Juno can edit them.',
+    pick_link: link,
+    next: link.includes('?t=')
+      ? pickNext(link)
+      : 'Give this link on its own line, with one line: open it signed in to Juno, choose up to 5 Docs or Sheets in Google\'s window, and Juno can edit them.',
   }
 }
 
@@ -359,6 +368,7 @@ export const googleModule: ToolModule = {
     'find_google_file (by words in the name), then read_google_file, then edit_google_doc / edit_google_sheet. Edit their own file ' +
     'at once (no yes needed), changing only what they asked; prefer append / insert_after_heading / append_rows / update_cells ' +
     'over replacing everything. "What\'s in my sheet?" → read_google_file. Juno opens only files it made or they chose for it: if ' +
-    'the file isn\'t found or can\'t be opened, pick_google_file gives the link where they choose it (put it in the reply). ' +
+    'the file isn\'t found or can\'t be opened, pick_google_file gives the link where they choose it: put it in the reply and say ' +
+    'plainly "Tap the link and choose the file; I\'ll add it as soon as you do." Juno then carries on by itself once they pick. ' +
     'Never say Juno can\'t edit Google Docs or Sheets.',
 }

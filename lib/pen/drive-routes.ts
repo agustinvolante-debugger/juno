@@ -4,6 +4,7 @@
 import { readOnlyRefusal } from './access'
 import { driveConnected } from './google-calendar'
 import { pickedFiles, pickerToken } from './google-drive'
+import { startContinue } from './drive-continue'
 
 export type RouteOut = { status: number; body: Record<string, unknown> }
 
@@ -26,16 +27,21 @@ export async function tokenFor(email: string | null, url: string): Promise<Route
   }
 }
 
-/** After a pick: which of these files Juno can now open (names and links). Stores nothing. */
-export async function pickedFor(email: string | null, raw: unknown): Promise<RouteOut> {
+/**
+ * After a pick: which of these files Juno can now open (names and links). With the chat's token
+ * (`token`, lib/pen/drive-continue.ts), the request that led here carries on in that chat in the
+ * background: `continued` says so, `back` which chat, `reason` why not (window = WhatsApp's 24 h).
+ */
+export async function pickedFor(email: string | null, raw: unknown, schedule?: (job: () => Promise<void>) => void | Promise<void>): Promise<RouteOut> {
   if (!email) return { status: 401, body: { error: 'unauthorized' } }
-  const b = (raw ?? {}) as { files?: { id?: unknown }[] }
+  const b = (raw ?? {}) as { files?: { id?: unknown }[]; token?: unknown }
   const ids = (Array.isArray(b.files) ? b.files : []).map((f) => (typeof f?.id === 'string' ? f.id : '')).filter((id) => /^[A-Za-z0-9_-]{10,200}$/.test(id)).slice(0, 5)
   if (!ids.length) return { status: 400, body: { error: 'no files' } }
   if (!(await driveConnected(email))) return { status: 409, body: { error: 'not connected', connect: true } }
   try {
-    const files = await pickedFiles(email, ids)
-    return { status: 200, body: { files: files.map((f) => ({ id: f.id, name: f.name, kind: f.kind, url: f.url })), missing: ids.length - files.length } }
+    const files = (await pickedFiles(email, ids)).map((f) => ({ id: f.id, name: f.name, kind: f.kind, url: f.url }))
+    const cont = b.token ? await startContinue(email, b.token, files, schedule) : { continued: false }
+    return { status: 200, body: { files, missing: ids.length - files.length, ...cont } }
   } catch (e) {
     return { status: 502, body: { error: (e as Error).message } }
   }

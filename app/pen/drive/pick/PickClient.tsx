@@ -10,6 +10,9 @@ import type { Lang } from '@/lib/pen/currency'
 
 export type PickState = 'signed_out' | 'not_configured' | 'connect' | 'reconnect' | 'ready' | 'done'
 type Picked = { id: string; name: string; kind: 'doc' | 'sheet'; url: string }
+/** The chat this page was opened from (lib/pen/drive-continue.ts): the pick carries on the request there. */
+export type Continue = { token: string; back: 'wa' | 'im' | 'web'; wa: string }
+type Outcome = 'plain' | 'continued' | 'say_done'
 
 /** The Google Cloud project number: the Picker grants files to the app with this id. */
 const APP_ID = '1084424504862'
@@ -22,6 +25,12 @@ const EN = {
   title: 'Let Juno edit a file',
   lede: 'Choose a Google Doc or Sheet you made yourself, and Juno can add to it or change it when you ask in the chat.',
   steps: ['Tap “Choose files”.', 'Pick up to 5 Docs or Sheets in Google’s window.', 'Go back to the chat and tell Juno what to change.'],
+  stepsCont: ['Tap “Choose files”.', 'Pick the file in Google’s window.', 'That’s all: Juno does what you asked, in your chat.'],
+  contLine: 'Done — Juno is adding it now. You’ll see it in your chat.',
+  sayDone: 'Go back to the chat and say “done”, and Juno will carry on.',
+  backWeb: 'Back to your chat',
+  backWa: 'Back to WhatsApp',
+  backIm: 'You can close this page and go back to Messages.',
   privacy: 'Juno can open only the files you choose here and the ones it made. Nothing else in your Drive is visible to Juno.',
   account: (a: string) => `Uses the Google account ${a}.`,
   choose: 'Choose files',
@@ -56,6 +65,12 @@ const COPY: Record<Lang, T> = {
     title: 'Deja que Juno edite un archivo',
     lede: 'Elige un Google Doc o Sheet que hiciste tú, y Juno podrá agregarle cosas o cambiarlo cuando se lo pidas en el chat.',
     steps: ['Toca “Elegir archivos”.', 'Elige hasta 5 Docs o Sheets en la ventana de Google.', 'Vuelve al chat y dile a Juno qué cambiar.'],
+    stepsCont: ['Toca “Elegir archivos”.', 'Elige el archivo en la ventana de Google.', 'Eso es todo: Juno hace lo que pediste, en tu chat.'],
+    contLine: 'Listo — Juno lo está agregando ahora. Lo verás en tu chat.',
+    sayDone: 'Vuelve al chat y escribe “listo”, y Juno sigue.',
+    backWeb: 'Volver a tu chat',
+    backWa: 'Volver a WhatsApp',
+    backIm: 'Puedes cerrar esta página y volver a Mensajes.',
     privacy: 'Juno solo puede abrir los archivos que elijas aquí y los que hizo él. Nada más de tu Drive es visible para Juno.',
     account: (a) => `Usa la cuenta de Google ${a}.`,
     choose: 'Elegir archivos',
@@ -86,6 +101,12 @@ const COPY: Record<Lang, T> = {
     title: 'Deixe o Juno editar um arquivo',
     lede: 'Escolha um Google Doc ou Planilha que você mesmo fez, e o Juno pode acrescentar ou mudar o que você pedir no chat.',
     steps: ['Toque em “Escolher arquivos”.', 'Escolha até 5 Docs ou Planilhas na janela do Google.', 'Volte ao chat e diga ao Juno o que mudar.'],
+    stepsCont: ['Toque em “Escolher arquivos”.', 'Escolha o arquivo na janela do Google.', 'Pronto: o Juno faz o que você pediu, no seu chat.'],
+    contLine: 'Pronto — o Juno está adicionando agora. Você vai ver no seu chat.',
+    sayDone: 'Volte ao chat e escreva “pronto”, e o Juno continua.',
+    backWeb: 'Voltar para o seu chat',
+    backWa: 'Voltar para o WhatsApp',
+    backIm: 'Pode fechar esta página e voltar para o Mensagens.',
     privacy: 'O Juno só abre os arquivos que você escolher aqui e os que ele criou. Nada mais do seu Drive fica visível para o Juno.',
     account: (a) => `Usa a conta Google ${a}.`,
     choose: 'Escolher arquivos',
@@ -176,9 +197,12 @@ const GoogleDriveMark = () => (
   </svg>
 )
 
-export default function PickClient({ lang, state, account, pickerKey, previewDone }: { lang: Lang; state: PickState; account: string | null; pickerKey: string; previewDone?: boolean }) {
+export default function PickClient({ lang, state, account, pickerKey, previewDone, cont, signIn }: { lang: Lang; state: PickState; account: string | null; pickerKey: string; previewDone?: Outcome | null; cont?: Continue | null; signIn?: string }) {
   const L = COPY[lang] ?? EN
   const [phase, setPhase] = useState<'idle' | 'opening' | 'saving' | 'done'>(previewDone ? 'done' : 'idle')
+  const [outcome, setOutcome] = useState<Outcome>(previewDone ?? 'plain')
+  // The token goes with the first pick only: it is single use.
+  const token = useRef<string | null>(cont?.token ?? null)
   const [view, setView] = useState<PickState>(state)
   const [err, setErr] = useState<string | null>(null)
   const [files, setFiles] = useState<Picked[]>(
@@ -195,12 +219,15 @@ export default function PickClient({ lang, state, account, pickerKey, previewDon
   const onPicked = useCallback(async (ids: string[]) => {
     setPhase('saving')
     try {
-      const r = await fetch('/api/pen/drive/picked', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ files: ids.map((id) => ({ id })) }) })
-      const j = (await r.json().catch(() => ({}))) as { files?: Picked[]; missing?: number; connect?: boolean }
+      const sent = token.current
+      const r = await fetch('/api/pen/drive/picked', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ files: ids.map((id) => ({ id })), ...(sent ? { token: sent } : {}) }) })
+      const j = (await r.json().catch(() => ({}))) as { files?: Picked[]; missing?: number; connect?: boolean; continued?: boolean; reason?: string }
       if (r.status === 409 || j.connect) { setView('connect'); setPhase('idle'); return }
       if (!r.ok || !j.files) throw new Error('picked')
       setFiles(j.files)
       setMissing(j.missing ?? 0)
+      if (sent && j.files.length) token.current = null
+      setOutcome(sent && j.continued ? 'continued' : sent && j.reason === 'window' ? 'say_done' : 'plain')
       setPhase(j.files.length ? 'done' : 'idle')
       if (!j.files.length) setErr(L.missing)
     } catch {
@@ -274,7 +301,7 @@ export default function PickClient({ lang, state, account, pickerKey, previewDon
 
   let body: React.ReactNode
   if (view === 'signed_out') {
-    body = (<>{head(L.signedOutTitle)}<p>{L.signedOut}</p><div className="pen-drive-actions"><a className="pen-drive-btn" href={SIGN_IN}>{L.signIn}</a></div></>)
+    body = (<>{head(L.signedOutTitle)}<p>{L.signedOut}</p><div className="pen-drive-actions"><a className="pen-drive-btn" href={signIn ?? SIGN_IN}>{L.signIn}</a></div></>)
   } else if (view === 'not_configured') {
     body = (<>{head(L.title)}<p>{L.notConfigured}</p></>)
   } else if (view === 'connect' || view === 'reconnect') {
@@ -284,7 +311,7 @@ export default function PickClient({ lang, state, account, pickerKey, previewDon
     body = (
       <>
         {head(L.doneTitle)}
-        <div className="pen-drive-ok" role="status">{L.doneLine(files.length)}</div>
+        <div className="pen-drive-ok" role="status">{outcome === 'continued' ? L.contLine : L.doneLine(files.length)}</div>
         <ul className="pen-drive-files">
           {files.map((f) => (
             <li key={f.id}>
@@ -294,8 +321,18 @@ export default function PickClient({ lang, state, account, pickerKey, previewDon
           ))}
         </ul>
         {missing > 0 && <p className="pen-drive-fine">{L.missing}</p>}
-        <p>{L.doneNext}</p>
-        <div className="pen-drive-actions"><button type="button" className="pen-drive-btn quiet" onClick={() => { setPhase('idle'); void choose() }}>{L.more}</button></div>
+        {outcome === 'plain' && <p>{L.doneNext}</p>}
+        {outcome === 'say_done' && <p>{L.sayDone}</p>}
+        {outcome !== 'plain' && cont && (
+          cont.back === 'web' ? (
+            <div className="pen-drive-actions"><a className="pen-drive-btn" href="/pen?view=chats">{L.backWeb}</a></div>
+          ) : cont.back === 'wa' && cont.wa ? (
+            <div className="pen-drive-actions"><a className="pen-drive-btn" href={`https://wa.me/${cont.wa}`}>{L.backWa}</a></div>
+          ) : (
+            <p className="pen-drive-fine">{cont.back === 'im' ? L.backIm : `${L.backWa}.`}</p>
+          )
+        )}
+        {outcome === 'plain' && <div className="pen-drive-actions"><button type="button" className="pen-drive-btn quiet" onClick={() => { setPhase('idle'); void choose() }}>{L.more}</button></div>}
       </>
     )
   } else {
@@ -303,7 +340,7 @@ export default function PickClient({ lang, state, account, pickerKey, previewDon
       <>
         {head(L.title)}
         <p>{L.lede}</p>
-        <ol className="pen-drive-steps">{L.steps.map((s) => <li key={s}>{s}</li>)}</ol>
+        <ol className="pen-drive-steps">{(cont ? L.stepsCont : L.steps).map((s) => <li key={s}>{s}</li>)}</ol>
         {err && <div className="pen-drive-err" role="alert">{err}</div>}
         <div className="pen-drive-actions">
           <button type="button" className="pen-drive-btn" onClick={() => void choose()} disabled={phase !== 'idle'}>
