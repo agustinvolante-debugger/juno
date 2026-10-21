@@ -64,6 +64,8 @@ export default function PenSettingsForm() {
   const [clockAt, setClockAt] = useState<number | null>(null)
   const timer = useRef<number | undefined>(undefined)
   const seq = useRef(0)
+  // Only what was changed is saved: untouched settings keep following the role's suggestion.
+  const pending = useRef<Partial<PenSettings>>({})
 
   useEffect(() => {
     setSupported(canUsePenDrive())
@@ -83,13 +85,18 @@ export default function PenSettingsForm() {
   function change(patch: Partial<PenSettings>) {
     if (!s) return
     const next = { ...s, ...patch }
+    pending.current = { ...pending.current, ...patch }
     setS(next)
     setStatus({ kind: 'saving' })
     window.clearTimeout(timer.current)
     // Waits for the slider to settle before saving.
     timer.current = window.setTimeout(async () => {
       const n = ++seq.current
-      const r = await putPenSettingsState(next)
+      const changed = pending.current
+      pending.current = {}
+      const r = await putPenSettingsState(changed)
+      // A failed save keeps its changes for the next one.
+      if (!r) pending.current = { ...changed, ...pending.current }
       if (n !== seq.current) return
       if (!r) return setStatus({ kind: 'failed' })
       setLoadErr(false)

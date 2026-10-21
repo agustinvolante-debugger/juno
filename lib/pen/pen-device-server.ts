@@ -25,7 +25,7 @@
 import { supabaseAdmin } from '@/lib/supabase'
 import { BUCKET, partPaths, PARTS_PREFIX } from './store'
 import { getProfileRaw, cleanProfile } from './profile'
-import { cleanPenSettings, withDefaults } from './pen-settings'
+import { cleanPenSettings, roleDefaults, withDefaults } from './pen-settings'
 import type { PenFileInfo, PenFilesState, PenSettings, PenSettingsGet, PenSettingsPut } from './pen-device'
 import { activeConference, effectiveSettings, eventPrepOn, presetOf, upcomingConferences } from './event-prep'
 import { userZone } from './timezone'
@@ -34,15 +34,20 @@ import { userZone } from './timezone'
 
 export async function readPenSettings(email: string): Promise<{ settings: PenSettings; savedAt: string | null }> {
   const p = await getProfileRaw(email)
-  return { settings: withDefaults(p?.pen), savedAt: p?.penSavedAt ?? null }
+  return { settings: withDefaults(p?.pen, roleDefaults(p)), savedAt: p?.penSavedAt ?? null }
 }
 
-/** Merges the valid fields of `raw` over what is stored (then the defaults) and saves the whole set. */
+/**
+ * Merges the valid fields of `raw` over what is stored and saves ONLY the fields the user chose:
+ * the rest keep following roleDefaults (switching to Student later still moves an untouched
+ * sensitivity to soft voices). Returns the full set.
+ */
 export async function savePenSettings(email: string, raw: unknown, now = new Date()): Promise<{ settings: PenSettings; savedAt: string }> {
   const current = (await getProfileRaw(email)) ?? {}
-  const settings = withDefaults({ ...withDefaults(current.pen), ...(cleanPenSettings(raw) ?? {}) })
+  const chosen = { ...(cleanPenSettings(current.pen) ?? {}), ...(cleanPenSettings(raw) ?? {}) }
+  const settings = withDefaults(chosen, roleDefaults(current))
   const savedAt = now.toISOString()
-  const profile = cleanProfile({ ...current, pen: settings, penSavedAt: savedAt })
+  const profile = cleanProfile({ ...current, pen: chosen, penSavedAt: savedAt })
   const { error } = await supabaseAdmin
     .from('pen_profiles')
     .upsert({ user_email: email.toLowerCase(), profile, updated_at: savedAt }, { onConflict: 'user_email' })

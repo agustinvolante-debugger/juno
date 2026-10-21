@@ -52,9 +52,27 @@ export function cleanPenSettings(raw: unknown): Partial<PenSettings> | undefined
   return Object.keys(out).length ? out : undefined
 }
 
-/** Full settings: the defaults under whatever valid values were saved. */
-export function withDefaults(saved: unknown): PenSettings {
-  return { ...PEN_DEFAULTS, ...(cleanPenSettings(saved) ?? {}) }
+/** Full settings: the defaults (`base`: PEN_DEFAULTS, or roleDefaults) under whatever valid values were saved. */
+export function withDefaults(saved: unknown, base: PenSettings = PEN_DEFAULTS): PenSettings {
+  return { ...base, ...(cleanPenSettings(saved) ?? {}) }
+}
+
+/** Far-away voices: lectures, talks, sermons, conferences (a role's "other" description, any language). */
+const FAR_WORK = /\b(lecture|class(es)?|seminar|conference|talk|sermon|church|clase|charla|c[aá]tedra|conferencia|misa|aula|palestra|semin[aá]rio|igreja)/i
+
+/**
+ * The best starting settings for what the user does (profile: role + answers), used for every
+ * field they never chose themselves. A student recording lectures or seminars (or who didn't say)
+ * sits rows away from the speaker: soft voices (GAIN 7). Study groups, office hours, interviews,
+ * and the other roles (meetings across a table, showings, consults) stay normal.
+ */
+export function roleDefaults(profile?: { role?: string; answers?: Record<string, string | string[]> } | null): PenSettings {
+  const a = profile?.answers ?? {}
+  const records = Array.isArray(a.records) ? a.records : []
+  const far =
+    (profile?.role === 'student' && (!records.length || records.some((r) => r === 'Lectures' || r === 'Seminars'))) ||
+    (profile?.role === 'other' && typeof a.work === 'string' && FAR_WORK.test(a.work))
+  return far ? { ...PEN_DEFAULTS, sensitivity: 'soft' } : PEN_DEFAULTS
 }
 
 /** The settings as the pen's keys. VOR 0 = off; values clamped again, so a bad object can't reach the pen. */

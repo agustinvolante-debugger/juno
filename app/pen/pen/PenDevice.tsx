@@ -287,7 +287,7 @@ export function usePenFlow(drive: PenDrive, { onUpload, onPickFiles, locked, lan
     if (always && drive.settings) {
       drive.setSettings({ ...drive.settings, autoClear: yes })
       // The user's own choices, never a temporary event set-up (drive.settings may be one).
-      void putPenSettings({ ...(drive.saved ?? drive.settings), autoClear: yes })
+      void putPenSettings({ autoClear: yes })
     }
     if (yes) await remove(names)
   }, [always, ask, drive, remove])

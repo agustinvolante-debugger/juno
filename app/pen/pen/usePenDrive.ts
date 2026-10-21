@@ -66,8 +66,9 @@ export async function fetchPenSettings(): Promise<PenSettings | null> {
   return (await fetchPenSettingsState())?.settings ?? null
 }
 
-/** Saves the user's own choices; `effective` = what to write onto the pen now. */
-export async function putPenSettingsState(s: PenSettings): Promise<{ saved: PenSettings; effective: PenSettings; preset: PenPreset | null } | null> {
+/** Saves the choices the user just made (only those: the rest keep following their role's
+ *  suggestion, lib/pen/pen-settings.ts roleDefaults); `effective` = what to write onto the pen now. */
+export async function putPenSettingsState(s: Partial<PenSettings>): Promise<{ saved: PenSettings; effective: PenSettings; preset: PenPreset | null } | null> {
   try {
     const r = await fetch(`/api/pen/pen-settings${tzQuery()}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(s) })
     if (!r.ok) return null
@@ -79,8 +80,8 @@ export async function putPenSettingsState(s: PenSettings): Promise<{ saved: PenS
   }
 }
 
-/** Saves the user's own choices (returns them as saved). */
-export async function putPenSettings(s: PenSettings): Promise<PenSettings | null> {
+/** Saves the choices the user just made (returns the full saved set). */
+export async function putPenSettings(s: Partial<PenSettings>): Promise<PenSettings | null> {
   return (await putPenSettingsState(s))?.saved ?? null
 }
 
