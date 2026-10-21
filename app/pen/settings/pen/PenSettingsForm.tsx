@@ -14,7 +14,11 @@ import { fetchPenSettingsState, lastClockSet, putPenSettingsState, usePenDrive }
 
 const QUALITIES: PenQuality[] = ['high', 'standard']
 const SENS: PenSensitivity[] = ['soft', 'normal', 'loud']
-const SPLITS = [30, 60, 90, 120]
+// Split length in minutes (21 Oct: 60/120/180/240, default 60). A saved value outside the four
+// (the server accepts 10..240, e.g. an old 30 or 90) is shown as its own chip, selected, rather
+// than silently snapped: the pen is still using it until the person picks one of these.
+const SPLITS = [60, 120, 180, 240]
+const splitOptions = (current: number) => (SPLITS.includes(current) ? SPLITS : [...SPLITS, current].sort((a, b) => a - b))
 const CLEAR: { k: 'ask' | 'always' | 'never'; v: boolean | null }[] = [
   { k: 'ask', v: null },
   { k: 'always', v: true },
@@ -176,7 +180,7 @@ export default function PenSettingsForm() {
 
             <Choice
               name="split" legend={T.splitLabel} hint={T.splitHint} value={s.splitMin}
-              options={SPLITS.map((m) => ({ v: m, label: T.min(m) }))}
+              options={splitOptions(s.splitMin).map((m) => ({ v: m, label: T.min(m) }))}
               onChange={(splitMin) => change({ splitMin })}
             />
 

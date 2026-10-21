@@ -12,11 +12,13 @@ import { getLinkByEmail } from '@/lib/pen/whatsapp/store'
 import { botNumber } from '@/lib/pen/whatsapp/provider'
 import { channelFor } from '@/lib/pen/proactive'
 import SettingsTabs from './SettingsTabs'
+import BackHome from './BackHome'
+import { headers } from 'next/headers'
 
 const COPY = {
-  en: { back: 'Back to recordings', title: 'Settings' },
-  es: { back: 'Volver a las grabaciones', title: 'Ajustes' },
-  pt: { back: 'Voltar para as gravações', title: 'Configurações' },
+  en: { back: 'Back to Home', title: 'Settings' },
+  es: { back: 'Volver al inicio', title: 'Ajustes' },
+  pt: { back: 'Voltar para o início', title: 'Configurações' },
 } as const
 
 export const dynamic = 'force-dynamic'
@@ -28,6 +30,10 @@ export default async function SettingsLayout({ children }: { children: React.Rea
   if (!email) redirect('/pen')
   const [lang, account] = await Promise.all([appLangFor(email), getAccount(email)])
   const T = COPY[lang]
+  // Home's address. On tryjunoapp.com it is "/": /pen there 308-redirects to "/" and drops the
+  // query, so a link to /pen cost an extra round trip (and lost ?tab= on the phone tabs).
+  const host = ((await headers()).get('host') || '').split(':')[0]
+  const home = host === 'tryjunoapp.com' || host === 'www.tryjunoapp.com' ? '/' : '/pen'
   // The phone tab bar's Chat: WhatsApp or iMessage when linked (as in the app), else the web chat.
   let chatLink: { href: string; label: string } | null = null
   if (whatsappReady() || imessageFor(email)) {
@@ -43,11 +49,11 @@ export default async function SettingsLayout({ children }: { children: React.Rea
     <LangProvider lang={lang}>
     <main className="pen-set">
       <header className="pen-set-head">
-        <Link href="/pen" className="pen-set-brand">
+        <Link href={home} className="pen-set-brand">
           <Image src="/juno_mark.png" alt="" width={30} height={30} className="pen-mark" priority />
           <span className="pen-wordmark pen-brand-name"><span className="pen-wordmark-j">J</span>uno Pen</span>
         </Link>
-        <Link href="/pen" className="pen-back">{T.back}</Link>
+        <BackHome href={home} label={T.back} />
       </header>
       <div className="pen-set-body">
         <aside className="pen-set-side">
@@ -57,7 +63,7 @@ export default async function SettingsLayout({ children }: { children: React.Rea
         </aside>
         <section className="pen-set-main">{children}</section>
       </div>
-      <SettingsTabs chatLink={chatLink} />
+      <SettingsTabs chatLink={chatLink} home={home} />
     </main>
     </LangProvider>
   )

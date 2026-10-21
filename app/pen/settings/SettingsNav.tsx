@@ -7,13 +7,13 @@ import { useCopy } from '../LangContext'
 import type { Copy } from '@/lib/pen/i18n'
 import { SUPPORT_EMAIL } from '@/lib/support'
 
-// Settings, 20 Oct: Profile · Your pen (21 Oct) · Connections · Messages from Juno · Invite friends · Billing · Help.
+// Settings, 20 Oct: Profile · Your Pen Settings (21 Oct) · Connections · Messages from Juno · Invite friends · Billing · Help.
 // Connections replaced one item per company (Google, Email, Notion, Granola, WhatsApp), which
 // told an Outlook user nothing applied to them and split one Gmail account across two pages.
 const SN: Copy<{ aria: string; profile: string; pen: string; connections: string; messages: string; invite: string; billing: string; help: string }> = {
-  en: { aria: 'Settings', profile: 'Profile', pen: 'Your pen', connections: 'Connections', messages: 'Messages from Juno', invite: 'Invite friends', billing: 'Billing', help: 'Help' },
-  es: { aria: 'Ajustes', profile: 'Perfil', pen: 'Tu lápiz', connections: 'Conexiones', messages: 'Mensajes de Juno', invite: 'Invitar amigos', billing: 'Facturación', help: 'Ayuda' },
-  pt: { aria: 'Configurações', profile: 'Perfil', pen: 'Sua caneta', connections: 'Conexões', messages: 'Mensagens do Juno', invite: 'Convidar amigos', billing: 'Cobrança', help: 'Ajuda' },
+  en: { aria: 'Settings', profile: 'Profile', pen: 'Your Pen Settings', connections: 'Connections', messages: 'Messages from Juno', invite: 'Invite friends', billing: 'Billing', help: 'Help' },
+  es: { aria: 'Ajustes', profile: 'Perfil', pen: 'Ajustes de tu Juno Pen', connections: 'Conexiones', messages: 'Mensajes de Juno', invite: 'Invitar amigos', billing: 'Facturación', help: 'Ayuda' },
+  pt: { aria: 'Configurações', profile: 'Perfil', pen: 'Configurações da sua Juno Pen', connections: 'Conexões', messages: 'Mensagens do Juno', invite: 'Convidar amigos', billing: 'Cobrança', help: 'Ajuda' },
 }
 
 type Item = { href: string; key: 'profile' | 'pen' | 'connections' | 'messages' | 'invite' | 'billing'; icon: IconName }

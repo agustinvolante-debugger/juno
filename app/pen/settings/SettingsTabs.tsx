@@ -1,7 +1,7 @@
 'use client'
 
 // Settings on a phone keeps the app's bottom tab bar (critique 15 Oct): Settings is its own page,
-// so the tabs are links back into the app (/pen?tab=…), and Chat opens WhatsApp or iMessage for
+// so the tabs are links back into the app (Home's address + ?tab=…; "/" on tryjunoapp.com), and Chat opens WhatsApp or iMessage for
 // a linked account, as it does in the app. Hidden above the phone breakpoint.
 
 import Link from 'next/link'
@@ -22,7 +22,7 @@ const TABS: { id: 'home' | 'calendar' | 'recordings' | 'search'; icon: IconName 
   { id: 'search', icon: 'chat' },
 ]
 
-export default function SettingsTabs({ chatLink }: { chatLink: { href: string; label: string } | null }) {
+export default function SettingsTabs({ chatLink, home = '/pen' }: { chatLink: { href: string; label: string } | null; home?: string }) {
   const T = useCopy(ST)
   return (
     <nav className="pen-m-tabs pen-set-tabs" aria-label={T.tabs}>
@@ -33,7 +33,7 @@ export default function SettingsTabs({ chatLink }: { chatLink: { href: string; l
             <span>{chatLink.label}</span>
           </a>
         ) : (
-          <Link key={t.id} className="pen-m-tab" href={`/pen?tab=${t.id}`}>
+          <Link key={t.id} className="pen-m-tab" href={`${home}?tab=${t.id}`}>
             <Icon name={t.icon} size={23} />
             <span>{T[t.id]}</span>
           </Link>
