@@ -96,9 +96,6 @@ export function buildMock(): CalRange {
       { key: BROKEN, address: 'agustin@caerusai.com', provider: 'outlook', broken: true, isDefault: false },
     ],
     events,
-    // Meetings only (founder, 20 Oct): the API may still send these; the page ignores them.
-    todos: [],
-    reminders: [],
     failed: [],
     tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
   }

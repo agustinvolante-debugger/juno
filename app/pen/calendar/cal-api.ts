@@ -60,9 +60,6 @@ export function mockApi(seed: CalRange, brief: (ref: string) => CalBrief): CalAp
       return {
         ...db,
         events: db.events.filter((e) => overlaps(evSpan(e), from, to)),
-        // Meetings only: the page shows no to-dos or reminders.
-        todos: [],
-        reminders: [],
       }
     },
     async brief(ref) {

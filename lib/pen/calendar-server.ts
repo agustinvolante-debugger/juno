@@ -83,9 +83,6 @@ export async function readRange(email: string, from: Date, to: Date, tzHint?: st
   return {
     calendars,
     events: keyed.map(({ e, key }) => toViewEvent(e, { own, now, recording: match.get(key) ?? null })),
-    // Meetings only (founder, 22 Oct): to-dos and reminders stay on Home and WhatsApp.
-    todos: [],
-    reminders: [],
     failed: read.failed,
     tz,
   }

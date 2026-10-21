@@ -77,7 +77,7 @@ function merge(parts: CalRange[]): CalRange | null {
     p.failed.forEach((f) => failed.add(f))
   }
   const last = parts[parts.length - 1]
-  return { calendars: last.calendars, tz: last.tz, events: [...ev.values()], todos: [], reminders: [], failed: [...failed] }
+  return { calendars: last.calendars, tz: last.tz, events: [...ev.values()], failed: [...failed] }
 }
 
 export default function CalendarView({ phone, onOpenRecording, onOpenConnections, goTo, mock, mockBrief }: CalendarViewProps) {

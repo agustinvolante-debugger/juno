@@ -12,7 +12,7 @@ export default function Preview({ phone, lang, empty, stress, goto }: { phone: b
   const [mock, setMock] = useState<CalRange | null>(null)
   useEffect(() => {
     const m = stress ? buildStress() : buildMock()
-    setMock(empty ? { ...m, calendars: [], events: [], todos: [], reminders: [] } : m)
+    setMock(empty ? { ...m, calendars: [], events: [] } : m)
   }, [empty, stress])
   const log = (what: string) => (id: string) => console.info(`[calendar preview] ${what}`, id)
   const view = mock && (

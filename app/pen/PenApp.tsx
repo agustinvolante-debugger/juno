@@ -1703,8 +1703,7 @@ export default function PenApp({
         <section className="pen-shell-main min-w-0" id="pen-main" tabIndex={-1}>
           {view.k === 'calendar' ? (
             <CalendarView
-              // goTo is CalendarView's new prop (other worktree); spread until the merge. Clean up then.
-              {...({ goTo: calGoTo ?? undefined } as Record<string, unknown>)}
+              goTo={calGoTo ?? undefined}
               onOpenRecording={(id) => {
                 openSession(id)
                 setTab('note')

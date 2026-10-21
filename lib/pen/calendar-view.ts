@@ -1,8 +1,8 @@
 // The Calendar page (22 Oct): the shapes the browser and the /api/pen/calendar routes share. Pure
 // types, no server imports, so app/pen/calendar/* can import it. Events are read live from every
 // connected Google and Outlook calendar (lib/pen/calendars.ts) for the range on screen and never
-// stored; the Juno extras (recording of a past meeting, brief, to-dos, reminders) are computed on
-// each read.
+// stored; the Juno extras (recording of a past meeting, brief) are computed on each read. Meetings only:
+// to-dos and reminders stay on Home and WhatsApp (founder, 22 Oct).
 //
 // Routes:
 //   GET    /api/pen/calendar?from=<ISO>&to=<ISO>        → CalRange   (span ≤ 42 days)
@@ -61,25 +61,9 @@ export type CalViewEvent = {
   hasBrief: boolean
 }
 
-/** A dated to-do from a recording's notes (no time: shown with the day's all-day items). */
-export type CalTodo = {
-  /** "<sessionId>#<index>" (the to-do ref used elsewhere). */
-  ref: string
-  sessionId: string
-  text: string
-  /** 'YYYY-MM-DD' */
-  date: string
-  done: boolean
-}
-
-/** A WhatsApp reminder ("remind me at 4 to call Ana"). */
-export type CalReminder = { id: string; text: string; dueAt: string; sent: boolean }
-
 export type CalRange = {
   calendars: CalAccount[]
   events: CalViewEvent[]
-  todos: CalTodo[]
-  reminders: CalReminder[]
   /** Calendar keys that failed to read this time (shown as a quiet warning). */
   failed: string[]
   /** The user's IANA zone (lib/pen/timezone.ts userZone), for labels. */
