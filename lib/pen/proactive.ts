@@ -86,10 +86,10 @@ async function allPrefs(email: string): Promise<ProactivePrefs> {
   return (p?.proactive ?? {}) as ProactivePrefs
 }
 
-/** The kinds Settings → Messages lists (pen_upload isn't there yet: STOP in the chat covers it). */
+/** The kinds Settings → Messages lists. */
 export async function getPrefs(email: string): Promise<{ off?: boolean; offKinds?: SettingsKind[] }> {
   const p = await allPrefs(email)
-  const offKinds = (p.offKinds ?? []).filter((k): k is SettingsKind => k !== 'pen_upload')
+  const offKinds = (p.offKinds ?? []) as SettingsKind[]
   return { ...(p.off ? { off: true } : {}), ...(offKinds.length ? { offKinds } : {}) }
 }
 

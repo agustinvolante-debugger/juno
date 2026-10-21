@@ -69,6 +69,14 @@ export function timeLine(d: Date): string {
   return `${p(d.getHours())}:${p(d.getMinutes())} ${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())}`
 }
 
+/** The TIME value ('HH:MM YYYY/MM/DD') as a local Date, or null when missing or unreadable. */
+export function parseTime(v: string | undefined): Date | null {
+  const m = v && /^(\d{1,2}):(\d{2})\s+(\d{4})\/(\d{1,2})\/(\d{1,2})$/.exec(v.trim())
+  if (!m) return null
+  const d = new Date(+m[3], +m[4] - 1, +m[5], +m[1], +m[2])
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
 type Line = { text: string; eol: string }
 
 /** Lines with their own endings; the trailing run of empty lines (the \n padding) dropped. */

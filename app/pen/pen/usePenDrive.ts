@@ -17,7 +17,7 @@ import {
   askPermission, canUsePenDrive, forgetPick, listRecordings, loadPick, permissionOf, pickDrive, readSettingsFile,
   removeRecordings, savePick, writeSettingsFile, type PenPick, type PenRecording,
 } from './pen-drive'
-import { parseMrecset, parseTime, penSettingsToKeys, timeLine, writeMrecset } from './mrecset-client'
+import { parseMrecset, parseTime, penSettingsToKeys, timeLine, writeMrecset } from '@/lib/pen/pen-settings'
 
 export type PenDriveState = 'off' | 'none' | 'prompt' | 'unplugged' | 'connected'
 
@@ -92,13 +92,13 @@ export function usePenDrive({ files: wantFiles = true }: { files?: boolean } = {
     if (text === null) return false
     const cur = parseMrecset(text)
     const now = new Date()
-    const want: Record<string, string | number> = {}
-    if (s) for (const [k, v] of Object.entries(penSettingsToKeys(s))) if (cur[k] !== String(v)) want[k] = v
+    const want: Partial<Record<'TIME' | 'VOR' | 'BIT' | 'GAIN' | 'PART', string | number>> = {}
+    if (s) for (const [k, v] of Object.entries(penSettingsToKeys(s)) as ['VOR' | 'BIT' | 'GAIN' | 'PART', number][]) if (cur[k] !== v) want[k] = v
     // The TIME line has minute resolution: "a minute old" = not this minute, or unreadable.
     const was = parseTime(cur.TIME)
     const clockOld = !was || Math.abs(now.getTime() - was.getTime()) >= CLOCK_EVERY_MS || clockAt.current === 0
     if (!force && !clockOld && !Object.keys(want).length) return true
-    want.TIME = timeLine(now).slice('TIME:'.length)
+    want.TIME = timeLine(now)
     const ok = await writeSettingsFile(p, writeMrecset(text, want))
     if (ok) {
       clockAt.current = Date.now()
