@@ -13,11 +13,16 @@
 // the meeting with Chris", "add lunch Friday to my work calendar") are undoable too: "undo" cancels
 // the reminders / deletes the event (no guests: it was the user's own). Everything set by one
 // message is one undo (both reminders go together).
+//
+// 21 Oct: an edit to a Google Doc or Sheet (tools/google.ts edit_google_doc / edit_google_sheet)
+// is undoable too: its record (lib/pen/google-drive.ts DriveUndo) is kept the same way, and "undo"
+// puts the file back with undoDriveEdit, unless someone changed it since (then: Version history).
 
 import { supabaseAdmin } from '@/lib/supabase'
 import { groupSessions, joinSegments, splitGroup } from '../merge'
 import { getSession } from '../store'
 import type { AgentStore } from './state'
+import type { DriveUndo } from '../google-drive'
 
 export const UNDO_TTL_MS = 24 * 60 * 60 * 1000
 
@@ -30,6 +35,8 @@ export type Undo =
   | { kind: 'combine'; ids: string[]; title: string; event: boolean; at: string; done?: boolean }
   /** set: reminder ids and calendar event refs (lib/pen/calendars.ts eventRef) made by one message. */
   | { kind: 'set'; reminders: string[]; events: { ref: string; title: string }[]; title: string; at: string; done?: boolean }
+  /** drive: an edit to a Google Doc / Sheet (title = the file's name). */
+  | { kind: 'drive'; rec: DriveUndo; title: string; at: string; done?: boolean }
 
 export type UndoIn<U = Undo> = U extends Undo ? Omit<U, 'at'> : never
 
@@ -112,7 +119,7 @@ export async function runUndo(email: string, opts: { store?: AgentStore; turn?: 
   if ('nothing' in c) {
     return c.already
       ? { nothing_to_undo: true, note: 'Say in one line it was already undone.' }
-      : { nothing_to_undo: true, note: 'Say in one line there is nothing to undo (undo covers reminders and calendar events Juno just set, and combining or separating recordings, for a day).' }
+      : { nothing_to_undo: true, note: 'Say in one line there is nothing to undo (undo covers reminders and calendar events Juno just set, edits to Google Docs and Sheets, and combining or separating recordings, for a day).' }
   }
   const { undo } = c
 
@@ -128,6 +135,24 @@ export async function runUndo(email: string, opts: { store?: AgentStore; turn?: 
       } catch {}
     }
     return { ok: true, undone: 'set', reminders_cancelled: cancelled, events_deleted: deleted, note: 'Say in one line what was undone (the reminders cancelled, the event taken off their calendar). If a reminder had already gone off, say that one could not be cancelled.' }
+  }
+
+  if (undo.kind === 'drive') {
+    const { undoDriveEdit } = await import('../google-drive')
+    const r = await undoDriveEdit(email, undo.rec)
+    if (r.ok) return { ok: true, undone: 'edit', file: r.name || undo.title, restored: true, note: `Say in one line that "${r.name || undo.title}" is back to how it was before the edit.` }
+    // Someone typed in the file after the edit: Juno doesn't guess (google-drive.ts), Google's history does.
+    const changed = /changed since/i.test(r.error)
+    return {
+      ok: false,
+      undone: 'nothing',
+      file: undo.title,
+      restored: false,
+      ...(changed ? { changed_since: true } : { reason: r.error.slice(0, 200) }),
+      note: changed
+        ? `Say in one line that "${undo.title}" changed since Juno edited it, so Juno left it as it is: they can use File → Version history in Google to go back.`
+        : `Say in one line that Juno couldn't take the edit to "${undo.title}" back right now; they can use File → Version history in Google to go back.`,
+    }
   }
 
   if (undo.kind === 'separate') {

@@ -11,6 +11,11 @@
 //   3. The callbacks see a chat state, connect that account, redirect to /pen/connected and
 //      send "Connected ✓ …" in the chat (announceConnected).
 //
+// The web chat (21 Oct): a link made there carries `web:<chat id>` as its origin (viaOfCtx), and
+// "Connected ✓ …" lands as a short assistant note at the end of that thread instead (the web
+// agent's notify: lib/pen/chats.ts appendToChat). A connect from Settings says it in the web
+// thread too when that thread is the latest place the user talked to Juno (announceFromSettings).
+//
 // Single use, without new tables: spending a nonce inserts a row in pen_proactive_log
 // (kind 'connect', ref = nonce, status 'used'). Its unique index on (user_email, kind, ref)
 // makes the insert the atomic test-and-set: a second tap gets 23505 and is refused. The
@@ -26,7 +31,8 @@ import type { Lang } from './i18n'
 /** gmail = send-only Gmail (lib/pen/gmail.ts): its own Google token, one per connected address. */
 /** outlook = a Microsoft account (lib/pen/outlook.ts): its calendar + sending as the user, one per address. */
 export type ConnectApp = 'gcal' | 'gdrive' | 'notion' | 'granola' | 'gmail' | 'outlook'
-export type Via = 'wa' | 'im'
+/** Where a connect link came from: WhatsApp, iMessage, or a web chat thread (`web:<chat id>`). */
+export type Via = 'wa' | 'im' | `web:${string}`
 
 export const LINK_TTL_MS = 15 * 60 * 1000
 const STATE_TTL_MS = 10 * 60 * 1000
@@ -63,6 +69,20 @@ function openPayload(domain: string, token: string): Record<string, unknown> | n
 const isApp = (a: unknown): a is ConnectApp => a === 'gcal' || a === 'gdrive' || a === 'notion' || a === 'granola' || a === 'gmail' || a === 'outlook'
 export const viaOf = (phone: string | null | undefined): Via => (phone?.startsWith('im:') ? 'im' : 'wa')
 
+const WEB_VIA = /^web:[\w-]{1,64}$/
+const asVia = (v: unknown): Via => (v === 'im' ? 'im' : typeof v === 'string' && WEB_VIA.test(v) ? (v as Via) : 'wa')
+/** The web chat thread a link came from, or null (WhatsApp / iMessage). */
+export const webChatOf = (via: Via): string | null => (via.startsWith('web:') ? via.slice(4) : null)
+
+/**
+ * A chat turn's origin for a connect link: the web thread (its store's chat id) when the turn runs
+ * in the web chat, else the phone's channel as before.
+ */
+export function viaOfCtx(ctx: { channel?: string; phone?: string | null; store?: { chatId?: string } }): Via {
+  const chat = ctx.channel === 'web' ? ctx.store?.chatId : undefined
+  return chat && WEB_VIA.test(`web:${chat}`) ? `web:${chat}` : viaOf(ctx.phone)
+}
+
 /* ------------------------------------------------------------ the link */
 
 const LINK = 'pen-connect-link'
@@ -76,7 +96,7 @@ export type LinkExtra = { hint?: string | null; cal?: boolean }
 
 export function connectToken(email: string, app: ConnectApp, via: Via = 'wa', now = Date.now(), extra: LinkExtra = {}): string {
   const hint = extra.hint && /^[^\s@]+@[^\s@]+$/.test(extra.hint) ? extra.hint.toLowerCase() : null
-  return sealPayload(LINK, { e: email.toLowerCase(), a: app, n: crypto.randomBytes(12).toString('base64url'), x: now + LINK_TTL_MS, ...(via === 'im' ? { c: 'im' } : {}), ...(hint ? { h: hint } : {}), ...(extra.cal ? { k: 'cal' } : {}) })
+  return sealPayload(LINK, { e: email.toLowerCase(), a: app, n: crypto.randomBytes(12).toString('base64url'), x: now + LINK_TTL_MS, ...(via !== 'wa' ? { c: via } : {}), ...(hint ? { h: hint } : {}), ...(extra.cal ? { k: 'cal' } : {}) })
 }
 
 /** The personal link the chat sends. `origin` defaults to the public site (must be a redirect URI the providers know). */
@@ -94,7 +114,7 @@ export function verifyConnectToken(token: string, now = Date.now()): LinkCheck {
   const p = openPayload(LINK, token)
   if (!p || typeof p.e !== 'string' || !p.e.includes('@') || !isApp(p.a) || typeof p.n !== 'string' || typeof p.x !== 'number') return { ok: false, reason: 'bad' }
   if (p.x <= now) return { ok: false, reason: 'expired', email: p.e, app: p.a }
-  return { ok: true, email: p.e, app: p.a, nonce: p.n, via: p.c === 'im' ? 'im' : 'wa', hint: typeof p.h === 'string' ? p.h : null, cal: p.k === 'cal' }
+  return { ok: true, email: p.e, app: p.a, nonce: p.n, via: asVia(p.c), hint: typeof p.h === 'string' ? p.h : null, cal: p.k === 'cal' }
 }
 
 /** Spends a nonce. True the first time; false if it was already spent (or the claim failed). */
@@ -127,13 +147,13 @@ export function readChatState(state: string | null | undefined, app: ConnectApp,
   const p = openPayload(STATE, state.slice(CHAT_PREFIX.length))
   if (!p || p.a !== app || typeof p.e !== 'string' || typeof p.x !== 'number' || p.x <= now) return null
   if (typeof p.n !== 'string' || p.n.length !== nonce.length || !crypto.timingSafeEqual(Buffer.from(p.n), Buffer.from(nonce))) return null
-  return { email: p.e, via: p.v === 'im' ? 'im' : 'wa', ...(typeof p.w === 'string' ? { w: p.w } : {}) }
+  return { email: p.e, via: asVia(p.v), ...(typeof p.w === 'string' ? { w: p.w } : {}) }
 }
 
 /** Where a chat-started callback lands: /pen/connected in the user's language. */
 export async function connectedPage(app: ConnectApp, email: string, via: Via, error?: string): Promise<string> {
   const { userLang } = await import('./user-lang')
-  const q = new URLSearchParams({ app, lang: await userLang(email), c: via, ...(error ? { error } : {}) })
+  const q = new URLSearchParams({ app, lang: await userLang(email), c: webChatOf(via) ? 'web' : via, ...(error ? { error } : {}) })
   return `/pen/connected?${q}`
 }
 
@@ -268,51 +288,105 @@ export const asLang = (v: unknown): Lang => (v === 'es' || v === 'pt' ? v : 'en'
 
 const WINDOW_MS = 24 * 60 * 60 * 1000
 
+export type ConnectedOpts = { canRead?: boolean; canSend?: boolean; canCal?: boolean; calFull?: boolean }
+
+/** "Connected ✓ …" in the user's language (the same words on every channel). */
+async function connectedText(email: string, app: ConnectApp, account: string | null | undefined, opts: ConnectedOpts): Promise<string> {
+  const { userLang } = await import('./user-lang')
+  const lang = await userLang(email)
+  let who: string | null = account ?? null
+  if (app === 'gmail' || app === 'outlook') {
+    // The address just connected comes in `account`.
+  } else if (app === 'gcal' || app === 'gdrive') {
+    const { getGcalConnection } = await import('./google-calendar')
+    who = (await getGcalConnection(email).catch(() => null))?.calendar_email ?? null
+  } else if (app === 'granola') {
+    const { getConnection } = await import('./granola')
+    who = (await getConnection(email).catch(() => null))?.account_email ?? null
+  } else {
+    const { getConnection } = await import('./notion')
+    who = (await getConnection(email).catch(() => null))?.workspace_name ?? null
+  }
+  const L = COPY[lang]
+  return app === 'outlook' ? `${L.connected.outlook(who)}${opts.canCal ? L.outlook.cal : ''}${opts.canSend !== false ? L.outlook.send : ''}${opts.canRead ? L.outlook.read : L.outlook.noRead}${opts.calFull ? L.outlook.calFull : ''}`
+    : app === 'gmail' && opts.canSend === false ? L.calendarOnly(who)
+    : app === 'gmail' ? `${opts.canRead ? L.gmailReading(who) : L.connected.gmail(who)}${opts.canCal ? L.calToo : opts.calFull ? L.calFull : ''}`
+      : L.connected[app](who)
+}
+
+/** A short assistant note at the end of a web chat thread (the web agent's notify). */
+async function noteInThread(email: string, chatId: string, text: string): Promise<{ sent: boolean; reason?: string }> {
+  const { getChat, appendToChat } = await import('./chats')
+  if (!(await getChat(email, chatId).catch(() => null))) return { sent: false, reason: 'no such chat' }
+  const { webText } = await import('./whatsapp/agent')
+  await appendToChat(email, chatId, { role: 'assistant', content: webText(text), ts: Date.now() })
+  return { sent: true }
+}
+
+/** Sends `text` to the chat `via` names: the web thread, or WhatsApp / iMessage (+ the chat history). */
+async function deliver(email: string, via: Via, text: () => Promise<string>): Promise<{ sent: boolean; reason?: string }> {
+  const web = webChatOf(via)
+  if (web) return noteInThread(email, web, await text())
+  const { getLinkByEmail, setChat } = await import('./whatsapp/store')
+  const link = await getLinkByEmail(email)
+  if (!link?.phone || !link.linked_at) return { sent: false, reason: 'no linked phone' }
+  if (via === 'wa') {
+    const { data } = await supabaseAdmin.from('pen_whatsapp_messages').select('created_at').eq('email', email.toLowerCase()).not('phone', 'like', 'im:%').order('created_at', { ascending: false }).limit(1)
+    const last = data?.[0]?.created_at ? Date.parse(data[0].created_at as string) : 0
+    if (Date.now() - last > WINDOW_MS) return { sent: false, reason: 'outside the 24-hour window' }
+  }
+  const t = await text()
+  const { sendText } = await import('./whatsapp/provider')
+  await sendText(via === 'im' ? `im:${link.phone}` : link.phone, t)
+  await setChat(email, [...(link.chat ?? []), { role: 'assistant', content: t, ts: Date.now() }]).catch(() => {})
+  return { sent: true }
+}
+
 /**
  * "Connected ✓ …" in the chat the connect came from, and into the chat history so the agent
  * has the context. WhatsApp only inside the 24-hour window (the user asked for the link, so it
- * is open unless they waited a day); iMessage is free-form. Never throws.
+ * is open unless they waited a day); iMessage is free-form; a web thread gets a short assistant
+ * note. Never throws.
  */
 /** `canRead`: a Gmail connected with reading (team test, lib/pen/gmail.ts), said differently. `canSend: false` = calendar only; `canCal` / `calFull`: its calendar too. */
-export async function announceConnected(email: string, app: ConnectApp, via: Via, account?: string | null, opts: { canRead?: boolean; canSend?: boolean; canCal?: boolean; calFull?: boolean } = {}): Promise<{ sent: boolean; reason?: string }> {
+export async function announceConnected(email: string, app: ConnectApp, via: Via, account?: string | null, opts: ConnectedOpts = {}): Promise<{ sent: boolean; reason?: string }> {
   try {
-    const { getLinkByEmail, setChat } = await import('./whatsapp/store')
-    const link = await getLinkByEmail(email)
-    if (!link?.phone || !link.linked_at) return { sent: false, reason: 'no linked phone' }
-    if (via === 'wa') {
-      const { data } = await supabaseAdmin.from('pen_whatsapp_messages').select('created_at').eq('email', email.toLowerCase()).not('phone', 'like', 'im:%').order('created_at', { ascending: false }).limit(1)
-      const last = data?.[0]?.created_at ? Date.parse(data[0].created_at as string) : 0
-      if (Date.now() - last > WINDOW_MS) return { sent: false, reason: 'outside the 24-hour window' }
-    }
-    const { userLang } = await import('./user-lang')
-    const lang = await userLang(email)
-    let who: string | null = account ?? null
-    if (app === 'gmail' || app === 'outlook') {
-      // The address just connected comes in `account`.
-    } else if (app === 'gcal' || app === 'gdrive') {
-      const { getGcalConnection } = await import('./google-calendar')
-      who = (await getGcalConnection(email).catch(() => null))?.calendar_email ?? null
-    } else if (app === 'granola') {
-      const { getConnection } = await import('./granola')
-      who = (await getConnection(email).catch(() => null))?.account_email ?? null
-    } else {
-      const { getConnection } = await import('./notion')
-      who = (await getConnection(email).catch(() => null))?.workspace_name ?? null
-    }
-    const L = COPY[lang]
-    const text =
-      app === 'outlook' ? `${L.connected.outlook(who)}${opts.canCal ? L.outlook.cal : ''}${opts.canSend !== false ? L.outlook.send : ''}${opts.canRead ? L.outlook.read : L.outlook.noRead}${opts.calFull ? L.outlook.calFull : ''}`
-        : app === 'gmail' && opts.canSend === false ? L.calendarOnly(who)
-        : app === 'gmail' ? `${opts.canRead ? L.gmailReading(who) : L.connected.gmail(who)}${opts.canCal ? L.calToo : opts.calFull ? L.calFull : ''}`
-          : L.connected[app](who)
-    const { sendText } = await import('./whatsapp/provider')
-    await sendText(via === 'im' ? `im:${link.phone}` : link.phone, text)
-    await setChat(email, [...(link.chat ?? []), { role: 'assistant', content: text, ts: Date.now() }]).catch(() => {})
-    return { sent: true }
+    return await deliver(email, via, () => connectedText(email, app, account, opts))
   } catch (e) {
     console.warn(`pen connect: chat confirmation not sent: ${(e as Error).message}`)
     return { sent: false, reason: (e as Error).message }
   }
+}
+
+/**
+ * A connect from the website's Settings (no chat state): "Connected ✓ …" goes to the web chat
+ * thread when that thread is where the user last talked to Juno (more recent than their last
+ * WhatsApp / iMessage message, and within the day), and only for users of the web assistant.
+ * Otherwise nothing, as before. Never throws.
+ */
+export async function announceFromSettings(email: string, app: ConnectApp, account?: string | null, opts: ConnectedOpts = {}): Promise<{ sent: boolean; reason?: string }> {
+  try {
+    const chat = await latestWebThread(email)
+    if (!chat) return { sent: false, reason: 'no recent web chat' }
+    return await deliver(email, `web:${chat}`, () => connectedText(email, app, account, opts))
+  } catch (e) {
+    console.warn(`pen connect: settings confirmation not sent: ${(e as Error).message}`)
+    return { sent: false, reason: (e as Error).message }
+  }
+}
+
+/** The web thread the user last talked in, if that is their latest conversation with Juno (24 h). */
+export async function latestWebThread(email: string, now = Date.now()): Promise<string | null> {
+  const { webAgentAllowed } = await import('./web-agent')
+  if (!webAgentAllowed(email)) return null
+  const lower = email.toLowerCase()
+  const { data: chats } = await supabaseAdmin.from('pen_chats').select('id,updated_at').eq('user_email', lower).order('updated_at', { ascending: false }).limit(1)
+  const c = (chats?.[0] ?? null) as { id: string; updated_at: string } | null
+  const at = c ? Date.parse(c.updated_at) : NaN
+  if (!c || !Number.isFinite(at) || now - at > WINDOW_MS) return null
+  const { data: msgs } = await supabaseAdmin.from('pen_whatsapp_messages').select('created_at').eq('email', lower).neq('kind', 'lock').order('created_at', { ascending: false }).limit(1)
+  const last = msgs?.[0]?.created_at ? Date.parse(msgs[0].created_at as string) : 0
+  return last > at ? null : c.id
 }
 
 /**
@@ -321,21 +395,11 @@ export async function announceConnected(email: string, app: ConnectApp, via: Via
  */
 export async function announceAdminConsent(email: string, via: Via, adminUrl: string): Promise<{ sent: boolean; reason?: string }> {
   try {
-    const { getLinkByEmail, setChat } = await import('./whatsapp/store')
-    const link = await getLinkByEmail(email)
-    if (!link?.phone || !link.linked_at) return { sent: false, reason: 'no linked phone' }
-    if (via === 'wa') {
-      const { data } = await supabaseAdmin.from('pen_whatsapp_messages').select('created_at').eq('email', email.toLowerCase()).not('phone', 'like', 'im:%').order('created_at', { ascending: false }).limit(1)
-      const last = data?.[0]?.created_at ? Date.parse(data[0].created_at as string) : 0
-      if (Date.now() - last > WINDOW_MS) return { sent: false, reason: 'outside the 24-hour window' }
-    }
-    const { userLang } = await import('./user-lang')
-    const L = COPY[await userLang(email)]
-    const text = `${L.errors.admin_consent}\n${L.adminLink}\n${adminUrl}`
-    const { sendText } = await import('./whatsapp/provider')
-    await sendText(via === 'im' ? `im:${link.phone}` : link.phone, text)
-    await setChat(email, [...(link.chat ?? []), { role: 'assistant', content: text, ts: Date.now() }]).catch(() => {})
-    return { sent: true }
+    return await deliver(email, via, async () => {
+      const { userLang } = await import('./user-lang')
+      const L = COPY[await userLang(email)]
+      return `${L.errors.admin_consent}\n${L.adminLink}\n${adminUrl}`
+    })
   } catch (e) {
     console.warn(`pen connect: admin-consent message not sent: ${(e as Error).message}`)
     return { sent: false, reason: (e as Error).message }

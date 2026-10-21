@@ -23,7 +23,7 @@ import type Anthropic from '@anthropic-ai/sdk'
 import type { Ctx } from '../agent'
 import { str, type ToolModule } from './types'
 import { getSession } from '../../store'
-import { connectLink, viaOf } from '../../connect-link'
+import { connectLink, viaOfCtx } from '../../connect-link'
 import { driveConnected, gcalConfigured } from '../../google-calendar'
 import type { DocEditMode, DriveUndo, GDocBlock, JunoFile, Resolved, SheetEditMode } from '../../google-drive'
 
@@ -133,7 +133,7 @@ async function needDrive(ctx: Ctx): Promise<Record<string, unknown> | null> {
   if (!gcalConfigured()) return { error: 'Google Docs & Sheets is not available yet' }
   return {
     error: 'Google Docs & Sheets is not connected',
-    connect_link: connectLink(ctx.email, 'gdrive', undefined, viaOf(ctx.phone)),
+    connect_link: connectLink(ctx.email, 'gdrive', undefined, viaOfCtx(ctx)),
     next:
       'Put this link in your reply NOW, on its own line, with one line saying Docs & Sheets needs connecting once (tap, approve, ' +
       'works once within 15 minutes; Juno can only open files it makes). Do not ask whether to send it. Juno confirms here when it ' +

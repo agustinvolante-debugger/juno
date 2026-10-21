@@ -11,7 +11,7 @@
 
 import { connectionsHref } from './settings-paths'
 import { readOnlyRefusal } from './access'
-import { announceAdminConsent, announceConnected, connectedPage, readChatState } from './connect-link'
+import { announceAdminConsent, announceConnected, announceFromSettings, connectedPage, readChatState } from './connect-link'
 import { OutlookError, connectOutlook, outlookAdminUrl, verifyOutlookState, type Want } from './outlook'
 import { classifyMsError } from './outlook-graph'
 
@@ -72,7 +72,9 @@ export async function handleOutlookCallback(url: string, o: { nonce: string | nu
   try {
     const want = chat ? wantOf(chat.w) : site!
     const r = await connectOutlook(email, code, u.origin, want)
-    if (chat) await announceConnected(email, 'outlook', chat.via, r.address, { canSend: r.canSend, canCal: r.canCal, calFull: r.calFull, canRead: r.canRead })
+    const said = { canSend: r.canSend, canCal: r.canCal, calFull: r.calFull, canRead: r.canRead }
+    if (chat) await announceConnected(email, 'outlook', chat.via, r.address, said)
+    else await announceFromSettings(email, 'outlook', r.address, said)
     // Reading asked (team test) but not granted on Microsoft's screen: said, like Gmail's ?read=denied.
     return back({ connected: r.address, cal: r.canCal ? 'on' : r.calFull ? 'full' : 'off', send: r.canSend ? 'on' : 'off', ...(want.read ? { read: r.canRead ? 'on' : 'denied' } : {}) })
   } catch (e) {

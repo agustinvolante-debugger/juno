@@ -61,10 +61,11 @@ import { addReminder, cancelReminder, pendingReminders, MAX_AHEAD_MS, maxAheadMs
 import type { Lang } from '../currency'
 import { isMine, type ActionMeta, type Mine } from '../todo-labels'
 import { getLinkByEmail, setChat, type Draft } from './store'
-import { phoneStore, stateOf, turnAddSetUndo, type AgentStore } from './state'
+import { phoneStore, stateOf, turnAddSetUndo, turnSetUndo, type AgentStore } from './state'
 import { sendText } from './provider'
 import type { AgentChannel, AgentDraft, AgentLink, AgentParts } from '../agent-io'
 import { MODULES } from './tools'
+import { driveUndoHook } from './tools/google'
 import { localDate, localIso, markZoneChecked, userZone, zonePromptLine, type Zone } from '../timezone'
 import { dropIfUnanswered, confirmPending, BARE_YES, BARE_NO, type Pending } from './confirm'
 import { finishZoneTurn, timeFields, zoneAskLine, type ZoneTurn } from './tools/timezone'
@@ -72,6 +73,11 @@ import { UNDO, runUndo } from './undo'
 import { unseen } from './burst'
 
 const anthropic = penAnthropic('whatsapp-agent')
+
+// A Google Doc / Sheet edit (tools/google.ts) is this turn's undoable action: kept where the turn's
+// undo lives (WhatsApp: on the inbound message; web: on the thread, keyed by the turn), and the
+// turn is marked undoable (web: the Undo button). "undo" runs undoDriveEdit (undo.ts runUndo).
+driveUndoHook.save = (ctx, rec, title) => turnSetUndo(ctx, { kind: 'drive', rec, title })
 // Haiku 5.5 (14 Oct, was Sonnet 5.5): a twentieth of the price, and the search stage now reads
 // far more transcript per question. Same test questions, same tool use, answers as grounded.
 const MODEL = process.env.PEN_AGENT_MODEL || 'claude-haiku-5-5'
@@ -1663,12 +1669,14 @@ function gmailFailed(lang: Lang, d: Draft, reason: 'cap' | 'not_connected' | 're
  * confirming, deleting, connecting…) waits for the user's own next message. Prompt injection in an
  * email can then at worst produce a draft the user sees.
  */
-const MAIL_SAFE = new Set([
+export const MAIL_SAFE: ReadonlySet<string> = new Set([
   'search_email', 'read_thread', 'reply_in_thread', 'save_draft', 'set_draft_from', 'set_mail_app',
   'search_recordings', 'open_todos', 'get_recording', 'find_person', 'list_recordings', 'recording_people',
   'recording_conversations', 'read_conversation', 'person_brief', 'list_reminders', 'connection_status',
   'list_suggestions', 'missed_items', 'find_events', 'set_reminder', 'add_todo', 'add_to_calendar',
   'list_events', 'find_meeting',
+  // Google Docs & Sheets, read-only (21 Oct). Editing them (edit_google_doc / edit_google_sheet) is not here.
+  'find_google_file', 'read_google_file',
 ])
 
 /**

@@ -3,7 +3,7 @@ import { connectionsHref } from '@/lib/pen/settings-paths'
 import { cookies } from 'next/headers'
 import { authedEmail } from '@/lib/news/auth'
 import { readOnlyRefusal } from '@/lib/pen/access'
-import { announceConnected, connectedPage, readChatState } from '@/lib/pen/connect-link'
+import { announceConnected, announceFromSettings, connectedPage, readChatState } from '@/lib/pen/connect-link'
 import { connect } from '@/lib/pen/notion'
 
 export const dynamic = 'force-dynamic'
@@ -33,6 +33,7 @@ export async function GET(req: Request) {
   try {
     await connect(email, code, u.origin)
     if (chat) await announceConnected(email, 'notion', chat.via)
+    else await announceFromSettings(email, 'notion')
     return back('connected=1')
   } catch (e) {
     console.warn(`pen notion connect: ${(e as Error).message}`)
