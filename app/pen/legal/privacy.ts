@@ -61,7 +61,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
           {
             list: [
               'To run Juno Pen: transcribe recordings, write notes, answer your questions, send you briefings by email or WhatsApp, and keep your archive searchable.',
-              'To message you first on WhatsApp or iMessage with reminders, briefs and suggestions from your meetings, such as a follow-up you promised or a meeting someone proposed. Juno Pen asks before acting on any of them. Reply STOP to turn these messages off and START to turn them back on.',
+              'To message you first on WhatsApp or iMessage with reminders, briefs and suggestions from your meetings, such as a follow-up you promised or a meeting someone proposed. Juno Pen asks before acting on any of them. Reply STOP to turn these messages off and START to turn them back on. If we can’t reach you on WhatsApp or iMessage when a reminder is due (or you set it on the website without them), we send it to your account email instead.',
               'To run your account and billing, post your pen, and send service emails (welcome, trial ending, payment problems).',
               'To keep the service secure and working, fix problems and prevent abuse.',
               'To understand, in aggregate, how the site is used, so we can improve it.',
@@ -123,7 +123,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
       {
         h: 'Google Docs and Sheets',
         body: [
-          'If you connect Google Docs and Sheets, Juno Pen asks Google for one permission (drive.file): to create files in your Google Drive and open only the files Juno Pen created. Juno Pen cannot see any other file in your Drive.',
+          'If you connect Google Docs and Sheets, Juno Pen asks Google for one permission (drive.file): it can create files in your Google Drive, and can open only the files it created and the files you choose for it in Google’s file picker. It reads and changes those files only when you ask, and never sees anything else in your Drive. To edit a file, it reads the file at that moment and doesn’t keep a copy, except the part it changed, kept for 24 hours so you can undo the edit.',
           'Juno Pen creates a Doc or a Sheet only when you ask (a recording’s notes, a plan you approved, your to-dos or contacts), inside a “Juno Pen” folder. We store only a sealed access token, shared with Google Calendar if both are connected.',
           'You can disconnect in Settings → Google. Files Juno Pen made stay in your Drive and remain yours.',
         ],
@@ -320,7 +320,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
           {
             list: [
               'Para operar Juno Pen: transcribir grabaciones, escribir notas, responder tus preguntas, enviarte resúmenes por correo o WhatsApp y mantener tu archivo buscable.',
-              'Para escribirte primero por WhatsApp o iMessage con recordatorios, resúmenes y sugerencias de tus reuniones, como un seguimiento que prometiste o una reunión que alguien propuso. Juno Pen te pregunta antes de actuar sobre cualquiera de ellas. Responde STOP para desactivar estos mensajes y START para volver a activarlos.',
+              'Para escribirte primero por WhatsApp o iMessage con recordatorios, resúmenes y sugerencias de tus reuniones, como un seguimiento que prometiste o una reunión que alguien propuso. Juno Pen te pregunta antes de actuar sobre cualquiera de ellas. Responde STOP para desactivar estos mensajes y START para volver a activarlos. Si no podemos contactarte por WhatsApp o iMessage cuando vence un recordatorio (o lo creaste en el sitio web sin ellos), te lo enviamos al correo de tu cuenta.',
               'Para gestionar tu cuenta y tus pagos, enviarte el lápiz y mandarte correos del servicio (bienvenida, fin de la prueba, problemas de pago).',
               'Para mantener el servicio seguro y funcionando, corregir problemas y evitar abusos.',
               'Para entender, en conjunto, cómo se usa el sitio y mejorarlo.',
@@ -382,7 +382,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
       {
         h: 'Google Docs y Sheets',
         body: [
-          'Si conectas Google Docs y Sheets, Juno Pen le pide a Google un solo permiso (drive.file): crear archivos en tu Google Drive y abrir solo los que Juno Pen creó. Juno Pen no puede ver ningún otro archivo de tu Drive.',
+          'Si conectas Google Docs y Sheets, Juno Pen le pide a Google un solo permiso (drive.file): puede crear archivos en tu Google Drive, y abrir solo los que creó y los que tú elijas para él en el selector de archivos de Google. Lee y cambia esos archivos solo cuando lo pides, y nunca ve nada más de tu Drive. Para editar un archivo, lo lee en ese momento y no guarda una copia, salvo la parte que cambió, que conserva 24 horas para que puedas deshacer el cambio.',
           'Juno Pen crea un Doc o una hoja solo cuando lo pides (las notas de una grabación, un plan que aprobaste, tus pendientes o contactos), dentro de una carpeta “Juno Pen”. Solo guardamos un token de acceso cifrado, compartido con Google Calendar si conectas ambos.',
           'Puedes desconectarlo en Ajustes → Google. Los archivos que hizo Juno Pen se quedan en tu Drive y son tuyos.',
         ],
@@ -579,7 +579,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
           {
             list: [
               'Para operar o Juno Pen: transcrever gravações, escrever notas, responder às suas perguntas, enviar resumos por e-mail ou WhatsApp e manter seu arquivo pesquisável.',
-              'Para te mandar mensagens primeiro pelo WhatsApp ou iMessage com lembretes, resumos e sugestões das suas reuniões, como um retorno que você prometeu ou uma reunião que alguém propôs. O Juno Pen pergunta antes de agir sobre qualquer uma delas. Responda STOP para desativar essas mensagens e START para ativá-las de novo.',
+              'Para te mandar mensagens primeiro pelo WhatsApp ou iMessage com lembretes, resumos e sugestões das suas reuniões, como um retorno que você prometeu ou uma reunião que alguém propôs. O Juno Pen pergunta antes de agir sobre qualquer uma delas. Responda STOP para desativar essas mensagens e START para ativá-las de novo. Se não conseguirmos falar com você pelo WhatsApp ou iMessage quando um lembrete vence (ou se você o criou no site sem eles), enviamos para o e-mail da sua conta.',
               'Para gerenciar sua conta e seus pagamentos, enviar sua caneta e mandar e-mails do serviço (boas-vindas, fim do teste, problemas de pagamento).',
               'Para manter o serviço seguro e funcionando, corrigir problemas e evitar abusos.',
               'Para entender, de forma agregada, como o site é usado e melhorá-lo.',
@@ -641,7 +641,7 @@ export const PRIVACY: Record<Lang, LegalDoc> = {
       {
         h: 'Google Docs e Planilhas',
         body: [
-          'Se você conectar o Google Docs e Planilhas, o Juno Pen pede ao Google uma única permissão (drive.file): criar arquivos no seu Google Drive e abrir só os que o Juno Pen criou. O Juno Pen não vê nenhum outro arquivo do seu Drive.',
+          'Se você conectar o Google Docs e Planilhas, o Juno Pen pede ao Google uma única permissão (drive.file): ele pode criar arquivos no seu Google Drive, e abrir só os que criou e os que você escolher para ele no seletor de arquivos do Google. Ele lê e altera esses arquivos só quando você pede, e nunca vê mais nada do seu Drive. Para editar um arquivo, ele o lê naquele momento e não guarda uma cópia, exceto a parte que alterou, guardada por 24 horas para você poder desfazer a edição.',
           'O Juno Pen cria um Doc ou uma planilha só quando você pede (as notas de uma gravação, um plano que você aprovou, suas tarefas ou contatos), numa pasta “Juno Pen”. Guardamos só um token de acesso criptografado, compartilhado com o Google Agenda se os dois estiverem conectados.',
           'Você pode desconectar em Configurações → Google. Os arquivos que o Juno Pen criou continuam no seu Drive e são seus.',
         ],
