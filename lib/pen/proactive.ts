@@ -61,7 +61,7 @@ import { userLang } from './user-lang'
 import { isActive } from './accounts'
 import { isMine, type ActionMeta } from './todo-labels'
 import { getLinkByEmail } from './whatsapp/store'
-import { sendText, sendTemplate, proactiveDry, dryRun } from './whatsapp/provider'
+import { sendText, sendTemplate, proactiveDry, proactiveLiveFor, dryRun } from './whatsapp/provider'
 import * as imessage from './imessage/sendblue'
 import { PEN_NAME_RE } from './pen-device'
 import { afterUploadMessage } from './after-upload'
@@ -424,7 +424,7 @@ export async function sendProactive(email: string, msg: ProactiveMessage, opts: 
   // In a test script the provider itself refuses every send (provider.ts dryRun), so there the
   // real path runs end to end (rows 'sent', offers marked) with nothing leaving; { dry: true }
   // still gives the dry path.
-  const dry = opts.dry ?? (proactiveDry() && !dryRun())
+  const dry = opts.dry ?? (proactiveDry() && !dryRun() && !proactiveLiveFor(email))
   const prefs = await allPrefs(email)
   if (!kindOn(prefs, msg.kind)) return { status: 'off' }
   const ch = await channelFor(email, now)

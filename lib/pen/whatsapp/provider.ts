@@ -46,6 +46,15 @@ export function proactiveDry(): boolean {
   }
   return true
 }
+/**
+ * The accounts a dry app still sends real proactive messages to (PEN_PROACTIVE_LIVE_USERS, comma-
+ * separated emails): localhost testing on the founder's own number while everyone else stays dry.
+ * Never in a script or with PEN_PROACTIVE_DRY=all (dryRun wins there).
+ */
+export function proactiveLiveFor(email: string): boolean {
+  const list = (process.env.PEN_PROACTIVE_LIVE_USERS ?? '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean)
+  return list.includes(email.toLowerCase())
+}
 /** Every provider send is refused (logged): a test script, or PEN_PROACTIVE_DRY=all. */
 export function dryRun(): boolean {
   return proactiveDry() && (process.env.PEN_PROACTIVE_DRY === 'all' || !process.env.NEXT_RUNTIME)
