@@ -13,6 +13,8 @@ import type { CalBrief, CalViewEvent } from './calendar-view'
 import { eventRef } from './calendar-merge'
 
 export const MAX_SPAN_DAYS = 42
+// Six local weeks across a clock change (US 1 Nov, EU 25 Oct) are 42 days and an hour: allow it.
+const DST_SLACK_MS = 2 * 3_600_000
 
 /** ?from=&to= → the instants, or why not (bad dates, to ≤ from, more than six weeks). */
 export function parseRange(from: string | null, to: string | null): { from: Date; to: Date } | { error: string } {
@@ -20,7 +22,7 @@ export function parseRange(from: string | null, to: string | null): { from: Date
   const t = to ? Date.parse(to) : NaN
   if (Number.isNaN(f) || Number.isNaN(t)) return { error: 'from and to must be dates' }
   if (t <= f) return { error: 'to must be after from' }
-  if (t - f > MAX_SPAN_DAYS * 86_400_000) return { error: `at most ${MAX_SPAN_DAYS} days at a time` }
+  if (t - f > MAX_SPAN_DAYS * 86_400_000 + DST_SLACK_MS) return { error: `at most ${MAX_SPAN_DAYS} days at a time` }
   return { from: new Date(f), to: new Date(t) }
 }
 
