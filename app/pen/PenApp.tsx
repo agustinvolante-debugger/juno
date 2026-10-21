@@ -1504,6 +1504,16 @@ export default function PenApp({
 
       {/* --------------------------------- recordings (rail; ordered right in CSS) */}
 
+      {!sideCollapsed && (
+        <MiniCalendar
+          onPick={(date) => {
+            setCalGoTo((g) => ({ date, n: (g?.n ?? 0) + 1 }))
+            setView({ k: 'calendar' })
+            setNavOpen(false)
+          }}
+        />
+      )}
+
       {sideCollapsed ? (
         <nav className="pen-side-icons" aria-label={T.chats}>
           <button
@@ -1559,16 +1569,6 @@ export default function PenApp({
           </div>
         )}
       </nav>
-      )}
-
-      {!sideCollapsed && (
-        <MiniCalendar
-          onPick={(date) => {
-            setCalGoTo((g) => ({ date, n: (g?.n ?? 0) + 1 }))
-            setView({ k: 'calendar' })
-            setNavOpen(false)
-          }}
-        />
       )}
 
       {!sideCollapsed && (
