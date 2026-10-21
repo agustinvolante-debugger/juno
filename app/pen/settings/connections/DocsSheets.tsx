@@ -20,7 +20,9 @@ const D_EN = {
   makesLabel: 'Makes',
   makes: 'Only the Docs and Sheets you ask for, in a “Juno Pen” folder in your Drive.',
   opensLabel: 'Opens',
-  opens: 'Only the files Juno made. Nothing else in your Drive is visible to Juno.',
+  opens: 'Only the files Juno made and the ones you choose for it. Nothing else in your Drive is visible to Juno.',
+  pick: 'Let Juno edit a file',
+  pickLine: 'Choose a Doc or Sheet you made, and Juno can add to it or change it when you ask.',
   reconnect: 'Connect again',
   disconnect: 'Disconnect Docs & Sheets',
   disconnecting: 'Disconnecting…',
@@ -44,7 +46,9 @@ const D: Copy<typeof D_EN> = {
     makesLabel: 'Crea',
     makes: 'Solo los Docs y Sheets que pidas, en una carpeta “Juno Pen” de tu Drive.',
     opensLabel: 'Abre',
-    opens: 'Solo los archivos que hizo Juno. Nada más de tu Drive es visible para Juno.',
+    opens: 'Solo los archivos que hizo Juno y los que tú elijas. Nada más de tu Drive es visible para Juno.',
+    pick: 'Deja que Juno edite un archivo',
+    pickLine: 'Elige un Doc o Sheet que hiciste tú, y Juno podrá agregarle cosas o cambiarlo cuando se lo pidas.',
     reconnect: 'Conectar de nuevo',
     disconnect: 'Desconectar Docs y Sheets',
     disconnecting: 'Desconectando…',
@@ -65,7 +69,9 @@ const D: Copy<typeof D_EN> = {
     makesLabel: 'Cria',
     makes: 'Só os Docs e Planilhas que você pedir, numa pasta “Juno Pen” do seu Drive.',
     opensLabel: 'Abre',
-    opens: 'Só os arquivos que o Juno criou. Nada mais do seu Drive fica visível para o Juno.',
+    opens: 'Só os arquivos que o Juno criou e os que você escolher. Nada mais do seu Drive fica visível para o Juno.',
+    pick: 'Deixe o Juno editar um arquivo',
+    pickLine: 'Escolha um Doc ou Planilha que você fez, e o Juno pode acrescentar ou mudar o que você pedir.',
     reconnect: 'Conectar de novo',
     disconnect: 'Desconectar Docs e Planilhas',
     disconnecting: 'Desconectando…',
@@ -127,6 +133,12 @@ export default function DocsSheets({ configured, on, calendarToo, address, broke
               <div><dt>{T.makesLabel}</dt><dd>{T.makes}</dd></div>
               <div><dt>{T.opensLabel}</dt><dd>{T.opens}</dd></div>
             </dl>
+            {!broken && (
+              <div className="pen-set-actions">
+                <a className="pen-btn" href="/pen/drive/pick">{T.pick}</a>
+                <span className="pen-set-fine">{T.pickLine}</span>
+              </div>
+            )}
             <div className="pen-set-actions">
               {broken && <a className="pen-btn pen-btn-accent" href={`${CONNECT}?want=drive`}>{T.reconnect}</a>}
               <button type="button" className="pen-btn" onClick={disconnect} disabled={busy}>{busy ? T.disconnecting : T.disconnect}</button>
