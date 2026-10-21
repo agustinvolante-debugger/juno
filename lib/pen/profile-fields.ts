@@ -7,6 +7,8 @@
 // The questions are data rather than markup so the form, the server-side cleaning and the
 // prompt paragraph all read the same list and cannot drift apart.
 
+import type { PenSettings } from './pen-device'
+
 export type Question =
   | { key: string; kind: 'text'; label: string; placeholder?: string; wide?: boolean }
   | { key: string; kind: 'textarea'; label: string; placeholder?: string }
@@ -200,6 +202,10 @@ export type AgentProfile = {
   /** Messages Juno sends first on WhatsApp/iMessage (lib/pen/proactive.ts). Set by STOP/START in
    *  the chat, never by the form. Unset = all on. */
   proactive?: { off?: boolean; offKinds?: string[] }
+  /** Juno Pen device settings (lib/pen/pen-settings.ts, /api/pen/pen-settings), written to the
+   *  pen's MRECSET.TXT by the browser. Set by Settings → Pen, never by the Profile form. */
+  pen?: Partial<PenSettings>
+  penSavedAt?: string
 }
 
 export function roleOf(value: string | undefined): Role | undefined {

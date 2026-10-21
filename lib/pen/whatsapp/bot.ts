@@ -33,7 +33,7 @@ import { isImessage } from '../imessage/sendblue'
 import { getPending, notePendingOut, setPending, BARE_NO, BARE_YES } from './confirm'
 import { decide, isConfirmation, joinTexts, nextBatch, type BurstRow } from './burst'
 import { cardLine, route, zoneAt } from './inbound'
-import type { ProactiveKind } from '../suggestions-types'
+import type { ProactiveSendKind as ProactiveKind } from '../suggestions-types'
 import {
   claimCode,
   claimTexts,
@@ -85,7 +85,7 @@ const EN = {
   stopKind: (what: string) => `Done, no more ${what}. Reply START to turn everything back on. You can still ask me anything.`,
   startAll: 'Done, I\'ll text you reminders and briefs from your meetings again. Reply STOP anytime.',
   startKind: (what: string) => `Done, ${what} are back on. Reply STOP anytime.`,
-  kinds: { offers: 'suggestions after your recordings', meeting_brief: 'meeting briefs', nudges: 'to-do reminders', morning_brief: 'morning briefs', notion: 'Notion offers' } as Record<ProactiveKind, string>,
+  kinds: { offers: 'suggestions after your recordings', meeting_brief: 'meeting briefs', nudges: 'to-do reminders', morning_brief: 'morning briefs', notion: 'Notion offers', pen_upload: 'Juno Pen reminders' } as Record<ProactiveKind, string>,
   empty: 'That file arrived without its contents. Could you send it again?',
   notAudio: (name: string) => `${name} doesn't look like a recording. Send me the WAV file from your pen.`,
   yourRecording: 'your recording',
@@ -152,7 +152,7 @@ const BOT: Record<Lang, typeof EN> = {
     stopKind: (what) => `Listo, no más ${what}. Responde START para volver a activar todo. Puedes seguir preguntándome lo que quieras.`,
     startAll: 'Listo, te volveré a escribir recordatorios y resúmenes de tus reuniones. Responde STOP cuando quieras.',
     startKind: (what) => `Listo, volví a activar ${what}. Responde STOP cuando quieras.`,
-    kinds: { offers: 'sugerencias después de tus grabaciones', meeting_brief: 'resúmenes antes de reuniones', nudges: 'recordatorios de tareas', morning_brief: 'resúmenes de la mañana', notion: 'ofertas de Notion' },
+    kinds: { offers: 'sugerencias después de tus grabaciones', meeting_brief: 'resúmenes antes de reuniones', nudges: 'recordatorios de tareas', morning_brief: 'resúmenes de la mañana', notion: 'ofertas de Notion', pen_upload: 'recordatorios del Juno Pen' },
     empty: 'Ese archivo llegó vacío. ¿Me lo mandas otra vez?',
     notAudio: (name) => `${name} no parece una grabación. Mándame el archivo WAV de tu lápiz.`,
     yourRecording: 'tu grabación',
@@ -216,7 +216,7 @@ const BOT: Record<Lang, typeof EN> = {
     stopKind: (what) => `Pronto, sem mais ${what}. Responda START para ativar tudo de novo. Você ainda pode me perguntar qualquer coisa.`,
     startAll: 'Pronto, vou voltar a te mandar lembretes e resumos das suas reuniões. Responda STOP quando quiser.',
     startKind: (what) => `Pronto, ${what} ativados de novo. Responda STOP quando quiser.`,
-    kinds: { offers: 'sugestões depois das suas gravações', meeting_brief: 'resumos antes das reuniões', nudges: 'lembretes de tarefas', morning_brief: 'resumos da manhã', notion: 'ofertas do Notion' },
+    kinds: { offers: 'sugestões depois das suas gravações', meeting_brief: 'resumos antes das reuniões', nudges: 'lembretes de tarefas', morning_brief: 'resumos da manhã', notion: 'ofertas do Notion', pen_upload: 'lembretes da Juno Pen' },
     empty: 'Esse arquivo chegou vazio. Pode mandar de novo?',
     notAudio: (name) => `${name} não parece uma gravação. Me mande o arquivo WAV da sua caneta.`,
     yourRecording: 'sua gravação',
@@ -506,6 +506,7 @@ const START_WORDS = 'start|empezar|activar|iniciar|reanudar|come[cç]ar|voltar|a
 const KIND_WORDS: [ProactiveKind, string][] = [
   ['morning_brief', 'morning briefs?|morning|resumen(es)? (de la )?ma[ñn]ana|resumen(es)? matutinos?|resumos? da manh[ãa]'],
   ['meeting_brief', 'meeting briefs?|briefs?|resumen(es)? (de|antes de) (las )?reuniones|resumos? (das|antes das) reuni[õo]es'],
+  ['pen_upload', '(juno )?pen( reminders?)?|(recordatorios? del )?(juno pen|l[áa]piz)|(lembretes? da )?(juno pen|caneta)'],
   ['nudges', 'reminders?|nudges?|follow[- ]?ups?|recordatorios?|lembretes?'],
   ['offers', 'offers?|suggestions?|sugerencias?|sugest[õo]es'],
   ['notion', 'notion( offers?)?'],

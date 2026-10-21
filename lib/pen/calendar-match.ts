@@ -2,9 +2,10 @@
 // (.pentest/calendar-page-unit.mts): no network, no DB. app/api/pen/calendar reads the events and
 // the recordings and calls matchRecordings on each read; nothing is stored.
 //
-//   · A recording's time: recorded_at is the file's mtime off the pen, so ≈ the END of the
-//     recording; it spans [recorded_at − duration, recorded_at]. No duration yet (still being
-//     transcribed) = a 20-minute guess.
+//   · A recording's time: recorded_at is the file's mtime off the pen, which the pen stamps with
+//     the START of the recording (same time as the R<date>-<time>.WAV name; measured 21 Oct: a
+//     61 s file named 15:12:31 has mtime 15:12:30). So it spans [recorded_at, recorded_at +
+//     duration]. No duration yet (still being transcribed) = a 20-minute guess forward.
 //   · A pair counts only when the times overlap meaningfully: ≥ 50% of the shorter of the two, or
 //     ≥ 10 minutes. Then the score: overlap share + 2 when a guest's email is one of the people
 //     linked to the recording (pen_session_people → pen_people.email) + title likeness (0..1).
@@ -30,7 +31,7 @@ export type MatchEvent = {
 export type MatchRecording = {
   id: string
   title: string
-  /** ISO: the END of the recording (file mtime). */
+  /** ISO: the START of the recording (file mtime; the pen stamps the start). */
   recordedAt: string
   durationSec: number | null
   /** Emails of the people linked to it (lower case). */
@@ -39,10 +40,10 @@ export type MatchRecording = {
 
 /** [start, end] of a recording in ms, or null when it has no usable time. */
 export function recordingSpan(r: Pick<MatchRecording, 'recordedAt' | 'durationSec'>): [number, number] | null {
-  const end = Date.parse(r.recordedAt)
-  if (Number.isNaN(end)) return null
+  const start = Date.parse(r.recordedAt)
+  if (Number.isNaN(start)) return null
   const len = r.durationSec && r.durationSec > 0 ? r.durationSec * 1000 : GUESS_MS
-  return [end - len, end]
+  return [start, start + len]
 }
 
 /** Words of a title, folded, without the filler that every meeting title shares. */

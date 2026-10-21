@@ -6,6 +6,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase'
 import { isMissingSchema } from './allowance'
+import { cleanPenSettings } from './pen-settings'
 
 import { roleOf, LANGUAGES, type AgentProfile } from './profile-fields'
 export { ROLES, NOTE_STYLES, LANGUAGES, type AgentProfile } from './profile-fields'
@@ -88,6 +89,8 @@ export function cleanProfile(raw: unknown): AgentProfile {
     calendarDefault: typeof r.calendarDefault === 'string' && (r.calendarDefault === 'gcal' || /^[^\s@]{1,64}@[^\s@]{1,190}$/.test(r.calendarDefault)) ? r.calendarDefault.toLowerCase() : undefined,
     mailApp: r.mailApp === 'gmail' || r.mailApp === 'outlook' || r.mailApp === 'yahoo' || r.mailApp === 'other' || r.mailApp === 'none' ? r.mailApp : undefined,
     mailAppSource: r.mailAppSource === 'said' || r.mailAppSource === 'guess' ? r.mailAppSource : undefined,
+    pen: cleanPenSettings(r.pen),
+    penSavedAt: instant(r.penSavedAt),
     proactive: (() => {
       const o = (r.proactive && typeof r.proactive === 'object' ? r.proactive : {}) as Record<string, unknown>
       const kinds = Array.isArray(o.offKinds) ? o.offKinds.filter((k): k is string => typeof k === 'string' && PROACTIVE_KINDS.includes(k)) : []
@@ -100,10 +103,10 @@ export function cleanProfile(raw: unknown): AgentProfile {
 }
 
 /** ProactiveKind (suggestions-types.ts), as data for cleaning. */
-const PROACTIVE_KINDS: string[] = ['offers', 'meeting_brief', 'nudges', 'morning_brief', 'notion']
+const PROACTIVE_KINDS: string[] = ['offers', 'meeting_brief', 'nudges', 'morning_brief', 'notion', 'pen_upload']
 
 /** App-set fields the Profile form never sends; a form save keeps the stored ones. */
-const APP_ZONE_KEYS = ['timeZone', 'timeZoneSeenAt', 'timeZoneSaid', 'timeZoneSaidAt', 'timeZoneUntil', 'timeZoneBefore', 'timeZoneChecked', 'timeZoneCheckedAt', 'calendarApp', 'calendarAppSource', 'calendarDefault', 'mailApp', 'mailAppSource'] as const
+const APP_ZONE_KEYS = ['timeZone', 'timeZoneSeenAt', 'timeZoneSaid', 'timeZoneSaidAt', 'timeZoneUntil', 'timeZoneBefore', 'timeZoneChecked', 'timeZoneCheckedAt', 'calendarApp', 'calendarAppSource', 'calendarDefault', 'mailApp', 'mailAppSource', 'pen', 'penSavedAt'] as const
 
 export async function getProfile(email: string): Promise<AgentProfile> {
   const { data, error } = await supabaseAdmin

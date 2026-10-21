@@ -31,7 +31,9 @@ const validTz = (tz: unknown): tz is string => {
 
 type RecRow = { id: string; title: string | null; source_name: string | null; source_channel: string | null; storage_path: string | null; recorded_at: string | null; duration_sec: number | null }
 
-/** Recordings that ended in the range (+6 h: a meeting at the range's end finishes after it), with their people's emails. */
+/** Recordings that started in the range or up to 4 h before it (recorded_at is the START; a pen
+ *  file runs at most PART = 240 min, so one begun before the range can still overlap it), with
+ *  their people's emails. */
 async function recordingsIn(email: string, from: Date, to: Date): Promise<MatchRecording[]> {
   const { data, error } = await supabaseAdmin
     .from('pen_sessions')
@@ -39,8 +41,8 @@ async function recordingsIn(email: string, from: Date, to: Date): Promise<MatchR
     .eq('user_email', email)
     .or('merge_index.is.null,merge_index.eq.0')
     .not('recorded_at', 'is', null)
-    .gte('recorded_at', from.toISOString())
-    .lt('recorded_at', new Date(Math.min(Date.now(), to.getTime()) + 6 * 3_600_000).toISOString())
+    .gte('recorded_at', new Date(from.getTime() - 4 * 3_600_000).toISOString())
+    .lt('recorded_at', new Date(Math.min(Date.now(), to.getTime())).toISOString())
     // 200: six weeks of recordings, and the session-id list below stays a short URL.
     .limit(200)
   if (error) throw new Error(error.message)

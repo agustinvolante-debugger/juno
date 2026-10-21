@@ -36,3 +36,6 @@ export type Suggestion = {
 
 /** Proactive message types, each can be turned off on its own (profile.proactive.off). */
 export type ProactiveKind = 'offers' | 'meeting_brief' | 'nudges' | 'morning_brief' | 'notion'
+/** Every kind Juno can send, including ones Settings doesn't list yet ('pen_upload', behind
+ *  PEN_PEN_NUDGE; STOP works for it in the chat). */
+export type ProactiveSendKind = ProactiveKind | 'pen_upload'

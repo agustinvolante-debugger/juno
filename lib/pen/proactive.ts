@@ -9,6 +9,11 @@
 //   nudges         to-dos due today, at 9:00 local, one bundled line
 //   morning_brief  7:30–8:00 local: today's meetings and to-dos, only when there is something
 //   notion         Notion doc offers (composed with the offers for now)
+//   pen_upload     (behind PEN_PEN_NUDGE=1, off by default) a user who owns a Juno Pen (≥ 1 upload
+//                  named like the pen's files, PEN_NAME_RE) and hasn't uploaded from it in 7 days:
+//                  "plug it in". From 10:00 local, at most once per 7 days, at most PEN_NUDGE_MAX
+//                  times per silence (penNudgeDue). Outside the WhatsApp window only with the
+//                  template pen_upload_reminder approved (draft: .pentest/pen-upload-template.md)
 //
 // Rules, every send: the user hasn't said STOP (all, or that kind); quiet hours 7:30–20:00 in
 // their zone; at most 3 a local day and an hour apart; each (kind, ref) once ever; whatever is due
@@ -41,7 +46,7 @@ import { userZone, localToUtc } from './timezone'
 import { supabaseAdmin } from '@/lib/supabase'
 import { ALLOWED_EMAILS } from '@/lib/auth'
 import type { Lang } from './currency'
-import type { ProactiveKind } from './suggestions-types'
+import type { ProactiveSendKind as ProactiveKind, ProactiveKind as SettingsKind } from './suggestions-types'
 import { getProfileRaw, cleanProfile } from './profile'
 import { userLang } from './user-lang'
 import { isActive } from './accounts'
@@ -49,8 +54,9 @@ import { isMine, type ActionMeta } from './todo-labels'
 import { getLinkByEmail } from './whatsapp/store'
 import { sendText, sendTemplate, proactiveDry, dryRun } from './whatsapp/provider'
 import * as imessage from './imessage/sendblue'
+import { PEN_NAME_RE } from './pen-device'
 
-export const PROACTIVE_KINDS: ProactiveKind[] = ['offers', 'meeting_brief', 'nudges', 'morning_brief', 'notion']
+export const PROACTIVE_KINDS: ProactiveKind[] = ['offers', 'meeting_brief', 'nudges', 'morning_brief', 'notion', 'pen_upload']
 
 const MIN = 60 * 1000
 const HOUR = 60 * MIN
@@ -74,9 +80,17 @@ const LOCK_STALE_MS = 5 * MIN
 
 export type ProactivePrefs = { off?: boolean; offKinds?: ProactiveKind[] }
 
-export async function getPrefs(email: string): Promise<ProactivePrefs> {
+/** Every kind's on/off, for sending. */
+async function allPrefs(email: string): Promise<ProactivePrefs> {
   const p = await getProfileRaw(email).catch(() => null)
   return (p?.proactive ?? {}) as ProactivePrefs
+}
+
+/** The kinds Settings → Messages lists (pen_upload isn't there yet: STOP in the chat covers it). */
+export async function getPrefs(email: string): Promise<{ off?: boolean; offKinds?: SettingsKind[] }> {
+  const p = await allPrefs(email)
+  const offKinds = (p.offKinds ?? []).filter((k): k is SettingsKind => k !== 'pen_upload')
+  return { ...(p.off ? { off: true } : {}), ...(offKinds.length ? { offKinds } : {}) }
 }
 
 export function kindOn(prefs: ProactivePrefs, kind: ProactiveKind): boolean {
@@ -400,7 +414,7 @@ export async function sendProactive(email: string, msg: ProactiveMessage, opts: 
   // real path runs end to end (rows 'sent', offers marked) with nothing leaving; { dry: true }
   // still gives the dry path.
   const dry = opts.dry ?? (proactiveDry() && !dryRun())
-  const prefs = await getPrefs(email)
+  const prefs = await allPrefs(email)
   if (!kindOn(prefs, msg.kind)) return { status: 'off' }
   const ch = await channelFor(email, now)
   if (!ch) return { status: 'not_linked' }
@@ -497,6 +511,7 @@ const COPY = {
     nudge: (list: string) => `Due today: ${list}. Want help with any of it?`,
     and: 'and',
     more: (n: number) => `and ${n} more`,
+    penUpload: "Haven't seen your Juno Pen in a week. Plug it in and open Juno to save your recent conversations.",
   },
   es: {
     morning: (name: string) => `Buenos días${name ? `, ${name}` : ''}.`,
@@ -512,6 +527,7 @@ const COPY = {
     nudge: (list: string) => `Para hoy: ${list}. ¿Te ayudo con algo de eso?`,
     and: 'y',
     more: (n: number) => `y ${n} más`,
+    penUpload: 'Hace una semana que no conectas tu Juno Pen. Conéctalo y abre Juno para guardar tus conversaciones recientes.',
   },
   pt: {
     morning: (name: string) => `Bom dia${name ? `, ${name}` : ''}.`,
@@ -527,6 +543,7 @@ const COPY = {
     nudge: (list: string) => `Para hoje: ${list}. Quer ajuda com alguma coisa?`,
     and: 'e',
     more: (n: number) => `e mais ${n}`,
+    penUpload: 'Faz uma semana que você não conecta sua Juno Pen. Conecte e abra o Juno para salvar suas conversas recentes.',
   },
 }
 
@@ -680,6 +697,66 @@ async function meetingBrief(email: string, m: Meeting, lang: Lang): Promise<stri
   }
 }
 
+/* ------------------------------------------------------- pen upload nudge */
+
+const DAY_MS = 24 * HOUR
+export const PEN_NUDGE_AFTER_MS = 7 * DAY_MS
+/** Nudges per silence (weeks 1..4 after the last pen upload), then Juno stops asking. */
+export const PEN_NUDGE_MAX = 4
+/** Not before this local time (the morning slot is the briefs'). */
+export const PEN_NUDGE_FROM_MIN = 10 * 60
+
+export const penNudgeOn = () => process.env.PEN_PEN_NUDGE === '1'
+
+/**
+ * Is a "plug your pen in" nudge due? Pure. lastPenUpload = newest upload (created_at, ms) of a
+ * file named like the pen's (null = owns no pen); lastNudge = the last pen_upload message that
+ * actually went out (sent/sending), or null. The ref is one per week of silence
+ * ("<YYYY-MM-DD of the last upload>:w<n>"), so each week of it is offered once, and a new upload
+ * starts the count again.
+ */
+export function penNudgeDue(lastPenUpload: number | null, lastNudge: number | null, now: number): { ref: string } | null {
+  if (lastPenUpload == null || Number.isNaN(lastPenUpload)) return null
+  const since = now - lastPenUpload
+  if (since < PEN_NUDGE_AFTER_MS) return null
+  const week = Math.floor(since / PEN_NUDGE_AFTER_MS)
+  if (week > PEN_NUDGE_MAX) return null
+  // A nudge for an older silence counts too: never two within 7 days.
+  if (lastNudge != null && now - lastNudge < PEN_NUDGE_AFTER_MS) return null
+  return { ref: `${new Date(lastPenUpload).toISOString().slice(0, 10)}:w${week}` }
+}
+
+/** Newest upload of a pen-named file (ms), or null: the user owns no pen. Samples don't count. */
+async function lastPenUploadAt(email: string): Promise<number | null> {
+  const { data, error } = await supabaseAdmin
+    .from('pen_sessions')
+    .select('source_name,source_channel,created_at')
+    .eq('user_email', email)
+    // LIKE's _ is one character: R20261021-151231.WAV's shape; the regex below is the real check.
+    .ilike('source_name', 'r________-______.%')
+    .order('created_at', { ascending: false })
+    .limit(20)
+  if (error) throw new Error(error.message)
+  const hit = ((data ?? []) as { source_name: string | null; source_channel: string | null; created_at: string }[]).find(
+    (r) => r.source_channel !== 'sample' && PEN_NAME_RE.test(r.source_name ?? ''),
+  )
+  return hit ? Date.parse(hit.created_at) : null
+}
+
+/** When the last pen_upload nudge went out (ms), or null. */
+async function lastPenNudgeAt(email: string): Promise<number | null> {
+  const { data } = await supabaseAdmin
+    .from('pen_proactive_log')
+    .select('sent_at,status')
+    .eq('user_email', email.toLowerCase())
+    .eq('kind', 'pen_upload')
+    .in('status', ['sent', 'sending'])
+    .order('sent_at', { ascending: false })
+    .limit(1)
+  const r = ((data ?? []) as { sent_at: string }[])[0]
+  return r ? Date.parse(r.sent_at) : null
+}
+
 /** One part of a bundle, with when it stops being worth sending. */
 type Part = ProactiveMessage & { order: number; staleAt: number; notedAt?: number }
 
@@ -786,6 +863,21 @@ export async function dueFor(email: string, now: Date, tz: string, lang: Lang, p
       })
     }
   }
+  // (e) Juno Pen not plugged in for 7 days (PEN_PEN_NUDGE=1 only). No buttons, no variables.
+  if (penNudgeOn() && kindOn(prefs, 'pen_upload') && mins >= PEN_NUDGE_FROM_MIN) {
+    const last = await lastPenUploadAt(email).catch(() => null)
+    const due = last != null ? penNudgeDue(last, await lastPenNudgeAt(email).catch(() => null), t) : null
+    if (due) {
+      parts.push({
+        kind: 'pen_upload',
+        ref: due.ref,
+        text: C.penUpload,
+        template: { name: 'pen_upload_reminder', vars: [] },
+        order: 4,
+        staleAt: zonedTime(today, QUIET.end, tz).getTime(),
+      })
+    }
+  }
   return parts.filter((p) => t < p.staleAt).sort((a, b) => a.order - b.order)
 }
 
@@ -810,7 +902,7 @@ export async function runForUser(email: string, opts: { now?: Date; dry?: boolea
   const run: UserRun = { email, tz: zone, local: `${lp.date} ${clockOf(now, tz)}`, window: !!ch?.window, due: [], result: null }
   if (!ch) return { ...run, result: { status: 'not_linked' } }
   if (!(await allowedUser(email))) return { ...run, result: { status: 'inactive' } }
-  const prefs = await getPrefs(email)
+  const prefs = await allPrefs(email)
   if (prefs.off) return { ...run, result: { status: 'off' } }
   // No zone: quiet hours can't be known. Only the after-upload offers, only while they're awake.
   if (!zone && !awake(ch, now)) return { ...run, result: { status: 'no_zone' } }
