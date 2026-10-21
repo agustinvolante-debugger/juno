@@ -51,6 +51,11 @@ import { LangProvider, useCopy, useLang } from './LangContext'
 import { APP_COPY, type AppCopy } from './PenApp.copy'
 import { typeLabel, bucketLabel, plural, shortDate, fmtDate, LOCALE, type Lang } from '@/lib/pen/i18n'
 import { SUPPORT_EMAIL } from '@/lib/support'
+import { PEN_NAME_RE } from '@/lib/pen/pen-device'
+import { usePenDrive } from './pen/usePenDrive'
+import { usePenFlow, PenCard, PenSpaceHelp } from './pen/PenDevice'
+import { PEN_DEVICE_COPY } from './pen/pen-device.copy'
+import { canUsePenDrive, penStartOf } from './pen/pen-drive'
 
 
 /**
@@ -450,7 +455,8 @@ export default function PenApp({
   const [supportsPicker, setSupportsPicker] = useState(false)
   useEffect(() => {
     setMounted(true)
-    setSupportsPicker(typeof window.showDirectoryPicker === 'function')
+    // Chrome / Edge on a computer (?penmock=nofs pretends otherwise on localhost).
+    setSupportsPicker(canUsePenDrive())
   }, [])
 
   const [allowance, setAllowance] = useState<Allowance | null>(initialAllowance)
@@ -616,13 +622,41 @@ export default function PenApp({
 
   /* ---------------------------------------------------------------- connect */
 
-  // Opens the same file picker as "Add audio files". It used to open a folder picker
-  // (showDirectoryPicker), which greys out the files themselves, so people with the pen
-  // plugged in couldn't see what to pick (9 Oct). Picking the recordings works everywhere.
+  // The pen as a drive (21 Oct), Chrome / Edge on a computer: chosen once after a picture guide
+  // (pen/PenDevice.tsx), then noticed whenever it's plugged in; Home shows "3 new recordings" and
+  // one Upload, which lands in the same import tray and uploads below. Everywhere else, and from
+  // the guide's "Or choose files instead", Connect pen opens the file picker as before (9 Oct:
+  // the folder picker alone greyed out the files and confused people).
+  const penDrive = usePenDrive()
+  const penFlow = usePenFlow(penDrive, {
+    lang: appLang,
+    locked,
+    onPickFiles: () => fileInput.current?.click(),
+    onUpload: (files) => {
+      if (locked) return
+      setErr(null)
+      setPenName('JUNO')
+      setPending((prev) => [...prev.filter((p) => !files.some((f) => f.name === p.file.name)), ...files.map((f) => ({ file: f, picked: true }))])
+    },
+  })
+  // Localhost only: ?penmock=nofs&upcard=going|done shows the upload card as Safari sees it,
+  // without uploading anything (for reviewing its wording, like ?ready=1).
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return
+    const v = new URLSearchParams(window.location.search).get('upcard')
+    if (v !== 'going' && v !== 'done') return
+    const names = ['R20261021-091202.WAV', 'R20261021-140202.WAV']
+    setUploads(names.map((name, i) => ({ key: name, name, phase: '', pct: v === 'done' ? 100 : 40, state: v === 'done' || i === 0 ? 'done' as const : 'working' as const })))
+  }, [])
+  // importPicked runs long after the click; it reads the flow of the latest render.
+  const penAfter = useRef(penFlow.afterUpload)
+  penAfter.current = penFlow.afterUpload
+  const PT = PEN_DEVICE_COPY[appLang]
+  const penMenuLabel = penDrive.state === 'connected' && penDrive.newFiles.length ? PT.menuUpload(penDrive.newFiles.length) : T.connectPen
   function connectPen() {
     if (locked) return
     setErr(null)
-    fileInput.current?.click()
+    void penFlow.connect()
   }
 
   function addFiles(files: FileList | File[]) {
@@ -719,7 +753,9 @@ export default function PenApp({
         mime: up.mime,
         bytes: up.bytes,
         duration_sec: up.durationSec,
-        recorded_at: new Date(file.lastModified).toISOString(),
+        // The pen names each file after the moment it STARTED recording (its mtime is the start
+        // too): R20261021-145802.WAV. Read the name when it parses, else the file's date.
+        recorded_at: penStartOf(file).toISOString(),
         consent: true,
         // The first person also names the call, which older parts of the app read.
         client_name: callPeople[0]?.name || undefined,
@@ -776,6 +812,7 @@ export default function PenApp({
     setImportDone(false)
 
     let next = 0
+    const wentUp: File[] = []
     const worker = async () => {
       while (next < batch.length) {
         const b = batch[next++]
@@ -783,12 +820,15 @@ export default function PenApp({
         try {
           const r = await uploadOne(b.file, people, ({ phase, pct }) => patchUpload(b.key, { phase, pct }), event)
           patchUpload(b.key, { state: r, pct: 100 })
+          wentUp.push(b.file)
         } catch (e) {
           patchUpload(b.key, { state: 'error', error: (e as Error).message })
         }
       }
     }
     await Promise.all(Array.from({ length: Math.min(isPhone ? 1 : 2, batch.length) }, worker))
+    // The pen is plugged in (Chrome / Edge): offer to free up space for what's now safely in Juno.
+    void penAfter.current(wentUp)
     void refresh()
     // New names typed at upload are contacts now.
     void refreshPeople()
@@ -1014,7 +1054,8 @@ export default function PenApp({
           ) : (
             <>
               <p className="pen-m-lede">{T.mUploadLede}</p>
-              {supportsPicker && (
+              {supportsPicker && <PenCard flow={penFlow} compact />}
+              {supportsPicker && penDrive.state !== 'connected' && penDrive.state !== 'prompt' && (
                 <button type="button" className="pen-m-rowbtn" onClick={() => { setAddSheet(false); connectPen() }}>
                   <Icon name="usb" size={19} />
                   <span>{T.connectPen}</span>
@@ -1067,6 +1108,7 @@ export default function PenApp({
       screen = stats ? (
         <>
         <ClockPill clock={allowance?.clock ?? null} T={T} phone />
+        {!locked && <PenCard flow={penFlow} />}
         <Overview
           phone
           ownRecordings={ownRecordings}
@@ -1294,6 +1336,7 @@ export default function PenApp({
             {uploadBody}
           </PhoneSheet>
         )}
+        {penFlow.layer}
 
         {(pending.length > 0 || progress || importDone) && (
           <>
@@ -1338,7 +1381,7 @@ export default function PenApp({
         )}
         {promoOpen && !tourOpen && <ReferralPromo T={T} onClose={closePromo} />}
         {askOpen && !tourOpen && !promoOpen && <FeedbackAsk T={T} onClose={closeAsk} />}
-        <UploadCard uploads={uploads} onClose={() => setUploads((prev) => prev.filter((u) => u.state === 'waiting' || u.state === 'working'))} whatsapp={whatsapp ?? null} phone={isPhone} T={T} />
+        <UploadCard uploads={uploads} onClose={() => setUploads((prev) => prev.filter((u) => u.state === 'waiting' || u.state === 'working'))} whatsapp={whatsapp ?? null} phone={isPhone} byHand={mounted && !supportsPicker} T={T} />
         {readyToast}
       </LangProvider>
     )
@@ -1422,6 +1465,7 @@ export default function PenApp({
           if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files)
         }}
         onConnect={!locked ? () => { setNavOpen(false); connectPen() } : null}
+        connectLabel={penMenuLabel}
         onUpload={!locked ? () => { setNavOpen(false); fileInput.current?.click() } : null}
         onTranscript={!readOnly && !paused ? () => { setNavOpen(false); setTxImport(true) } : null}
         onNotion={!readOnly && !paused && notion ? () => { setNavOpen(false); setNImport(true) } : null}
@@ -1433,10 +1477,11 @@ export default function PenApp({
         } : null}
         tip={sideCollapsed ? T.add : undefined}
       />
+      {penFlow.layer}
       {tourOpen && <Tour lang={appLang} linked={Boolean(whatsapp?.linked)} onClose={closeTour} onUpload={() => fileInput.current?.click()} onOpenFirst={tourFirst} />}
       {promoOpen && !tourOpen && <ReferralPromo T={T} onClose={closePromo} />}
       {askOpen && !tourOpen && !promoOpen && <FeedbackAsk T={T} onClose={closeAsk} />}
-      <UploadCard uploads={uploads} onClose={() => setUploads((prev) => prev.filter((u) => u.state === 'waiting' || u.state === 'working'))} whatsapp={whatsapp ?? null} phone={isPhone} T={T} />
+      <UploadCard uploads={uploads} onClose={() => setUploads((prev) => prev.filter((u) => u.state === 'waiting' || u.state === 'working'))} whatsapp={whatsapp ?? null} phone={isPhone} byHand={mounted && !supportsPicker} T={T} />
       {readyToast}
       {txImport && (
         <TranscriptImport
@@ -1750,6 +1795,7 @@ export default function PenApp({
 
             stats ? (
               <>
+              {!locked && <PenCard flow={penFlow} />}
               <Overview
                 ownRecordings={ownRecordings}
                 onUpload={locked ? undefined : () => fileInput.current?.click()}
@@ -3646,7 +3692,12 @@ function ReferralPromo({ T, onClose }: { T: AppCopy; onClose: () => void }) {
  * finished: what happens next (the briefing emails), anything held or failed, and the way to ask
  * about them on WhatsApp.
  */
-function UploadCard({ uploads, onClose, whatsapp, phone, T }: { uploads: UploadItem[]; onClose: () => void; whatsapp: { number: string; linked: boolean } | null; phone: boolean; T: AppCopy }) {
+/**
+ * `byHand`: a browser that can't write to the pen (Safari, phones, Firefox). It gets the "keep
+ * this page open" note while uploading, and after pen recordings went up, how to delete them
+ * from the pen by hand.
+ */
+function UploadCard({ uploads, onClose, whatsapp, phone, byHand = false, T }: { uploads: UploadItem[]; onClose: () => void; whatsapp: { number: string; linked: boolean } | null; phone: boolean; byHand?: boolean; T: AppCopy }) {
   const [open, setOpen] = useState(false)
   // Finished without errors: the card goes away on its own 10 s later (16 Oct), held while the
   // pointer or focus is on it. Errors stay until closed.
@@ -3683,11 +3734,12 @@ function UploadCard({ uploads, onClose, whatsapp, phone, T }: { uploads: UploadI
       {going ? (
         <>
           <div className="pen-meter-bar"><span style={{ width: `${pct}%` }} /></div>
-          <p className="pen-upcard-note">{phone ? T.upKeepOpenPhone : T.upKeepOpen}</p>
+          <p className="pen-upcard-note">{phone || byHand ? T.upKeepOpenPhone : T.upKeepOpen}</p>
         </>
       ) : (
         <>
           {ok + held > 0 && <p className="pen-upcard-note">{T.upDoneBody}</p>}
+          {byHand && uploads.some((u) => u.state !== 'error' && PEN_NAME_RE.test(u.name)) && <PenSpaceHelp />}
           {held > 0 && <p className="pen-upcard-note">{T.upHeld(held)}</p>}
           {failed.length > 0 && (
             <div className="pen-upcard-err">
@@ -4095,7 +4147,10 @@ function AddMenu({
   onGranola,
   whatsapp,
   tip,
+  connectLabel,
 }: {
+  /** "Connect pen", or "Upload 3 from your pen" while it's plugged in. */
+  connectLabel?: string
   /** Folded sidebar: the label shown as a tooltip. */
   tip?: string
   T: AppCopy
@@ -4134,7 +4189,7 @@ function AddMenu({
         <div className="pen-menu" role="menu" aria-label={T.addAria}>
           {onConnect && (
             <button type="button" role="menuitem" className="pen-menu-item" onClick={pick(onConnect)}>
-              <Icon name="usb" size={15} />{T.connectPen}
+              <Icon name="usb" size={15} />{connectLabel ?? T.connectPen}
             </button>
           )}
           {onUpload && (

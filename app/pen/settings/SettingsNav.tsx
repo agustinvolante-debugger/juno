@@ -7,16 +7,16 @@ import { useCopy } from '../LangContext'
 import type { Copy } from '@/lib/pen/i18n'
 import { SUPPORT_EMAIL } from '@/lib/support'
 
-// Settings, 20 Oct: Profile · Connections · Messages from Juno · Invite friends · Billing · Help.
+// Settings, 20 Oct: Profile · Your pen (21 Oct) · Connections · Messages from Juno · Invite friends · Billing · Help.
 // Connections replaced one item per company (Google, Email, Notion, Granola, WhatsApp), which
 // told an Outlook user nothing applied to them and split one Gmail account across two pages.
-const SN: Copy<{ aria: string; profile: string; connections: string; messages: string; invite: string; billing: string; help: string }> = {
-  en: { aria: 'Settings', profile: 'Profile', connections: 'Connections', messages: 'Messages from Juno', invite: 'Invite friends', billing: 'Billing', help: 'Help' },
-  es: { aria: 'Ajustes', profile: 'Perfil', connections: 'Conexiones', messages: 'Mensajes de Juno', invite: 'Invitar amigos', billing: 'Facturación', help: 'Ayuda' },
-  pt: { aria: 'Configurações', profile: 'Perfil', connections: 'Conexões', messages: 'Mensagens do Juno', invite: 'Convidar amigos', billing: 'Cobrança', help: 'Ajuda' },
+const SN: Copy<{ aria: string; profile: string; pen: string; connections: string; messages: string; invite: string; billing: string; help: string }> = {
+  en: { aria: 'Settings', profile: 'Profile', pen: 'Your pen', connections: 'Connections', messages: 'Messages from Juno', invite: 'Invite friends', billing: 'Billing', help: 'Help' },
+  es: { aria: 'Ajustes', profile: 'Perfil', pen: 'Tu lápiz', connections: 'Conexiones', messages: 'Mensajes de Juno', invite: 'Invitar amigos', billing: 'Facturación', help: 'Ayuda' },
+  pt: { aria: 'Configurações', profile: 'Perfil', pen: 'Sua caneta', connections: 'Conexões', messages: 'Mensagens do Juno', invite: 'Convidar amigos', billing: 'Cobrança', help: 'Ajuda' },
 }
 
-type Item = { href: string; key: 'profile' | 'connections' | 'messages' | 'invite' | 'billing'; icon: IconName }
+type Item = { href: string; key: 'profile' | 'pen' | 'connections' | 'messages' | 'invite' | 'billing'; icon: IconName }
 
 /**
  * `messages`: WhatsApp or iMessage is switched on (Messages from Juno only goes out there).
@@ -27,6 +27,8 @@ export default function SettingsNav({ messages = false, billing = false }: { mes
   const path = usePathname()
   const items: Item[] = [
     { href: '/pen/settings', key: 'profile', icon: 'person' },
+    // The Juno Pen itself (21 Oct): quality, microphone, voice-activated, split length, clean-up.
+    { href: '/pen/settings/pen', key: 'pen', icon: 'usb' },
     { href: '/pen/settings/connections', key: 'connections', icon: 'link' },
     ...(messages ? [{ href: '/pen/settings/messages', key: 'messages', icon: 'bell' } as Item] : []),
     { href: '/pen/settings/invite', key: 'invite', icon: 'people' },
