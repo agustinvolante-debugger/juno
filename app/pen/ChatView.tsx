@@ -9,12 +9,17 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import type { ArchiveTurn, Citation, Mention } from '@/lib/pen/store'
+import type { Citation, Mention } from '@/lib/pen/store'
+import type { WebAction } from '@/lib/pen/agent-io'
 import { useTagPicker, TagMenu, TaggedText, type Taggable } from './TagPicker'
 import type { DocKind } from '@/lib/pen/docs'
 import { postJson, errMessage } from '@/lib/pen/http'
-import { useCopy } from './LangContext'
+import { useCopy, useLang } from './LangContext'
 import type { Copy } from '@/lib/pen/i18n'
+import { httpTransport, runChat, type AgentTurn, type ChatBody, type ChatTransport } from './chat-stream'
+import { chatMockOn, mockTransport, MOCK_THREAD } from './chat-mock'
+import { AskCard, DraftCard, LinkCards, ProgressSteps, RichText, UndoButton, type ActState } from './chat-agent'
+import './chat-agent.css'
 
 const SPRING = { type: 'spring' as const, stiffness: 420, damping: 34, mass: 0.7 }
 
@@ -45,6 +50,8 @@ const CV_EN = {
   ask: 'Ask',
   recent: 'Recent',
   pages: 'Pages',
+  retry: 'Try again',
+  actionFailed: 'That didn’t go through.',
 }
 
 const CV: Copy<typeof CV_EN> = {
@@ -73,6 +80,8 @@ const CV: Copy<typeof CV_EN> = {
     ask: 'Preguntar',
     recent: 'Recientes',
     pages: 'Páginas',
+    retry: 'Reintentar',
+    actionFailed: 'Eso no se pudo hacer.',
   },
   pt: {
     quick: [
@@ -98,6 +107,8 @@ const CV: Copy<typeof CV_EN> = {
     ask: 'Perguntar',
     recent: 'Recentes',
     pages: 'Páginas',
+    retry: 'Tentar de novo',
+    actionFailed: 'Isso não deu certo.',
   },
 }
 
@@ -138,11 +149,23 @@ export default function ChatView({
   onDocCreated: (docId: string) => void
 }) {
   const T = useCopy(CV)
-  const [messages, setMessages] = useState<ArchiveTurn[]>([])
+  const lang = useLang()
+  const [messages, setMessages] = useState<AgentTurn[]>([])
   const [q, setQ] = useState('')
   const [thinking, setThinking] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // What the error's "Try again" re-sends: the question (given back to the composer) or the button press.
+  const [retry, setRetry] = useState<(() => void) | null>(null)
+  // The assistant's steps while it works (SSE `progress`), newest last.
+  const [steps, setSteps] = useState<string[]>([])
+  // Button presses on turns, keyed `kind:ts`, and the yes/no given on an ask, by turn ts.
+  const [acts, setActs] = useState<Record<string, ActState>>({})
+  const [answers, setAnswers] = useState<Record<number, boolean>>({})
+  // ?chatmock=1 on localhost: a fake route and a sample thread (chat-mock.ts). Never production.
+  const [mock, setMock] = useState(false)
+  const transport = useRef<ChatTransport | null>(null)
+  const abort = useRef<AbortController | null>(null)
   const [making, setMaking] = useState<DocKind | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -159,6 +182,19 @@ export default function ChatView({
   useEffect(() => setId(chatId), [chatId])
 
   useEffect(() => {
+    if (chatMockOn()) {
+      setMock(true)
+      transport.current = mockTransport(MOCK_THREAD)
+      setMessages(MOCK_THREAD)
+      setId('mock-thread')
+    }
+    return () => abort.current?.abort()
+  }, [])
+
+  useEffect(() => {
+    if (chatMockOn()) return
+    setActs({})
+    setAnswers({})
     if (!chatId) {
       setMessages([])
       setError(null)
@@ -167,7 +203,7 @@ export default function ChatView({
     let alive = true
     setLoading(true)
     fetch(`/api/pen/chats/${chatId}`, { cache: 'no-store' })
-      .then(async (r) => (r.ok ? ((await r.json()) as { chat: { messages: ArchiveTurn[] } }) : null))
+      .then(async (r) => (r.ok ? ((await r.json()) as { chat: { messages: AgentTurn[] } }) : null))
       .then((j) => {
         if (!alive) return
         setMessages(j?.chat?.messages ?? [])
@@ -183,7 +219,7 @@ export default function ChatView({
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [messages.length, thinking, making])
+  }, [messages.length, thinking, making, steps.length])
 
   useEffect(() => {
     if (!chatId && !seed) requestAnimationFrame(() => inputRef.current?.focus())
@@ -209,36 +245,84 @@ export default function ChatView({
     if (!text || inFlight.current) return
     inFlight.current = true
     setError(null)
+    setRetry(null)
     setQ('')
     setThinking(true)
+    setSteps([])
     // The question shows immediately; the archive pass takes a while and an empty screen
     // during it reads as a dropped request.
     // Only tags still in the text: deleting the words untags it.
     const mentions = preset ?? tp.take(text)
-    const optimistic: ArchiveTurn = { role: 'user', content: text, ...(mentions.length ? { mentions } : {}), ts: Date.now() }
+    const optimistic: AgentTurn = { role: 'user', content: text, ...(mentions.length ? { mentions } : {}), ts: Date.now() }
     setMessages((m) => [...m, optimistic])
     try {
-      const j = await postJson<{ chat: { id: string; messages: ArchiveTurn[] } }>('/api/pen/chats', {
+      await send({
         ...(id ? { id } : {}),
         question: text,
         ...(mentions.length ? { mentions: mentions.map((t) => ({ id: t.id, kind: t.kind ?? 'recording', label: t.label })) } : {}),
       })
-      setMessages(j.chat.messages)
-      setId(j.chat.id)
-      onThreadChanged(j.chat.id)
     } catch (e) {
+      if (abort.current?.signal.aborted) return
       setMessages((m) => m.filter((x) => x !== optimistic))
       setQ(text) // Give the question back rather than making them retype it.
       tp.setTags(mentions)
       setError(errMessage(e, T.searchFailed))
+      setRetry(() => () => { setQ(''); void ask(text, mentions) })
     } finally {
       inFlight.current = false
       setThinking(false)
+      setSteps([])
+    }
+  }
+
+  /** One request to the route, JSON or streamed; the thread comes back whole either way. */
+  async function send(body: ChatBody) {
+    abort.current?.abort()
+    const ctl = new AbortController()
+    abort.current = ctl
+    const j = await runChat(transport.current ?? httpTransport(lang), body, (label) => setSteps((s) => [...s, label]), ctl.signal, lang)
+    setMessages(j.chat.messages)
+    setId(j.chat.id)
+    // The mock thread is not a real chat: refreshing the sidebar would fetch it by id.
+    if (!mock) onThreadChanged(j.chat.id)
+  }
+
+  /** A button on a turn (Yes/No, Send, Undo): the press goes to the route as an action. */
+  async function act(action: WebAction, key: string): Promise<boolean> {
+    if (readOnly || !id || inFlight.current) return false
+    inFlight.current = true
+    setError(null)
+    setRetry(null)
+    setThinking(true)
+    setSteps([])
+    setActs((a) => ({ ...a, [key]: 'busy' }))
+    try {
+      await send({ id, action })
+      setActs((a) => ({ ...a, [key]: 'done' }))
+      return true
+    } catch (e) {
+      if (abort.current?.signal.aborted) return false
+      setActs((a) => ({ ...a, [key]: undefined }))
+      setError(errMessage(e, T.actionFailed))
+      setRetry(() => () => void act(action, key))
+      return false
+    } finally {
+      inFlight.current = false
+      setThinking(false)
+      setSteps([])
+    }
+  }
+
+  async function answer(ts: number, yes: boolean) {
+    setAnswers((a) => ({ ...a, [ts]: yes }))
+    // A failed press un-answers, so Yes/No come back alongside the error's Try again.
+    if (!(await act({ kind: 'confirm', yes }, `confirm:${ts}`))) {
+      setAnswers((a) => { const n = { ...a }; delete n[ts]; return n })
     }
   }
 
   async function make(kind: DocKind) {
-    if (!id || making) return
+    if (!id || making || mock) return
     setError(null)
     setMaking(kind)
     try {
@@ -252,6 +336,8 @@ export default function ChatView({
   }
 
   const answered = messages.some((m) => m.role === 'assistant')
+  // The server keeps one pending draft: only the newest one in the thread can be sent.
+  const lastDraft = messages.reduce((n, m, i) => (m.role === 'assistant' && m.parts?.draft ? i : n), -1)
 
   return (
     <div className="pen-chatview">
@@ -305,20 +391,47 @@ export default function ChatView({
             {m.role === 'user' ? (
               <TaggedText text={m.content} mentions={m.mentions ?? []} onOpen={onCite} />
             ) : (
-              <AnswerWithCitations text={m.content} citations={m.citations ?? []} onCite={onCite} />
+              <>
+                <AnswerWithCitations text={m.content} citations={m.citations ?? []} onCite={onCite} />
+                {m.parts && (m.parts.ask || m.parts.draft || m.parts.links?.length || m.parts.undoable) && (
+                  <div className="pen-parts">
+                    {m.parts.draft && (
+                      <DraftCard
+                        draft={m.parts.draft}
+                        state={acts[`send:${m.ts}`]}
+                        canSend={!readOnly && i === lastDraft && (!thinking || acts[`send:${m.ts}`] === 'busy')}
+                        onSend={() => void act({ kind: 'send_draft' }, `send:${m.ts}`)}
+                      />
+                    )}
+                    {m.parts.ask && (
+                      <AskCard
+                        ask={m.parts.ask}
+                        live={!readOnly && !thinking && i === messages.length - 1}
+                        answer={answers[m.ts]}
+                        onAnswer={(yes) => void answer(m.ts, yes)}
+                      />
+                    )}
+                    {!!m.parts.links?.length && <LinkCards links={m.parts.links} onOpenRecording={onCite} />}
+                    {m.parts.undoable && (
+                      <div className="pen-parts-foot">
+                        <UndoButton
+                          state={acts[`undo:${m.ts}`]}
+                          disabled={readOnly || (thinking && acts[`undo:${m.ts}`] !== 'busy')}
+                          onUndo={() => void act({ kind: 'undo', turn: m.ts }, `undo:${m.ts}`)}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </motion.div>
         ))}
 
         {thinking && (
-          <div className="pen-turn-a">
-            <span className="pen-mono text-[13px]" style={{ color: 'var(--dim)' }}>
-              {T.reading}
-            </span>
-            <span className="pen-dots" aria-hidden>
-              <span /><span /><span />
-            </span>
-          </div>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
+            <ProgressSteps steps={steps} fallback={T.reading} />
+          </motion.div>
         )}
 
         <AnimatePresence>
@@ -331,8 +444,13 @@ export default function ChatView({
               exit={{ opacity: 0 }}
               transition={SPRING}
             >
-              <span>{error}</span>
-              <button className="pen-chat-error-x" onClick={() => setError(null)} aria-label={T.dismiss}>
+              <span className="pen-chat-error-msg">{error}</span>
+              {retry && (
+                <button type="button" className="pen-chat-retry" onClick={() => { const r = retry; setError(null); setRetry(null); r() }}>
+                  {T.retry}
+                </button>
+              )}
+              <button className="pen-chat-error-x" onClick={() => { setError(null); setRetry(null) }} aria-label={T.dismiss}>
                 ×
               </button>
             </motion.div>
@@ -360,7 +478,7 @@ export default function ChatView({
           </div>
         )}
 
-        <div ref={endRef} />
+        <div ref={endRef} className="pen-chat-end" />
       </div>
 
       {readOnly ? (
@@ -420,32 +538,28 @@ function AnswerWithCitations({
   onCite: (sessionId: string) => void
 }) {
   const byMarker = useMemo(() => new Map(citations.map((c) => [c.marker, c])), [citations])
-  const parts = useMemo(() => text.split(/(\[\d+\])/g), [text])
+  const cite = (marker: number) => {
+    const c = byMarker.get(marker)
+    // A marker with no matching citation is dropped rather than shown as dead text.
+    if (!c) return null
+    return (
+      <motion.button
+        className="pen-cite"
+        onClick={() => onCite(c.session_id)}
+        whileHover={{ y: -1 }}
+        whileTap={{ scale: 0.96 }}
+        transition={SPRING}
+        title={c.quote ? `“${c.quote}”` : c.title}
+      >
+        {c.marker}
+      </motion.button>
+    )
+  }
 
   return (
     <div>
-      <div className="pen-answer">
-        {parts.map((p, i) => {
-          const m = /^\[(\d+)\]$/.exec(p)
-          if (!m) return <span key={i}>{p}</span>
-          const c = byMarker.get(Number(m[1]))
-          // A marker with no matching citation is dropped rather than shown as dead text.
-          if (!c) return null
-          return (
-            <motion.button
-              key={i}
-              className="pen-cite"
-              onClick={() => onCite(c.session_id)}
-              whileHover={{ y: -1 }}
-              whileTap={{ scale: 0.96 }}
-              transition={SPRING}
-              title={c.quote ? `“${c.quote}”` : c.title}
-            >
-              {c.marker}
-            </motion.button>
-          )
-        })}
-      </div>
+      {/* Markdown-light, built as nodes (chat-agent.tsx RichText): never HTML from the model. */}
+      <RichText text={text} cite={cite} className="pen-answer" />
 
       {citations.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">

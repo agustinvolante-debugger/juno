@@ -11,8 +11,12 @@
 // 16 Oct, rewritten for the assistant-first layout: six stops, the same on a computer (sidebar
 // expanded or collapsed: each target exists in both, as the icon when collapsed) and on a phone
 // (the phone shell's own elements, the tab bar). It ends by opening the sample recording.
+//
+// 22 Oct: the Calendar and Chats took sidebar places, and Connect pen moved under Add. Add now
+// teaches Connect pen (what Chrome/Edge does vs. Safari and phones), Calendar gets a stop, and
+// Ask points at Chats, where every question is kept. Today was cut to stay at seven.
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import HowToPlayer from './how-to/HowToPlayer'
 
@@ -25,9 +29,11 @@ type Copy = { ui: { next: string; back: string; skip: string; upload: string; op
 const T_WA = '[data-tour="wa"]'
 const T_JUNO = '.pen-juno'
 const T_ADD = '.pen-add-btn'
-const T_ADD_M = '.pen-m-tab[data-tab="upload"]'
-const T_TODAY = '.pen-today'
-const T_ASK = '.pen-search'
+// The phone's Add lives on Recordings (.pen-m-add); from another tab, the Recordings tab itself.
+const T_ADD_M = '.pen-m-add, .pen-m-tab[data-tab="recordings"]'
+const T_CAL = '[data-tour="calendar"]'
+const T_CAL_M = '.pen-m-tab[data-tab="calendar"]'
+const T_CHATS = '[data-tour="chats"]'
 const T_ASK_M = '.pen-m-tab[data-tab="search"]'
 const T_FIRST = '[data-tour="recordings"]'
 const T_FIRST_M = '.pen-m-tab[data-tab="recordings"]'
@@ -38,10 +44,10 @@ const COPY: Record<Lang, Copy> = {
     steps: [
       { id: 'video', video: true, title: 'See it in under a minute', body: 'From plugging in the pen to asking about a call on WhatsApp. Then Next walks you through your own screen.' },
       { id: 'juno', target: T_JUNO, title: 'Juno speaks first', body: 'Here’s what I heard and what I can do. One tap and it’s done.' },
-      { id: 'add', target: T_ADD, phone: T_ADD_M, title: 'Add anything', body: 'The pen, an audio file, a transcript, or your Granola and Notion notes. It all starts here.' },
+      { id: 'add', target: T_ADD, phone: T_ADD_M, title: 'Connect your pen', body: 'Add → Connect pen. In Chrome or Edge it also sets the pen’s clock and settings; in Safari or on a phone, you pick its files. Audio, transcripts and Notion notes come in here too.' },
       { id: 'wa', target: T_WA, title: 'Get Juno on WhatsApp', body: 'One tap opens WhatsApp with the message ready. Press Send and I’ll text you what to do next. Reply STOP anytime.' },
-      { id: 'today', target: T_TODAY, title: 'Today', body: 'What’s due, and what you owe people. Tick it off, or let me draft the email.' },
-      { id: 'ask', target: T_ASK, phone: T_ASK_M, title: 'Ask anything', body: 'Search every call you’ve recorded. Type @ to ask about one person, like “what did @Sarah say about pricing?”' },
+      { id: 'calendar', target: T_CAL, phone: T_CAL_M, title: 'All your calendars', body: 'Google and Outlook in one Calendar. A meeting you recorded opens its notes right from there.' },
+      { id: 'ask', target: T_CHATS, phone: T_ASK_M, title: 'Ask, or have it done', body: 'Ask about any call, or tell me to book the meeting or draft the email. Type @ to name a person. Every chat is kept in Chats.' },
       { id: 'first', target: T_FIRST, phone: T_FIRST_M, title: 'Your first recording', body: 'Open the sample to see the summary and up to three things I can do for you, each one tap.' },
     ],
     waLinked: { title: 'Juno on WhatsApp', body: 'I text you first: reminders, a brief before you meet someone, what I can do after a call. Reply STOP anytime.' },
@@ -50,10 +56,10 @@ const COPY: Record<Lang, Copy> = {
     ui: { next: 'Siguiente', back: 'Atrás', skip: 'Saltar', upload: 'Subir una grabación', open: 'Abrir el ejemplo', later: 'Lo veo después', of: 'de' },
     steps: [
       { id: 'juno', target: T_JUNO, title: 'Juno habla primero', body: 'Esto es lo que escuché y lo que puedo hacer. Un toque y listo.' },
-      { id: 'add', target: T_ADD, phone: T_ADD_M, title: 'Agrega lo que sea', body: 'El lápiz, un archivo de audio, una transcripción o tus notas de Granola y Notion. Todo empieza aquí.' },
+      { id: 'add', target: T_ADD, phone: T_ADD_M, title: 'Conecta tu lápiz', body: 'Agregar → Conectar el lápiz. En Chrome o Edge también ajusta la hora y la configuración del lápiz; en Safari o en el teléfono, eliges sus archivos. Audios, transcripciones y notas de Notion también entran aquí.' },
       { id: 'wa', target: T_WA, title: 'Agrega a Juno en WhatsApp', body: 'Un toque abre WhatsApp con el mensaje listo. Toca Enviar y te escribo qué hacer después. Responde STOP cuando quieras.' },
-      { id: 'today', target: T_TODAY, title: 'Hoy', body: 'Lo que vence y lo que les debes a otros. Márcalo como hecho o deja que redacte el correo.' },
-      { id: 'ask', target: T_ASK, phone: T_ASK_M, title: 'Pregunta lo que quieras', body: 'Busca en todas tus reuniones. Escribe @ para preguntar por una persona, como “¿qué dijo @Sofía del precio?”' },
+      { id: 'calendar', target: T_CAL, phone: T_CAL_M, title: 'Todos tus calendarios', body: 'Google y Outlook en un solo Calendario. Una reunión que grabaste abre sus notas desde ahí.' },
+      { id: 'ask', target: T_CHATS, phone: T_ASK_M, title: 'Pregunta, o pídelo', body: 'Pregunta por cualquier llamada, o pídeme agendar la reunión o redactar el correo. Escribe @ para nombrar a alguien. Cada chat queda en Chats.' },
       { id: 'first', target: T_FIRST, phone: T_FIRST_M, title: 'Tu primera grabación', body: 'Abre el ejemplo para ver el resumen y hasta tres cosas que puedo hacer por ti, cada una con un toque.' },
     ],
     waLinked: { title: 'Juno en WhatsApp', body: 'Te escribo primero: recordatorios, un resumen antes de cada reunión y lo que puedo hacer después de una llamada. Responde STOP cuando quieras.' },
@@ -62,10 +68,10 @@ const COPY: Record<Lang, Copy> = {
     ui: { next: 'Próximo', back: 'Voltar', skip: 'Pular', upload: 'Enviar uma gravação', open: 'Abrir o exemplo', later: 'Vejo depois', of: 'de' },
     steps: [
       { id: 'juno', target: T_JUNO, title: 'O Juno fala primeiro', body: 'Isto é o que eu ouvi e o que posso fazer. Um toque e pronto.' },
-      { id: 'add', target: T_ADD, phone: T_ADD_M, title: 'Adicione o que quiser', body: 'A caneta, um arquivo de áudio, uma transcrição ou suas notas do Granola e do Notion. Tudo começa aqui.' },
+      { id: 'add', target: T_ADD, phone: T_ADD_M, title: 'Conecte sua caneta', body: 'Adicionar → Conectar a caneta. No Chrome ou no Edge ela também acerta o relógio e as configurações da caneta; no Safari ou no celular, você escolhe os arquivos. Áudios, transcrições e notas do Notion também entram aqui.' },
       { id: 'wa', target: T_WA, title: 'Adicione o Juno no WhatsApp', body: 'Um toque abre o WhatsApp com a mensagem pronta. Toque em Enviar e eu te mando o que fazer depois. Responda STOP quando quiser.' },
-      { id: 'today', target: T_TODAY, title: 'Hoje', body: 'O que vence e o que você deve aos outros. Marque como feito ou deixe que eu escreva o e-mail.' },
-      { id: 'ask', target: T_ASK, phone: T_ASK_M, title: 'Pergunte qualquer coisa', body: 'Busque em todas as suas reuniões. Digite @ para perguntar sobre uma pessoa, como “o que a @Sofia disse sobre o preço?”' },
+      { id: 'calendar', target: T_CAL, phone: T_CAL_M, title: 'Todos os seus calendários', body: 'Google e Outlook num só Calendário. Uma reunião que você gravou abre as notas dali mesmo.' },
+      { id: 'ask', target: T_CHATS, phone: T_ASK_M, title: 'Pergunte, ou peça', body: 'Pergunte sobre qualquer ligação, ou peça para marcar a reunião ou escrever o e-mail. Digite @ para citar alguém. Cada conversa fica em Conversas.' },
       { id: 'first', target: T_FIRST, phone: T_FIRST_M, title: 'Sua primeira gravação', body: 'Abra o exemplo para ver o resumo e até três coisas que posso fazer por você, cada uma com um toque.' },
     ],
     waLinked: { title: 'O Juno no WhatsApp', body: 'Eu te escrevo primeiro: lembretes, um resumo antes das reuniões e o que posso fazer depois de uma ligação. Responda STOP quando quiser.' },
@@ -75,7 +81,9 @@ const COPY: Record<Lang, Copy> = {
 const PAD = 8
 const GAP = 14
 const CARD_W = 340
-// The card's height, near enough, for deciding whether it fits under or over the target.
+// The card's height before it has been measured, for deciding whether it fits under or over the
+// target. Once drawn, the real height is used (a long step on a phone runs taller than this, and
+// the estimate let the card cover the tab it pointed at).
 const CARD_H = 230
 
 /** The first element matching the selector that is actually on screen. */
@@ -124,10 +132,17 @@ export default function Tour({
   const [host, setHost] = useState<Element | null>(null)
   const [vw, setVw] = useState(0)
   const [vh, setVh] = useState(0)
+  const cardRef = useRef<HTMLDivElement>(null)
+  const [cardH, setCardH] = useState(CARD_H)
   useEffect(() => setHost(document.querySelector('.pen-root') ?? document.body), [])
 
   const step = steps[i]
   const last = i === steps.length - 1
+  // Measured per step (the copy changes the height); a change re-places the card once.
+  useLayoutEffect(() => {
+    const h = cardRef.current?.offsetHeight
+    if (h && Math.abs(h - cardH) > 4) setCardH(h)
+  })
 
   // Find this step's target; skip the step if it isn't on screen.
   const locate = useCallback(() => {
@@ -194,23 +209,23 @@ export default function Tour({
     // A sidebar icon (the collapsed sidebar, or any narrow target at the left edge): beside it,
     // so the card doesn't cover the page it is pointing out of.
     if (!phone && rect.width < 280 && rect.right + PAD + GAP + w < vw - 16 && rect.left < vw * 0.3) {
-      const top = Math.max(16, Math.min(rect.top - PAD, vh - CARD_H - 16))
+      const top = Math.max(16, Math.min(rect.top - PAD, vh - cardH - 16))
       return { left: rect.right + PAD + GAP, top, w }
     }
     // A target that fills most of the screen (the Juno card): the card sits inside its lower
     // right corner, where the offers' row ends, instead of over the middle of it.
     if (!phone && rect.height > vh * 0.6 && rect.width > w * 2) {
-      const top = Math.max(16, Math.min(rect.bottom, vh) - CARD_H - 28)
+      const top = Math.max(16, Math.min(rect.bottom, vh) - cardH - 28)
       return { left: rect.right - w - 28, top, w }
     }
     const left = Math.max(16, Math.min(rect.left + rect.width / 2 - w / 2, vw - w - 16))
     const below = rect.bottom + PAD + GAP
-    const above = rect.top - PAD - GAP - CARD_H
+    const above = rect.top - PAD - GAP - cardH
     // Under it, else over it, else (a target nearly as tall as the screen) over its lower part,
     // clear of a phone's tab bar.
-    const top = below + CARD_H < vh ? below : above >= 16 ? above : Math.max(16, vh - CARD_H - (phone ? 96 : 24))
+    const top = below + cardH < vh ? below : above >= 16 ? above : Math.max(16, vh - cardH - (phone ? 96 : 24))
     return { left, top, w }
-  }, [rect, vw, vh, step.video, phone])
+  }, [rect, vw, vh, step.video, phone, cardH])
 
   if (!host) return null
   // Whole pixels, so the four panels meet with no hairline of undimmed page between them.
@@ -235,7 +250,7 @@ export default function Tour({
         <div className="pen-tour-dim" style={{ inset: 0 }} />
       )}
 
-      <div className="pen-tour-card" style={{ left: card.left, top: card.top, width: card.w, maxHeight: vh ? Math.max(220, vh - card.top - 12) : undefined }}>
+      <div ref={cardRef} className="pen-tour-card" style={{ left: card.left, top: card.top, width: card.w, maxHeight: vh ? Math.max(220, vh - card.top - 12) : undefined }}>
         <div className="pen-tour-count">{`${i + 1} ${ui.of} ${steps.length}`}</div>
         <h2 className="pen-tour-title">{step.title}</h2>
         <p className="pen-tour-body">{step.body}</p>

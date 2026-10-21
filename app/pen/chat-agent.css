@@ -1,0 +1,152 @@
+/* The web chat's action-taking assistant (22 Oct; chat-agent.tsx). An extension of the app skin
+   (app-skin.css): the answer stays on its white turn surface; what the assistant made or wants
+   sits inside it as inset wells (the sunk grey), never a card on a card. The one blue marks the
+   single thing to press; everything else is a glass pill or quiet text. Prefixed .pen-root so
+   these outrank the skin's nested rules. */
+
+/* ---------------------------------------------------------------------- markdown-light */
+.pen-root .pen-md p { margin: 0; }
+.pen-root .pen-md :is(ul, ol) { margin: 0; padding-left: 1.3em; }
+.pen-root .pen-md > :is(p, ul, ol) + :is(p, ul, ol) { margin-top: .72em; }
+.pen-root .pen-md ul { list-style: disc; }
+.pen-root .pen-md ol { list-style: decimal; }
+.pen-root .pen-md li + li { margin-top: .3em; }
+.pen-root .pen-md li { padding-left: .15em; }
+.pen-root .pen-md li::marker { color: var(--dim); font-variant-numeric: tabular-nums; }
+.pen-root .pen-md strong { font-weight: 600; color: var(--ink); }
+.pen-root .pen-md-link {
+  color: var(--accent); text-decoration: underline; text-decoration-thickness: 1px;
+  text-underline-offset: 3px; text-decoration-color: var(--accent-line);
+  overflow-wrap: anywhere; transition: text-decoration-color .15s;
+}
+.pen-root .pen-md-link:hover { text-decoration-color: currentColor; }
+
+/* -------------------------------------------------------------------- the parts block */
+.pen-root .pen-parts { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.pen-root .pen-parts-foot { display: flex; justify-content: flex-end; margin-top: -2px; }
+.pen-root .pen-agent-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.pen-root .pen-agent-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  min-height: 38px; padding: 0 16px; font-size: 14.5px; text-decoration: none;
+}
+.pen-root .pen-agent-btn svg { flex: none; }
+.pen-root .pen-agent-done {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 0 4px;
+  font-size: 14.5px; font-weight: 600; color: var(--good);
+}
+
+/* ----------------------------------------------------------------------- email draft */
+.pen-root .pen-draft {
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 14px 16px 16px; border-radius: 14px; background: var(--sunk);
+}
+.pen-root .pen-draft-env {
+  display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 5px 14px; margin: 0;
+  padding-bottom: 12px; border-bottom: 1px solid var(--hair); font-size: 14px; line-height: 1.4;
+}
+.pen-root .pen-draft-env dt { color: var(--dim); }
+.pen-root .pen-draft-env dd { margin: 0; color: var(--soft); overflow-wrap: anywhere; }
+.pen-root .pen-draft-env .pen-draft-subj { color: var(--ink); font-weight: 600; }
+.pen-root .pen-draft-body {
+  white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14.5px; line-height: 1.58; color: var(--soft);
+  max-width: 68ch;
+}
+.pen-root .pen-draft-body[data-open='false'] {
+  max-height: 8.2em; overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent);
+          mask-image: linear-gradient(to bottom, #000 55%, transparent);
+}
+.pen-root .pen-draft-more {
+  align-self: flex-start; margin-top: -6px; padding: 4px 0;
+  font-size: 13.5px; font-weight: 500; color: var(--accent);
+}
+.pen-root .pen-draft-more:hover { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 3px; }
+.pen-root .pen-draft[data-sent='true'] .pen-draft-body { color: var(--dim); }
+
+/* ------------------------------------------------------------------------------- ask */
+.pen-root .pen-ask {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 14px 16px; border-radius: 14px; background: var(--sunk);
+  transition: background .2s ease;
+}
+.pen-root .pen-ask[data-live='true'] { background: var(--accent-wash); }
+.pen-root .pen-ask-icon { display: grid; place-items: center; flex: none; width: 22px; height: 24px; color: var(--dim); }
+.pen-root .pen-ask[data-live='true'] .pen-ask-icon { color: var(--accent); }
+.pen-root .pen-ask-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; flex: 1; }
+.pen-root .pen-ask-text { font-size: 15.5px; line-height: 1.5; color: var(--ink); }
+.pen-root .pen-ask-yes { min-width: 84px; }
+.pen-root .pen-ask-said { font-size: 13.5px; color: var(--dim); }
+
+/* ----------------------------------------------------------------------------- links */
+.pen-root .pen-links { display: flex; flex-direction: column; gap: 10px; }
+.pen-root .pen-links-list {
+  list-style: none; margin: 0; padding: 0;
+  border-radius: 14px; background: var(--sunk); overflow: hidden;
+}
+.pen-root .pen-links-list li + li { border-top: 1px solid var(--hair); }
+.pen-root .pen-link {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 8px 12px;
+  text-align: left; color: inherit; text-decoration: none; transition: background .15s;
+}
+.pen-root .pen-link:hover { background: rgba(0, 0, 0, .035); }
+.pen-root .pen-link:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 14px; }
+.pen-root .pen-link-ic {
+  display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 10px;
+  background: var(--panel); color: var(--soft); box-shadow: 0 1px 2px rgba(0, 0, 0, .06);
+}
+.pen-root .pen-link-ic[data-kind='doc'] { color: #1a5fc0; }
+.pen-root .pen-link-ic[data-kind='sheet'] { color: var(--good); }
+.pen-root .pen-link-ic[data-kind='event'] { color: var(--accent); }
+.pen-root .pen-link-ic[data-kind='recording'] { color: var(--warn); }
+.pen-root .pen-link-txt { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.pen-root .pen-link-txt strong {
+  font-size: 14.5px; font-weight: 600; color: var(--ink); line-height: 1.3;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pen-root .pen-link-txt em { font-style: normal; font-size: 12.5px; color: var(--dim); line-height: 1.35; }
+.pen-root .pen-link-go { flex: none; color: var(--dim); transition: transform .18s ease; }
+.pen-root .pen-link:hover .pen-link-go { transform: translateX(2px); color: var(--soft); }
+
+/* ------------------------------------------------------------------------------ undo */
+.pen-root .pen-undo {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 8px; border-radius: 8px;
+  font-size: 13.5px; font-weight: 500; color: var(--dim); transition: color .15s, background .15s;
+}
+.pen-root button.pen-undo:hover:not(:disabled) { color: var(--ink); background: var(--sunk); }
+.pen-root button.pen-undo:disabled { opacity: .5; cursor: not-allowed; }
+.pen-root .pen-undo-done { color: var(--good); }
+
+/* -------------------------------------------------------------------------- progress */
+.pen-root .pen-steps { align-self: flex-start; padding: 2px 4px; }
+.pen-root .pen-steps ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.pen-root .pen-steps li {
+  display: flex; align-items: center; gap: 10px; font-size: 14px; line-height: 1.35; color: var(--dim);
+  animation: penStepIn .32s cubic-bezier(.16, 1, .3, 1) both;
+}
+.pen-root .pen-steps li[data-current='true'] { color: var(--soft); }
+.pen-root .pen-steps-mark { display: grid; place-items: center; width: 16px; height: 16px; flex: none; color: var(--good); }
+@keyframes penStepIn { from { opacity: 0; transform: translateY(4px); } }
+@media (prefers-reduced-motion: reduce) { .pen-root .pen-steps li { animation: none; } }
+
+/* The thread scrolls its end into view as steps arrive; on a computer the composer is sticky
+   over the bottom of the window, so the end stops above it rather than under it. */
+.pen-root .pen-chat-end { scroll-margin-bottom: 96px; }
+.pen-root .pen-m .pen-chat-end { scroll-margin-bottom: 0; }
+
+/* ------------------------------------------------------------------- error and retry */
+.pen-root .pen-chat-error { align-items: center; }
+.pen-root .pen-chat-error-msg { flex: 1; min-width: 0; }
+.pen-root .pen-chat-retry {
+  flex: none; padding: 4px 10px; border-radius: 999px; font-size: 14px; font-weight: 600; color: var(--bad);
+  border: 1px solid #f3c6c2; background: rgba(255, 255, 255, .7); transition: background .15s;
+}
+.pen-root .pen-chat-retry:hover { background: #fff; }
+
+/* -------------------------------------------------------------------- phone (44px) */
+.pen-root .pen-m :is(.pen-agent-btn, .pen-agent-done, .pen-undo, .pen-chat-retry, .pen-draft-more) { min-height: 44px; }
+.pen-root .pen-m .pen-link { min-height: 56px; }
+.pen-root .pen-m .pen-agent-row .pen-agent-btn { flex: 1 1 auto; }
+.pen-root .pen-m .pen-draft, .pen-root .pen-m .pen-ask { padding-left: 14px; padding-right: 14px; }
+.pen-root .pen-m .pen-draft-env { grid-template-columns: 1fr; gap: 1px; }
+.pen-root .pen-m .pen-draft-env dt { font-size: 12.5px; margin-top: 6px; }
+.pen-root .pen-m .pen-draft-env dt:first-child { margin-top: 0; }

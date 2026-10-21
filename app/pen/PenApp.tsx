@@ -222,6 +222,10 @@ export default function PenApp({
   }, [])
   // ?view=calendar: links (an email, Settings → Calendar) open the Calendar page. Dropped
   // afterwards, like ?open=.
+  // Localhost only: ?chatmock=1 opens the chat on its sample thread and fake route (chat-mock.ts).
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development' && new URLSearchParams(window.location.search).has('chatmock')) setView({ k: 'chat', id: null })
+  }, [])
   useEffect(() => {
     const u = new URL(window.location.href)
     if (u.searchParams.get('view') !== 'calendar') return
@@ -315,6 +319,7 @@ export default function PenApp({
   useEffect(() => {
     if (!isPhone) return
     const t = new URLSearchParams(window.location.search).get('tab')
+    if (process.env.NODE_ENV === 'development' && new URLSearchParams(window.location.search).has('chatmock')) { goTab('search', true); return }
     if (t === 'home' || t === 'calendar' || t === 'recordings' || t === 'search') goTab(t)
     // Old links to the Upload tab: Recordings, with the Add sheet open.
     else if (t === 'upload') { goTab('recordings'); setAddSheet(true) }
@@ -391,7 +396,9 @@ export default function PenApp({
   useEffect(() => {
     let seenHere = false
     try { seenHere = localStorage.getItem('juno-tour-done') === '1' } catch {}
-    if (showTour && !seenHere) setTourOpen(true)
+    // Localhost only: ?tour=1 opens it again, for reviewing the design.
+    const preview = process.env.NODE_ENV === 'development' && new URLSearchParams(window.location.search).get('tour') === '1'
+    if (preview || (showTour && !seenHere)) setTourOpen(true)
   }, [showTour])
   // The referral pop-up: once per account, after the tour, never for a read-only account.
   const [promoOpen, setPromoOpen] = useState(false)
@@ -1546,6 +1553,7 @@ export default function PenApp({
           <button
             className="pen-cat"
             data-active={view.k === 'calendar'}
+            data-tour="calendar"
             aria-current={view.k === 'calendar' ? 'page' : undefined}
             aria-label={sideCollapsed ? T.calendar : undefined}
             data-tip={sideCollapsed ? T.calendar : undefined}
@@ -1557,6 +1565,7 @@ export default function PenApp({
           <button
             className="pen-cat"
             data-active={view.k === 'chats'}
+            data-tour="chats"
             aria-current={view.k === 'chats' ? 'page' : undefined}
             aria-label={sideCollapsed ? T.chats : undefined}
             data-tip={sideCollapsed ? T.chats : undefined}
