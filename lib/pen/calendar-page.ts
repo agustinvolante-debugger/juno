@@ -26,14 +26,25 @@ export function parseRange(from: string | null, to: string | null): { from: Date
   return { from: new Date(f), to: new Date(t) }
 }
 
-/** The user's own addresses: their sign-in email and every connected calendar's. */
-export function ownAddresses(email: string, cals: { address: string | null; key: string }[]): Set<string> {
+/** The user's own addresses: their sign-in email, every connected calendar's, and any `extra`
+ *  (connected Google / Microsoft addresses without a calendar: lib/pen/calendars.ts ownAddressesOf). */
+export function ownAddresses(email: string, cals: { address: string | null; key: string }[], extra: (string | null | undefined)[] = []): Set<string> {
   const s = new Set<string>([email.toLowerCase()])
   for (const c of cals) {
     if (c.address) s.add(c.address.toLowerCase())
     if (c.key.includes('@')) s.add(c.key.toLowerCase())
   }
+  for (const a of extra) if (a && a.includes('@')) s.add(a.trim().toLowerCase())
   return s
+}
+
+/**
+ * The guests who are other people (22 Oct): the user's own addresses on an event (their work
+ * address invited from their personal calendar) are the user, not guests. Whether a change asks
+ * first, and who "will get the cancellation", count only these.
+ */
+export function guestsBesides<T extends { email: string }>(guests: T[], own: Set<string>): T[] {
+  return guests.filter((g) => !own.has(g.email.trim().toLowerCase()))
 }
 
 export function isEditable(e: Pick<UpcomingEvent, 'organizerSelf' | 'organizer'>, own: Set<string>): boolean {

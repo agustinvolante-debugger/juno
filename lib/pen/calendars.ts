@@ -54,6 +54,23 @@ export async function listCalendars(email: string): Promise<Calendar[]> {
   return out.slice(0, MAX)
 }
 
+/**
+ * The user's own addresses (22 Oct): their sign-in email, every connected calendar, and every
+ * connected Google / Microsoft address, calendar on or not. On an event these are the user, never
+ * guests (lib/pen/calendar-page.ts guestsBesides).
+ */
+export async function ownAddressesOf(email: string, cals?: Calendar[]): Promise<Set<string>> {
+  const lower = email.toLowerCase()
+  const list = cals ?? (await listCalendars(lower).catch((): Calendar[] => []))
+  const extra: string[] = []
+  const { gmailAvailable, listGoogleAccounts } = await import('./gmail')
+  if (await gmailAvailable().catch(() => false)) for (const a of await listGoogleAccounts(lower).catch(() => [])) extra.push(a.address)
+  const { outlookAvailable, listOutlookAccounts } = await import('./outlook')
+  if (await outlookAvailable().catch(() => false)) for (const a of await listOutlookAccounts(lower).catch(() => [])) extra.push(a.address)
+  const { ownAddresses } = await import('./calendar-page')
+  return ownAddresses(lower, list, extra)
+}
+
 /** At least one calendar is connected and working. */
 export async function anyCalendar(email: string): Promise<boolean> {
   return (await listCalendars(email).catch((): Calendar[] => [])).some((c) => !c.broken)

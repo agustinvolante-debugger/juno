@@ -29,8 +29,32 @@ import { stateOf } from './state'
 //
 // A 👍 reaction on the message that asked is the same as typing yes (bot.ts): outIds are the ids
 // of the message(s) that carried the question, stored once the reply has gone out.
+//
+// One yes for the whole request (22 Oct, founder: "delete test 2, test 3 and test on phone" asked
+// once but the yes deleted one): every askConfirm in ONE turn adds to that turn's batch (the same
+// action twice is kept once), and the question is the whole batch, a line and a numbered list. One
+// yes (typed, the web button, a 👍) runs every item in order and reports each; no drops them all.
+// A next message that changes the instructions ("only test 2") is the model's: it sees the list
+// and runs a subset (confirm_pending only: [n]) or asks again (a new batch replaces the old one).
+// Rows written before have no items: they are one action (pendingItems).
+
+/** One action waiting in a batch. line / group / people / tail only shape the batch's question. */
+export type PendingItem = {
+  kind: string
+  args: Record<string, unknown>
+  /** The question for this action alone ("Delete "X"…? Chris will get Google's cancellation. Reply yes."). */
+  summary: string
+  /** The action as a list line ('"Test 2", Tue Oct 21, 3:00 PM'). Default: the summary without its question. */
+  line?: string
+  /** Items with the same group are said together: "Delete {n} events from your Google Calendar". */
+  group?: string
+  /** Other people the action emails, and what they get ("will get Google's cancellation"). */
+  people?: string[]
+  tail?: string
+}
 
 export type Pending = {
+  /** One item: its kind and args (as before 22 Oct). Several: 'batch' and {} (the items carry them). */
   kind: string
   args: Record<string, unknown>
   summary: string
@@ -39,7 +63,41 @@ export type Pending = {
   /** Provider ids of the reply that asked (Meta wamid / Sendblue handle), and its text. */
   outIds?: string[]
   outText?: string
+  /** Every action the one yes runs, in order. Absent on older rows: the single kind / args / summary. */
+  items?: PendingItem[]
 }
+
+/** The actions a pending runs: its items, or (a row from before batches) the one action. */
+export function pendingItems(p: Pick<Pending, 'kind' | 'args' | 'summary' | 'items'>): PendingItem[] {
+  return p.items?.length ? p.items : [{ kind: p.kind, args: p.args, summary: p.summary }]
+}
+
+const noAsk = (s: string) => s.replace(/\s*Reply yes\b[^.?!]*[.!]?\s*$/i, '').trim()
+/** An item's question as a statement: "Delete "X" for good?" → "Delete "X" for good". */
+const asLine = (i: PendingItem) => i.line ?? noAsk(i.summary).replace(/\?(\s|$)/g, (_, sp: string) => (sp ? '.' + sp : '')).trim()
+const names = (xs: string[]) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`)
+/** "Chris "Titi" Dyas <chris@x.com>" → "Chris "Titi" Dyas"; a bare address stays. */
+const shortName = (g: string) => g.replace(/\s*<[^>]+>\s*$/, '').trim() || g
+
+/**
+ * The one question for a batch: a single item is its own question; several are one line (said
+ * together when they are the same kind of change on the same calendar) and the numbered list
+ * (the numbers confirm_pending only takes).
+ */
+export function batchSummary(items: PendingItem[]): string {
+  if (items.length === 1) return items[0].summary
+  const n = items.length
+  const g = items[0].group
+  const together = g && items.every((i) => i.group === g && (i.tail ?? '') === (items[0].tail ?? ''))
+  const people = [...new Set(items.flatMap((i) => i.people ?? []).map(shortName))]
+  const head = together
+    ? `${g!.replace('{n}', String(n))}${people.length && items[0].tail ? ` — ${names(people)} ${items[0].tail}` : ''}?`
+    : `Do these ${n} things?`
+  return `${head}\n${items.map((i, k) => `${k + 1}. ${asLine(i)}`).join('\n')}\nReply yes to do all ${n}.`
+}
+
+/** The same action asked twice in a turn (a second round, the nudge) is one item. */
+const sameItem = (a: PendingItem, b: PendingItem) => a.kind === b.kind && JSON.stringify(a.args) === JSON.stringify(b.args)
 
 /** Whether an action waits for a yes. Anything not listed asks (the safe default). */
 const ASK: Record<string, boolean | 'if_guests'> = {
@@ -112,24 +170,56 @@ export async function setPending(email: string, p: Pending | null): Promise<void
   if (error) throw new Error(error.message)
 }
 
-/** Store the action and tell the model what to ask. `summary` is shown to the user as-is. */
-export async function askConfirm(ctx: Ctx, p: { kind: string; args: Record<string, unknown>; summary: string }): Promise<unknown> {
+/**
+ * Add the action to this turn's batch, store the batch and tell the model what to ask. The first
+ * ask of a turn starts a new batch (replacing an older question); later ones in the same turn add
+ * to it. The summary (the batch's, batchSummary) is shown to the user as-is.
+ */
+export async function askConfirm(ctx: Ctx, p: PendingItem): Promise<unknown> {
   ctx.pendingTouched = true
   ctx.askedNow = true
-  await stateOf(ctx).setPending({ ...p, msgId: ctx.msgId, createdAt: new Date().toISOString() })
-  ctx.asked = { kind: p.kind, summary: p.summary }
-  return { needs_yes: true, ask_user: p.summary, note: 'Nothing has changed yet. Ask the user exactly this and stop; their yes in the next message runs it (confirm_pending).' }
+  const prev = ctx.batch ?? []
+  const items = prev.some((i) => sameItem(i, p)) ? prev : [...prev, p]
+  ctx.batch = items
+  ctx.batchAt ??= new Date().toISOString()
+  const pending = toPending(items, ctx.msgId, ctx.batchAt)
+  await stateOf(ctx).setPending(pending)
+  ctx.asked = { kind: pending.kind, summary: pending.summary }
+  return items.length === 1
+    ? { needs_yes: true, ask_user: pending.summary, note: 'Nothing has changed yet. If the request has other actions, do them too first (any that needs a yes joins this same question). Then ask the user exactly ask_user, once, and stop; their yes in the next message runs it (confirm_pending).' }
+    : { needs_yes: true, actions_waiting: items.length, ask_user: pending.summary, note: `Nothing has changed yet. This is now ONE question for all ${items.length} actions asked in this turn: ask the user exactly ask_user, once (never one question per action), and stop. Their one yes runs them all (confirm_pending).` }
+}
+
+/** The stored form of a batch. One item keeps the pre-batch shape (kind / args at the top). */
+export function toPending(items: PendingItem[], msgId: string, createdAt: string): Pending {
+  const one = items.length === 1
+  return { kind: one ? items[0].kind : 'batch', args: one ? items[0].args : {}, summary: batchSummary(items), msgId, createdAt, items }
+}
+
+/** The system-prompt line while a question waits: a batch is listed with its numbers (for only). */
+export function waitingLine(p: Pending): string {
+  const items = pendingItems(p)
+  if (items.length === 1) return `\nWaiting for the user's yes (asked earlier): ${p.summary}\n`
+  return (
+    `\nWaiting for the user's one yes (asked earlier) for these ${items.length} actions:\n${items.map((i, k) => `${k + 1}. ${asLine(i)}`).join('\n')}\n` +
+    'A clear yes runs all of them (confirm_pending yes). If their message changes it ("only 2", "not the second one", "just Test 2"), call ' +
+    'confirm_pending yes with only: the numbers to run (the rest are dropped), or ask again for a new set; never ask about the ones they already settled.\n'
+  )
 }
 
 const TOOLS: Anthropic.Tool[] = [
   {
     name: 'confirm_pending',
     description:
-      'Run the action the user was asked to confirm in an EARLIER message (merge, delete, send, combine…), after a clear yes. ' +
-      'Or cancel it when they say no. Never call it in the same turn the action was asked.',
+      'Run the action(s) the user was asked to confirm in an EARLIER message (merge, delete, send, combine…), after a clear yes: ' +
+      'all of them, or only some (only: their numbers in the list asked) when the user changed it ("only the first", "not Test 3"). ' +
+      'Or cancel them all when they say no. Never call it in the same turn the action was asked.',
     input_schema: {
       type: 'object',
-      properties: { decision: { type: 'string', enum: ['yes', 'no'] } },
+      properties: {
+        decision: { type: 'string', enum: ['yes', 'no'] },
+        only: { type: 'array', items: { type: 'integer' }, description: 'With yes: the numbers (1, 2, …) of the listed actions to run; the others are dropped. Omit to run all.' },
+      },
       required: ['decision'],
       additionalProperties: false,
     },
@@ -146,17 +236,49 @@ export async function dropIfUnanswered(ctx: Ctx, asked: Pending | null): Promise
   await stateOf(ctx).dropPending(asked.createdAt)
 }
 
-export async function confirmPending(ctx: Ctx, decision: string): Promise<unknown> {
+/**
+ * The yes (or no) to the waiting question: every item in order, or only the numbers given. One
+ * item answers as before (its own result); several answer with one result per item (done, or
+ * failed and why), so the reply reports them all at once.
+ */
+export async function confirmPending(ctx: Ctx, decision: string, only?: number[]): Promise<unknown> {
   ctx.pendingTouched = true
   const p = await stateOf(ctx).getPending()
   if (!p) return { error: 'nothing is waiting for a yes (it may have expired after 30 minutes); ask again' }
   if (p.msgId === ctx.msgId || unseen(p.createdAt, ctx.sentAt)) return { error: 'the user has not seen this question yet; ask it and wait for their reply' }
+  const items = pendingItems(p)
+  if (decision !== 'yes') {
+    await stateOf(ctx).setPending(null)
+    return { ok: true, cancelled: items.length === 1 ? p.summary : items.map(asLine) }
+  }
+  const want = (only ?? []).filter((x) => Number.isInteger(x))
+  const picked = want.length ? items.map((it, k) => ({ it, k })).filter(({ k }) => want.includes(k + 1)) : items.map((it, k) => ({ it, k }))
+  if (!picked.length) return { error: `only must be numbers from 1 to ${items.length}`, waiting: items.map((i, k) => `${k + 1}. ${asLine(i)}`) }
   await stateOf(ctx).setPending(null)
-  if (decision !== 'yes') return { ok: true, cancelled: p.summary }
   const { MODULES } = await import('./tools')
-  const run = MODULES.map((m) => m.confirm?.[p.kind]).find(Boolean)
-  if (!run) return { error: `cannot run ${p.kind}` }
-  return run(ctx, p.args)
+  const runOne = async (it: PendingItem): Promise<unknown> => {
+    const run = MODULES.map((m) => m.confirm?.[it.kind]).find(Boolean)
+    if (!run) return { error: `cannot run ${it.kind}` }
+    try {
+      return await run(ctx, it.args)
+    } catch (e) {
+      return { error: (e as Error).message.slice(0, 200) }
+    }
+  }
+  if (items.length === 1) return runOne(items[0])
+  const results: Record<string, unknown>[] = []
+  for (const { it, k } of picked) {
+    const r = await runOne(it)
+    const o = r && typeof r === 'object' ? (r as Record<string, unknown>) : { result: r }
+    results.push('error' in o ? { item: k + 1, action: asLine(it), failed: String(o.error) } : { item: k + 1, action: asLine(it), done: true, ...o })
+  }
+  const skipped = items.filter((_, k) => !picked.some((x) => x.k === k)).map(asLine)
+  return {
+    ok: results.every((r) => r.done),
+    results,
+    ...(skipped.length ? { not_done_as_asked: skipped } : {}),
+    note: 'Report every action in ONE reply, one short line each: done, or failed with the reason (each result\'s own note says how to word a done one). Don\'t ask anything again.',
+  }
 }
 
 /** A contact card the user sent, after Juno offered to save it (bot.ts onContacts): all of them. */
@@ -172,12 +294,15 @@ async function saveCards(ctx: Ctx, args: Record<string, unknown>): Promise<unkno
 
 export const confirmModule: ToolModule = {
   tools: TOOLS,
-  run: (ctx, name, input) => (name === 'confirm_pending' ? confirmPending(ctx, String(input.decision ?? '')) : undefined),
+  run: (ctx, name, input) => (name === 'confirm_pending' ? confirmPending(ctx, String(input.decision ?? ''), Array.isArray(input.only) ? input.only.map(Number) : undefined) : undefined),
   confirm: { save_contacts: saveCards },
   prompt:
     '- Ask once, only where the tools ask. A tool that returns ask_user (delete a recording, delete or merge a contact, ' +
     'email or invite other people, change an event that has guests) has changed nothing: send exactly that question and ' +
     'stop. On the user\'s clear yes in their next message, call confirm_pending yes; on no, confirm_pending no.\n' +
+    '- When one request needs several confirmations ("delete A, B and C"), do all the lookups and actions first, then ask once for the whole ' +
+    'set: each tool that asks adds to the same question, and the last ask_user is that one question (a line and a numbered list). One yes runs ' +
+    'them all. If the user then changes it ("only A", "not C"), run just those with confirm_pending only, or ask again for the new set.\n' +
     '- Everything else the user asks for runs at once (reminders, to-dos, add to their calendar, combine or separate recordings, delete or move an event with no ' +
     'guests, disconnect an app): never add your own "are you sure?", "shall I?" or "reply yes to confirm" first, also when the time comes from something you ' +
     'looked up (a meeting found in their calendar or an email: set the reminders in the same turn). Say in one ' +

@@ -7,9 +7,9 @@
 
 import { supabaseAdmin } from '@/lib/supabase'
 import type { CalAccount, CalBrief, CalCreate, CalPatch, CalRange, CalViewEvent } from './calendar-view'
-import { addMeetByRef, createOn, defaultCalendar, deleteByRef, eventsBetween, getEventByRef, listCalendars, moveByRef, providerOf, setGuestsByRef, updateByRef, type Calendar } from './calendars'
+import { addMeetByRef, createOn, defaultCalendar, deleteByRef, eventsBetween, getEventByRef, listCalendars, moveByRef, ownAddressesOf, providerOf, setGuestsByRef, updateByRef, type Calendar } from './calendars'
 import { matchRecordings, type MatchRecording } from './calendar-match'
-import { briefPerson, changeGate, guestDiff, ownAddresses, patchGate, toViewEvent, type BriefSource, type PatchGate } from './calendar-page'
+import { briefPerson, changeGate, guestDiff, guestsBesides, ownAddresses, patchGate, toViewEvent, type BriefSource, type PatchGate } from './calendar-page'
 import { isDay, type EventPatch, type NewEvent } from './calendar-edit'
 import type { UpcomingEvent } from './google-calendar'
 import { userZone } from './timezone'
@@ -145,7 +145,8 @@ export async function createFromPage(email: string, b: Partial<CalCreate>): Prom
   const key = typeof b.cal === 'string' && b.cal.trim() ? b.cal.trim().toLowerCase() : null
   if (key && !cals.some((c) => c.key === key && !c.broken)) return bad('that calendar is not connected (or needs reconnecting)')
   if (!cals.length) return bad('no calendar is connected')
-  const gate = changeGate('create', { guests: guests.length, confirm: b.confirm === true })
+  // The user's own other addresses aren't guests: nobody else is emailed for those (22 Oct).
+  const gate = changeGate('create', { guests: guestsBesides(guests, await ownAddressesOf(email, cals)).length, confirm: b.confirm === true })
   if (gate) return refuse(gate)
   const made = await createOn(
     email,
@@ -199,8 +200,10 @@ export async function patchFromPage(email: string, b: Partial<CalPatch>, ops: Mo
   const move = Boolean(key && key !== got.cal.key)
   if (!fieldChange && b.guests === undefined && b.video === undefined && !key) return bad('nothing to change')
 
-  const editable = toViewEvent(e, { own: ownAddresses(email, cals) }).editable
-  const gate = patchGate({ editable, before: e.others, after: guestChange ? after : undefined, otherChange: fieldChange || video, move, recurring: e.recurring, confirm: b.confirm === true })
+  const own = await ownAddressesOf(email, cals)
+  const editable = toViewEvent(e, { own }).editable
+  // Who would be emailed counts other people only: the user's own addresses on it aren't guests.
+  const gate = patchGate({ editable, before: guestsBesides(e.others, own), after: guestChange ? guestsBesides(after!, own) : undefined, otherChange: fieldChange || video, move, recurring: e.recurring, confirm: b.confirm === true })
   if (gate) return refuse(gate)
   if (move && !cals.some((c) => c.key === key && !c.broken)) return bad('that calendar is not connected (or needs reconnecting)')
   // Nothing actually changes (same list, a link already there, the same calendar): the event as it is.
@@ -298,7 +301,8 @@ export async function deleteFromPage(email: string, ref: string, confirm: boolea
   const cals = await listCalendars(email).catch((): Calendar[] => [])
   const got = await getEventByRef(email, ref)
   if (!got) return bad('that event is gone', 404)
-  const gate = changeGate('delete', { guests: got.event.others.length, editable: toViewEvent(got.event, { own: ownAddresses(email, cals) }).editable, confirm })
+  const own = await ownAddressesOf(email, cals)
+  const gate = changeGate('delete', { guests: guestsBesides(got.event.others, own).length, editable: toViewEvent(got.event, { own }).editable, confirm })
   if (gate) return refuse(gate)
   await deleteByRef(email, ref)
   return { ok: true, value: true }

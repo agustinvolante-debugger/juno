@@ -28,7 +28,8 @@ import { timeFields, zoneOf } from './timezone'
 import { sendInvite, type CalEvent } from '../../calendar'
 import { calendarPref, linksMessage, setCalendarPref, type CalendarApp } from '../../calendar-pref'
 import type { UpcomingEvent } from '../../google-calendar'
-import { addAttendeeByRef, addMeetByRef, anyCalendar, calendarName, createOn, defaultCalendar, deleteByRef, eventRef, eventsBetween, getEventByRef, listCalendars, moveByRef, parseEventRef, pickCalendar, providerOf, setDefaultCalendar, type Calendar } from '../../calendars'
+import { addAttendeeByRef, addMeetByRef, anyCalendar, calendarName, createOn, defaultCalendar, deleteByRef, eventRef, eventsBetween, getEventByRef, listCalendars, moveByRef, ownAddressesOf, parseEventRef, pickCalendar, providerOf, setDefaultCalendar, type Calendar } from '../../calendars'
+import { guestsBesides } from '../../calendar-page'
 import { localDate, localIso, localToUtc, localWhen, validZone, whenLabel, zoneTimeLabel } from '../../timezone'
 import { isPerson, type PersonVariants } from '../../person-match'
 import { eventPeople, resolvePerson } from '../../person-resolve'
@@ -261,13 +262,14 @@ async function pickEvent(ctx: Ctx, input: Record<string, unknown>): Promise<{ ev
   return { event: events[0] }
 }
 
-/** The event as the model sees it: its ref (id + calendar), title, when in the user's zone, guests, calendar. */
-export const eventLine = (ctx: Ctx) => (e: UpcomingEvent) => ({
+/** The event as the model sees it: its ref (id + calendar), title, when in the user's zone, guests, calendar.
+ *  With `own` (the user's own addresses, ownAddressesOf), guests are other people only (22 Oct). */
+export const eventLine = (ctx: Ctx, own?: Set<string>) => (e: UpcomingEvent) => ({
   event_id: eventRef(e.id, e.cal),
   title: e.title,
   when: e.allDay ? e.start.slice(0, 10) : whenLabel(Date.parse(e.start), ctx.zone?.tz ?? 'UTC'),
   ...(e.end && !e.allDay ? { ends: whenLabel(Date.parse(e.end), ctx.zone?.tz ?? 'UTC') } : {}),
-  guests: e.others.map((o) => (o.name ? `${o.name} <${o.email}>` : o.email)),
+  guests: (own ? guestsBesides(e.others, own) : e.others).map((o) => (o.name ? `${o.name} <${o.email}>` : o.email)),
   ...(e.cals && e.cals.length > 1 ? { calendars: e.cals } : e.cal ? { calendar: e.cal } : {}),
   meet: Boolean(e.meet),
   ...(e.declined ? { declined: true } : {}),
@@ -336,7 +338,8 @@ async function findEventsTool(ctx: Ctx, input: Record<string, unknown>): Promise
     if (!hits.length && query && v) hits = matching(events, '', v)
     tried.push(`${w.step}: ${localDate(ctx.zone?.tz, w.from)} to ${localDate(ctx.zone?.tz, new Date(w.to.getTime() - 1))}`)
     if (hits.length) {
-      return { events: hits.slice(0, 12).map(eventLine(ctx)), calendars_read: cals.filter((c) => !c.broken).map((c) => c.address ?? c.key), ...(failed.length ? { could_not_read: failed } : {}), ...needsReconnect(cals), searched: tried, ...(w.step !== 'asked' ? { widened: `nothing on the day(s) asked; found by widening (${w.step})` } : {}) }
+      const own = await ownAddressesOf(ctx.email, cals).catch(() => undefined)
+      return { events: hits.slice(0, 12).map(eventLine(ctx, own)), calendars_read: cals.filter((c) => !c.broken).map((c) => c.address ?? c.key), ...(failed.length ? { could_not_read: failed } : {}), ...needsReconnect(cals), searched: tried, ...(w.step !== 'asked' ? { widened: `nothing on the day(s) asked; found by widening (${w.step})` } : {}) }
     }
     if (!str(input, 'from_date') && w.step === 'asked') break
   }
@@ -362,7 +365,7 @@ async function listEventsTool(ctx: Ctx, input: Record<string, unknown>): Promise
     ...(failed.length ? { could_not_read: failed, note_failed: 'say in one line which calendar could not be read' } : {}),
     ...needsReconnect(cals),
     count: shown.length,
-    events: shown.slice(0, 40).map(eventLine(ctx)),
+    events: shown.slice(0, 40).map(eventLine(ctx, await ownAddressesOf(ctx.email, cals).catch(() => undefined))),
     note: 'List them by day, one line each: time, title, with whom (first names). Say "nothing" for an empty day. Mention the calendar only when they have more than one and it helps.' +
       (cals.some((c) => c.broken) ? ' REQUIRED last line: needs_reconnect calendars were NOT read (their access stopped working); name them and offer the link to connect again.' : ''),
   }
@@ -394,7 +397,8 @@ async function deleteEventTool(ctx: Ctx, input: Record<string, unknown>): Promis
   if (!(await anyCalendar(ctx.email))) return NOT_CONNECTED
   const p = await pickEvent(ctx, input)
   if ('error' in p) return p
-  const line = eventLine(ctx)(p.event)
+  // Guests are other people: the user's own addresses on it get no confirm and aren't listed (22 Oct).
+  const line = eventLine(ctx, await ownAddressesOf(ctx.email))(p.event)
   const c = await calOf(ctx, line.event_id)
   const args = { eventId: line.event_id, title: line.title, when: line.when, calName: c.name }
   if (!asksFirst('delete_event', { guests: line.guests.length > 0 })) return confirmDelete(ctx, args)
@@ -402,6 +406,10 @@ async function deleteEventTool(ctx: Ctx, input: Record<string, unknown>): Promis
     kind: 'gcal_delete',
     args,
     summary: `Delete "${line.title}", ${line.when}, from your ${c.name}? ${line.guests.join(', ')} will get ${c.who}'s cancellation. Reply yes.`,
+    line: `"${line.title}", ${line.when}`,
+    group: `Delete {n} events from your ${c.name}`,
+    people: line.guests,
+    tail: `will get ${c.who}'s cancellation`,
   })
 }
 
@@ -431,13 +439,18 @@ async function moveEventTool(ctx: Ctx, input: Record<string, unknown>): Promise<
   if (!tz) return { error: 'time zone unknown; ask the user where they are (set_timezone)' }
   const start = localToUtc(local, tz)
   if (!start) return { error: 'that time does not exist in that zone' }
-  const line = eventLine(ctx)(p.event)
+  const line = eventLine(ctx, await ownAddressesOf(ctx.email))(p.event)
   const args = { eventId: line.event_id, start: start.toISOString(), tz, duration: num(input, 'duration_min') ?? null, title: line.title, guests: line.guests.length > 0 }
   if (asksFirst('move_event', { guests: args.guests })) {
+    const who = (await calOf(ctx, line.event_id)).who
     return askConfirm(ctx, {
       kind: 'gcal_move',
       args,
-      summary: `Move "${line.title}" to ${localWhen(start, tz)}, ${zoneTimeLabel(tz)}? ${line.guests.join(', ')} will get ${(await calOf(ctx, line.event_id)).who}'s update. Reply yes.`,
+      summary: `Move "${line.title}" to ${localWhen(start, tz)}, ${zoneTimeLabel(tz)}? ${line.guests.join(', ')} will get ${who}'s update. Reply yes.`,
+      line: `"${line.title}" to ${localWhen(start, tz)}, ${zoneTimeLabel(tz)}`,
+      group: 'Move {n} events',
+      people: line.guests,
+      tail: `will get ${who}'s update`,
     })
   }
   return confirmMove(ctx, args)
@@ -480,6 +493,9 @@ async function inviteToMeeting(ctx: Ctx, input: Record<string, unknown>): Promis
   const r = await eventFrom(ctx, input)
   if ('error' in r) return r
   const meet = input.meet === true
+  // One of the user's own addresses (their work email): nobody else is emailed, so no confirm.
+  const mine = (await ownAddressesOf(ctx.email).catch(() => new Set<string>())).has(toEmail)
+  if (mine && (await anyCalendar(ctx.email))) return confirmGcalInvite(ctx, { ev: r.ev, toName, toEmail, eventId: str(input, 'event_id') || null, meet })
   if (await anyCalendar(ctx.email)) {
     const eventId = str(input, 'event_id') || null
     const c = await calOf(ctx, eventId ?? '')

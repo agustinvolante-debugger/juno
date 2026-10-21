@@ -67,7 +67,7 @@ import type { AgentChannel, AgentDraft, AgentLink, AgentParts } from '../agent-i
 import { MODULES } from './tools'
 import { driveUndoHook } from './tools/google'
 import { localDate, localIso, markZoneChecked, userZone, zonePromptLine, type Zone } from '../timezone'
-import { dropIfUnanswered, confirmPending, BARE_YES, BARE_NO, type Pending } from './confirm'
+import { dropIfUnanswered, confirmPending, waitingLine, BARE_YES, BARE_NO, type Pending, type PendingItem } from './confirm'
 import { finishZoneTurn, timeFields, zoneAskLine, type ZoneTurn } from './tools/timezone'
 import { UNDO, runUndo } from './undo'
 import { unseen } from './burst'
@@ -152,6 +152,10 @@ export type Ctx = {
   /** A new yes/no question was asked this turn (askConfirm): it is the latest question, so a
    *  zone check in the same reply doesn't become the one waiting for the yes. */
   askedNow?: boolean
+  /** Everything asked this turn, as one question (confirm.ts askConfirm): one yes runs it all. */
+  batch?: PendingItem[]
+  /** When this turn's first ask was stored (the batch keeps it). */
+  batchAt?: string
   /** Times set this turn and the "still in Santiago?" check, if one is due (tools/timezone.ts). */
   zoneTurn?: ZoneTurn
   /** When the user's latest message in this turn arrived (ms). A question or draft made after it
@@ -643,7 +647,7 @@ function waSystem(ctx: Ctx, pending: Draft | null, asked: Pending | null, askedU
     MODULES.map((m) => (m.prompt && (!m.when || m.when(ctx)) ? `${m.prompt}\n` : '')).join('') +
     (askedUnseen && asked
       ? `\nJust asked the user (they have NOT seen it yet; nothing in their message answers it, so never call confirm_pending this turn): ${asked.summary}\n`
-      : asked?.kind === 'zone_check' ? zoneAskLine(asked) : asked ? `\nWaiting for the user's yes (asked earlier): ${asked.summary}\n` : '')
+      : asked?.kind === 'zone_check' ? zoneAskLine(asked) : asked ? waitingLine(asked) : '')
   )
 }
 
@@ -672,7 +676,7 @@ export function webSystem(wa: string): string {
       )
       .replace('The draft and a "reply send it" hint are shown below your reply automatically.', 'The draft and a Send button are shown below your reply automatically.')
       .replace('never "reply yes to confirm". Say what was set in one line; "undo" cancels it.', 'never "reply yes to confirm". Say what was set in one line; an Undo button is shown under your reply.') +
-    '\nWeb chat: under your reply the user sees Yes / No buttons for a question a tool asked, a Send button under a draft, an Undo ' +
+    '\nWeb chat: under your reply the user sees Yes / No buttons for a question a tool asked (one Yes runs every action listed in it), a Send button under a draft, an Undo ' +
     'button when what you did can be undone, and cards for the docs, sheets, events and connect links you made. Never write "reply yes", ' +
     '"reply send it" or "say undo": ask the question, or say what was done, in one line. Still put any link in the text as a plain URL.\n'
   )
@@ -1809,10 +1813,10 @@ export async function runAgent(opts: {
     const decision = BARE_YES.test(opts.question) ? 'yes' : BARE_NO.test(opts.question) ? 'no' : null
     if (decision) {
       const result = await confirmPending(ctx, decision).catch((e) => ({ error: (e as Error).message }))
-      ctx.links!.push(...linksFrom('confirm_pending', {}, result))
+      ctx.links!.push(...confirmLinks(result))
       answered =
         `(My reply "${opts.question.slice(0, 40)}" answers your question "${asked.summary}" and it has been handled: ` +
-        `${JSON.stringify(result).slice(0, 1500)}. Tell me in one or two lines what happened, following any note in it; don't ask it again.)`
+        `${JSON.stringify(result).slice(0, 4000)}. Tell me in one or two lines what happened (several actions: one short line each, done or failed and why), following any note in it; don't ask it again.)`
       stillAsked = null
     }
   }
@@ -1894,7 +1898,7 @@ export async function runAgent(opts: {
         }
         onTool?.(c.name)
         const out = await runTool(ctx, c.name, (c.input ?? {}) as Record<string, unknown>)
-        ctx.links!.push(...linksFrom(c.name, (c.input ?? {}) as Record<string, unknown>, out))
+        ctx.links!.push(...(c.name === 'confirm_pending' ? confirmLinks(out) : linksFrom(c.name, (c.input ?? {}) as Record<string, unknown>, out)))
         const isError = !!out && typeof out === 'object' && 'error' in out
         if (!isError && (['set_reminder', 'add_todo', 'add_to_calendar'].includes(c.name) || (c.name === 'find_meeting' && ((out as { reminders_set?: unknown[] }).reminders_set?.length ?? 0) > 0))) ranSelf = true
         results.push({ type: 'tool_result', tool_use_id: c.id, content: JSON.stringify(out), ...(isError ? { is_error: true } : {}) })
@@ -2020,6 +2024,12 @@ export function linksFrom(name: string, input: Record<string, unknown>, out: unk
     links.push({ kind: 'recording', title: s('title') || 'Recording', url: `${publicBase()}/pen?open=${encodeURIComponent(o.session_id)}` })
   }
   return links
+}
+
+/** Cards for what a yes ran: one result, or each result of a batch (confirm.ts confirmPending). */
+function confirmLinks(out: unknown): AgentLink[] {
+  const results = (out as { results?: unknown } | null)?.results
+  return Array.isArray(results) ? results.flatMap((r) => linksFrom('confirm_pending', {}, r)) : linksFrom('confirm_pending', {}, out)
 }
 
 function dedupeLinks(links: AgentLink[]): AgentLink[] {
