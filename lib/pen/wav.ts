@@ -10,10 +10,10 @@
 // pipeline ordinary PCM. A-law and mu-law are included because the same class of recorder
 // often uses them and they cost fifteen lines each.
 
-const FMT_PCM = 1
-const FMT_ALAW = 6
-const FMT_MULAW = 7
-const FMT_IMA_ADPCM = 17
+export const FMT_PCM = 1
+export const FMT_ALAW = 6
+export const FMT_MULAW = 7
+export const FMT_IMA_ADPCM = 17
 
 export type WavInfo = {
   formatTag: number
@@ -86,7 +86,7 @@ export function formatName(tag: number): string {
 
 /** IMA ADPCM. Each block opens with a 4-byte header carrying the first sample and the step
  *  index; the rest is 4-bit nibbles, low nibble first. Channels interleave per block. */
-function decodeIma(bytes: Uint8Array, info: WavInfo): Int16Array {
+export function decodeIma(bytes: Uint8Array, info: WavInfo): Int16Array {
   const { channels, blockAlign } = info
   const perChannelBytes = blockAlign / channels
   const samplesPerBlock = (perChannelBytes - 4) * 2 + 1
@@ -137,7 +137,7 @@ function decodeIma(bytes: Uint8Array, info: WavInfo): Int16Array {
   return out.subarray(0, w)
 }
 
-function decodeMuLaw(bytes: Uint8Array): Int16Array {
+export function decodeMuLaw(bytes: Uint8Array): Int16Array {
   const out = new Int16Array(bytes.length)
   for (let i = 0; i < bytes.length; i++) {
     const u = ~bytes[i] & 0xff
@@ -147,7 +147,7 @@ function decodeMuLaw(bytes: Uint8Array): Int16Array {
   return out
 }
 
-function decodeALaw(bytes: Uint8Array): Int16Array {
+export function decodeALaw(bytes: Uint8Array): Int16Array {
   const out = new Int16Array(bytes.length)
   for (let i = 0; i < bytes.length; i++) {
     let a = bytes[i] ^ 0x55

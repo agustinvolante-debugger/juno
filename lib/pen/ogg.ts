@@ -108,41 +108,75 @@ export type OpusPacket = { data: Uint8Array; granule: number }
  * input rate, which is what RFC 7845 requires and the most common thing to get wrong.
  */
 export function writeOggOpus(packets: OpusPacket[], channels: number, inputRate: number, preSkip: number): Blob {
-  const serial = (Math.random() * 0xffffffff) >>> 0
-  const parts: Uint8Array[] = []
-  let seq = 0
+  const w = new OggOpusWriter(channels, inputRate, preSkip)
+  for (const p of packets) w.add(p)
+  return w.finish()
+}
 
-  const head = opusHead(channels, preSkip, inputRate)
-  parts.push(page({ headerType: 0x02, granule: 0, serial, sequence: seq++, segments: lace(head.length), body: head }))
+/**
+ * The same stream, built as packets arrive (the streaming prep worker, 22 Oct). Finished pages
+ * are folded into a Blob every ~1 MB, which the browser keeps outside the JS heap, so an hour
+ * of audio doesn't sit as 180,000 little arrays. The pre-skip is only needed at finish(), when
+ * the encoder has reported it, so the header pages are written last and put in front.
+ */
+export class OggOpusWriter {
+  private readonly serial = (Math.random() * 0xffffffff) >>> 0
+  private seq = 2 // 0 and 1 are the header pages
+  private segs: number[] = []
+  private bodies: Uint8Array[] = []
+  private granule = 0
+  private pages: Uint8Array[] = []
+  private pageBytes = 0
+  private done: Blob[] = []
+  private readonly channels: number
+  private readonly inputRate: number
+  preSkip: number
 
-  const tags = opusTags()
-  parts.push(page({ headerType: 0x00, granule: 0, serial, sequence: seq++, segments: lace(tags.length), body: tags }))
+  constructor(channels: number, inputRate: number, preSkip: number) {
+    this.channels = channels
+    this.inputRate = inputRate
+    this.preSkip = preSkip
+  }
 
-  // Pack packets into pages, respecting the 255-segment ceiling. Each page carries the
-  // granule of the LAST packet that finishes on it.
-  let i = 0
-  while (i < packets.length) {
-    const segs: number[] = []
-    const bodies: Uint8Array[] = []
-    let granule = 0
-    while (i < packets.length) {
-      const l = lace(packets[i].data.length)
-      if (segs.length + l.length > 255) break
-      segs.push(...l)
-      bodies.push(packets[i].data)
-      granule = packets[i].granule
-      i++
-    }
-    const size = bodies.reduce((n, b) => n + b.length, 0)
+  add(p: OpusPacket) {
+    const l = lace(p.data.length)
+    // Respect the 255-segment ceiling. Each page carries the granule of the LAST packet on it.
+    if (this.segs.length + l.length > 255) this.emit(false)
+    this.segs.push(...l)
+    this.bodies.push(p.data)
+    this.granule = p.granule
+  }
+
+  private emit(last: boolean) {
+    const size = this.bodies.reduce((n, b) => n + b.length, 0)
     const body = new Uint8Array(size)
     let o = 0
-    for (const b of bodies) {
+    for (const b of this.bodies) {
       body.set(b, o)
       o += b.length
     }
-    const last = i >= packets.length
-    parts.push(page({ headerType: last ? 0x04 : 0x00, granule, serial, sequence: seq++, segments: segs, body }))
+    const pg = page({ headerType: last ? 0x04 : 0x00, granule: this.granule, serial: this.serial, sequence: this.seq++, segments: this.segs, body })
+    this.pages.push(pg)
+    this.pageBytes += pg.length
+    this.segs = []
+    this.bodies = []
+    if (this.pageBytes >= 1 << 20) this.fold()
   }
 
-  return new Blob(parts as BlobPart[], { type: 'audio/ogg' })
+  private fold() {
+    if (!this.pages.length) return
+    this.done.push(new Blob(this.pages as BlobPart[]))
+    this.pages = []
+    this.pageBytes = 0
+  }
+
+  finish(): Blob {
+    if (this.bodies.length) this.emit(true)
+    this.fold()
+    const head = opusHead(this.channels, this.preSkip, this.inputRate)
+    const tags = opusTags()
+    const h0 = page({ headerType: 0x02, granule: 0, serial: this.serial, sequence: 0, segments: lace(head.length), body: head })
+    const h1 = page({ headerType: 0x00, granule: 0, serial: this.serial, sequence: 1, segments: lace(tags.length), body: tags })
+    return new Blob([h0, h1, ...this.done] as BlobPart[], { type: 'audio/ogg' })
+  }
 }

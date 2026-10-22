@@ -114,7 +114,9 @@ function bufferToWav(buf: AudioBuffer): Blob {
   return new Blob([out], { type: 'audio/wav' })
 }
 
-/** `compressAbove` overrides the size at which a WAV gets compressed (tests use 0). */
+/** `compressAbove` overrides the size at which a WAV gets compressed (tests use 0).
+ *  Long WAVs on browsers with WebCodecs don't come here any more: they stream through a worker
+ *  (stream-prep-client.ts) in bounded memory. This whole-file path is for short files and video. */
 export async function prepareAudio(file: File, opts: { compressAbove?: number } = {}): Promise<Prepared> {
   const originalBytes = file.size
 

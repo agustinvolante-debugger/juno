@@ -38,7 +38,8 @@ import type { ArchiveStats } from '@/lib/pen/stats'
 import DeliverableSheet, { DeliverableActions, type SheetRequest } from './DeliverableSheet'
 import SendBriefing from './SendBriefing'
 import { storedAudio, AUDIO_DAYS, AUDIO_WARN_DAYS } from '@/lib/pen/audio-state'
-import { prepareAudio, fmtMB, fmtDur, SOFT_SIZE_LIMIT, needsPiecedUpload, durationWithoutDecoding, PIECE_BYTES } from '@/lib/pen/encode'
+import { prepareAudio, fmtMB, fmtDur, SOFT_SIZE_LIMIT, needsPiecedUpload, durationWithoutDecoding, PIECE_BYTES, type Prepared } from '@/lib/pen/encode'
+import { canStreamPrep, streamPrepare } from '@/lib/pen/stream-prep-client'
 import { postJson, getJson, patchJson, del, errMessage, PenHttpError } from '@/lib/pen/http'
 import type { ChatSummary } from '@/lib/pen/chats'
 import type { DocSummary } from '@/lib/pen/docs'
@@ -114,7 +115,7 @@ function useAccept(): string | undefined {
 
 type Pending = { file: File; picked: boolean }
 type Progress = { name: string; phase: string; pct: number }
-type UploadItem = { key: string; name: string; phase: string; pct: number; state: 'waiting' | 'working' | 'done' | 'held' | 'error'; error?: string }
+type UploadItem = { key: string; name: string; phase: string; pct: number; short?: string; state: 'waiting' | 'working' | 'done' | 'held' | 'error'; error?: string }
 
 export default function PenApp({
   initial,
@@ -716,14 +717,26 @@ export default function PenApp({
     return () => window.removeEventListener('beforeunload', warn)
   }, [uploading])
 
+  // Preparing audio is the memory-heavy step, so files take turns at it; uploads still overlap
+  // (two at a time on a computer). A long recording no longer shares the tab with another.
+  const prepQueue = useRef<Promise<unknown>>(Promise.resolve())
+  function onePrepAtATime<R>(fn: () => Promise<R>): Promise<R> {
+    const run = prepQueue.current.then(fn, fn)
+    prepQueue.current = run.catch(() => {})
+    return run
+  }
+
   /** One file: prepare, upload, save, send for transcription. 'held' = saved, waiting for hours. */
-  async function uploadOne(file: File, people: Picked[], step: (p: { phase: string; pct: number }) => void, event = false): Promise<'done' | 'held'> {
+  async function uploadOne(file: File, people: Picked[], step: (p: { phase: string; pct: number; short?: string }) => void, event = false): Promise<'done' | 'held'> {
     const callPeople = people
     // What goes up, and where it lands. Normally the audio is prepared (compressed) in the
     // browser first. A file too big to prepare safely on this device (a long recording on a
     // phone) goes up exactly as it is, in pieces, and the server joins them for AssemblyAI.
     let up: { storage_path: string; mime: string; bytes: number; durationSec: number }
-    if (needsPiecedUpload(file)) {
+
+    // The original, as it is, in pieces; the server joins them for AssemblyAI. Phones without an
+    // Opus encoder take this path for long files, and so does any file whose prep failed.
+    const asIs = async () => {
       step({ phase: T.phaseSlot, pct: 5 })
       const durationSec = await durationWithoutDecoding(file)
       const n = Math.ceil(file.size / PIECE_BYTES)
@@ -743,12 +756,12 @@ export default function PenApp({
         )
         await put().catch(put)
       }
-      up = { storage_path, mime, bytes: file.size, durationSec }
-    } else {
-      step({ phase: T.phasePreparing, pct: 5 })
-      const prep = await prepareAudio(file)
+      return { storage_path, mime, bytes: file.size, durationSec }
+    }
 
-      step({ phase: T.phaseSlot, pct: 15 })
+    // Prepared (compressed) audio, one signed URL.
+    const upPrepared = async (prep: Prepared, from = 15) => {
+      step({ phase: T.phaseSlot, pct: from })
       const urlRes = await fetch('/api/pen/upload-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -767,9 +780,39 @@ export default function PenApp({
       }
 
       await putWithProgress(signedUrl, prep.blob, prep.mime, (pct) =>
-        step({ phase: T.phaseUploading(prep.note), pct: 15 + pct * 0.6 }),
+        step({ phase: T.phaseUploading(prep.note), pct: from + (pct / 100) * (75 - from) }),
       )
-      up = { storage_path: path, mime: prep.mime, bytes: prep.blob.size, durationSec: prep.durationSec }
+      return { storage_path: path, mime: prep.mime, bytes: prep.blob.size, durationSec: prep.durationSec }
+    }
+
+    if (canStreamPrep(file)) {
+      // A long WAV (22 Oct: Chris's hour-long pen files sat at "5%" forever). Prepared in a
+      // worker a slice at a time with a moving percent, one file at a time; if that fails or
+      // stops moving for a minute, the original goes up as it is instead of hanging.
+      // Prep is the long part here (~20-30 s an hour), so it gets most of the bar: 2 → 45%.
+      step({ phase: T.phasePrepQueue, pct: 2, short: T.upPrepQueue })
+      let prep: Prepared | null = null
+      try {
+        prep = await onePrepAtATime(() => {
+          step({ phase: T.phasePreparingPct(0), pct: 2, short: T.upPreparing(0) })
+          return streamPrepare(file, (f) => {
+            const p = Math.floor(f * 100)
+            step({ phase: T.phasePreparingPct(p), pct: 2 + f * 43, short: T.upPreparing(p) })
+          })
+        })
+      } catch (e) {
+        console.warn('[pen] streaming prep failed, uploading as-is:', (e as Error).message)
+      }
+      up = prep ? await upPrepared(prep, 45) : await asIs()
+    } else if (needsPiecedUpload(file)) {
+      up = await asIs()
+    } else {
+      step({ phase: T.phasePrepQueue, pct: 2, short: T.upPrepQueue })
+      const prep = await onePrepAtATime(() => {
+        step({ phase: T.phasePreparing, pct: 5 })
+        return prepareAudio(file)
+      })
+      up = await upPrepared(prep)
     }
 
     step({ phase: T.phaseSaving, pct: 80 })
@@ -847,7 +890,7 @@ export default function PenApp({
         const b = batch[next++]
         patchUpload(b.key, { state: 'working', phase: T.phasePreparing, pct: 2 })
         try {
-          const r = await uploadOne(b.file, people, ({ phase, pct }) => patchUpload(b.key, { phase, pct }), event)
+          const r = await uploadOne(b.file, people, ({ phase, pct, short }) => patchUpload(b.key, { phase, pct, short }), event)
           patchUpload(b.key, { state: r, pct: 100 })
           wentUp.push(b.file)
         } catch (e) {
@@ -3786,6 +3829,7 @@ function UploadCard({ uploads, onClose, whatsapp, phone, byHand = false, T }: { 
   const ok = uploads.filter((u) => u.state === 'done').length
   const held = uploads.filter((u) => u.state === 'held').length
   const failed = uploads.filter((u) => u.state === 'error')
+  const preparing = uploads.find((u) => u.state === 'working' && u.short && u.short !== T.upPrepQueue)
   // Portalled to .pen-root like the referral pop-up: inside the shell, the recordings rail
   // painted over it (5 Oct).
   const host = typeof document !== 'undefined' ? document.querySelector('.pen-root') ?? document.body : null
@@ -3803,6 +3847,8 @@ function UploadCard({ uploads, onClose, whatsapp, phone, byHand = false, T }: { 
       {going ? (
         <>
           <div className="pen-meter-bar"><span style={{ width: `${pct}%` }} /></div>
+          {/* A long recording spends a while being prepared: say so with a moving number (22 Oct). */}
+          {preparing && <p className="pen-upcard-note pen-mono">{preparing.name} · {preparing.short}</p>}
           <p className="pen-upcard-note">{phone || byHand ? T.upKeepOpenPhone : T.upKeepOpen}</p>
         </>
       ) : (
@@ -3838,7 +3884,7 @@ function UploadCard({ uploads, onClose, whatsapp, phone, byHand = false, T }: { 
             <li key={u.key} data-state={u.state}>
               <span className="pen-mono pen-upcard-name">{u.name}</span>
               <span className="pen-upcard-state">
-                {u.state === 'done' ? '✓' : u.state === 'error' ? '!' : u.state === 'held' ? '⏸' : u.state === 'waiting' ? T.upWaiting : `${Math.round(u.pct)}%`}
+                {u.state === 'done' ? '✓' : u.state === 'error' ? '!' : u.state === 'held' ? '⏸' : u.state === 'waiting' ? T.upWaiting : u.short ?? `${Math.round(u.pct)}%`}
               </span>
             </li>
           ))}
