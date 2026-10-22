@@ -2271,7 +2271,6 @@ body:has(.pen-root) {
 .pen-acct2-item:hover { color: var(--ink); background: var(--sunk); }
 
 /* The usage bar at the foot of the sidebar. */
-.pen-side-meter { margin-top: 14px; padding-top: 6px; border-top: 1px solid var(--line); }
 .pen-meter-held { color: var(--warn); }
 .pen-meter-cta:hover { background: var(--accent-wash); border-color: var(--accent); }
 .pen-pill[data-s='held'] { background: var(--warn-wash); color: var(--warn); border-color: var(--warn-line); }

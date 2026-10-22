@@ -47,6 +47,7 @@ import type { ChatSummary } from '@/lib/pen/chats'
 import type { DocSummary } from '@/lib/pen/docs'
 import type { Allowance } from '@/lib/pen/allowance'
 import UsageBar from './UsageBar'
+import HoursPill from './HoursPill'
 import PhoneShell, { type PhoneTab } from './PhoneShell'
 import Link from 'next/link'
 import { ACCEPT_DESKTOP, acceptFor } from '@/lib/pen/file-accept'
@@ -398,6 +399,28 @@ export default function PenApp({
     if (view.k === 'chats' || mHist) void refreshPreviews()
   }, [view.k, mHist, refreshPreviews])
   const refreshAllChats = useCallback(() => { void refreshChats(); void refreshPreviews() }, [refreshChats, refreshPreviews])
+
+  // The sidebar's chat list scrolls on its own; the fade at its foot shows only while there is
+  // more below, so the last row is never dimmed when it is genuinely the last.
+  const savedList = useRef<HTMLDivElement>(null)
+  const [savedFade, setSavedFade] = useState(false)
+  const syncSavedFade = useCallback(() => {
+    const el = savedList.current
+    setSavedFade(!!el && el.scrollHeight - el.scrollTop - el.clientHeight > 2)
+  }, [])
+
+  // Everything ever recorded, for the header pill's detail. Summed here from the list already
+  // on screen rather than asking the server for another number.
+  const { allTimeSec, recordingCount } = useMemo(() => {
+    let sec = 0
+    let n = 0
+    for (const x of sessions) {
+      if (x.status === 'error' || !x.duration_sec) continue
+      sec += x.duration_sec
+      n++
+    }
+    return { allTimeSec: sec, recordingCount: n }
+  }, [sessions])
   const refreshDocs = useCallback(async () => {
     try {
       setDocs((await getJson<{ docs: DocSummary[] }>('/api/pen/docs')).docs)
@@ -492,6 +515,14 @@ export default function PenApp({
   const inRec = Boolean(active)
   useEffect(() => { if (!inRec) setRecUnfold(false) }, [inRec])
   const sideCollapsed = inRec ? !recUnfold : sidePref === 'collapsed'
+  useEffect(() => {
+    syncSavedFade()
+    const el = savedList.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(syncSavedFade)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [chats, sideCollapsed, syncSavedFade])
   const toggleSide = () => {
     if (inRec) return setRecUnfold(sideCollapsed)
     const next = sidePref === 'collapsed' ? 'open' : 'collapsed'
@@ -1802,8 +1833,15 @@ export default function PenApp({
         {chats.length === 0 ? (
           <p className="pen-cats-empty">{T.chatsEmpty}</p>
         ) : (
-          <div className="pen-cats-list">
-            {chats.slice(0, 4).map((c) => (
+          // Recent threads, newest first, as in Claude or ChatGPT. The list takes whatever height the
+          // sidebar has left under the mini month and scrolls on its own, fading at the foot.
+          <div
+            className="pen-cats-list pen-saved-list"
+            ref={savedList}
+            data-fade={savedFade || undefined}
+            onScroll={syncSavedFade}
+          >
+            {chats.slice(0, SIDEBAR_CHATS).map((c) => (
               <ChatRow
                 key={c.id}
                 chat={c}
@@ -1821,15 +1859,17 @@ export default function PenApp({
                 }}
               />
             ))}
+            <button
+              type="button"
+              className="pen-saved-all"
+              onClick={() => { setView({ k: 'chats' }); setNavOpen(false) }}
+            >
+              {T.allChats}
+              <Icon name="chevron" size={14} />
+            </button>
           </div>
         )}
       </nav>
-      )}
-
-      {!sideCollapsed && (
-        <div className="pen-side-meter">
-          <UsageBar allowance={allowance} />
-        </div>
       )}
       </div>
 
@@ -1851,6 +1891,7 @@ export default function PenApp({
 
         <div className="pen-head-right">
           <ClockPill clock={allowance?.clock ?? null} T={T} />
+          <HoursPill allowance={allowance} allTimeSec={allTimeSec} recordings={recordingCount} />
           <button
             className="pen-browse"
             onClick={() => setNavOpen((v) => !v)}
@@ -2194,7 +2235,7 @@ function Account({ email, name, avatar, onTour }: { email: string; name?: string
 
   return (
     <div className="pen-acct2" ref={wrap}>
-      <button className="pen-acct2-btn" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+      <button className="pen-acct2-btn" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label={label}>
         {avatar ? (
           <Image src={avatar} alt="" width={30} height={30} className="pen-avatar" unoptimized />
         ) : (
@@ -4637,6 +4678,9 @@ function AddMenu({
  * delete after a confirmation. Uses PATCH and DELETE on /api/pen/chats/[id], which only
  * touch the signed-in user's own chats.
  */
+/** How many recent chats the sidebar lists before "All chats". */
+const SIDEBAR_CHATS = 15
+
 function ChatRow({
   chat,
   T,
@@ -4665,6 +4709,12 @@ function ChatRow({
   useEffect(() => {
     if (editing) requestAnimationFrame(() => { input.current?.focus(); input.current?.select() })
   }, [editing])
+  // In the sidebar the rows sit in their own scrolling list: a menu opened on one of the last
+  // rows would hang below the list's edge and be clipped, so bring it into view.
+  const menu = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (m.open) menu.current?.scrollIntoView({ block: 'nearest' })
+  }, [m.open])
 
   const save = async () => {
     const t = draft.trim()
@@ -4752,7 +4802,7 @@ function ChatRow({
         <span aria-hidden>⋯</span>
       </button>
       {m.open && (
-        <div className="pen-menu pen-menu-right" role="menu" aria-label={T.chatOptions(title)}>
+        <div ref={menu} className="pen-menu pen-menu-right" role="menu" aria-label={T.chatOptions(title)}>
           <button type="button" role="menuitem" className="pen-menu-item" onClick={() => { m.setOpen(false); setDraft(title); setEditing(true) }}>
             <Icon name="pen" size={15} />{T.renameChat}
           </button>
