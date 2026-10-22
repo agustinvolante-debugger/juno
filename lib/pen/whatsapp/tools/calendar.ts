@@ -89,8 +89,8 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'set_calendar_app',
-    description: 'Remember which calendar app the user uses ("I use Outlook", "uso el calendario de Apple"), so add-to-calendar sends that link only.',
-    input_schema: { type: 'object', properties: { app: { type: 'string', enum: ['apple', 'google', 'outlook'] } }, required: ['app'], additionalProperties: false },
+    description: 'Remember which calendar app the user uses ("I use Outlook", "uso el calendario de Apple", "I use Yahoo calendar"), so add-to-calendar sends that link only.',
+    input_schema: { type: 'object', properties: { app: { type: 'string', enum: ['apple', 'google', 'outlook', 'yahoo'] } }, required: ['app'], additionalProperties: false },
   },
   {
     name: 'find_events',

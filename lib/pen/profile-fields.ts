@@ -190,7 +190,7 @@ export type AgentProfile = {
   timeZoneChecked?: string
   timeZoneCheckedAt?: string
   /** Which calendar app they use, for add-to-calendar links (calendar-pref.ts): said, or guessed from the email domain. */
-  calendarApp?: 'apple' | 'google' | 'outlook'
+  calendarApp?: 'apple' | 'google' | 'outlook' | 'yahoo'
   calendarAppSource?: 'said' | 'guess'
   /** Which connected calendar new events go on (lib/pen/calendars.ts): 'gcal' or a connected address. */
   calendarDefault?: string

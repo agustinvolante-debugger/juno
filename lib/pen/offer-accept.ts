@@ -109,6 +109,7 @@ export async function acceptMeeting(ctx: AcceptCtx, s: Suggestion, tzIn: string,
       calendar_ics: links.ics,
       calendar_google: links.google,
       calendar_outlook: links.outlook,
+      calendar_yahoo: links.yahoo,
       message,
       note:
         'Send the message exactly (translate the words, never the links): it carries the link for their calendar app. ' +

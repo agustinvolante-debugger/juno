@@ -10,7 +10,7 @@ import { useCopy } from '../../LangContext'
 import type { Copy } from '@/lib/pen/i18n'
 
 export type MailChoice = 'gmail' | 'outlook' | 'yahoo' | 'other'
-export type CalChoice = 'google' | 'apple' | 'outlook'
+export type CalChoice = 'google' | 'apple' | 'outlook' | 'yahoo'
 
 const L_EN = {
   title: 'One-tap links open in',
@@ -18,7 +18,7 @@ const L_EN = {
   mail: 'Email drafts',
   cal: 'Add to calendar',
   mailOpts: { gmail: 'Gmail', outlook: 'Outlook', yahoo: 'Yahoo Mail', other: 'My mail app' } as Record<MailChoice, string>,
-  calOpts: { google: 'Google Calendar', apple: 'Apple Calendar', outlook: 'Outlook' } as Record<CalChoice, string>,
+  calOpts: { google: 'Google Calendar', apple: 'Apple Calendar', outlook: 'Outlook', yahoo: 'Yahoo Calendar' } as Record<CalChoice, string>,
   guessed: 'Guessed from your address. Pick one to be sure.',
   unset: 'Not chosen yet: Juno offers a couple of options with each link.',
   saved: 'Saved',
@@ -34,7 +34,7 @@ const L: Copy<typeof L_EN> = {
     mail: 'Borradores de correo',
     cal: 'Agregar al calendario',
     mailOpts: { gmail: 'Gmail', outlook: 'Outlook', yahoo: 'Yahoo Mail', other: 'Mi app de correo' },
-    calOpts: { google: 'Google Calendar', apple: 'Calendario de Apple', outlook: 'Outlook' },
+    calOpts: { google: 'Google Calendar', apple: 'Calendario de Apple', outlook: 'Outlook', yahoo: 'Calendario de Yahoo' },
     guessed: 'Lo adivinamos por tu dirección. Elige uno para estar seguro.',
     unset: 'Aún sin elegir: Juno te ofrece un par de opciones con cada link.',
     saved: 'Guardado',
@@ -47,7 +47,7 @@ const L: Copy<typeof L_EN> = {
     mail: 'Rascunhos de e-mail',
     cal: 'Adicionar à agenda',
     mailOpts: { gmail: 'Gmail', outlook: 'Outlook', yahoo: 'Yahoo Mail', other: 'Meu app de e-mail' },
-    calOpts: { google: 'Google Agenda', apple: 'Calendário da Apple', outlook: 'Outlook' },
+    calOpts: { google: 'Google Agenda', apple: 'Calendário da Apple', outlook: 'Outlook', yahoo: 'Agenda do Yahoo' },
     guessed: 'Adivinhamos pelo seu endereço. Escolha um para ter certeza.',
     unset: 'Ainda não escolhido: o Juno oferece algumas opções com cada link.',
     saved: 'Salvo',

@@ -84,7 +84,7 @@ export function cleanProfile(raw: unknown): AgentProfile {
     timeZoneBefore: zone(r.timeZoneBefore),
     timeZoneChecked: zone(r.timeZoneChecked),
     timeZoneCheckedAt: instant(r.timeZoneCheckedAt),
-    calendarApp: r.calendarApp === 'apple' || r.calendarApp === 'google' || r.calendarApp === 'outlook' ? r.calendarApp : undefined,
+    calendarApp: r.calendarApp === 'apple' || r.calendarApp === 'google' || r.calendarApp === 'outlook' || r.calendarApp === 'yahoo' ? r.calendarApp : undefined,
     calendarAppSource: r.calendarAppSource === 'said' || r.calendarAppSource === 'guess' ? r.calendarAppSource : undefined,
     calendarDefault: typeof r.calendarDefault === 'string' && (r.calendarDefault === 'gcal' || /^[^\s@]{1,64}@[^\s@]{1,190}$/.test(r.calendarDefault)) ? r.calendarDefault.toLowerCase() : undefined,
     mailApp: r.mailApp === 'gmail' || r.mailApp === 'outlook' || r.mailApp === 'yahoo' || r.mailApp === 'other' || r.mailApp === 'none' ? r.mailApp : undefined,

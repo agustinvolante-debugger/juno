@@ -245,8 +245,21 @@ export function outlookLink(input: CalEvent): string {
   return `https://outlook.office.com/calendar/0/deeplink/compose?${q.toString()}`
 }
 
-export function calendarLinks(ev: CalEvent): { ics: string; google: string; outlook: string } {
-  return { ics: `${baseUrl()}/api/pen/ics/${eventToken(ev)}`, google: googleLink(ev), outlook: outlookLink(ev) }
+/** Yahoo Calendar on the web, the event filled in: one tap, then Save (22 Oct). Yahoo has no
+ *  calendar API to connect, so this is the whole Yahoo support. UTC times; Yahoo shows them in the
+ *  user's own zone. */
+export function yahooLink(input: CalEvent): string {
+  const ev = tidy(input)
+  const startMs = Date.parse(ev.start)
+  const endMs = startMs + ev.durationMin! * 60000
+  const q = new URLSearchParams({ v: '60', title: ev.title, st: utcStamp(startMs), et: utcStamp(endMs) })
+  if (ev.description) q.set('desc', ev.description)
+  if (ev.location) q.set('in_loc', ev.location)
+  return `https://calendar.yahoo.com/?${q.toString()}`
+}
+
+export function calendarLinks(ev: CalEvent): { ics: string; google: string; outlook: string; yahoo: string } {
+  return { ics: `${baseUrl()}/api/pen/ics/${eventToken(ev)}`, google: googleLink(ev), outlook: outlookLink(ev), yahoo: yahooLink(ev) }
 }
 
 /* ------------------------------------------------------------------ invite */
