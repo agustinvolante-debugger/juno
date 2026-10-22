@@ -10,7 +10,7 @@ export const BUCKET = 'pen-audio'
 export type PenStatus = 'uploaded' | 'held' | 'transcribing' | 'transcribed' | 'noting' | 'noted' | 'error'
 
 export type Utterance = { speaker: string; text: string; start: number; end: number }
-export type Transcript = { text?: string; utterances?: Utterance[] }
+export type Transcript = { text?: string; utterances?: Utterance[]; split?: import('./split').SplitMarker }
 
 export { slugType, COMMON_TYPES, isViewing, displayType } from '@/lib/pen/categories'
 export type { MeetingType } from '@/lib/pen/categories'
@@ -369,7 +369,11 @@ export async function deleteSession(userEmail: string, id: string): Promise<bool
   if (session.storage_path?.startsWith(PARTS_PREFIX)) await removeParts(session.storage_path)
   // 'aai:' paths live in AssemblyAI's storage (WhatsApp files, pieced uploads) and 'text:'
   // imports have no audio at all; neither is in our bucket.
-  if (session.storage_path && !/^(aai|text|sample|parts):/.test(session.storage_path)) {
+  // A split recording's parts share one audio file (lib/pen/split-server.ts): it goes with the last of them.
+  const shared = session.storage_path
+    ? ((await supabaseAdmin.from('pen_sessions').select('id', { count: 'exact', head: true }).eq('user_email', userEmail).eq('storage_path', session.storage_path)).count ?? 0) > 0
+    : false
+  if (session.storage_path && !shared && !/^(aai|text|sample|parts):/.test(session.storage_path)) {
     // Best effort, and deliberately after the row: failing here costs storage, not correctness.
     const { error: se } = await supabaseAdmin.storage.from(BUCKET).remove([session.storage_path])
     if (se) console.warn(`pen: orphaned object ${session.storage_path}: ${se.message}`)
@@ -379,7 +383,9 @@ export async function deleteSession(userEmail: string, id: string): Promise<bool
   // (UUIDs) are sent, and never one another row still points at (translation reads it).
   if (session.aai_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(session.aai_id)) {
     const { count } = await supabaseAdmin.from('pen_sessions').select('id', { count: 'exact', head: true }).eq('aai_id', session.aai_id)
-    if (count === 0) {
+    // The parts of a split read their translation from it (transcript.split.aai_id).
+    const { count: parts } = await supabaseAdmin.from('pen_sessions').select('id', { count: 'exact', head: true }).eq('transcript->split->>aai_id', session.aai_id)
+    if (count === 0 && !parts) {
       await deleteTranscript(session.aai_id).catch((e) => console.warn(`pen: assemblyai copy of ${id} not deleted: ${(e as Error).message}`))
     }
   }

@@ -14,7 +14,7 @@ export type IconName =
   | 'quote' | 'people' | 'clock' | 'calendar' | 'tag' | 'sparkle' | 'alert' | 'chevron'
   | 'back' | 'mail' | 'trash' | 'settings' | 'person' | 'hourglass'
   | 'lock' | 'battery' | 'mic' | 'usb' | 'pen' | 'save' | 'folder' | 'wave' | 'chat' | 'more' | 'bell' | 'doc'
-  | 'close' | 'filter' | 'sidebar'
+  | 'close' | 'filter' | 'sidebar' | 'scissors'
 
 const P: Record<IconName, React.ReactNode> = {
   home:       <path d="M3.5 8.6 10 3.4l6.5 5.2V16a.9.9 0 0 1-.9.9h-3.4v-4.6H7.8v4.6H4.4a.9.9 0 0 1-.9-.9Z" />,
@@ -27,6 +27,7 @@ const P: Record<IconName, React.ReactNode> = {
   archive:    <><rect x="2.9" y="4.2" width="14.2" height="3.4" rx="1" /><path d="M4.4 7.6v7.3a1.3 1.3 0 0 0 1.3 1.3h8.6a1.3 1.3 0 0 0 1.3-1.3V7.6" /><path d="M8.2 10.9h3.6" /></>,
   search:     <><circle cx="8.8" cy="8.8" r="5.3" /><path d="M12.7 12.7 17 17" /></>,
   plus:       <path d="M10 4.4v11.2M4.4 10h11.2" />,
+  scissors:   <><circle cx="5.6" cy="6" r="2.3" /><circle cx="5.6" cy="14" r="2.3" /><path d="M7.6 7.2 16.6 15M7.6 12.8 16.6 5" /></>,
   close:      <path d="M5.4 5.4l9.2 9.2M14.6 5.4l-9.2 9.2" />,
   filter:     <path d="M3.4 5.6h13.2M5.8 10h8.4M8.4 14.4h3.2" />,
   sidebar:    <><rect x="2.9" y="3.8" width="14.2" height="12.4" rx="2" /><path d="M7.6 3.8v12.4" /></>,

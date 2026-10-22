@@ -4283,3 +4283,54 @@ html.pen-m-lock, html.pen-m-lock body { height: 100%; overflow: hidden; overscro
   .pen-mail-row { grid-template-columns: auto 1fr; }
   .pen-mail-acts { grid-column: 2; justify-content: flex-start; }
 }
+
+/* ============================================================ One recording, two meetings (22 Oct) */
+/* The suggestion ("This looks like two conversations"), the result after a split, and the
+   "Split here" confirm at a line of the transcript. Same card as Juno noticed: a panel, the
+   parts as a short list of times and who, one primary action and a plain way out. */
+.pen-split {
+  margin-top: 18px; padding: 16px 20px; animation: pen-jn-in .32s cubic-bezier(.16, 1, .3, 1);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 16px; color: var(--ink);
+}
+@media (prefers-reduced-motion: reduce) { .pen-split { animation: none; } }
+.pen-split-h { display: flex; align-items: center; gap: 9px; margin: 0; font-size: 16.5px; font-weight: 600; line-height: 1.35; text-wrap: balance; }
+.pen-split-h svg { flex: none; color: var(--accent); }
+.pen-split-parts { list-style: none; margin: 10px 0 0; padding: 0; }
+.pen-split-parts li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; padding: 9px 0; font-size: 15.5px; }
+.pen-split-parts li + li { border-top: 1px solid var(--hair); }
+.pen-split-time { min-width: 10ch; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pen-split-who { color: var(--soft); overflow-wrap: anywhere; }
+.pen-split-open {
+  display: inline-flex; align-items: center; gap: 3px; margin-left: auto; padding: 6px 4px;
+  color: var(--accent-ink); font-weight: 600; text-underline-offset: 3px;
+}
+.pen-split-open:hover { text-decoration: underline; }
+.pen-split-why { margin: 10px 0 0; max-width: 65ch; font-size: 14.5px; line-height: 1.55; color: var(--dim); }
+.pen-split-err { margin: 10px 0 0; font-size: 14.5px; color: var(--bad); }
+.pen-split-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.pen-split-acts .pen-btn { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding-inline: 16px; }
+.pen-split-undo { color: var(--soft); text-decoration: underline; text-underline-offset: 3px; }
+.pen-split-undo:disabled { opacity: .6; }
+.pen-split-done { background: var(--accent-wash); border-color: var(--accent-line); }
+.pen-split-done .pen-split-parts li + li { border-top-color: var(--accent-line); }
+.pen-split-done .pen-split-why { color: var(--soft); }
+.pen-split-here { margin: 6px 0 12px; box-shadow: 0 6px 20px -12px rgba(36, 33, 26, .35); }
+.pen-m-body .pen-doc > .pen-split { order: -1; margin: 0 0 18px; }
+
+/* "Split here": quiet beside each line's speaker; shown on hover or keyboard focus on a desktop,
+   always (as an icon) where there is no hover. */
+.pen-utt-side { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
+.pen-utt-split {
+  display: inline-flex; align-items: center; gap: 5px; margin-left: -8px; padding: 4px 8px; border-radius: 9999px;
+  font-size: 12.5px; font-weight: 500; color: var(--dim); opacity: 0; transition: opacity .15s ease, background-color .15s ease;
+}
+.pen-utt:hover .pen-utt-split, .pen-utt-split:focus-visible, .pen-utt-split[aria-expanded='true'] { opacity: 1; }
+.pen-utt-split:hover, .pen-utt-split[aria-expanded='true'] { background: var(--sunk); color: var(--ink); }
+.pen-utt-split:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+@media (max-width: 900px), (hover: none) {
+  .pen-utt-side { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; }
+  .pen-utt-split { opacity: 1; margin: -6px -6px -6px 0; padding: 0; width: 36px; height: 36px; justify-content: center; color: var(--dim); }
+  .pen-utt-split span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+@media (prefers-reduced-motion: reduce) { .pen-utt-split { transition: none; } }
+.pen-doc > .pen-split { margin-bottom: 14px; }

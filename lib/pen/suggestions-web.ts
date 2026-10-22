@@ -75,7 +75,7 @@ export async function homeSuggestions(email: string): Promise<{ open: WebSuggest
   const { data } = await supabaseAdmin
     .from('pen_suggestions').select('*').eq('user_email', email).in('state', ['done', 'accepted']).gte('decided_at', since)
     .order('decided_at', { ascending: false }).limit(6)
-  const did = (data ?? []) as Suggestion[]
+  const did = ((data ?? []) as Suggestion[]).filter((s) => (s.kind as string) !== 'split')
   const titles = await titlesFor(email, [...open, ...did])
   return { open: open.map((s) => view(s, lang, titles)), did: did.map((s) => view(s, lang, titles)) }
 }

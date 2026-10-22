@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef } from 'react'
+import { Fragment, useCallback, useEffect, useRef, type ReactNode } from 'react'
 import type { Utterance } from '@/lib/pen/store'
 import { speakerName, type SpeakerMap } from '@/lib/pen/speakers'
 import { useCopy, useLang } from './LangContext'
@@ -23,7 +23,13 @@ export default function TranscriptEditor({
   speakerMap,
   translation,
   anchor,
+  lineAction,
+  beforeLine,
 }: {
+  /** A quiet action beside a line's speaker ("Split here"); null for none. */
+  lineAction?: (index: number) => ReactNode
+  /** Something shown above a line (the "Split here" confirm, at the cut). */
+  beforeLine?: (index: number) => ReactNode
   /** Prefix for each line's id ("<anchor>-<index>"), so Names heard and Conversations can jump to a line. */
   anchor?: string
   /** Names for the speaker labels, where known. */
@@ -59,9 +65,19 @@ export default function TranscriptEditor({
       </div>
       {utterances.map((u, i) => {
         const edited = typeof edits[String(i)] === 'string' && edits[String(i)] !== u.text
+        const act = lineAction?.(i)
         return (
-          <div key={i} className="pen-utt" data-edited={edited} id={anchor ? `${anchor}-${i}` : undefined}>
-            <div className="pen-label pen-spk-tag pt-0.5">{speakerName(speakerMap, u.speaker, { word: SPEAKER_WORD[lang] })}</div>
+          <Fragment key={i}>
+          {beforeLine?.(i)}
+          <div className="pen-utt" data-edited={edited} id={anchor ? `${anchor}-${i}` : undefined}>
+            {act ? (
+              <div className="pen-utt-side">
+                <div className="pen-label pen-spk-tag pt-0.5">{speakerName(speakerMap, u.speaker, { word: SPEAKER_WORD[lang] })}</div>
+                {act}
+              </div>
+            ) : (
+              <div className="pen-label pen-spk-tag pt-0.5">{speakerName(speakerMap, u.speaker, { word: SPEAKER_WORD[lang] })}</div>
+            )}
             <textarea
               ref={(el) => { refs.current[i] = el; autoGrow(el) }}
               className="pen-utt-input"
@@ -72,6 +88,7 @@ export default function TranscriptEditor({
             />
             {translation?.[i] ? <p className="pen-utt-tr">{translation[i]}</p> : null}
           </div>
+          </Fragment>
         )
       })}
     </div>

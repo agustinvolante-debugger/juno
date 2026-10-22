@@ -29,6 +29,11 @@ export async function POST(req: Request) {
   if (!session) return NextResponse.json({ error: 'not found' }, { status: 404 })
   if (!session.consent) return NextResponse.json({ error: 'consent not confirmed' }, { status: 400 })
   if (session.status === 'transcribing') return NextResponse.json({ session })
+  // A part of a split recording is a slice of a longer file: transcribing it again would bring
+  // back the whole file (lib/pen/split-server.ts).
+  if (session.transcript?.split) {
+    return NextResponse.json({ error: 'This recording was split from a longer one, so it can\'t be transcribed again on its own.' }, { status: 409 })
+  }
   // The 90-day rule removed the audio (lib/pen/audio-retention.ts): there is nothing to send.
   if (session.audio_deleted_at) {
     return NextResponse.json({ error: 'The audio of this recording was removed after 90 days, so it cannot be transcribed again. The transcript and notes are kept.' }, { status: 410 })

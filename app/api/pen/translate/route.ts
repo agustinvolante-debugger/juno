@@ -4,6 +4,7 @@ import { readOnlyRefusal } from '@/lib/pen/access'
 import { getSession, updateSession } from '@/lib/pen/store'
 import { translateTranscript } from '@/lib/pen/aai'
 import { LANGUAGES } from '@/lib/pen/profile-fields'
+import { translationSource } from '@/lib/pen/split-server'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -20,10 +21,13 @@ export async function POST(req: Request) {
   const lang = LANGUAGES.find((l) => l.code === b.lang)?.code
   if (!b.id || !lang) return NextResponse.json({ error: 'id and a supported lang required' }, { status: 400 })
   const session = await getSession(email, b.id)
-  if (!session?.aai_id) return NextResponse.json({ error: 'not found' }, { status: 404 })
+  // A split part translates its slice of the original transcript (lib/pen/split-server.ts).
+  const src = session ? translationSource(session) : null
+  if (!session || !src) return NextResponse.json({ error: 'not found' }, { status: 404 })
   if (session.translation?.lang === lang) return NextResponse.json({ translation: session.translation })
   try {
-    const lines = await translateTranscript(session.aai_id, lang)
+    const all = await translateTranscript(src.aaiId, lang)
+    const lines = session.transcript?.split ? all.slice(src.from, src.from + (session.transcript?.utterances?.length ?? 0)) : all
     // Line up with our transcript; a count mismatch means the two copies differ, so refuse
     // rather than put a translation beside the wrong line.
     if (lines.length !== (session.transcript?.utterances?.length ?? 0)) {

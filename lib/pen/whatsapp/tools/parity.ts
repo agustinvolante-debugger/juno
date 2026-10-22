@@ -496,13 +496,17 @@ async function translate(ctx: Ctx, id: string, lang: string): Promise<unknown> {
   const s = await own(ctx, id)
   if (!s) return { error: 'no such recording' }
   if (!LANGUAGES.some((l) => l.code === lang)) return { error: `lang must be one of ${LANGUAGES.map((l) => l.code).join(', ')}` }
-  if (!s.aai_id || !s.transcript?.utterances?.length) return { error: 'this recording has no transcript that can be translated' }
+  const { translationSource } = await import('../../split-server')
+  const src = translationSource(s)
+  if (!src || !s.transcript?.utterances?.length) return { error: 'this recording has no transcript that can be translated' }
   if (s.translation?.lang === lang) return { ok: true, already: true, note: 'Already translated; it is on the website beside the transcript.' }
   const L = S[ctx.lang]
   ctx.later.push(async () => {
     try {
       const { translateTranscript } = await import('../../aai')
-      const lines = await translateTranscript(s.aai_id!, lang)
+      const all = await translateTranscript(src.aaiId, lang)
+      // A split part is a slice of the original transcript (lib/pen/split-server.ts).
+      const lines = s.transcript?.split ? all.slice(src.from, src.from + s.transcript.utterances!.length) : all
       // Same rule as the website: a line count that differs means the copies differ; refuse.
       if (lines.length !== s.transcript!.utterances!.length) throw new Error('translation did not line up')
       await updateSession(s.id, { translation: { lang, utterances: lines } })

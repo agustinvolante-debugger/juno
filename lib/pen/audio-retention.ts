@@ -90,10 +90,27 @@ const finished = (r: RetentionRow) => r.status === 'noted'
  */
 export function planUnits(rows: RetentionRow[], now: Date, days = RETAIN_DAYS): Plan {
   const cutoff = now.getTime() - days * DAY
-  const groups = new Map<string, RetentionRow[]>()
+  // One unit per joined meeting, and per audio file: the parts of a split recording share one
+  // (lib/pen/split-server.ts), so "keep" on any of them keeps it for all.
+  const up = new Map<string, string>()
+  const find = (k: string): string => { let x = k; while (up.has(x) && up.get(x) !== x) x = up.get(x)!; return x }
+  const join = (a: string, b: string) => {
+    if (!up.has(b)) up.set(b, b)
+    const ra = find(a), rb = find(b)
+    if (ra !== rb) up.set(rb, ra)
+  }
   for (const r of rows) {
-    const k = r.merge_group ?? r.id
-    groups.set(k, [...(groups.get(k) ?? []), r])
+    if (!up.has(r.id)) up.set(r.id, r.id)
+    if (r.merge_group) join(r.id, `g:${r.merge_group}`)
+    for (const path of audioPaths(r.storage_path)) join(r.id, `p:${path}`)
+  }
+  const byRoot = new Map<string, RetentionRow[]>()
+  for (const r of rows) byRoot.set(find(r.id), [...(byRoot.get(find(r.id)) ?? []), r])
+  // Keyed as before (the meeting's group, or the recording) unless audio is shared across them.
+  const groups = new Map<string, RetentionRow[]>()
+  for (const [root, parts] of byRoot) {
+    const g = parts[0].merge_group
+    groups.set(g && parts.every((p) => p.merge_group === g) ? g : parts.length === 1 ? parts[0].id : root, parts)
   }
   const plan: Plan = { expired: [], kept: [], skipped: [] }
   for (const [key, parts] of groups) {

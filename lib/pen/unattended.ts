@@ -20,6 +20,7 @@ import type { PenSession } from './store'
 import { enrichPerson, peopleOnSession } from './people'
 import { sendWhatsAppBriefing, sendWhatsAppFailure } from './whatsapp/bot'
 import { linkCalendarGuests } from './who-server'
+import { detectSplit } from './split-server'
 
 /** Notes, then the briefing. Runs with nobody watching, so every failure has to say so. */
 export async function runUnattended(sessionId: string, email: string) {
@@ -33,6 +34,9 @@ export async function runUnattended(sessionId: string, email: string) {
     scanSuggestions(email, sessionId),
     namesAndConversations(email, sessionId).catch(() => {}),
   ])
+  // One recording holding two meetings (lib/pen/split.ts): a suggestion on the recording page,
+  // never a split. After names, so a voice named meanwhile counts. Never throws.
+  await detectSplit(email, sessionId)
   // The after-upload message (summary, to-dos, offers) goes out now rather than at the next
   // 15-minute tick; the scheduler's rules (STOP, quiet hours, daily max, the 24-hour window)
   // still decide. justNoted: the suggestions for it are in, no need to wait for them.
@@ -47,6 +51,7 @@ export async function runUnattended(sessionId: string, email: string) {
 export async function afterNotesFollowUps(email: string, sessionId: string): Promise<void> {
   await linkCalendarGuests(email, sessionId)
   await scanSuggestions(email, sessionId).catch(() => {})
+  await detectSplit(email, sessionId)
   await import('./proactive').then((m) => m.runForUser(email, { justNoted: sessionId })).catch((e) => console.warn(`pen proactive after notes: ${(e as Error).message}`))
 }
 

@@ -11,6 +11,7 @@ import type { PersonCard } from '@/lib/pen/people'
 import { useTagPicker, TagMenu, shortLabel, type Taggable } from './TagPicker'
 import NoteEditor, { blocksFrom } from './NoteEditor'
 import TranscriptEditor from './TranscriptEditor'
+import { SplitCard, SplitDone, SplitHereButton, SplitHereConfirm, JoinBackLine, rangeText, type SplitResult } from './SplitRecording'
 import SpeakerNames from './SpeakerNames'
 import TranscriptImport from './TranscriptImport'
 import NotionImport from './NotionImport'
@@ -1147,6 +1148,13 @@ export default function PenApp({
     />
   ) : null
 
+  // One recording, two meetings (app/pen/SplitRecording.tsx): what the recording page needs.
+  const splitApi = locked ? undefined : {
+    onChanged: () => refresh().then(() => { void refreshSuggest() }),
+    open: (id: string) => { openSession(id); setTab('note') },
+    titleOf: (id: string) => { const x = sessions.find((y) => y.id === id); return x ? x.title || x.notes?.headline || null : null },
+  }
+
   const splitGroup = async (group: string) => {
     setJoining(true)
     try {
@@ -1335,6 +1343,7 @@ export default function PenApp({
               onBack={() => setView({ k: 'archive' })}
               session={active} tab={tab} setTab={setTab}
               parts={partsOf(active)}
+              split={splitApi}
               splitting={joining}
               onSplit={() => active.merge_group && void splitGroup(active.merge_group)}
               onCombine={locked ? undefined : () => setCombineFor(active.id)}
@@ -2039,6 +2048,7 @@ export default function PenApp({
                 onBack={() => setView({ k: 'archive' })}
                 session={active} tab={tab} setTab={setTab}
                 parts={partsOf(active)}
+              split={splitApi}
                 splitting={joining}
                 onSplit={() => active.merge_group && void splitGroup(active.merge_group)}
                 onCombine={locked ? undefined : () => setCombineFor(active.id)}
@@ -2780,7 +2790,12 @@ function ImportTray({
  * overlay keyed by utterance index, and index 7 of part two is a different line from index 7
  * of part one. Merging the overlays would quietly rewrite the wrong sentences.
  */
-function PartTranscript({ part, onUpdateNotes }: { part: PenSession; onUpdateNotes: () => void }) {
+function PartTranscript({ part, onUpdateNotes, lineAction, beforeLine }: {
+  part: PenSession
+  onUpdateNotes: () => void
+  lineAction?: (index: number) => React.ReactNode
+  beforeLine?: (index: number) => React.ReactNode
+}) {
   const T = useCopy(APP_COPY)
   const [edits, setEdits] = useState<Record<string, string>>(part.transcript_edits ?? {})
   const [map, setMap] = useState<SpeakerMap | null>((part.speaker_map as SpeakerMap | null) ?? null)
@@ -2841,6 +2856,8 @@ function PartTranscript({ part, onUpdateNotes }: { part: PenSession; onUpdateNot
         speakerMap={map}
         translation={showTr ? translation?.utterances : null}
         anchor={`pen-u-${part.id}`}
+        lineAction={lineAction}
+        beforeLine={beforeLine}
         onEdit={(i, text) => { dirty.current = true; setEdits((prev) => ({ ...prev, [String(i)]: text })) }}
       />
     </>
@@ -2851,8 +2868,10 @@ function PartTranscript({ part, onUpdateNotes }: { part: PenSession; onUpdateNot
 
 function Detail({
   session, tab, setTab, chatOpen, onToggleChat, onNotes, onDelete, onPatch, askCategory, selfEmail, onBack, notion, google,
-  parts, onSplit, splitting, onPeopleChanged, onCombine, onEventDay,
+  parts, onSplit, splitting, onPeopleChanged, onCombine, onEventDay, split,
 }: {
+  /** One recording, two meetings: split it, open a part, list refresh. Absent when read-only. */
+  split?: { onChanged: () => Promise<void> | void; open: (id: string) => void; titleOf: (id: string) => string | null }
   /** "Combine this day into one event" made a new recording: refresh and open it. */
   onEventDay?: (primaryId: string) => void
   /** "Combine with…": open the picker. Absent on a read-only or paused account. */
@@ -3042,6 +3061,67 @@ function Detail({
   const suggestEvent = totalSec >= 25 * 60 && speakerCount >= 4
   const canSplit = spoken && totalSec >= 10 * 60
 
+  // ---- one recording, two meetings (SplitRecording.tsx, /api/pen/split).
+  const [splitDone, setSplitDone] = useState<(SplitResult & { startIso: string | null }) | null>(null)
+  const [joiningBack, setJoiningBack] = useState(false)
+  const [cut, setCut] = useState<{ sid: string; i: number } | null>(null)
+  const [cutBusy, setCutBusy] = useState(false)
+  const [cutErr, setCutErr] = useState<string | null>(null)
+  useEffect(() => {
+    setCut(null)
+    setCutErr(null)
+    setSplitDone((d) => (d && d.parts.some((p) => p.id === session.id) ? d : null))
+  }, [session.id])
+  const marker = session.transcript?.split ?? null
+  // Only a finished recording, never an event (its conversations are listed instead).
+  const canCut = !!split && spoken && !parts.some((p) => p.event_mode) && parts.every((p) => p.status === 'noted' || p.status === 'error') && totalSec >= 60
+  const offsetOf = (sid: string) => nameParts.find((p) => p.id === sid)?.offset ?? 0
+  const cutSec = (sid: string, i: number) => offsetOf(sid) + ((parts.find((p) => p.id === sid)?.transcript?.utterances?.[i]?.start ?? 0) / 1000)
+  const lineAction = (sid: string) => (i: number) =>
+    canCut && !(sid === parts[0]?.id && i === 0)
+      ? <SplitHereButton open={cut?.sid === sid && cut.i === i} onClick={() => { setCutErr(null); setCut(cut?.sid === sid && cut.i === i ? null : { sid, i }) }} />
+      : null
+  const beforeLine = (sid: string) => (i: number) => {
+    if (!cut || cut.sid !== sid || cut.i !== i) return null
+    const at = cutSec(sid, i)
+    const start = parts[0]?.recorded_at ?? null
+    return (
+      <SplitHereConfirm
+        ranges={[rangeText(0, at, start, lang), rangeText(at, totalSec, start, lang)]}
+        busy={cutBusy}
+        error={cutErr}
+        onNo={() => setCut(null)}
+        onYes={() => void doCut(at)}
+      />
+    )
+  }
+  async function doCut(at: number) {
+    setCutBusy(true)
+    setCutErr(null)
+    try {
+      const r = await postJson<SplitResult>('/api/pen/split', { action: 'split', session: session.id, cuts: [at] })
+      setSplitDone({ ...r, startIso: parts[0]?.recorded_at ?? null })
+      setCut(null)
+      await split?.onChanged()
+    } catch (e) {
+      setCutErr(errMessage(e))
+    } finally {
+      setCutBusy(false)
+    }
+  }
+  async function joinBack() {
+    setJoiningBack(true)
+    try {
+      await postJson('/api/pen/split', { action: 'join_back', session: session.id })
+      setSplitDone(null)
+      await split?.onChanged()
+    } catch (e) {
+      setCutErr(errMessage(e))
+    } finally {
+      setJoiningBack(false)
+    }
+  }
+
   async function toggleAction(i: number) {
     const next = new Set(done)
     next.has(i) ? next.delete(i) : next.add(i)
@@ -3224,6 +3304,9 @@ function Detail({
               </button>
             </p>
           )}
+          {marker && !joined && !splitDone && split && (
+            <JoinBackLine part={marker.part} parts={marker.parts} busy={joiningBack} onJoinBack={() => void joinBack()} />
+          )}
           <AudioLine parts={parts} T={T} lang={lang} onKeep={(keep) => onPatch({ keep_audio: keep })} />
         </div>
         {/* As many actions as fit on one row, in priority order; the rest, and always Delete,
@@ -3269,6 +3352,17 @@ function Detail({
       </div>
 
       {session.error_text && <Banner tone="bad">{session.error_text}</Banner>}
+
+      {splitDone && split && (
+        <SplitDone
+          result={splitDone}
+          startIso={splitDone.startIso}
+          titles={splitDone.parts.map((p) => split.titleOf(p.id))}
+          joining={joiningBack}
+          onOpen={split.open}
+          onJoinBack={() => void joinBack()}
+        />
+      )}
 
       {/* ----------------------------------------------------------- tabs */}
       <div className="pen-tabrow mt-5 flex items-center justify-between gap-4 border-b" style={{ borderColor: 'var(--line)' }}>
@@ -3348,6 +3442,8 @@ function Detail({
                 speakerMap={speakerMap}
                 translation={showTr ? translation?.utterances : null}
                 anchor={`pen-u-${session.id}`}
+                lineAction={lineAction(session.id)}
+                beforeLine={beforeLine(session.id)}
                 onEdit={(i, text) => { dirtyT.current = true; setTEdits((prev) => ({ ...prev, [String(i)]: text })) }}
               />
             </>
@@ -3370,7 +3466,7 @@ function Detail({
               <p className="mb-4 mt-2 text-[14px]" style={{ color: 'var(--faint)' }}>
                 {T.partNote}
               </p>
-              <PartTranscript part={part} onUpdateNotes={() => regenerate()} />
+              <PartTranscript part={part} onUpdateNotes={() => regenerate()} lineAction={lineAction(part.id)} beforeLine={beforeLine(part.id)} />
             </div>
           ))}
         </div>
@@ -3399,6 +3495,10 @@ function Detail({
 
           {/* Assistant first (16 Oct): what Juno can do from this meeting leads, before any
               reading. The same offers WhatsApp makes; nothing happens until a button is pressed. */}
+          {/* One recording, two meetings: a suggestion only; nothing is cut until Split. */}
+          {session.status === 'noted' && split && !splitDone && !parts.some((p) => p.event_mode) && (
+            <SplitCard key={`sp-${session.id}`} sessionId={session.id} startIso={parts[0]?.recorded_at ?? null} onSplit={(r) => { setSplitDone({ ...r, startIso: parts[0]?.recorded_at ?? null }); void split.onChanged() }} />
+          )}
           {session.status === 'noted' && (
             <JunoNoticed key={`jn-${session.id}`} sessionId={session.id} onAsk={spoken ? () => { if (!chatOpen) onToggleChat() } : undefined} />
           )}

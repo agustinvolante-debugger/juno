@@ -386,7 +386,8 @@ export async function listSuggestions(email: string, opts: { sessionId?: string;
   if (opts.sessionId) q = q.eq('session_id', opts.sessionId)
   const { data, error } = await q.order('created_at', { ascending: false }).limit(50)
   if (error) throw new Error(error.message)
-  return (data ?? []) as Suggestion[]
+  // 'split' rows (lib/pen/split-server.ts) are the recording page's own card, never an offer.
+  return ((data ?? []) as Suggestion[]).filter((s) => (s.kind as string) !== 'split')
 }
 
 const CONF: Record<string, number> = { high: 3, medium: 2, low: 1 }
@@ -482,7 +483,8 @@ export async function resolveSuggestion(email: string, ref: string): Promise<Sug
   const r = ref.trim()
   if (/^[0-9a-f-]{36}$/i.test(r)) {
     const { data } = await supabaseAdmin.from('pen_suggestions').select('*').eq('user_email', email).eq('id', r).maybeSingle()
-    return (data as Suggestion) ?? null
+    // A split suggestion is not an offer: only its own route acts on it.
+    return data && (data as Suggestion).kind as string !== 'split' ? (data as Suggestion) : null
   }
   const n = Number(r.replace(/\D/g, '') || '1')
   const open = await listSuggestions(email, { states: ['offered'] })

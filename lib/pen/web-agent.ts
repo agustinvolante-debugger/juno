@@ -83,7 +83,7 @@ const TOOL_LABEL: Record<string, string> = {
   create_doc: 'doc', send_to_google_docs: 'doc', draft_deliverable: 'doc', create_sheet: 'sheet', export_todos_sheet: 'sheet', export_contacts_sheet: 'sheet',
   send_to_notion: 'notion', connect_app: 'connect', search_email: 'mail', read_thread: 'mail', redo_notes: 'notes', redo_notes_as: 'notes', add_note: 'notes',
   translate_transcript: 'notes', update_recording: 'organise', combine_recordings: 'organise', separate_recordings: 'organise', combine_day: 'organise',
-  split_conversations: 'organise', delete_recording: 'organise', set_client: 'organise', set_timezone: 'zone', confirm_pending: 'confirm', import_granola: 'granola',
+  split_conversations: 'organise', split_recording: 'organise', join_split: 'organise', delete_recording: 'organise', set_client: 'organise', set_timezone: 'zone', confirm_pending: 'confirm', import_granola: 'granola',
 }
 export function progressLabel(tool: string, lang: Lang): string {
   const L = LABELS[lang] ?? LABELS.en
