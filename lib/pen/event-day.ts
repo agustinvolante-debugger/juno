@@ -12,7 +12,7 @@
 // Nothing is destroyed: every file keeps its audio and transcript, and "Separate" undoes it.
 
 import { supabaseAdmin } from '@/lib/supabase'
-import { getSession, updateSession, type PenSession } from './store'
+import { getSession, updateSession, listRunRows, type PenSession } from './store'
 import { joinSegments, groupSessions, startFromName, type AutoJoin } from './merge'
 
 /** Recordings belong to the same day when each starts within this long of the one before. */
@@ -50,9 +50,10 @@ export function dayCluster(sessions: PenSession[], focusId: string): PenSession[
 
 /** What "Combine this day" would join, for the page to show before it does anything. */
 export async function dayCandidates(email: string, sessionId: string) {
-  const { data, error } = await supabaseAdmin.from('pen_sessions').select('*').eq('user_email', email).order('created_at', { ascending: false }).limit(400)
-  if (error) throw new Error(error.message)
-  const day = dayCluster((data ?? []) as PenSession[], sessionId)
+  // Times, lengths and status only: 400 whole rows with their transcripts was the heaviest read
+  // in the app, for a question that never looks at a transcript.
+  const rows = await listRunRows(email, 400)
+  const day = dayCluster(rows, sessionId)
   const groups = new Set(day.map((s) => s.merge_group ?? s.id))
   return {
     ids: day.map((s) => s.id),

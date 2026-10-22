@@ -23,6 +23,7 @@ import { languageName } from './profile-fields'
 import { peopleOnSession } from './people'
 import { hintsFor } from './hints'
 import { cleanupTranscript } from './cleanup'
+import { hasSlot, keepsSlot, releaseClaim, scheduleRetry, RetryLater, plainReason } from './notes-queue'
 
 /**
  * The language to write in and who was on the call.
@@ -87,19 +88,37 @@ export async function dialogueFor(email: string, session: PenSession): Promise<s
  * `force` is the manual path — the user pressed "Redo notes" or picked a category — and skips
  * the claim, because they are explicitly asking for the work to happen again.
  */
-export async function writeNotes(opts: {
+export type WriteNotesOpts = {
   email: string
   session: PenSession
   forceType?: MeetingType
   /** Manual regeneration bypasses the claim; automatic runs must take it. */
   claim: boolean
-}): Promise<NotesResult | 'taken'> {
+  /**
+   * The automatic paths (webhook, poll, the browser's fallback, the queue): at most NOTES_CAP
+   * write-ups per user at once (lib/pen/notes-queue.ts). Over it, 'queued': the row stays
+   * 'transcribed' for the next finished write-up or the recovery tick. A transient failure is
+   * retried later instead of failing (RetryLater). Needs `claim`.
+   */
+  queue?: boolean
+}
+
+export function writeNotes(opts: WriteNotesOpts & { queue?: false }): Promise<NotesResult | 'taken'>
+export function writeNotes(opts: WriteNotesOpts): Promise<NotesResult | 'taken' | 'queued'>
+export async function writeNotes(opts: WriteNotesOpts): Promise<NotesResult | 'taken' | 'queued'> {
   const { email, forceType } = opts
   let session = opts.session
+  const queue = Boolean(opts.queue && opts.claim)
 
   if (opts.claim) {
+    if (queue && !(await hasSlot(email))) return 'queued'
     const won = await claimStatus(session.id, 'transcribed', STATUS_WORKING)
     if (!won) return 'taken'
+    // Two runs that saw a free slot at the same moment: the later one gives way.
+    if (queue && !(await keepsSlot(email, session.id))) {
+      await releaseClaim(session.id)
+      return 'queued'
+    }
   }
 
   // The clean-up pass, once per recording, before the first notes: fixes plain mishearings
@@ -129,7 +148,8 @@ export async function writeNotes(opts: {
       await updateSession(session.id, { status: 'noted', notes: { empty: true }, error_text: null })
       throw new EmptyRecording()
     }
-    if (opts.claim) await updateSession(session.id, { status: 'transcribed' })
+    // error_text marks it, so the write-up queue (notes-queue.ts) doesn't pick it up every tick.
+    if (opts.claim) await updateSession(session.id, { status: 'transcribed', error_text: 'no transcript yet' })
     throw new Error('no transcript yet')
   }
 
@@ -192,8 +212,14 @@ export async function writeNotes(opts: {
       category: { value: category || null, confidence, alternatives },
     }
   } catch (e) {
+    // The database or the gateway was busy (22 Oct): back to the queue for another try rather
+    // than a failure, up to MAX_NOTE_RETRIES times. The failure email waits for the last one.
+    if (queue) {
+      const r = await scheduleRetry(session, e).catch(() => ({ state: 'final' as const }))
+      if (r.state === 'scheduled') throw new RetryLater(r.attempt, r.at, e)
+    }
     // Leave the row in a state that says what happened rather than stuck on `noting`.
-    await updateSession(session.id, { status: 'error', error_text: (e as Error).message })
+    await updateSession(session.id, { status: 'error', error_text: plainReason((e as Error).message) })
     throw e
   }
 }

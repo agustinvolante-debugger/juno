@@ -44,10 +44,10 @@ export async function POST(req: Request) {
       await updateSession(session.id, { status: 'error', error_text: t.error ?? `assemblyai status ${t.status}`, metered_sec: 0 })
       await sendFailureNotice({
         to: session.user_email,
-        sourceName: session.source_name ?? 'your recording',
+        sourceName: session.title || session.source_name,
         reason: t.error ?? 'The transcription service could not process this recording.',
       }).catch(() => {})
-      if (session.source_channel === 'whatsapp') await sendWhatsAppFailure(session.user_email, session.source_name ?? 'your recording')
+      if (session.source_channel === 'whatsapp') await sendWhatsAppFailure(session.user_email, session.source_name)
       return NextResponse.json({ ok: true })
     }
 

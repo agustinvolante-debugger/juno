@@ -1125,11 +1125,14 @@ export async function sendWhatsAppBriefing(session: PenSession, opts: { ask?: bo
   }
 }
 
-export async function sendWhatsAppFailure(email: string, sourceName: string): Promise<void> {
+export async function sendWhatsAppFailure(email: string, sourceName?: string | null): Promise<void> {
   try {
     const link = await getLinkByEmail(email)
     if (!link?.phone) return
-    await sendText(link.phone, BOT[await userLang(email)].writeFailed(sourceName, appUrl()))
+    const L = BOT[await userLang(email)]
+    // No real name (or the English placeholder): "your recording" in their language, once.
+    const name = sourceName?.trim() && !/^your recording$/i.test(sourceName.trim()) ? sourceName.trim() : L.yourRecording
+    await sendText(link.phone, L.writeFailed(name, appUrl()))
   } catch {}
 }
 

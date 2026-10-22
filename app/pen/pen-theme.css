@@ -3874,6 +3874,12 @@ html.pen-m-lock, html.pen-m-lock body { height: 100%; overflow: hidden; overscro
 .pen-upcard-state { flex: none; font-variant-numeric: tabular-nums; color: var(--faint); }
 .pen-upcard-files li[data-state='done'] .pen-upcard-state { color: var(--good); }
 .pen-upcard-files li[data-state='error'] .pen-upcard-state { color: var(--bad); }
+/* A failed upload (22 Oct): "!" opens the reason, Retry sends it again; "Retry the n failed" for all. */
+.pen-upcard-files li { flex-wrap: wrap; }
+.pen-upcard-state .pen-linkbtn, .pen-upcard-err .pen-linkbtn { font: inherit; color: inherit; padding: 0 2px; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.pen-upcard-retry-one { font-weight: 600; }
+.pen-upcard-why { flex-basis: 100%; font-size: 12.5px; line-height: 1.4; color: var(--bad); }
+.pen-upcard-retry { align-self: flex-start; margin-top: 6px; }
 
 /* Home: "Ask Juno on WhatsApp", with questions that open the chat already typed. */
 .pen-wacall {

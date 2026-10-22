@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { runProactive } from '@/lib/pen/proactive'
+import { sweepQueued } from '@/lib/pen/notes-queue'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -18,6 +19,10 @@ function authorized(req: Request): boolean {
 
 export async function GET(req: Request) {
   if (!authorized(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  // The same 15 minutes also starts write-ups left waiting (the per-user cap) or due another try
+  // after a busy database (lib/pen/notes-queue.ts), in case the recovery route's kick didn't run.
+  // After the response; the claim and the cap make a second sweeper harmless.
+  after(() => sweepQueued().then(() => {}, (e) => console.warn(`pen proactive: queue: ${(e as Error).message}`)))
   try {
     const r = await runProactive()
     // Counts and statuses only: no message text in the cron's response.

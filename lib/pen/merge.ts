@@ -12,7 +12,8 @@
 // part two — which the extraction prompt is told explicitly.
 
 import { supabaseAdmin } from '@/lib/supabase'
-import type { PenSession } from './store'
+import { listRunRows, type PenSession } from './store'
+import { withDbRetry } from './db-retry'
 import { findRuns, combinedDialogue } from './merge-detect'
 import { separateSeams } from './join-suggest'
 import { readPenSettings } from './pen-device-server'
@@ -21,12 +22,12 @@ export * from './merge-detect'
 
 /** Every segment of a joined meeting, in order. */
 export async function groupSessions(userEmail: string, mergeGroup: string): Promise<PenSession[]> {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await withDbRetry(() => supabaseAdmin
     .from('pen_sessions')
     .select('*')
     .eq('user_email', userEmail)
     .eq('merge_group', mergeGroup)
-    .order('merge_index', { ascending: true })
+    .order('merge_index', { ascending: true }))
   if (error) throw new Error(error.message)
   return (data ?? []) as PenSession[]
 }
@@ -70,15 +71,10 @@ export type AutoJoin = { group: string; segments: PenSession[] } | null
  * notes written over a hole, and waiting costs nothing: the last part to finish joins them.
  */
 export async function autoJoin(userEmail: string, sessionId: string): Promise<AutoJoin> {
-  const { data, error } = await supabaseAdmin
-    .from('pen_sessions')
-    .select('*')
-    .eq('user_email', userEmail)
-    .order('created_at', { ascending: false })
-    .limit(200)
-  if (error) throw new Error(error.message)
-
-  const all = (data ?? []) as PenSession[]
+  // Start times and lengths only (22 Oct): this ran once per finished recording and used to
+  // pull 200 whole rows, transcripts and all, which is what timed the database out on a
+  // 14-file batch. The transcripts of the few files in the run are read below.
+  const all = await listRunRows(userEmail, 200)
   // Only a file that lasted the pen's split length is continued by the next one (merge-detect
   // endsAtSplit), and never across a seam the user said is separate.
   const [splitMin, separate] = await Promise.all([
@@ -88,7 +84,11 @@ export async function autoJoin(userEmail: string, sessionId: string): Promise<Au
   const run = findRuns(all, { splitMin, separate }).find((r) => r.sessions.some((s) => s.id === sessionId))
   if (!run) return null
 
-  const ready = run.sessions.every((s) => (s.transcript?.utterances?.length ?? 0) > 0 || !!s.transcript?.text)
+  const ids = run.sessions.map((s) => s.id)
+  const { data: tx, error: txErr } = await withDbRetry(() => supabaseAdmin.from('pen_sessions').select('id,transcript').eq('user_email', userEmail).in('id', ids))
+  if (txErr) throw new Error(txErr.message)
+  const byId = new Map(((tx ?? []) as Pick<PenSession, 'id' | 'transcript'>[]).map((r) => [r.id, r.transcript]))
+  const ready = ids.every((id) => { const t = byId.get(id); return (t?.utterances?.length ?? 0) > 0 || !!t?.text })
   if (!ready) return null
 
   const group = await joinSegments(userEmail, run.sessions.map((s) => s.id))

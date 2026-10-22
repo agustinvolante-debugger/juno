@@ -18,7 +18,7 @@ import { isMissingSchema } from './allowance'
 import { findRuns, startFromName } from './merge-detect'
 import { namedDialogue, type SpeakerMap } from './speakers'
 import { getProfileRaw } from './profile'
-import type { PenSession } from './store'
+import { selectCols, RUN_COLS, type PenSession } from './store'
 
 const MODEL = 'claude-haiku-5-5'
 /** How far apart two recordings can start and still be one conversation. */
@@ -55,10 +55,10 @@ function hasTranscript(s: PenSession): boolean {
  * within 12 h, and not a pair the filename rule already handles. With `focusId`, only pairs
  * that include that recording.
  */
-export function candidatePairs(sessions: PenSession[], focusId?: string, max = MAX_PAIRS): Pair[] {
+export function candidatePairs(sessions: PenSession[], focusId?: string, max = MAX_PAIRS, has: (s: PenSession) => boolean = hasTranscript): Pair[] {
   const inRun = new Set(findRuns(sessions).flatMap((r) => r.sessions.map((s) => s.id)))
   const ok = sessions
-    .filter((s) => s.status === 'noted' && !s.merge_group && s.source_channel !== 'sample' && hasTranscript(s) && !inRun.has(s.id))
+    .filter((s) => s.status === 'noted' && !s.merge_group && s.source_channel !== 'sample' && has(s) && !inRun.has(s.id))
     .map((s) => ({ s, t: startMs(s) }))
     .sort((x, y) => x.t - y.t)
   const pairs: { p: Pair; t: number }[] = []
@@ -156,10 +156,21 @@ export async function checkJoinSuggestions(email: string, focusId?: string): Pro
   try {
     const seen = await judged(email)
     if (!seen) return 0
-    const { data, error } = await supabaseAdmin
-      .from('pen_sessions').select('*').eq('user_email', email).order('created_at', { ascending: false }).limit(60)
-    if (error) return 0
-    const pairs = candidatePairs((data ?? []) as PenSession[], focusId).filter((p) => !seen.has(`${p.a.id}:${p.b.id}`))
+    // The 60 newest WITHOUT transcripts (22 Oct: this ran after every recording and read 60
+    // whole rows each time). Pairs are found on times and status alone; only the few recordings
+    // in them are read in full, for the edges the model sees.
+    const light = await selectCols<PenSession>(
+      (cols) => supabaseAdmin.from('pen_sessions').select(cols).eq('user_email', email).order('created_at', { ascending: false }).limit(60),
+      RUN_COLS,
+    ).catch(() => null)
+    if (!light) return 0
+    const maybe = candidatePairs(light, focusId, MAX_PAIRS * 2, () => true).filter((p) => !seen.has(`${p.a.id}:${p.b.id}`))
+    if (!maybe.length) return 0
+    const ids = [...new Set(maybe.flatMap((p) => [p.a.id, p.b.id]))]
+    const { data: full } = await supabaseAdmin.from('pen_sessions').select('id,transcript,transcript_edits,speaker_map').eq('user_email', email).in('id', ids)
+    const byId = new Map(((full ?? []) as Pick<PenSession, 'id' | 'transcript' | 'transcript_edits' | 'speaker_map'>[]).map((r) => [r.id, r]))
+    const withText = (s: PenSession): PenSession => ({ ...s, ...(byId.get(s.id) ?? {}) })
+    const pairs = maybe.map((p) => ({ a: withText(p.a), b: withText(p.b) })).filter((p) => hasTranscript(p.a) && hasTranscript(p.b)).slice(0, MAX_PAIRS)
     if (!pairs.length) return 0
     const lang = await langOf(email)
     let n = 0

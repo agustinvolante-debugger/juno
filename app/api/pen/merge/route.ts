@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
 import { readOnlyRefusal } from '@/lib/pen/access'
-import { getSession, updateSession, listSessions } from '@/lib/pen/store'
+import { getSession, updateSession, listRunRows } from '@/lib/pen/store'
 import { writeNotes } from '@/lib/pen/pipeline'
 import { joinSegments, splitGroup, groupSessions, findRuns } from '@/lib/pen/merge'
 import { sendBriefing, hasSomethingToSay } from '@/lib/pen/briefing'
@@ -29,7 +29,8 @@ export async function GET() {
   if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
   const [list, splitMin, separate] = await Promise.all([
-    listSessions(email, 200),
+    // Start times and lengths only: the detector never reads a transcript.
+    listRunRows(email, 200),
     readPenSettings(email).then((r) => r.settings.splitMin).catch(() => null),
     separateSeams(email).catch(() => new Set<string>()),
   ])

@@ -4,7 +4,8 @@
 // way: the upload itself, the app resuming held recordings when it opens, and a purchase
 // landing through the Stripe webhook.
 
-import { getSession, updateSession, createReadUrl, listSessions, partPaths, removeParts, PARTS_PREFIX, type PenSession } from './store'
+import { getSession, updateSession, createReadUrl, selectCols, partPaths, removeParts, PARTS_PREFIX, type PenSession } from './store'
+import { supabaseAdmin } from '@/lib/supabase'
 import { submit, hasKey, uploadStream } from './aai'
 import { getAllowance, type Allowance } from './allowance'
 import { hintsFor } from './hints'
@@ -100,9 +101,11 @@ export async function startTranscription(email: string, session: PenSession): Pr
  * recording rather than every held file at once.
  */
 export async function resumeHeld(email: string): Promise<{ started: number; stillHeld: number }> {
-  const held = (await listSessions(email))
-    .filter((s) => s.status === 'held')
-    .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))
+  // Just the held ones, ids and dates: each is read in full right before it goes.
+  const held = await selectCols<Pick<PenSession, 'id' | 'created_at'>>(
+    (cols) => supabaseAdmin.from('pen_sessions').select(cols).eq('user_email', email).eq('status', 'held').order('created_at', { ascending: true }).limit(100),
+    'id,created_at',
+  )
 
   let started = 0
   for (const s of held) {

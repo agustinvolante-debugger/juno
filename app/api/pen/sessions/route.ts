@@ -4,6 +4,7 @@ import { authedEmail } from '@/lib/news/auth'
 import { pausedRefusal } from '@/lib/pen/pause'
 import { createSession, listSessionsForClient } from '@/lib/pen/store'
 import { linkPerson, ownedPeople, upsertByName } from '@/lib/pen/people'
+import { withDbRetry, isTransientError } from '@/lib/pen/db-retry'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,8 +22,9 @@ export async function GET() {
 export async function POST(req: Request) {
   const email = await authedEmail()
   if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  // Paused: the service is off. Reading stays open; adding doesn't.
-  const paused = await pausedRefusal(email)
+  // Paused: the service is off. Reading stays open; adding doesn't. Retried while the database
+  // is busy, like the insert below (createSession): a 14-file batch lost recordings here.
+  const paused = await withDbRetry(() => pausedRefusal(email))
   if (paused) return NextResponse.json({ error: paused }, { status: 403 })
 
   const b = (await req.json().catch(() => ({}))) as Record<string, unknown>
@@ -63,7 +65,7 @@ export async function POST(req: Request) {
     // "This was an event with many people": split into conversations once written up.
     // Separate write so a missing column (migration not run yet) never fails the upload.
     if (!duplicate && b.event_mode === true) {
-      const { error: evErr } = await supabaseAdmin.from('pen_sessions').update({ event_mode: true }).eq('id', session.id)
+      const { error: evErr } = await withDbRetry(() => supabaseAdmin.from('pen_sessions').update({ event_mode: true }).eq('id', session.id))
       if (evErr) console.warn(`pen: event_mode not saved for ${session.id}: ${evErr.message}`)
       else session.event_mode = true
     }
@@ -85,6 +87,7 @@ export async function POST(req: Request) {
     }
     return NextResponse.json({ session, duplicate })
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
+    // Still busy after the retries: 503, which the upload tray retries (the audio is already up).
+    return NextResponse.json({ error: (e as Error).message }, { status: isTransientError(e) ? 503 : 500 })
   }
 }

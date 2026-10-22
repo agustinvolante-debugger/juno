@@ -7,7 +7,8 @@
 
 import { supabaseAdmin } from '@/lib/supabase'
 import { sendEmailResult } from '@/lib/news/email'
-import type { PenSession } from './store'
+import { selectCols, META_COLS, RUN_COLS, type PenSession } from './store'
+import { withDbRetry } from './db-retry'
 import { sendBriefing, sendReadyNotice, hasSomethingToSay, emailConversations } from './briefing'
 import { userLang } from './user-lang'
 import { LOCALE } from './i18n'
@@ -23,11 +24,16 @@ type Row = PenSession & { updated_at?: string | null }
 
 async function neighbours(email: string, around: string): Promise<Row[]> {
   const t = Date.parse(around)
-  const { data, error } = await supabaseAdmin.from('pen_sessions').select('*').eq('user_email', email)
-    .gte('created_at', new Date(t - WINDOW_MS).toISOString())
-    .lte('created_at', new Date(t + WINDOW_MS).toISOString())
-  if (error) throw new Error(error.message)
-  return ((data ?? []) as Row[]).filter((s) =>
+  // Status and notes, never transcripts (22 Oct): every finished recording of a 14-file batch
+  // reads its batch-mates here. Notes stay: the email is written from them.
+  const data = await selectCols<Row>(
+    (cols) => supabaseAdmin.from('pen_sessions').select(cols).eq('user_email', email)
+      .gte('created_at', new Date(t - WINDOW_MS).toISOString())
+      .lte('created_at', new Date(t + WINDOW_MS).toISOString())
+      .limit(200),
+    META_COLS, `${RUN_COLS},notes`, '*',
+  )
+  return data.filter((s) =>
     s.source_channel !== 'whatsapp' && !(s.merge_group && (s.merge_index ?? 0) > 0) && !String(s.storage_path ?? '').startsWith('sample'))
 }
 
@@ -45,15 +51,18 @@ export async function briefBatch(email: string, session: { id: string; created_a
   const ready = rows.filter((s) => s.status === 'noted' && !s.briefing_sent_at && !s.notes?.empty)
   if (!ready.length) return 'none'
   const stamp = new Date().toISOString()
-  const { data: claimed } = await supabaseAdmin.from('pen_sessions').update({ briefing_sent_at: stamp })
-    .in('id', ready.map((s) => s.id)).is('briefing_sent_at', null).select('*')
-  const mine = ((claimed ?? []) as PenSession[]).sort((a, b) => Date.parse(a.recorded_at ?? a.created_at) - Date.parse(b.recorded_at ?? b.created_at))
+  const { data: claimed } = await withDbRetry(() => supabaseAdmin.from('pen_sessions').update({ briefing_sent_at: stamp })
+    .in('id', ready.map((s) => s.id)).is('briefing_sent_at', null).select('id'))
+  // The claimed rows as the neighbour read saw them, plus the stamp: nothing the email reads
+  // changes between the two, and re-reading them would only pull the transcripts back in.
+  const won = new Set(((claimed ?? []) as { id: string }[]).map((r) => r.id))
+  const mine = ready.filter((s) => won.has(s.id)).map((s) => ({ ...s, briefing_sent_at: stamp }) as PenSession).sort((a, b) => Date.parse(a.recorded_at ?? a.created_at) - Date.parse(b.recorded_at ?? b.created_at))
   if (!mine.length) return 'none'
 
   const r = mine.length === 1
     ? (hasSomethingToSay(mine[0])
       ? await sendBriefing({ session: mine[0], to: [email], replyTo: email, parts: 1 })
-      : await sendReadyNotice({ to: email, title: mine[0].title || mine[0].source_name || 'your recording' }))
+      : await sendReadyNotice({ to: email, title: mine[0].title || mine[0].source_name }))
     : await sendBatchEmail(email, mine)
   if (!r.ok) {
     // Let the next finisher (or the health sweep) try again.

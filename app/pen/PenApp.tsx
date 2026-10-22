@@ -43,6 +43,7 @@ import { storedAudio, AUDIO_DAYS, AUDIO_WARN_DAYS } from '@/lib/pen/audio-state'
 import { prepareAudio, fmtMB, fmtDur, SOFT_SIZE_LIMIT, needsPiecedUpload, durationWithoutDecoding, pieceSizeFor, type Prepared } from '@/lib/pen/encode'
 import { canStreamPrep, streamPrepare, PrepFailed, type PrepFallback, type StreamExtra } from '@/lib/pen/stream-prep-client'
 import { postJson, getJson, patchJson, del, errMessage, PenHttpError } from '@/lib/pen/http'
+import { postJsonRetry, UploadError, classifyUploadError, canRetry, isStalled, Lanes, runLanes, uploadReason, UPLOAD_RETRY_COPY, type UploadFailure } from '@/lib/pen/upload-retry'
 import type { ChatSummary } from '@/lib/pen/chats'
 import type { DocSummary } from '@/lib/pen/docs'
 import type { Allowance } from '@/lib/pen/allowance'
@@ -118,7 +119,16 @@ function useAccept(): string | undefined {
 /** `people`: who was on this file, when 2+ files are selected (each file its own; 22 Oct). */
 type Pending = { file: File; picked: boolean; people?: Picked[] }
 type Progress = { name: string; phase: string; pct: number }
-type UploadItem = { key: string; name: string; phase: string; pct: number; short?: string; state: 'waiting' | 'working' | 'done' | 'held' | 'error'; error?: string; sessionId?: string; tagged?: boolean }
+type UploadJob = { key: string; file: File; people: Picked[]; event: boolean }
+type UploadItem = {
+  key: string; name: string; phase: string; pct: number; short?: string; state: 'waiting' | 'working' | 'done' | 'held' | 'error'; error?: string; sessionId?: string; tagged?: boolean
+  /** Why it failed, in a word the tray says in plain language (lib/pen/upload-retry.ts). */
+  kind?: UploadFailure
+  /** 'prep' while the audio is prepared or waits its turn for that; 'upload' for the rest, the part that can stall. */
+  stage?: 'prep' | 'upload'
+  /** Last time anything moved, for the 90-second stall check. */
+  movedAt?: number
+}
 
 export default function PenApp({
   initial,
@@ -754,6 +764,28 @@ export default function PenApp({
   const patchUpload = useCallback((key: string, patch: Partial<UploadItem>) => {
     setUploads((prev) => prev.map((u) => (u.key === key ? { ...u, ...patch } : u)))
   }, [])
+  // What each row needs to be retried (its file, people, event flag), the recording it already
+  // saved if it got that far, and the handle the stall check stops it with.
+  const uploadJobs = useRef(new Map<string, UploadJob>())
+  const savedIds = useRef(new Map<string, string>())
+  const uploadAborts = useRef(new Map<string, AbortController>())
+  const uploadsNow = useRef(uploads)
+  uploadsNow.current = uploads
+  // Rows closed from the card let go of their files.
+  useEffect(() => {
+    const keep = new Set(uploads.map((u) => u.key))
+    for (const k of [...uploadJobs.current.keys()]) if (!keep.has(k)) { uploadJobs.current.delete(k); savedIds.current.delete(k) }
+  }, [uploads])
+  // No progress for 90 s while uploading (not while preparing or waiting a turn): stop it, so the
+  // row shows a reason and a Retry instead of sitting at 5% (22 Oct).
+  useEffect(() => {
+    if (!uploading) return
+    const t = window.setInterval(() => {
+      const now = Date.now()
+      for (const u of uploadsNow.current) if (isStalled(u, now)) uploadAborts.current.get(u.key)?.abort()
+    }, 5000)
+    return () => window.clearInterval(t)
+  }, [uploading])
   // Closing the tab mid-upload loses the files that haven't gone up: ask first.
   useEffect(() => {
     if (!uploading) return
@@ -772,8 +804,15 @@ export default function PenApp({
   }
 
   /** One file: prepare, upload, save, send for transcription. 'held' = saved, waiting for hours. */
-  async function uploadOne(file: File, people: Picked[], step: (p: { phase: string; pct: number; short?: string }) => void, event = false): Promise<{ state: 'done' | 'held'; id: string }> {
+  async function uploadOne(file: File, people: Picked[], step: (p: { phase: string; pct: number; short?: string; stage?: 'prep' | 'upload' }) => void, event = false, signal?: AbortSignal, onSaved?: (id: string) => void): Promise<{ state: 'done' | 'held'; id: string }> {
     const callPeople = people
+    // The two small calls (signed URL, save) try again on a busy or dropped answer (22 Oct: a
+    // 14-file batch lost 4 files to one failed call each). Stopped by the stall check (signal).
+    const RC = UPLOAD_RETRY_COPY[appLang]
+    const post = <R,>(url: string, body: unknown, fallback: string, at: { phase: string; pct: number }) =>
+      postJsonRetry<R>((u, init) => fetch(u, { ...init, signal }), url, body, fallback, {
+        onRetry: () => step({ phase: `${at.phase} · ${RC.retrying}`, pct: at.pct }),
+      })
     // What goes up, and where it lands. Normally the audio is prepared (compressed) in the
     // browser first. A file too big to prepare safely on this device (a long recording on a
     // phone) goes up exactly as it is, in pieces, and the server joins them for AssemblyAI.
@@ -786,13 +825,8 @@ export default function PenApp({
       const durationSec = await durationWithoutDecoding(file)
       const pieceBytes = pieceSizeFor(file.size)
       const n = Math.ceil(file.size / pieceBytes)
-      const urlRes = await fetch('/api/pen/upload-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: file.name, parts: n }),
-      })
-      if (!urlRes.ok) throw new Error((await urlRes.json()).error ?? T.uploadUrlFailed)
-      const { storage_path, parts } = (await urlRes.json()) as { storage_path: string; parts: { path: string; signedUrl: string }[] }
+      const { storage_path, parts } = await post<{ storage_path: string; parts: { path: string; signedUrl: string }[] }>(
+        '/api/pen/upload-url', { name: file.name, parts: n }, T.uploadUrlFailed, { phase: T.phaseSlot, pct: 5 })
       const mime = file.type || (/\.wav$/i.test(file.name) ? 'audio/wav' : 'application/octet-stream')
       // Several pieces at once (one connection rarely fills an uplink); each lands at its own
       // path, and the server stitches them by index, so the order they finish in doesn't matter.
@@ -807,7 +841,7 @@ export default function PenApp({
         const put = () => putWithProgress(parts[i].signedUrl, piece, 'application/octet-stream', (pct) => {
           loaded[i] = (pct / 100) * piece.size
           report()
-        })
+        }, signal)
         // Two retries per piece: a phone on the move drops a request now and then.
         await put().catch(() => { loaded[i] = 0; return put() }).catch(() => { loaded[i] = 0; return put() })
         loaded[i] = piece.size
@@ -820,26 +854,22 @@ export default function PenApp({
     // Prepared (compressed) audio, one signed URL.
     const upPrepared = async (prep: Prepared, from = 15) => {
       step({ phase: T.phaseSlot, pct: from })
-      const urlRes = await fetch('/api/pen/upload-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: file.name.replace(/\.[^.]+$/, prep.mime === 'audio/wav' ? '.wav' : '') }),
-      })
-      if (!urlRes.ok) throw new Error((await urlRes.json()).error ?? T.uploadUrlFailed)
-      const { path, signedUrl } = (await urlRes.json()) as { path: string; signedUrl: string }
+      const { path, signedUrl } = await post<{ path: string; signedUrl: string }>(
+        '/api/pen/upload-url', { name: file.name.replace(/\.[^.]+$/, prep.mime === 'audio/wav' ? '.wav' : '') }, T.uploadUrlFailed, { phase: T.phaseSlot, pct: from })
 
       // Anything compressible has already been compressed by now, so reaching this means
       // either a genuinely enormous recording or a browser with no Opus encoder. Say which,
       // because "split the recording" is useless advice for the second one.
       if (prep.blob.size > SOFT_SIZE_LIMIT) {
-        throw new Error(
+        throw new UploadError(
+          'too-big',
           prep.mime === 'audio/ogg' ? T.tooBigCompressed(fmtMB(prep.blob.size)) : T.tooBigNoCompress(fmtMB(prep.blob.size)),
         )
       }
 
       await putWithProgress(signedUrl, prep.blob, prep.mime, (pct) =>
         step({ phase: T.phaseUploading(prep.note), pct: from + (pct / 100) * (75 - from) }),
-      )
+      signal)
       return { storage_path: path, mime: prep.mime, bytes: prep.blob.size, durationSec: prep.durationSec }
     }
 
@@ -849,14 +879,14 @@ export default function PenApp({
       // or stops moving for 20 s, the page prepares it itself from the start; only if that fails
       // too does the original go up as it is (in parallel pieces). Fallbacks are logged.
       // Prep is the long part here (~20-30 s an hour), so it gets most of the bar: 2 → 45%.
-      step({ phase: T.phasePrepQueue, pct: 2, short: T.upPrepQueue })
+      step({ phase: T.phasePrepQueue, pct: 2, short: T.upPrepQueue, stage: 'prep' })
       let prep: (Prepared & { extra?: StreamExtra }) | null = null
       try {
         prep = await onePrepAtATime(() => {
-          step({ phase: T.phasePreparingPct(0), pct: 2, short: T.upPreparing(0) })
+          step({ phase: T.phasePreparingPct(0), pct: 2, short: T.upPreparing(0), stage: 'prep' })
           return streamPrepare(file, (f) => {
             const p = Math.floor(f * 100)
-            step({ phase: T.phasePreparingPct(p), pct: 2 + f * 43, short: T.upPreparing(p) })
+            step({ phase: T.phasePreparingPct(p), pct: 2 + f * 43, short: T.upPreparing(p), stage: 'prep' })
           })
         })
       } catch (e) {
@@ -869,60 +899,80 @@ export default function PenApp({
     } else if (needsPiecedUpload(file)) {
       up = await asIs()
     } else {
-      step({ phase: T.phasePrepQueue, pct: 2, short: T.upPrepQueue })
+      step({ phase: T.phasePrepQueue, pct: 2, short: T.upPrepQueue, stage: 'prep' })
       const prep = await onePrepAtATime(() => {
-        step({ phase: T.phasePreparing, pct: 5 })
+        step({ phase: T.phasePreparing, pct: 5, stage: 'prep' })
         return prepareAudio(file)
       })
       up = await upPrepared(prep)
     }
 
     step({ phase: T.phaseSaving, pct: 80 })
-    const sRes = await fetch('/api/pen/sessions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        storage_path: up.storage_path,
-        source_name: file.name,
-        mime: up.mime,
-        bytes: up.bytes,
-        duration_sec: up.durationSec,
-        // The pen names each file after the moment it STARTED recording (its mtime is the start
-        // too): R20261021-145802.WAV. Read the name when it parses, else the file's date.
-        recorded_at: penStartOf(file).toISOString(),
-        consent: true,
-        // The first person also names the call, which older parts of the app read.
-        client_name: callPeople[0]?.name || undefined,
-        ...(callPeople.length ? { people: callPeople.map((p) => (p.id ? { id: p.id } : { name: p.name })) } : {}),
-        ...(event ? { event_mode: true } : {}),
-      }),
-    })
-    if (!sRes.ok) throw new Error((await sRes.json()).error ?? T.saveRecordingFailed)
-    const { session, duplicate } = (await sRes.json()) as { session: PenSession; duplicate: boolean }
+    // The audio is up; a busy answer here is retried rather than losing the recording.
+    const { session, duplicate } = await post<{ session: PenSession; duplicate: boolean }>('/api/pen/sessions', {
+      storage_path: up.storage_path,
+      source_name: file.name,
+      mime: up.mime,
+      bytes: up.bytes,
+      duration_sec: up.durationSec,
+      // The pen names each file after the moment it STARTED recording (its mtime is the start
+      // too): R20261021-145802.WAV. Read the name when it parses, else the file's date.
+      recorded_at: penStartOf(file).toISOString(),
+      consent: true,
+      // The first person also names the call, which older parts of the app read.
+      client_name: callPeople[0]?.name || undefined,
+      ...(callPeople.length ? { people: callPeople.map((p) => (p.id ? { id: p.id } : { name: p.name })) } : {}),
+      ...(event ? { event_mode: true } : {}),
+    }, T.saveRecordingFailed, { phase: T.phaseSaving, pct: 80 })
 
     // Not opened: the user is busy elsewhere in the app while these upload.
     setSessions((prev) => [session, ...prev.filter((x) => x.id !== session.id)])
 
-    if (!duplicate) {
-      step({ phase: T.phaseSending, pct: 92 })
-      const tRes = await fetch('/api/pen/transcribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: session.id }),
-      })
-      if (tRes.status === 402) {
-        // Saved and waiting, not failed. The banner says so and the row shows it.
-        const j = (await tRes.json()) as { allowance?: Allowance }
-        if (j.allowance) setAllowance(j.allowance)
-        setSessions((prev) => prev.map((x) => (x.id === session.id ? { ...x, status: 'held' as const } : x)))
-        setHeldNotice(true)
-        return { state: 'held', id: session.id }
-      }
-      if (!tRes.ok) throw new Error((await tRes.json()).error ?? T.transcribeFailed)
-      setSessions((prev) => prev.map((x) => (x.id === session.id ? { ...x, status: 'transcribing' as const } : x)))
-      setWatchReady((w) => ({ ...w, [session.id]: Date.now() }))
+    onSaved?.(session.id)
+
+    // A Retry after the save went through finds the same recording (duplicate): it still goes for
+    // transcription if it never got there.
+    if (!duplicate || session.status === 'uploaded' || (session.status === 'error' && !session.aai_id)) {
+      return { state: await sendOff(session.id, step, signal), id: session.id }
     }
     return { state: 'done', id: session.id }
+  }
+
+  /**
+   * Sends a saved recording for transcription. Retries a busy or dropped answer; 402 = saved and
+   * waiting for hours. Also what a row's Retry runs when the save already went through, so the
+   * audio isn't uploaded twice.
+   */
+  async function sendOff(id: string, step: (p: { phase: string; pct: number }) => void, signal?: AbortSignal): Promise<'done' | 'held'> {
+    const RC = UPLOAD_RETRY_COPY[appLang]
+    step({ phase: T.phaseSending, pct: 92 })
+    let tRes: Response
+    for (let attempt = 1; ; attempt++) {
+      tRes = await fetch('/api/pen/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+        signal,
+      }).catch(() => {
+        if (signal?.aborted) throw new UploadError('stalled', 'stalled')
+        return new Response(null, { status: 599 })
+      })
+      if (tRes.ok || tRes.status === 402 || ![502, 503, 504, 599].includes(tRes.status) || attempt >= 3) break
+      step({ phase: `${T.phaseSending} · ${RC.retrying}`, pct: 92 })
+      await new Promise((r) => setTimeout(r, 1500 * 3 ** (attempt - 1)))
+    }
+    if (tRes.status === 402) {
+      // Saved and waiting, not failed. The banner says so and the row shows it.
+      const j = (await tRes.json()) as { allowance?: Allowance }
+      if (j.allowance) setAllowance(j.allowance)
+      setSessions((prev) => prev.map((x) => (x.id === id ? { ...x, status: 'held' as const } : x)))
+      setHeldNotice(true)
+      return 'held'
+    }
+    if (!tRes.ok) throw new UploadError(tRes.status === 599 ? 'network' : tRes.status >= 502 ? 'busy' : 'server', ((await tRes.json().catch(() => ({}))) as { error?: string }).error ?? T.transcribeFailed, tRes.status)
+    setSessions((prev) => prev.map((x) => (x.id === id ? { ...x, status: 'transcribing' as const } : x)))
+    setWatchReady((w) => ({ ...w, [id]: Date.now() }))
+    return 'done'
   }
 
   async function importPicked() {
@@ -937,9 +987,10 @@ export default function PenApp({
     const event = eventMode
     const tags = peopleForUploads(picked, callPeople)
     const batch = picked.map((p, i) => ({ key: `${Date.now()}-${i}-${p.file.name}`, file: p.file, people: tags[i] }))
-    // Finished rows from an earlier batch make way for this one; rows still going stay.
+    // Finished rows from an earlier batch make way for this one; rows still going stay, and so do
+    // failed ones (they can still be retried).
     setUploads((prev) => [
-      ...prev.filter((u) => u.state === 'waiting' || u.state === 'working'),
+      ...prev.filter((u) => u.state === 'waiting' || u.state === 'working' || u.state === 'error'),
       ...batch.map((b) => ({ key: b.key, name: b.file.name, phase: T.upWaiting, pct: 0, state: 'waiting' as const })),
     ])
     setPending([])
@@ -947,29 +998,70 @@ export default function PenApp({
     setEventMode(false)
     setImportDone(false)
 
-    let next = 0
+    await runUploads(batch.map((b) => ({ ...b, event })))
+  }
+
+  /**
+   * Runs upload jobs through the lanes: three files at a time on a computer (one on a phone),
+   * fewer after a failure and more again once files go through (lib/pen/upload-retry.ts Lanes),
+   * so a struggling server isn't sent three uploads and saves at once. Prep still takes turns
+   * (onePrepAtATime). Each job can be stopped by the stall check and retried from its row.
+   */
+  async function runUploads(jobs: UploadJob[]) {
+    for (const j of jobs) uploadJobs.current.set(j.key, j)
+    const lanes = new Lanes(isPhone ? 1 : 3)
     const wentUp: File[] = []
-    const worker = async () => {
-      while (next < batch.length) {
-        const b = batch[next++]
-        patchUpload(b.key, { state: 'working', phase: T.phasePreparing, pct: 2 })
-        try {
-          const r = await uploadOne(b.file, b.people, ({ phase, pct, short }) => patchUpload(b.key, { phase, pct, short }), event)
-          patchUpload(b.key, { state: r.state, pct: 100, sessionId: r.id, tagged: b.people.length > 0 })
-          wentUp.push(b.file)
-        } catch (e) {
-          patchUpload(b.key, { state: 'error', error: (e as Error).message })
-        }
+    await runLanes(jobs, lanes, async (j) => {
+      const ctl = new AbortController()
+      uploadAborts.current.set(j.key, ctl)
+      patchUpload(j.key, { state: 'working', phase: T.phasePreparing, pct: 2, stage: 'upload', movedAt: Date.now(), error: undefined, kind: undefined })
+      const step = ({ phase, pct, short, stage }: { phase: string; pct: number; short?: string; stage?: 'prep' | 'upload' }) =>
+        patchUpload(j.key, { phase, pct, short, stage: stage ?? 'upload', movedAt: Date.now() })
+      // The stall check aborts: the row fails over at once, whatever step it was waiting on.
+      const stalled = new Promise<never>((_, reject) => ctl.signal.addEventListener('abort', () => reject(new UploadError('stalled', 'stalled')), { once: true }))
+      stalled.catch(() => {})
+      try {
+        // Saved already (it failed at "sending"): only that step again, not the whole upload.
+        const saved = savedIds.current.get(j.key)
+        const r = await Promise.race([
+          saved
+            ? sendOff(saved, step, ctl.signal).then((state) => ({ state, id: saved }))
+            : uploadOne(j.file, j.people, step, j.event, ctl.signal, (id) => {
+              savedIds.current.set(j.key, id)
+              patchUpload(j.key, { sessionId: id })
+            }),
+          stalled,
+        ])
+        patchUpload(j.key, { state: r.state, pct: 100, sessionId: r.id, tagged: j.people.length > 0 })
+        wentUp.push(j.file)
+        return true
+      } catch (e) {
+        const kind = classifyUploadError(e)
+        patchUpload(j.key, { state: 'error', kind, error: (e as Error).message })
+        // Only a busy or dropped answer slows the batch down; a too-big file says nothing about the server.
+        return !canRetry(kind)
+      } finally {
+        uploadAborts.current.delete(j.key)
       }
-    }
-    // Three lanes on a computer: prep still takes turns (onePrepAtATime), so this only lets the
-    // next file's prep start while two others are uploading, saving or being sent off.
-    await Promise.all(Array.from({ length: Math.min(isPhone ? 1 : 3, batch.length) }, worker))
+    })
     // The pen is plugged in (Chrome / Edge): offer to free up space for what's now safely in Juno.
     void penAfter.current(wentUp)
     void refresh()
     // New names typed at upload are contacts now.
     void refreshPeople()
+  }
+
+  /** A failed row's Retry, or "Retry failed" for all of them. */
+  function retryUploads(keys: string[]) {
+    const jobs = keys.flatMap((k) => {
+      const job = uploadJobs.current.get(k)
+      const row = uploads.find((u) => u.key === k)
+      return job && row?.state === 'error' && canRetry(row.kind ?? 'server') ? [job] : []
+    })
+    if (!jobs.length) return
+    const again = new Set(jobs.map((j) => j.key))
+    setUploads((prev) => prev.map((u) => (again.has(u.key) ? { ...u, state: 'waiting' as const, phase: T.upWaiting, pct: 0, short: undefined, error: undefined, kind: undefined } : u)))
+    void runUploads(jobs)
   }
 
   /* ------------------------------------------------------------------- view */
@@ -1578,7 +1670,7 @@ export default function PenApp({
         )}
         {promoOpen && !tourOpen && <ReferralPromo T={T} onClose={closePromo} />}
         {askOpen && !tourOpen && !promoOpen && <FeedbackAsk T={T} onClose={closeAsk} />}
-        <UploadCard uploads={uploads} onClose={() => setUploads((prev) => prev.filter((u) => u.state === 'waiting' || u.state === 'working'))} onWho={openWho} whatsapp={whatsapp ?? null} phone={isPhone} byHand={mounted && !supportsPicker} T={T} />
+        <UploadCard uploads={uploads} onClose={() => setUploads((prev) => prev.filter((u) => u.state === 'waiting' || u.state === 'working'))} onWho={openWho} onRetry={retryUploads} lang={appLang} whatsapp={whatsapp ?? null} phone={isPhone} byHand={mounted && !supportsPicker} T={T} />
         {readyToast}
       </LangProvider>
     )
@@ -1678,7 +1770,7 @@ export default function PenApp({
       {tourOpen && <Tour lang={appLang} linked={Boolean(whatsapp?.linked)} onClose={closeTour} onUpload={() => fileInput.current?.click()} onOpenFirst={tourFirst} />}
       {promoOpen && !tourOpen && <ReferralPromo T={T} onClose={closePromo} />}
       {askOpen && !tourOpen && !promoOpen && <FeedbackAsk T={T} onClose={closeAsk} />}
-      <UploadCard uploads={uploads} onClose={() => setUploads((prev) => prev.filter((u) => u.state === 'waiting' || u.state === 'working'))} onWho={openWho} whatsapp={whatsapp ?? null} phone={isPhone} byHand={mounted && !supportsPicker} T={T} />
+      <UploadCard uploads={uploads} onClose={() => setUploads((prev) => prev.filter((u) => u.state === 'waiting' || u.state === 'working'))} onWho={openWho} onRetry={retryUploads} lang={appLang} whatsapp={whatsapp ?? null} phone={isPhone} byHand={mounted && !supportsPicker} T={T} />
       {readyToast}
       {txImport && (
         <TranscriptImport
@@ -4001,9 +4093,12 @@ function logPrep(file: File, outcome: 'worker' | 'main-thread' | 'as-is', trail:
   } catch {}
 }
 
-function putWithProgress(url: string, blob: Blob, mime: string, onPct: (pct: number) => void) {
+function putWithProgress(url: string, blob: Blob, mime: string, onPct: (pct: number) => void, signal?: AbortSignal) {
   return new Promise<void>((resolve, reject) => {
+    // Stopped by the tray's stall check: no more tries on this piece either.
+    if (signal?.aborted) return reject(new UploadError('stalled', 'stalled'))
     const xhr = new XMLHttpRequest()
+    signal?.addEventListener('abort', () => { xhr.abort(); reject(new UploadError('stalled', 'stalled')) }, { once: true })
     xhr.open('PUT', url)
     xhr.setRequestHeader('Content-Type', mime)
     xhr.upload.onprogress = (e) => { if (e.lengthComputable) onPct((e.loaded / e.total) * 100) }
@@ -4090,8 +4185,11 @@ function ReferralPromo({ T, onClose }: { T: AppCopy; onClose: () => void }) {
  * this page open" note while uploading, and after pen recordings went up, how to delete them
  * from the pen by hand.
  */
-function UploadCard({ uploads, onClose, onWho, whatsapp, phone, byHand = false, T }: { uploads: UploadItem[]; onClose: () => void; onWho?: (ids: string[]) => void; whatsapp: { number: string; linked: boolean } | null; phone: boolean; byHand?: boolean; T: AppCopy }) {
+function UploadCard({ uploads, onClose, onWho, onRetry, lang = 'en', whatsapp, phone, byHand = false, T }: { uploads: UploadItem[]; onClose: () => void; onWho?: (ids: string[]) => void; onRetry?: (keys: string[]) => void; lang?: Lang; whatsapp: { number: string; linked: boolean } | null; phone: boolean; byHand?: boolean; T: AppCopy }) {
   const [open, setOpen] = useState(false)
+  // A failed row's reason, opened by tapping its "!" (hover shows it too).
+  const [why, setWhy] = useState<string | null>(null)
+  const RC = UPLOAD_RETRY_COPY[lang]
   // Finished without errors: the card goes away on its own 10 s later (16 Oct), held while the
   // pointer or focus is on it. Errors stay until closed.
   const [hold, setHold] = useState(false)
@@ -4110,6 +4208,8 @@ function UploadCard({ uploads, onClose, onWho, whatsapp, phone, byHand = false, 
   const ok = uploads.filter((u) => u.state === 'done').length
   const held = uploads.filter((u) => u.state === 'held').length
   const failed = uploads.filter((u) => u.state === 'error')
+  const retryable = failed.filter((u) => canRetry(u.kind ?? 'server'))
+  const reasonOf = (u: UploadItem) => uploadReason(u.kind ?? 'server', lang)
   const preparing = uploads.find((u) => u.state === 'working' && u.short && u.short !== T.upPrepQueue)
   const untagged = uploads.flatMap((u) => ((u.state === 'done' || u.state === 'held') && u.sessionId && !u.tagged ? [u.sessionId] : []))
   // Portalled to .pen-root like the referral pop-up: inside the shell, the recordings rail
@@ -4132,6 +4232,10 @@ function UploadCard({ uploads, onClose, onWho, whatsapp, phone, byHand = false, 
           {/* A long recording spends a while being prepared: say so with a moving number (22 Oct). */}
           {preparing && <p className="pen-upcard-note pen-mono">{preparing.name} · {preparing.short}</p>}
           <p className="pen-upcard-note">{phone || byHand ? T.upKeepOpenPhone : T.upKeepOpen}</p>
+          {/* Failed while the rest still go: say so now, with the way to try again. */}
+          {retryable.length > 0 && onRetry && (
+            <button type="button" className="pen-btn pen-upcard-retry" onClick={() => onRetry(retryable.map((u) => u.key))}>{RC.retryAll(retryable.length)}</button>
+          )}
         </>
       ) : (
         <>
@@ -4148,7 +4252,19 @@ function UploadCard({ uploads, onClose, onWho, whatsapp, phone, byHand = false, 
           {failed.length > 0 && (
             <div className="pen-upcard-err">
               {T.upFailed(failed.length)}
-              <ul>{failed.map((f) => <li key={f.key}><span className="pen-mono">{f.name}</span>: {f.error}</li>)}</ul>
+              <ul>
+                {failed.map((f) => (
+                  <li key={f.key} title={f.error}>
+                    <span className="pen-mono">{f.name}</span>: {reasonOf(f)}
+                    {onRetry && canRetry(f.kind ?? 'server') && (
+                      <> <button type="button" className="pen-linkbtn pen-upcard-retry-one" onClick={() => onRetry([f.key])}>{RC.retry}</button></>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {onRetry && retryable.length > 1 && (
+                <button type="button" className="pen-btn pen-upcard-retry" onClick={() => onRetry(retryable.map((u) => u.key))}>{RC.retryAll(retryable.length)}</button>
+              )}
             </div>
           )}
           {whatsapp?.linked && ok + held > 0 && (
@@ -4170,11 +4286,19 @@ function UploadCard({ uploads, onClose, onWho, whatsapp, phone, byHand = false, 
       {open && (
         <ul className="pen-upcard-files">
           {uploads.map((u) => (
-            <li key={u.key} data-state={u.state}>
+            <li key={u.key} data-state={u.state} title={u.state === 'error' ? `${reasonOf(u)}${u.error ? ` (${u.error})` : ''}` : undefined}>
               <span className="pen-mono pen-upcard-name">{u.name}</span>
               <span className="pen-upcard-state">
-                {u.state === 'done' ? '✓' : u.state === 'error' ? '!' : u.state === 'held' ? '⏸' : u.state === 'waiting' ? T.upWaiting : u.short ?? `${Math.round(u.pct)}%`}
+                {u.state === 'error' ? (
+                  <>
+                    <button type="button" className="pen-linkbtn" aria-expanded={why === u.key} aria-label={RC.why} onClick={() => setWhy((w) => (w === u.key ? null : u.key))}>!</button>
+                    {onRetry && canRetry(u.kind ?? 'server') && (
+                      <> <button type="button" className="pen-linkbtn pen-upcard-retry-one" onClick={() => onRetry([u.key])}>{RC.retry}</button></>
+                    )}
+                  </>
+                ) : u.state === 'done' ? '✓' : u.state === 'held' ? '⏸' : u.state === 'waiting' ? T.upWaiting : u.short ?? `${Math.round(u.pct)}%`}
               </span>
+              {u.state === 'error' && why === u.key && <span className="pen-upcard-why">{reasonOf(u)}</span>}
             </li>
           ))}
         </ul>
