@@ -3936,40 +3936,39 @@ function sentimentColor(s: string) {
   return 'var(--soft)'
 }
 
-// Newest recording first by when it was RECORDED (the file's own date), falling back to the
-// upload time for files without one. Sorting by upload time while heading by recording date put
-// an old recording uploaded today at the top under an old day, and could repeat a day heading.
-// But an old recording uploaded today (a lecture from two weeks ago) then sank out of sight under
-// its own day, so for a day it heads the list as "Just added" instead.
-const JUST_ADDED: Record<Lang, string> = { en: 'Just added', es: 'Recién agregadas', pt: 'Recém-adicionadas' }
-const HOUR_MS = 3_600_000
+// Two orders (founder, 22 Oct: they read as swapped while "By date" had a "Just added" group on
+// top, which looked like "Recently added", and "Recently added" had bare day headings, which
+// looked like dates):
+//   'date'   newest RECORDED first (the file's own date, else the upload time), headed by that day.
+//   'added'  newest UPLOADED first, headed "Added today" / "Added yesterday" / "Added Oct 20".
+const ADDED: Record<Lang, { today: string; yesterday: string; on: (d: string) => string }> = {
+  en: { today: 'Added today', yesterday: 'Added yesterday', on: (d) => `Added ${d}` },
+  es: { today: 'Agregadas hoy', yesterday: 'Agregadas ayer', on: (d) => `Agregadas el ${d}` },
+  pt: { today: 'Adicionadas hoje', yesterday: 'Adicionadas ontem', on: (d) => `Adicionadas em ${d}` },
+}
 
 export type RecOrder = 'date' | 'added'
 
 function groupByDay(sessions: PenSession[], lang: Lang, order: RecOrder = 'date'): [string, PenSession[]][] {
-  // "Recently added": by upload time, headed by the upload day.
+  const map = new Map<string, PenSession[]>()
+  const put = (key: string, s: PenSession) => {
+    if (!map.has(key)) map.set(key, [])
+    map.get(key)!.push(s)
+  }
   if (order === 'added') {
-    const map = new Map<string, PenSession[]>()
+    const A = ADDED[lang] ?? ADDED.en
+    const dayOf = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+    const today = dayOf(new Date())
+    const yesterday = dayOf(new Date(Date.now() - 86_400_000))
     for (const s of [...sessions].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())) {
-      const key = fmtDate(s.created_at, lang, { weekday: 'short', month: 'short', day: 'numeric' })
-      if (!map.has(key)) map.set(key, [])
-      map.get(key)!.push(s)
+      const d = dayOf(new Date(s.created_at))
+      put(d === today ? A.today : d === yesterday ? A.yesterday : A.on(fmtDate(s.created_at, lang, { month: 'short', day: 'numeric' })), s)
     }
     return Array.from(map.entries())
   }
   const at = (s: PenSession) => new Date(s.recorded_at ?? s.created_at).getTime()
-  const now = Date.now()
-  const justAdded = (s: PenSession) => {
-    const up = new Date(s.created_at).getTime()
-    return !!s.recorded_at && now - up < 24 * HOUR_MS && up - at(s) > 36 * HOUR_MS
-  }
-  const map = new Map<string, PenSession[]>()
-  const fresh = sessions.filter(justAdded).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-  if (fresh.length) map.set(JUST_ADDED[lang] ?? JUST_ADDED.en, fresh)
-  for (const s of [...sessions].filter((s) => !justAdded(s)).sort((a, b) => at(b) - at(a))) {
-    const key = fmtDate(s.recorded_at ?? s.created_at, lang, { weekday: 'short', month: 'short', day: 'numeric' })
-    if (!map.has(key)) map.set(key, [])
-    map.get(key)!.push(s)
+  for (const s of [...sessions].sort((a, b) => at(b) - at(a))) {
+    put(fmtDate(s.recorded_at ?? s.created_at, lang, { weekday: 'short', month: 'short', day: 'numeric' }), s)
   }
   return Array.from(map.entries())
 }
