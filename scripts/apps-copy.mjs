@@ -6,14 +6,22 @@
 //                                                                and Form D issuers updated since the full copy
 //   node --env-file=.env.local scripts/apps-copy.mjs --verify   row counts, old vs new
 //
+// --reverse (22 Oct 2026, the merge back): the same, from "juno-apps" INTO the Pen project, once the
+// Pen project is on Supabase Pro (8 GB) and has the tables (paste supabase/apps/001_apps_schema.sql
+// there first). Combine with the modes: --reverse, --reverse --top-up, --reverse --verify.
+// Separate progress file (.apps-copy-state-reverse.json). Never writes to juno-apps.
+//
 // Upserts on each table's primary key, so every mode is safe to repeat.
 // Progress lives in .apps-copy-state.json (gitignored via .apps-*).
 
 import { createClient } from '@supabase/supabase-js'
 import fs from 'node:fs'
 
-const OLD = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
-const NEW = createClient(process.env.APPS_SUPABASE_URL, process.env.APPS_SUPABASE_SERVICE_ROLE_KEY)
+const REVERSE = process.argv.includes('--reverse')
+const PEN = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+const APPS = createClient(process.env.APPS_SUPABASE_URL, process.env.APPS_SUPABASE_SERVICE_ROLE_KEY)
+const OLD = REVERSE ? APPS : PEN
+const NEW = REVERSE ? PEN : APPS
 if (!process.env.APPS_SUPABASE_URL || process.env.APPS_SUPABASE_URL === process.env.NEXT_PUBLIC_SUPABASE_URL) {
   console.error('APPS_SUPABASE_URL missing or equal to the Pen project. Stopping.'); process.exit(1)
 }
@@ -50,7 +58,7 @@ const TABLES = [
 ]
 
 const PAGE = 1000 // Supabase's default max rows per request
-const STATE = '.apps-copy-state.json'
+const STATE = REVERSE ? '.apps-copy-state-reverse.json' : '.apps-copy-state.json'
 const state = fs.existsSync(STATE) ? JSON.parse(fs.readFileSync(STATE, 'utf8')) : {}
 const save = () => fs.writeFileSync(STATE, JSON.stringify(state, null, 1))
 
@@ -124,7 +132,7 @@ async function verify() {
   console.log(bad ? `\n${bad} table(s) differ.` : '\nAll tables match.')
 }
 
-const mode = process.argv[2]
+const mode = process.argv.slice(2).find((a) => a !== '--reverse')
 if (mode === '--verify') await verify()
 else if (mode === '--top-up') {
   const since = state.started_at
