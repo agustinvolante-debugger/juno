@@ -614,3 +614,13 @@
   .pen-imp-who-hint { margin: 10px 0 0; font-size: 13.5px; line-height: 1.45; color: var(--dim); }
   .pen-upcard-who { justify-content: center; gap: 7px; }
 }
+
+/* Recent recordings reaches the same bottom line as the left menu (founder, 22 Oct). The menu is
+   sticky at 20px and ends 28px above the window's bottom; the rail starts under the header row
+   (98px at desktop widths), so its height fills the rest of the window. Its own list scrolls. */
+@media (min-width: 1221px) {
+  .pen-root:has(.pen-page) .pen-shell > .pen-rail {
+    min-height: calc(100dvh - 126px);
+    display: flex; flex-direction: column;
+  }
+}
