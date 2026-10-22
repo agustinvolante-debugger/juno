@@ -21,26 +21,43 @@ import { enrichPerson, peopleOnSession } from './people'
 import { sendWhatsAppBriefing, sendWhatsAppFailure } from './whatsapp/bot'
 import { linkCalendarGuests } from './who-server'
 import { detectSplit } from './split-server'
+import { hasSlot, kickQueue, scheduleRetry, RetryLater, plainReason } from './notes-queue'
+import { isTransientError } from './db-retry'
+
+/**
+ * What notesAndBriefing did. Only a run that wrote the notes (or a tail part, which has its own
+ * names to find) goes on to the follow-ups: a run that lost the claim, waited its turn or will be
+ * retried used to scan names and suggestions anyway, for nothing, against a busy database.
+ */
+export type UnattendedOutcome = 'noted' | 'tail' | 'taken' | 'queued' | 'retry' | 'failed' | 'empty' | 'gone'
 
 /** Notes, then the briefing. Runs with nobody watching, so every failure has to say so. */
-export async function runUnattended(sessionId: string, email: string) {
-  await notesAndBriefing(sessionId, email)
-  // Then, with the briefing already out: does this recording look like part of another one the
-  // filename rule couldn't place? Only ever a suggestion, and never allowed to throw.
-  await checkJoinSuggestions(email, sessionId).catch(() => 0)
-  // What Juno could offer to help with (lib/pen/suggestions.ts): stored only, never sent from
-  // here; the scheduler decides when. Alongside names, and it never throws.
-  await Promise.all([
-    scanSuggestions(email, sessionId),
-    namesAndConversations(email, sessionId).catch(() => {}),
-  ])
-  // One recording holding two meetings (lib/pen/split.ts): a suggestion on the recording page,
-  // never a split. After names, so a voice named meanwhile counts. Never throws.
-  await detectSplit(email, sessionId)
-  // The after-upload message (summary, to-dos, offers) goes out now rather than at the next
-  // 15-minute tick; the scheduler's rules (STOP, quiet hours, daily max, the 24-hour window)
-  // still decide. justNoted: the suggestions for it are in, no need to wait for them.
-  await import('./proactive').then((m) => m.runForUser(email, { justNoted: sessionId })).catch((e) => console.warn(`pen proactive after notes: ${(e as Error).message}`))
+export async function runUnattended(sessionId: string, email: string): Promise<UnattendedOutcome> {
+  const outcome = await notesAndBriefing(sessionId, email)
+  try {
+    if (outcome !== 'noted' && outcome !== 'tail') return outcome
+    // Then, with the briefing already out: does this recording look like part of another one the
+    // filename rule couldn't place? Only ever a suggestion, and never allowed to throw.
+    await checkJoinSuggestions(email, sessionId).catch(() => 0)
+    // What Juno could offer to help with (lib/pen/suggestions.ts): stored only, never sent from
+    // here; the scheduler decides when. Alongside names, and it never throws.
+    await Promise.all([
+      scanSuggestions(email, sessionId),
+      namesAndConversations(email, sessionId).catch(() => {}),
+    ])
+    // One recording holding two meetings (lib/pen/split.ts): a suggestion on the recording page,
+    // never a split. After names, so a voice named meanwhile counts. Never throws.
+    await detectSplit(email, sessionId)
+    // The after-upload message (summary, to-dos, offers) goes out now rather than at the next
+    // 15-minute tick; the scheduler's rules (STOP, quiet hours, daily max, the 24-hour window)
+    // still decide. justNoted: the suggestions for it are in, no need to wait for them.
+    await import('./proactive').then((m) => m.runForUser(email, { justNoted: sessionId })).catch((e) => console.warn(`pen proactive after notes: ${(e as Error).message}`))
+    return outcome
+  } finally {
+    // A slot just came free (or this one gave way): the next recording waiting its turn starts
+    // (lib/pen/notes-queue.ts). Not after 'queued' or 'taken': this run held no slot.
+    if (outcome !== 'queued' && outcome !== 'taken') await kickQueue(email).catch(() => {})
+  }
 }
 
 /**
@@ -88,20 +105,24 @@ async function prepareEvent(email: string, s: PenSession) {
   }
 }
 
-async function notesAndBriefing(sessionId: string, email: string) {
-  let sourceName = 'your recording'
+async function notesAndBriefing(sessionId: string, email: string): Promise<UnattendedOutcome> {
+  let sourceName: string | null = null
   let whatsapp = false
   let createdAt: string | null = null
+  let fresh: PenSession | null = null
   try {
-    const fresh = await getSession(email, sessionId)
-    if (!fresh) return
+    // Over the per-user cap: wait in the queue without even reading the row (the poll asks
+    // every few seconds while a recording is 'transcribed').
+    if (!(await hasSlot(email))) return 'queued'
+    fresh = await getSession(email, sessionId)
+    if (!fresh) return 'gone'
     createdAt = fresh.created_at
-    sourceName = fresh.source_name ?? 'your recording'
+    sourceName = fresh.title || fresh.source_name
     whatsapp = fresh.source_channel === 'whatsapp'
 
     // Already the tail of a joined meeting: the first segment carries the notes for the whole
     // thing, so writing a second set here would describe half a meeting as if it were one.
-    if (fresh.merge_group && (fresh.merge_index ?? 0) > 0) return
+    if (fresh.merge_group && (fresh.merge_index ?? 0) > 0) return 'tail'
 
     // This part gets written up on its own FIRST, even when it is about to be joined to the
     // one before it.
@@ -111,8 +132,8 @@ async function notesAndBriefing(sessionId: string, email: string) {
     // 73-minute pair, going straight to a single pass over the joined transcript kept 1 of
     // part two's 5 actions and none of its 4 open questions. It costs one extra extraction
     // per part and buys back the half of the meeting that would otherwise vanish.
-    const own = await writeNotes({ email, session: fresh, claim: true })
-    if (own === 'taken') return
+    const own = await writeNotes({ email, session: fresh, claim: true, queue: true })
+    if (own === 'taken' || own === 'queued') return own
 
     // Did this recording just complete a meeting the pen split at its file limit? Checked
     // after the write above, so every part has its own notes to contribute.
@@ -133,9 +154,11 @@ async function notesAndBriefing(sessionId: string, email: string) {
       // out for the finished meeting.
       await updateSession(primary.id, { status: 'transcribed', briefing_sent_at: null })
       const re = await getSession(email, primary.id)
-      if (!re) return
-      const combined = await writeNotes({ email, session: re, claim: true })
-      if (combined === 'taken') return
+      if (!re) return 'gone'
+      // Queued here means the combined notes wait their turn: the primary is 'transcribed' again
+      // and the queue writes it up (and briefs it) like any other.
+      const combined = await writeNotes({ email, session: re, claim: true, queue: true })
+      if (combined === 'taken' || combined === 'queued') return combined
       noted = combined.session
     }
 
@@ -151,9 +174,9 @@ async function notesAndBriefing(sessionId: string, email: string) {
       await Promise.all(people.map((p) => enrichPerson(email, p.id).catch(() => {})))
     }
 
-    if (!noted) return
+    if (!noted) return 'noted'
     // A tail part on its own says nothing worth an email — the combined briefing covers it.
-    if (joined && noted.id !== joined.segments[0].id) return
+    if (joined && noted.id !== joined.segments[0].id) return 'noted'
 
     // An event: its conversations first, so the email can list them.
     await prepareEvent(email, noted)
@@ -163,13 +186,13 @@ async function notesAndBriefing(sessionId: string, email: string) {
     await autoToNotion(email, noted)
 
     // Belt and braces against a retry that slipped past the claim.
-    if (noted.briefing_sent_at) return
+    if (noted.briefing_sent_at) return 'noted'
 
     // Uploads (not WhatsApp) are briefed as a batch: one email for everything that arrived
     // together, sent by whichever finishes last (lib/pen/batch.ts).
     if (!whatsapp && noted.source_channel !== 'whatsapp') {
       await briefBatch(email, noted)
-      return
+      return 'noted'
     }
 
     // Nothing to brief (no summary, to-dos, near-misses or questions). The upload screen
@@ -177,7 +200,7 @@ async function notesAndBriefing(sessionId: string, email: string) {
     if (!hasSomethingToSay(noted)) {
       const ready = await sendReadyNotice({ to: email, title: noted.title || sourceName })
       if (ready.ok) await updateSession(noted.id, { briefing_sent_at: new Date().toISOString() })
-      return
+      return 'noted'
     }
 
     // Sent from WhatsApp: the short briefing goes back to that chat as well as the email.
@@ -191,13 +214,43 @@ async function notesAndBriefing(sessionId: string, email: string) {
     } else {
       console.warn(`pen: briefing not sent for ${noted.id}: ${sent.error}`)
     }
+    return 'noted'
   } catch (e) {
     // Nobody spoke (a pen left on in a pocket): settled quietly, no failure email.
-    if (!(e instanceof EmptyRecording)) {
-      await sendFailureNotice({ to: email, sourceName, reason: (e as Error).message }).catch(() => {})
-      if (whatsapp) await sendWhatsAppFailure(email, sourceName)
+    if (e instanceof EmptyRecording) {
+      if (createdAt && !whatsapp) await briefBatch(email, { id: sessionId, created_at: createdAt }).catch(() => {})
+      return 'empty'
     }
+    // Another try is booked (the database was busy): no email yet. Batch-mates keep waiting,
+    // since a 'transcribed' row still counts as on its way (lib/pen/batch.ts).
+    if (e instanceof RetryLater) {
+      console.warn(`pen: ${sessionId}: ${e.message}`)
+      return 'retry'
+    }
+    // Busy somewhere outside the write-up itself (reading the row, the join, saving the notes):
+    // same rule, as long as the notes aren't written. Notes already written and only the email
+    // failed: the batch sweep sends it; a "couldn't write up" email would be wrong.
+    if (isTransientError(e)) {
+      const now = await getSession(email, sessionId).catch(() => null)
+      const row = now ?? fresh
+      if (row && row.status === 'noted') {
+        console.warn(`pen: ${sessionId} noted, follow-up hit a busy database: ${(e as Error).message}`)
+        return 'noted'
+      }
+      if (row) {
+        const r = await scheduleRetry(row, e).catch(() => ({ state: 'final' as const }))
+        if (r.state === 'scheduled') {
+          console.warn(`pen: ${sessionId}: notes will be tried again (${r.attempt}): ${(e as Error).message}`)
+          return 'retry'
+        }
+        // Out of tries: settle it as failed so the recording page offers "Write the notes".
+        await updateSession(sessionId, { status: 'error', error_text: plainReason((e as Error).message) }).catch(() => {})
+      }
+    }
+    await sendFailureNotice({ to: email, sourceName, reason: plainReason((e as Error).message) }).catch(() => {})
+    if (whatsapp) await sendWhatsAppFailure(email, sourceName)
     // Batch-mates may be waiting on this one to finish before their email goes out.
     if (createdAt && !whatsapp) await briefBatch(email, { id: sessionId, created_at: createdAt }).catch(() => {})
+    return 'failed'
   }
 }

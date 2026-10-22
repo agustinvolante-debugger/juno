@@ -17,10 +17,10 @@ const MAIL = {
     untitled: 'Untitled recording',
     full: (n: number) => `Full briefing (${n} parts) — `,
     brief: 'Briefing — ',
-    failSubject: (s: string) => `Juno Pen couldn't write up ${s}`,
-    failLead: (s: string) => `Your recording <strong>${s}</strong> uploaded and transcribed, but the write-up failed.`,
-    readySubject: (s: string) => `Your recording is ready: ${s}`,
-    readyLead: (s: string) => `<strong>${s}</strong> is transcribed and in Juno Pen.`,
+    failSubject: (s: string | null) => (s ? `Juno Pen couldn't write up ${s}` : `Juno Pen couldn't write up your recording`),
+    failLead: (s: string | null) => (s ? `Your recording <strong>${s}</strong> uploaded and transcribed, but the write-up failed.` : 'Your recording uploaded and transcribed, but the write-up failed.'),
+    readySubject: (s: string | null) => (s ? `Your recording is ready: ${s}` : 'Your recording is ready'),
+    readyLead: (s: string | null) => (s ? `<strong>${s}</strong> is transcribed and in Juno Pen.` : 'Your recording is transcribed and in Juno Pen.'),
     readyBody: 'There were no decisions, to-dos or open questions to pull out of it, so there is no briefing this time. The full transcript is saved, and you can search it or ask about it anytime.',
     readyOpen: 'Open Juno Pen',
     failSafe: '<strong>Nothing is lost.</strong> The recording and its transcript are saved. Open it and press &ldquo;Write the notes&rdquo; to try again.',
@@ -29,10 +29,10 @@ const MAIL = {
     untitled: 'Grabación sin título',
     full: (n: number) => `Resumen completo (${n} partes) — `,
     brief: 'Resumen — ',
-    failSubject: (s: string) => `Juno Pen no pudo escribir las notas de ${s}`,
-    failLead: (s: string) => `Tu grabación <strong>${s}</strong> se subió y se transcribió, pero las notas fallaron.`,
-    readySubject: (s: string) => `Tu grabación está lista: ${s}`,
-    readyLead: (s: string) => `<strong>${s}</strong> está transcrita y en Juno Pen.`,
+    failSubject: (s: string | null) => (s ? `Juno Pen no pudo escribir las notas de ${s}` : 'Juno Pen no pudo escribir las notas de tu grabación'),
+    failLead: (s: string | null) => (s ? `Tu grabación <strong>${s}</strong> se subió y se transcribió, pero las notas fallaron.` : 'Tu grabación se subió y se transcribió, pero las notas fallaron.'),
+    readySubject: (s: string | null) => (s ? `Tu grabación está lista: ${s}` : 'Tu grabación está lista'),
+    readyLead: (s: string | null) => (s ? `<strong>${s}</strong> está transcrita y en Juno Pen.` : 'Tu grabación está transcrita y en Juno Pen.'),
     readyBody: 'No había decisiones, tareas ni preguntas abiertas que sacar, así que esta vez no hay resumen. La transcripción completa quedó guardada y puedes buscar en ella o preguntar cuando quieras.',
     readyOpen: 'Abrir Juno Pen',
     failSafe: '<strong>No se perdió nada.</strong> La grabación y su transcripción están guardadas. Ábrela y presiona &ldquo;Escribir las notas&rdquo; para intentarlo otra vez.',
@@ -41,10 +41,10 @@ const MAIL = {
     untitled: 'Gravação sem título',
     full: (n: number) => `Resumo completo (${n} partes) — `,
     brief: 'Resumo — ',
-    failSubject: (s: string) => `O Juno Pen não conseguiu escrever as notas de ${s}`,
-    failLead: (s: string) => `Sua gravação <strong>${s}</strong> foi enviada e transcrita, mas as notas falharam.`,
-    readySubject: (s: string) => `Sua gravação está pronta: ${s}`,
-    readyLead: (s: string) => `<strong>${s}</strong> está transcrita e no Juno Pen.`,
+    failSubject: (s: string | null) => (s ? `O Juno Pen não conseguiu escrever as notas de ${s}` : 'O Juno Pen não conseguiu escrever as notas da sua gravação'),
+    failLead: (s: string | null) => (s ? `Sua gravação <strong>${s}</strong> foi enviada e transcrita, mas as notas falharam.` : 'Sua gravação foi enviada e transcrita, mas as notas falharam.'),
+    readySubject: (s: string | null) => (s ? `Sua gravação está pronta: ${s}` : 'Sua gravação está pronta'),
+    readyLead: (s: string | null) => (s ? `<strong>${s}</strong> está transcrita e no Juno Pen.` : 'Sua gravação está transcrita e no Juno Pen.'),
     readyBody: 'Não havia decisões, tarefas nem perguntas em aberto para tirar dela, então desta vez não há resumo. A transcrição completa está salva, e você pode buscar nela ou perguntar quando quiser.',
     readyOpen: 'Abrir o Juno Pen',
     failSafe: '<strong>Nada se perdeu.</strong> A gravação e a transcrição estão salvas. Abra e aperte &ldquo;Escrever as notas&rdquo; para tentar de novo.',
@@ -164,41 +164,73 @@ export async function sendBriefing(opts: {
  */
 export async function sendFailureNotice(opts: {
   to: string
-  sourceName: string
+  /** The recording's title or file name. Missing: the email says "your recording", once. */
+  sourceName?: string | null
   reason: string
 }): Promise<void> {
-  const M = MAIL[await userLang(opts.to)]
+  const lang = await userLang(opts.to)
+  const c = failureCopy(lang, opts.sourceName)
   const base = (process.env.PEN_PUBLIC_URL || 'https://pen.tryjunoapp.com').replace(/\/$/, '')
   const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   await sendEmailResult({
     to: opts.to,
-    subject: M.failSubject(opts.sourceName),
+    subject: c.subject,
     html:
       `<!doctype html><html><head><meta charset="utf-8"></head>` +
       `<body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.6;color:#16150F;padding:24px">` +
-      `<p>${M.failLead(esc(opts.sourceName))}</p>` +
+      `<p>${c.lead}</p>` +
       `<p style="color:#514E45">${esc(opts.reason)}</p>` +
-      `<p>${M.failSafe}</p>` +
+      `<p>${MAIL[lang].failSafe}</p>` +
       `<p><a href="${base}" style="color:#2C5F7C">${base.replace(/^https?:\/\//, '')}</a></p>` +
       `</body></html>`,
   })
 }
 
 /**
+ * A name worth printing, or null. The callers used to pass the English placeholder "your
+ * recording" when there was no title, and the copy wraps the name in "Your recording …", so the
+ * email read "Your recording your recording uploaded…" (22 Oct). Placeholders in any language
+ * count as no name.
+ */
+export function recordingName(name: string | null | undefined): string | null {
+  const n = (name ?? '').trim()
+  if (!n) return null
+  if (/^(your recording|tu grabaci[oó]n|sua grava[cç][aã]o|untitled recording|grabaci[oó]n sin t[ií]tulo|grava[cç][aã]o sem t[ií]tulo)$/i.test(n)) return null
+  return n
+}
+
+/** The failure email's subject and first line (HTML-escaped name), without duplication. Pure. */
+export function failureCopy(lang: Lang, name: string | null | undefined): { subject: string; lead: string } {
+  const M = MAIL[lang]
+  const n = recordingName(name)
+  const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  return { subject: M.failSubject(n), lead: M.failLead(n ? esc(n) : null) }
+}
+
+/** The "ready" email's subject and first line. Pure. */
+export function readyCopy(lang: Lang, title: string | null | undefined): { subject: string; lead: string } {
+  const M = MAIL[lang]
+  const n = recordingName(title)
+  const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  return { subject: M.readySubject(n), lead: M.readyLead(n ? esc(n) : null) }
+}
+
+/**
  * The short email for a recording with nothing to brief: no summary, to-dos, near-misses or open
  * questions. The upload screen promises an email when it's ready, so one always goes out.
  */
-export async function sendReadyNotice(opts: { to: string; title: string }): Promise<{ ok: boolean; error?: string }> {
-  const M = MAIL[await userLang(opts.to)]
+export async function sendReadyNotice(opts: { to: string; title?: string | null }): Promise<{ ok: boolean; error?: string }> {
+  const lang = await userLang(opts.to)
+  const M = MAIL[lang]
+  const c = readyCopy(lang, opts.title)
   const base = (process.env.PEN_PUBLIC_URL || 'https://www.tryjunoapp.com').replace(/\/$/, '')
-  const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   return sendEmailResult({
     to: opts.to,
-    subject: M.readySubject(opts.title),
+    subject: c.subject,
     html:
       `<!doctype html><html><head><meta charset="utf-8"></head>` +
       `<body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.6;color:#16150F;padding:24px">` +
-      `<p>${M.readyLead(esc(opts.title))}</p>` +
+      `<p>${c.lead}</p>` +
       `<p style="color:#514E45">${M.readyBody}</p>` +
       `<p><a href="${base}" style="color:#0B6B44">${M.readyOpen}</a></p>` +
       `</body></html>`,
@@ -216,7 +248,7 @@ export async function briefOnce(opts: { email: string; session: PenSession; part
   if (s.briefing_sent_at || (s.merge_group && (s.merge_index ?? 0) > 0)) return 'skipped'
   const r = hasSomethingToSay(s)
     ? await sendBriefing({ session: s, to: [opts.email], replyTo: opts.email, parts: opts.parts ?? 1 })
-    : await sendReadyNotice({ to: opts.email, title: s.title || s.source_name || 'your recording' })
+    : await sendReadyNotice({ to: opts.email, title: s.title || s.source_name })
   if (!r.ok) {
     console.warn(`pen: briefing not sent for ${s.id}: ${r.error}`)
     return 'failed'

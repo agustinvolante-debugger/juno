@@ -504,3 +504,21 @@ alter table public.pen_segments enable row level security;  -- service role only
 -- 2026-10-22, who was in each recording (lib/pen/who.ts, who-server.ts). who_at = the user answered Home's "Who was here?" card for this recording (Save or Skip); cal_people_at = the matching calendar event's guests were linked (source 'calendar' in pen_session_people, a value the text column already takes). Until these run: guests are still linked once, Save still works, and Skip only hides the card on that device. ONE line each.
 -- alter table public.pen_sessions add column if not exists who_at timestamptz;
 -- alter table public.pen_sessions add column if not exists cal_people_at timestamptz;
+
+-- 2026-10-22, big batch uploads (Chris, 14 files at once: two write-ups died on "statement timeout" / "upstream request timeout", some uploads never got a row). Code in lib/pen/db-retry.ts + lib/pen/notes-queue.ts works WITHOUT any of this; these make it lighter and tidier. ONE line each (Supabase's SQL editor splits multi-line DDL).
+-- The write-up queue's retry count and due time. Until they run, the count rides in error_text as "[retry n/3] …" (visible on the recording page while it waits).
+-- alter table public.pen_sessions add column if not exists notes_attempts int not null default 0;
+-- alter table public.pen_sessions add column if not exists notes_retry_at timestamptz;
+-- Indexes for the per-recording reads of the pipeline. pen_sessions_user (user_email, created_at desc) already covers the per-user lists and the batch window.
+-- Joined meetings (groupSessions, deleteSession, splitGroup): every part of a group, per user. Replaces the older pen_sessions_merge(merge_group, merge_index) if that one never ran.
+-- create index if not exists pen_sessions_user_merge on public.pen_sessions(user_email, merge_group, merge_index) where merge_group is not null;
+-- The per-user cap (count of 'noting' rows), the queue ('transcribed' rows), recovery and the health check: a small partial index over the rows still on their way.
+-- create index if not exists pen_sessions_working on public.pen_sessions(status, user_email, updated_at) where status in ('uploaded', 'transcribing', 'transcribed', 'noting');
+-- Calendar matching (calendar-server recordingsIn, who-server): recordings by start time, per user.
+-- create index if not exists pen_sessions_user_recorded on public.pen_sessions(user_email, recorded_at desc);
+-- People on a recording: the primary key (session_id, person_id) already serves session lookups; reads by user + session list use this.
+-- create index if not exists pen_session_people_user_session on public.pen_session_people(user_email, session_id);
+-- Conversations of an event, read per recording (conference.ts segmentsFor).
+-- create index if not exists pen_segments_user_session on public.pen_segments(user_email, session_id);
+-- Suggestions per recording (split-server, suggestions.ts after every write-up).
+-- create index if not exists pen_suggestions_user_session on public.pen_suggestions(user_email, session_id);

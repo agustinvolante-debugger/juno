@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '@/lib/supabase'
 import type { MeetingType } from '@/lib/pen/categories'
 import { deleteTranscript } from '@/lib/pen/aai'
+import { withDbRetry } from '@/lib/pen/db-retry'
 
 export const BUCKET = 'pen-audio'
 
@@ -132,6 +133,10 @@ export type PenSession = {
   who_at?: string | null
   /** The matching calendar event's guests were linked (lib/pen/who-server.ts). Same ALTER. */
   cal_people_at?: string | null
+  /** Automatic retries of a write-up that failed on a passing error (lib/pen/notes-queue.ts). Absent until the 2026-10-22 batch ALTER. */
+  notes_attempts?: number | null
+  /** When the next of those retries is due. Same ALTER. */
+  notes_retry_at?: string | null
   created_at: string
   updated_at: string
 }
@@ -204,6 +209,50 @@ export async function createReadUrl(path: string, expiresInSec = 60 * 60 * 4) {
   return data.signedUrl
 }
 
+/**
+ * Columns for server code that reads MANY recordings: everything a list, a batch email or the
+ * join detector looks at, and none of the heavy jsonb (transcript, translation, chat,
+ * deliverables, note blocks, transcript edits). A 46-minute transcript with word timings is
+ * megabytes; `select('*')` over 200 of them, once per finished recording, is what timed the
+ * database out on 22 Oct. RUN_COLS is the part of it that exists on every database (the
+ * original table plus the long-run ALTERs); META_COLS adds the newer ones, and readers fall
+ * back to RUN_COLS when one of those is missing (selectCols).
+ */
+export const RUN_COLS = 'id,user_email,title,status,storage_path,source_name,mime,duration_sec,bytes,aai_id,client_name,error_text,recorded_at,merge_group,merge_index,source_channel,briefing_sent_at,meeting_type,created_at,updated_at'
+export const META_COLS = `${RUN_COLS},notes,action_done,action_meta,user_notes,consent,language,speaker_map,event_mode,names_at,segments_at`
+/** Never in a list read. Exported for the tests. */
+export const HEAVY_COLS = ['transcript', 'translation', 'chat', 'deliverables', 'note_blocks', 'transcript_edits'] as const
+
+/**
+ * Runs a pen_sessions read with `cols`, and again with each fallback when the database says a
+ * column doesn't exist yet (a deploy that landed before its ALTER). Transient failures retry.
+ */
+export async function selectCols<T>(
+  build: (cols: string) => PromiseLike<{ data: unknown; error: { message: string } | null }>,
+  cols: string,
+  ...fallbacks: string[]
+): Promise<T[]> {
+  let res = await withDbRetry(() => build(cols))
+  for (const f of fallbacks) {
+    if (!res.error || !/column .* does not exist|schema cache|could not find/i.test(res.error.message)) break
+    res = await withDbRetry(() => build(f))
+  }
+  if (res.error) throw new Error(res.error.message)
+  return ((res.data ?? []) as T[])
+}
+
+/**
+ * The newest recordings with just what the join detector (merge-detect findRuns) needs: start
+ * time, length, name, group. No transcripts.
+ */
+export async function listRunRows(userEmail: string, limit = 200): Promise<PenSession[]> {
+  return selectCols<PenSession>(
+    (cols) => supabaseAdmin.from('pen_sessions').select(cols).eq('user_email', userEmail).order('created_at', { ascending: false }).limit(limit),
+    RUN_COLS,
+  )
+}
+
+/** Heavy: every column of every row, transcripts included. Prefer listRunRows / selectCols on the server. */
 export async function listSessions(userEmail: string, limit = 100): Promise<PenSession[]> {
   const { data, error } = await supabaseAdmin
     .from('pen_sessions')
@@ -230,22 +279,22 @@ export async function listSessionsForClient(userEmail: string, limit = 100): Pro
 }
 
 export async function getSession(userEmail: string, id: string): Promise<PenSession | null> {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await withDbRetry(() => supabaseAdmin
     .from('pen_sessions')
     .select('*')
     .eq('user_email', userEmail)
     .eq('id', id)
-    .maybeSingle()
+    .maybeSingle())
   if (error) throw new Error(error.message)
   return (data as PenSession) ?? null
 }
 
 export async function getSessionByAai(aaiId: string): Promise<PenSession | null> {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await withDbRetry(() => supabaseAdmin
     .from('pen_sessions')
     .select('*')
     .eq('aai_id', aaiId)
-    .maybeSingle()
+    .maybeSingle())
   if (error) throw new Error(error.message)
   return (data as PenSession) ?? null
 }
@@ -263,11 +312,13 @@ export async function createSession(row: {
   client_name?: string | null
   source_channel?: string | null
 }) {
-  const { data, error } = await supabaseAdmin
+  // Retried when the database is busy (22 Oct: a 14-file batch lost recordings here). A retry
+  // after an insert that did land meets the dedupe index below and returns that row.
+  const { data, error } = await withDbRetry(() => supabaseAdmin
     .from('pen_sessions')
     .insert({ ...row, status: 'uploaded' as PenStatus })
     .select('*')
-    .single()
+    .single())
   // Plugging the pen in twice hits the dedupe index. That's success, not failure.
   if (error) {
     // 23505 = unique violation, i.e. the pen was plugged in twice. That is success, not failure.
@@ -280,7 +331,7 @@ export async function createSession(row: {
         .eq('user_email', row.user_email)
         .eq('source_name', row.source_name)
       q = row.recorded_at ? q.eq('recorded_at', row.recorded_at) : q.is('recorded_at', null)
-      const existing = await q.maybeSingle()
+      const existing = await withDbRetry(() => q.maybeSingle())
       if (existing.data) return { session: existing.data as PenSession, duplicate: true }
     }
     throw new Error(error.message)
@@ -295,22 +346,23 @@ export async function createSession(row: {
  * at the same moment, and without this they would both pay for extraction and both email.
  */
 export async function claimStatus(id: string, from: string, to: string): Promise<boolean> {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await withDbRetry(() => supabaseAdmin
     .from('pen_sessions')
     .update({ status: to, updated_at: new Date().toISOString() })
     .eq('id', id)
     .eq('status', from)
-    .select('id')
+    .select('id'))
   if (error) throw new Error(error.message)
   return (data?.length ?? 0) > 0
 }
 
 export async function updateSession(id: string, patch: Record<string, unknown>) {
+  // Retried while the database is busy: the same patch twice is the same row.
   const write = (body: Record<string, unknown>) =>
-    supabaseAdmin
+    withDbRetry(() => supabaseAdmin
       .from('pen_sessions')
       .update({ ...body, updated_at: new Date().toISOString() })
-      .eq('id', id)
+      .eq('id', id))
   let { error } = await write(patch)
   // metered_at / metered_sec need an ALTER to exist. If the deploy lands before it, losing the
   // meter for a few recordings is far better than failing the transcription they belong to.

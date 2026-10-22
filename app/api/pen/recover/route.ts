@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import { runUnattended } from '@/lib/pen/unattended'
 import { briefBatch } from '@/lib/pen/batch'
 import { sweepConsent } from '@/lib/pen/whatsapp/bot'
+import { drainUser, sweepQueued } from '@/lib/pen/notes-queue'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -26,6 +27,14 @@ function authorized(req: Request): boolean {
 export async function GET(req: Request) {
   if (!authorized(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
+  // ?user=: a write-up of theirs just finished, start their next waiting ones (kickQueue in
+  // lib/pen/notes-queue.ts). Only that, in this function's own time budget.
+  const user = new URL(req.url).searchParams.get('user')
+  if (user) {
+    const started = await drainUser(user).catch((e) => { console.warn(`pen recover: drain ${user}: ${(e as Error).message}`); return 0 })
+    return NextResponse.json({ ok: true, started })
+  }
+
   // A 'noting' row older than any function can run was cut off mid-write: put it back.
   const { data: cut } = await supabaseAdmin.from('pen_sessions').update({ status: 'transcribed' })
     .eq('status', 'noting').lt('updated_at', ago(15 * MIN)).gt('updated_at', ago(24 * 60 * MIN)).select('id')
@@ -40,6 +49,10 @@ export async function GET(req: Request) {
     retried.push(s.id)
   }
 
+  // Write-ups waiting their turn (the per-user cap) or booked for another try after a busy
+  // database: each user up to their free slots (lib/pen/notes-queue.ts).
+  const queue = await sweepQueued().catch((e) => { console.warn(`pen recover: queue: ${(e as Error).message}`); return { users: 0, started: 0 } })
+
   // Finished, never emailed, the batch went quiet: send it.
   const { data: waiting } = await supabaseAdmin.from('pen_sessions').select('id,user_email,created_at,source_channel')
     .eq('status', 'noted').is('briefing_sent_at', null).lt('updated_at', ago(30 * MIN)).gt('created_at', ago(6 * 60 * MIN)).limit(20)
@@ -52,5 +65,5 @@ export async function GET(req: Request) {
   }
   // WhatsApp files waiting on the consent tap: a reminder, then let go (lib/pen/whatsapp/bot.ts).
   const consent = await sweepConsent().catch(() => ({ nudged: 0, expired: 0 }))
-  return NextResponse.json({ ok: true, resetFromNoting: cut?.length ?? 0, retried, batchesSent: flushed, consent })
+  return NextResponse.json({ ok: true, resetFromNoting: cut?.length ?? 0, retried, queue, batchesSent: flushed, consent })
 }

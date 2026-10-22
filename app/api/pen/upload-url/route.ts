@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
 import { pausedRefusal } from '@/lib/pen/pause'
 import { createUploadUrl, createUploadParts, MAX_PARTS } from '@/lib/pen/store'
+import { withDbRetry, isTransientError } from '@/lib/pen/db-retry'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,7 +13,10 @@ export async function POST(req: Request) {
   const email = await authedEmail()
   if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   // Paused: the service is off. Reading stays open; adding doesn't.
-  const paused = await pausedRefusal(email)
+  // Every step here retries while the database or storage is busy (22 Oct: some files of a
+  // 14-file batch never got this far). A busy answer that outlasts the retries is a 503, which
+  // the upload tray retries in turn; anything else is a real refusal.
+  const paused = await withDbRetry(() => pausedRefusal(email))
   if (paused) return NextResponse.json({ error: paused }, { status: 403 })
 
   const body = (await req.json().catch(() => ({}))) as { name?: string; parts?: number }
@@ -23,16 +27,17 @@ export async function POST(req: Request) {
     const n = Math.floor(Number(body.parts))
     if (!Number.isFinite(n) || n < 1 || n > MAX_PARTS) return NextResponse.json({ error: 'That file is too big to upload.' }, { status: 400 })
     try {
-      return NextResponse.json(await createUploadParts(email, body.name, n))
+      return NextResponse.json(await withDbRetry(() => createUploadParts(email, body.name!, n)))
     } catch (e) {
-      return NextResponse.json({ error: (e as Error).message }, { status: 500 })
+      return NextResponse.json({ error: (e as Error).message }, { status: isTransientError(e) ? 503 : 500 })
     }
   }
 
   try {
-    const out = await createUploadUrl(email, body.name)
+    const name = body.name
+    const out = await withDbRetry(() => createUploadUrl(email, name))
     return NextResponse.json(out)
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
+    return NextResponse.json({ error: (e as Error).message }, { status: isTransientError(e) ? 503 : 500 })
   }
 }

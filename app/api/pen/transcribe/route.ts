@@ -68,9 +68,17 @@ export async function GET(req: Request) {
   // Transcript saved but the notes never started (the request that saved it was cut off, as a
   // phone does when it sleeps): start them now. Any later check heals it; the claim inside keeps
   // this from running twice alongside the webhook.
+  //
+  // Not on every poll (22 Oct): the browser asks every 6 s per recording, and a 14-file batch
+  // waiting its turn (lib/pen/notes-queue.ts) would start 14 runs every 6 s that each find the
+  // queue full. Once the row has sat a minute untouched; the queue itself is what starts it
+  // normally. Nor for a row booked for a retry or holding another error: those are the queue's.
   if (session.status === 'transcribed' && !session.notes?.summary) {
-    const { runUnattended } = await import('@/lib/pen/unattended')
-    after(() => runUnattended(session.id, email))
+    const idle = Date.now() - Date.parse(session.updated_at ?? session.created_at)
+    if (idle > 60_000 && !session.error_text && !(session.notes_attempts && session.notes_retry_at && Date.parse(session.notes_retry_at) > Date.now())) {
+      const { runUnattended } = await import('@/lib/pen/unattended')
+      after(() => runUnattended(session.id, email).then(() => {}))
+    }
     return NextResponse.json({ session })
   }
   if (session.status !== 'transcribing' || !session.aai_id) return NextResponse.json({ session })

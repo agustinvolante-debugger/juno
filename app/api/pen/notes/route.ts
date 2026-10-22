@@ -6,6 +6,7 @@ import { getSession } from '@/lib/pen/store'
 import { writeNotes, EmptyRecording } from '@/lib/pen/pipeline'
 import { briefBatch } from '@/lib/pen/batch'
 import { briefOnce } from '@/lib/pen/briefing'
+import { RetryLater } from '@/lib/pen/notes-queue'
 
 export const dynamic = 'force-dynamic'
 // Two model calls over the whole transcript — categorise, then extract. A 75-minute recording
@@ -33,8 +34,11 @@ export async function POST(req: Request) {
     // A person pressing the button skips the claim — they asked for this and should not be
     // refused because a webhook happens to be mid-flight. The browser's automatic fallback
     // sets `auto` and does take the claim, so it cannot duplicate the webhook's work.
-    const r = await writeNotes({ email, session, forceType, claim: Boolean(b.auto) })
+    // The automatic fallback waits its turn like the webhook does (lib/pen/notes-queue.ts): over
+    // the per-user cap it gets a 409, which the browser already treats as "the server has it".
+    const r = await writeNotes({ email, session, forceType, claim: Boolean(b.auto), queue: Boolean(b.auto) })
     if (r === 'taken') return NextResponse.json({ error: 'already being written' }, { status: 409 })
+    if (r === 'queued') return NextResponse.json({ error: 'waiting its turn', queued: true }, { status: 409 })
     // The upload screen promised an email when it's ready. The webhook usually sends it; this
     // covers the notes written here instead (the browser's fallback when the webhook didn't
     // arrive, or a first "Write the notes" after a failure). Already sent means nothing new.
@@ -53,6 +57,8 @@ export async function POST(req: Request) {
   } catch (e) {
     // Nobody spoke on it: a settled state, not a failure.
     if (e instanceof EmptyRecording) return NextResponse.json({ session: await getSession(email, b.id), empty: true })
+    // Booked for another try (the database was busy): the queue writes it up, and emails then.
+    if (e instanceof RetryLater) return NextResponse.json({ error: 'waiting its turn', queued: true }, { status: 409 })
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }
 }
