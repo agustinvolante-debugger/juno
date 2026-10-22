@@ -1655,6 +1655,7 @@ export default function PenApp({
         {askOpen && !tourOpen && !promoOpen && <FeedbackAsk T={T} onClose={closeAsk} />}
         <UploadCard uploads={uploads} onClose={() => setUploads((prev) => prev.filter((u) => u.state === 'waiting' || u.state === 'working'))} onWho={openWho} whatsapp={whatsapp ?? null} phone={isPhone} byHand={mounted && !supportsPicker} T={T} />
         {readyToast}
+        {undoToast}
       </LangProvider>
     )
   }
@@ -1755,6 +1756,7 @@ export default function PenApp({
       {askOpen && !tourOpen && !promoOpen && <FeedbackAsk T={T} onClose={closeAsk} />}
       <UploadCard uploads={uploads} onClose={() => setUploads((prev) => prev.filter((u) => u.state === 'waiting' || u.state === 'working'))} onWho={openWho} whatsapp={whatsapp ?? null} phone={isPhone} byHand={mounted && !supportsPicker} T={T} />
       {readyToast}
+      {undoToast}
       {txImport && (
         <TranscriptImport
           people={people}
@@ -2990,8 +2992,6 @@ function Detail({
   const lang = useLang()
   const [busy, setBusy] = useState(false)
   const [sheet, setSheet] = useState<SheetRequest | null>(null)
-  const [confirmDelete, setConfirmDelete] = useState(false)
-  useEffect(() => setConfirmDelete(false), [session.id])
 
   // Note blocks. Keyed off session.id ONLY — including the server copy in the deps would
   // reset the editor mid-typing every time an autosave round-tripped.
@@ -3408,7 +3408,7 @@ function Detail({
             />
           </div>
           {actions.slice(0, actFit).map((a) => <Fragment key={a.key}>{a.node(false)}</Fragment>)}
-          <details ref={actMoreEl} className="pen-d-more" onToggle={(e) => { if (!(e.currentTarget as HTMLDetailsElement).open) setConfirmDelete(false) }}>
+          <details ref={actMoreEl} className="pen-d-more">
             <summary className="pen-btn" aria-label={T.moreActions}><Icon name="more" size={16} /><span className="pen-d-more-l">{T.more}</span></summary>
             <div className="pen-d-menu" role="menu">
           {actions.slice(actFit).map((a) => <Fragment key={a.key}>{a.node(true)}</Fragment>)}
