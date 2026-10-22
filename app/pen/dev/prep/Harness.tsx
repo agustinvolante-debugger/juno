@@ -10,7 +10,7 @@ export default function Harness() {
   const [log, setLog] = useState<string[]>([])
   useEffect(() => {
     const w = window as unknown as Record<string, unknown>
-    w.__runPrep = async (index = 0, opts: { watchdogMs?: number; decode?: boolean; b64?: boolean; mode?: 'worker' | 'main-thread' } = {}) => {
+    w.__runPrep = async (index = 0, opts: { watchdogMs?: number; decode?: boolean; b64?: boolean; mode?: 'worker' | 'main-thread'; fault?: { encoderErrorAt?: number; hangAt?: number } } = {}) => {
       const input = document.getElementById('f') as HTMLInputElement
       const file = input.files?.[index]
       if (!file) throw new Error('no file')
@@ -19,9 +19,11 @@ export default function Harness() {
       const sampler = setInterval(() => { peak = Math.max(peak, heap()) }, 100)
       let events = 0
       let lastPct = -1
+      let t100 = 0
+      let t50 = 0
       const t0 = performance.now()
       try {
-        const prep = await streamPrepare(file, (f) => { events++; lastPct = Math.floor(f * 100) }, { watchdogMs: opts.watchdogMs, mode: opts.mode })
+        const prep = await streamPrepare(file, (f) => { events++; lastPct = Math.floor(f * 100); if (f >= 1 && !t100) t100 = (performance.now() - t0) / 1000; if (f >= 0.5 && !t50) t50 = (performance.now() - t0) / 1000 }, { watchdogMs: opts.watchdogMs, mode: opts.mode, fault: opts.fault })
         const wall = (performance.now() - t0) / 1000
         const headerDur = await durationWithoutDecoding(file)
         let decodedDur = -1
@@ -38,11 +40,11 @@ export default function Harness() {
           for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
           b64 = btoa(bin)
         }
-        const r = { ok: true, name: file.name, inMB: file.size / 1048576, wall, outMB: prep.blob.size / 1048576, durationSec: prep.durationSec, headerDur, decodedDur, events, lastPct, peakMainHeapMB: peak / 1048576, note: prep.note, ...prep.extra, ...(b64 ? { b64 } : {}) }
+        const r = { ok: true, name: file.name, inMB: file.size / 1048576, wall, t50, t100, outMB: prep.blob.size / 1048576, durationSec: prep.durationSec, headerDur, decodedDur, events, lastPct, peakMainHeapMB: peak / 1048576, note: prep.note, ...prep.extra, ...(b64 ? { b64 } : {}) }
         setLog((l) => [...l, JSON.stringify(r)])
         return r
       } catch (e) {
-        const r = { ok: false, name: file.name, error: (e as Error).message, wall: (performance.now() - t0) / 1000, events }
+        const r = { ok: false, name: file.name, error: (e as Error).message, trail: (e as { trail?: unknown }).trail, wall: (performance.now() - t0) / 1000, events }
         setLog((l) => [...l, JSON.stringify(r)])
         return r
       } finally {

@@ -14,6 +14,8 @@
 import { supabaseAdmin } from '@/lib/supabase'
 import type { PenSession } from './store'
 import { findRuns, combinedDialogue } from './merge-detect'
+import { separateSeams } from './join-suggest'
+import { readPenSettings } from './pen-device-server'
 
 export * from './merge-detect'
 
@@ -77,7 +79,13 @@ export async function autoJoin(userEmail: string, sessionId: string): Promise<Au
   if (error) throw new Error(error.message)
 
   const all = (data ?? []) as PenSession[]
-  const run = findRuns(all).find((r) => r.sessions.some((s) => s.id === sessionId))
+  // Only a file that lasted the pen's split length is continued by the next one (merge-detect
+  // endsAtSplit), and never across a seam the user said is separate.
+  const [splitMin, separate] = await Promise.all([
+    readPenSettings(userEmail).then((r) => r.settings.splitMin).catch(() => null),
+    separateSeams(userEmail).catch(() => new Set<string>()),
+  ])
+  const run = findRuns(all, { splitMin, separate }).find((r) => r.sessions.some((s) => s.id === sessionId))
   if (!run) return null
 
   const ready = run.sessions.every((s) => (s.transcript?.utterances?.length ?? 0) > 0 || !!s.transcript?.text)

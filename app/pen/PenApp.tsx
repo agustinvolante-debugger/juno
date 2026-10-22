@@ -39,8 +39,8 @@ import type { ArchiveStats } from '@/lib/pen/stats'
 import DeliverableSheet, { DeliverableActions, type SheetRequest } from './DeliverableSheet'
 import SendBriefing from './SendBriefing'
 import { storedAudio, AUDIO_DAYS, AUDIO_WARN_DAYS } from '@/lib/pen/audio-state'
-import { prepareAudio, fmtMB, fmtDur, SOFT_SIZE_LIMIT, needsPiecedUpload, durationWithoutDecoding, PIECE_BYTES, type Prepared } from '@/lib/pen/encode'
-import { canStreamPrep, streamPrepare } from '@/lib/pen/stream-prep-client'
+import { prepareAudio, fmtMB, fmtDur, SOFT_SIZE_LIMIT, needsPiecedUpload, durationWithoutDecoding, pieceSizeFor, type Prepared } from '@/lib/pen/encode'
+import { canStreamPrep, streamPrepare, PrepFailed, type PrepFallback, type StreamExtra } from '@/lib/pen/stream-prep-client'
 import { postJson, getJson, patchJson, del, errMessage, PenHttpError } from '@/lib/pen/http'
 import type { ChatSummary } from '@/lib/pen/chats'
 import type { DocSummary } from '@/lib/pen/docs'
@@ -49,7 +49,7 @@ import UsageBar from './UsageBar'
 import PhoneShell, { type PhoneTab } from './PhoneShell'
 import Link from 'next/link'
 import { ACCEPT_DESKTOP, acceptFor } from '@/lib/pen/file-accept'
-import { findRuns } from '@/lib/pen/merge-detect'
+import { runsToOffer } from '@/lib/pen/merge-detect'
 import CombinePicker from './CombinePicker'
 import { LangProvider, useCopy, useLang } from './LangContext'
 import { APP_COPY, type AppCopy } from './PenApp.copy'
@@ -624,6 +624,11 @@ export default function PenApp({
         const j = (await r.json()) as { session?: PenSession }
         if (!j.session) continue
         if (j.session.status !== s.status) patchLocal(j.session)
+        // Just written up: the server may join it to the part before it right after (autoJoin),
+        // which changes OTHER rows this poll never sees. Reload the list once that has had time.
+        if (j.session.status === 'noted' && s.status !== 'noted') {
+          for (const ms of [5000, 20000]) setTimeout(() => { void refresh(); void refreshSuggest() }, ms)
+        }
 
         if (j.session.status === 'transcribed') {
           const first = seenTranscribed.current[j.session.id] ?? Date.now()
@@ -740,7 +745,7 @@ export default function PenApp({
 
   // Uploads run in the background (Carlitos, 5 Oct: ten recordings one by one behind a window
   // that blocks the app is too slow). Import closes the sheet at once; a small card counts the
-  // files up while the rest of the app stays usable; two go at a time (one on a phone, where
+  // files up while the rest of the app stays usable; three go at a time (one on a phone, where
   // decoding a long recording already uses most of the memory). Transcription, notes and the
   // briefing email were always server-side, so once a file is up nothing waits on this tab.
   const [uploads, setUploads] = useState<UploadItem[]>([])
@@ -757,7 +762,7 @@ export default function PenApp({
   }, [uploading])
 
   // Preparing audio is the memory-heavy step, so files take turns at it; uploads still overlap
-  // (two at a time on a computer). A long recording no longer shares the tab with another.
+  // (three at a time on a computer). A long recording no longer shares the tab with another.
   const prepQueue = useRef<Promise<unknown>>(Promise.resolve())
   function onePrepAtATime<R>(fn: () => Promise<R>): Promise<R> {
     const run = prepQueue.current.then(fn, fn)
@@ -778,7 +783,8 @@ export default function PenApp({
     const asIs = async () => {
       step({ phase: T.phaseSlot, pct: 5 })
       const durationSec = await durationWithoutDecoding(file)
-      const n = Math.ceil(file.size / PIECE_BYTES)
+      const pieceBytes = pieceSizeFor(file.size)
+      const n = Math.ceil(file.size / pieceBytes)
       const urlRes = await fetch('/api/pen/upload-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -787,14 +793,26 @@ export default function PenApp({
       if (!urlRes.ok) throw new Error((await urlRes.json()).error ?? T.uploadUrlFailed)
       const { storage_path, parts } = (await urlRes.json()) as { storage_path: string; parts: { path: string; signedUrl: string }[] }
       const mime = file.type || (/\.wav$/i.test(file.name) ? 'audio/wav' : 'application/octet-stream')
-      for (let i = 0; i < parts.length; i++) {
-        const piece = file.slice(i * PIECE_BYTES, (i + 1) * PIECE_BYTES)
-        // One retry per piece: a phone on the move drops a request now and then.
-        const put = () => putWithProgress(parts[i].signedUrl, piece, 'application/octet-stream', (pct) =>
-          step({ phase: T.phasePiece(i + 1, parts.length, fmtMB(file.size)), pct: 5 + ((i + pct / 100) / parts.length) * 70 }),
-        )
-        await put().catch(put)
+      // Several pieces at once (one connection rarely fills an uplink); each lands at its own
+      // path, and the server stitches them by index, so the order they finish in doesn't matter.
+      const loaded = new Array<number>(parts.length).fill(0)
+      let finished = 0
+      const report = () => {
+        const sent = loaded.reduce((a, b) => a + b, 0)
+        step({ phase: T.phasePiece(Math.min(parts.length, finished + 1), parts.length, fmtMB(file.size)), pct: 5 + (sent / file.size) * 70 })
       }
+      await pool(parts.map((_, i) => i), isPhone ? 2 : PIECE_CONCURRENCY, async (i) => {
+        const piece = file.slice(i * pieceBytes, (i + 1) * pieceBytes)
+        const put = () => putWithProgress(parts[i].signedUrl, piece, 'application/octet-stream', (pct) => {
+          loaded[i] = (pct / 100) * piece.size
+          report()
+        })
+        // Two retries per piece: a phone on the move drops a request now and then.
+        await put().catch(() => { loaded[i] = 0; return put() }).catch(() => { loaded[i] = 0; return put() })
+        loaded[i] = piece.size
+        finished++
+        report()
+      })
       return { storage_path, mime, bytes: file.size, durationSec }
     }
 
@@ -826,11 +844,12 @@ export default function PenApp({
 
     if (canStreamPrep(file)) {
       // A long WAV (22 Oct: Chris's hour-long pen files sat at "5%" forever). Prepared in a
-      // worker a slice at a time with a moving percent, one file at a time; if that fails or
-      // stops moving for a minute, the original goes up as it is instead of hanging.
+      // worker a slice at a time with a moving percent, one file at a time. If the worker fails
+      // or stops moving for 20 s, the page prepares it itself from the start; only if that fails
+      // too does the original go up as it is (in parallel pieces). Fallbacks are logged.
       // Prep is the long part here (~20-30 s an hour), so it gets most of the bar: 2 → 45%.
       step({ phase: T.phasePrepQueue, pct: 2, short: T.upPrepQueue })
-      let prep: Prepared | null = null
+      let prep: (Prepared & { extra?: StreamExtra }) | null = null
       try {
         prep = await onePrepAtATime(() => {
           step({ phase: T.phasePreparingPct(0), pct: 2, short: T.upPreparing(0) })
@@ -841,7 +860,10 @@ export default function PenApp({
         })
       } catch (e) {
         console.warn('[pen] streaming prep failed, uploading as-is:', (e as Error).message)
+        logPrep(file, 'as-is', e instanceof PrepFailed ? e.trail : [{ path: 'worker', stage: 'prep', pct: 0, error: (e as Error).message }])
       }
+      // The worker failed part-way but the page's own prep finished: worth knowing too.
+      if (prep?.extra?.fallbacks.some((f) => f.stage === 'prep')) logPrep(file, prep.extra.path, prep.extra.fallbacks)
       up = prep ? await upPrepared(prep, 45) : await asIs()
     } else if (needsPiecedUpload(file)) {
       up = await asIs()
@@ -939,7 +961,9 @@ export default function PenApp({
         }
       }
     }
-    await Promise.all(Array.from({ length: Math.min(isPhone ? 1 : 2, batch.length) }, worker))
+    // Three lanes on a computer: prep still takes turns (onePrepAtATime), so this only lets the
+    // next file's prep start while two others are uploading, saving or being sent off.
+    await Promise.all(Array.from({ length: Math.min(isPhone ? 1 : 3, batch.length) }, worker))
     // The pen is plugged in (Chrome / Edge): offer to free up space for what's now safely in Juno.
     void penAfter.current(wentUp)
     void refresh()
@@ -1003,8 +1027,15 @@ export default function PenApp({
     [sessions],
   )
 
-  /** Recordings that look like one meeting the pen cut in half but that nobody has joined. */
-  const runs = useMemo(() => findRuns(sessions), [sessions])
+  // What the server's detector knows that this one needs to agree with it (GET /api/pen/merge):
+  // the user's pen split length, and seams they said are separate recordings.
+  const [runCtx, setRunCtx] = useState<{ splitMin: number | null; separate: string[] }>({ splitMin: null, separate: [] })
+  /** Recordings that look like one meeting the pen cut at its split length, all written up, that
+   *  nobody has joined (while a part is still on its way the server joins them itself). */
+  const runs = useMemo(
+    () => runsToOffer(sessions, { splitMin: runCtx.splitMin, separate: new Set(runCtx.separate) }),
+    [sessions, runCtx],
+  )
   const [joining, setJoining] = useState(false)
 
   const joinRun = async (ids: string[]): Promise<boolean> => {
@@ -1033,10 +1064,18 @@ export default function PenApp({
   const [suggest, setSuggest] = useState<{ a_id: string; b_id: string; reason: string }[]>([])
   const refreshSuggest = useCallback(async () => {
     try {
-      setSuggest((await getJson<{ suggestions?: { a_id: string; b_id: string; reason: string }[] }>('/api/pen/merge')).suggestions ?? [])
+      const j = await getJson<{ suggestions?: { a_id: string; b_id: string; reason: string }[]; splitMin?: number | null; separate?: string[] }>('/api/pen/merge')
+      setSuggest(j.suggestions ?? [])
+      setRunCtx({ splitMin: j.splitMin ?? null, separate: j.separate ?? [] })
     } catch {}
   }, [])
   useEffect(() => { void refreshSuggest() }, [refreshSuggest])
+  /** "No, keep separate" on a run: hidden at once, and stored so it never comes back. */
+  const keepSeparate = async (ids: string[]) => {
+    const seams = ids.slice(1).map((b, i) => `${ids[i]}:${b}`)
+    setRunCtx((c) => ({ ...c, separate: [...c.separate, ...seams] }))
+    try { await postJson('/api/pen/merge', { action: 'separate', ids }) } catch (e) { setErr(errMessage(e)) }
+  }
   const dismissSuggest = async (a: string, b: string) => {
     setSuggest((xs) => xs.filter((x) => !(x.a_id === a && x.b_id === b)))
     try { await postJson('/api/pen/merge', { action: 'dismiss', a, b }) } catch (e) { setErr(errMessage(e)) }
@@ -1051,19 +1090,52 @@ export default function PenApp({
     const a = sessions.find((s) => s.id === x.a_id)!, b = sessions.find((s) => s.id === x.b_id)!
     const nm = (s: PenSession) => s.title || s.client_name || s.source_name || T.untitled
     return (
-      <Banner key={`${x.a_id}:${x.b_id}`} tone="warn">
-        <strong style={{ color: 'var(--ink)' }}>{T.suggestTitle}</strong>
-        {x.reason && <span className="pen-suggest-reason">{x.reason}</span>}
-        <span className="pen-suggest-pair">{nm(a)}  →  {nm(b)}</span>
-        <span className="pen-suggest-btns">
-          <button className="pen-btn pen-btn-primary" disabled={joining} onClick={() => void joinRun([x.a_id, x.b_id])}>
-            <Icon name="link" size={15} />{joining ? T.joining : T.suggestJoin}
-          </button>
-          <button className="pen-btn" disabled={joining} onClick={() => void dismissSuggest(x.a_id, x.b_id)}>{T.suggestNo}</button>
-        </span>
-      </Banner>
+      <JoinBanner
+        key={`${x.a_id}:${x.b_id}`}
+        title={T.suggestTitle}
+        body={x.reason}
+        names={[nm(a), nm(b)]}
+        joinLabel={joining ? T.joining : T.suggestJoin}
+        noLabel={T.suggestNo}
+        busy={joining}
+        onJoin={() => void joinRun([x.a_id, x.b_id])}
+        onNo={() => void dismissSuggest(x.a_id, x.b_id)}
+      />
     )
   })
+  /** The filename rule's runs, the same banner. */
+  const runBanners = !locked && runs.map((r) => (
+    <JoinBanner
+      key={r.sessions[0].id}
+      title={T.runTitle(r.sessions.length, fmtDur(r.totalSec))}
+      body={T.runBody}
+      names={r.sessions.map((s) => s.source_name || s.title || T.untitledLower)}
+      joinLabel={joining ? T.joining : T.join}
+      joinShort={joining ? T.joining : T.suggestJoin}
+      noLabel={T.suggestNo}
+      busy={joining}
+      onJoin={() => void joinRun(r.sessions.map((s) => s.id))}
+      onNo={() => void keepSeparate(r.sessions.map((s) => s.id))}
+    />
+  ))
+  // Localhost only: ?joinmock=1 adds a pen split (59:12 + 31 min, the run banner) and a model
+  // suggestion to the list, for reviewing the banners without real recordings (like ?upcard=).
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return
+    if (new URLSearchParams(window.location.search).get('joinmock') !== '1') return
+    const base = sessions[0] ?? ({} as PenSession)
+    const mk = (id: string, source_name: string, duration_sec: number, title: string): PenSession =>
+      ({ ...base, id, source_name, duration_sec, title, status: 'noted', merge_group: null, merge_index: null, source_channel: 'upload', recorded_at: null } as PenSession)
+    setSessions((prev) => [
+      mk('mock-a', 'R20261021-140202.WAV', 3552, 'Quarterly planning'),
+      mk('mock-b', 'R20261021-150114.WAV', 1860, 'Quarterly planning (cont.)'),
+      mk('mock-c', 'VoiceNote-0912.m4a', 640, 'Call with Marta'),
+      mk('mock-d', 'VoiceNote-0915.m4a', 410, 'Call with Marta, part 2'),
+      ...prev.filter((x) => !x.id.startsWith('mock-')),
+    ])
+    setTimeout(() => setSuggest([{ a_id: 'mock-c', b_id: 'mock-d', reason: 'The second starts mid-sentence, on the same pricing question the first ends on.' }]), 4000)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const combineSheet = combineFor && sessions.find((s) => s.id === combineFor) ? (
     <CombinePicker
       session={sessions.find((s) => s.id === combineFor)!}
@@ -1137,16 +1209,7 @@ export default function PenApp({
         {heldNotice && <Banner tone="warn" onClose={() => setHeldNotice(false)}>{T.heldNotice}</Banner>}
         {phoneTab !== 'search' && suggestBanners}
         {combineSheet}
-        {phoneTab !== 'search' && runs.map((r) => (
-          <Banner key={r.sessions[0].id} tone="warn">
-            <strong style={{ color: 'var(--ink)' }}>{T.runTitle(r.sessions.length, fmtDur(r.totalSec))}</strong>{' '}
-            {T.runBody}
-            <button className="pen-btn mt-2.5" disabled={joining} onClick={() => void joinRun(r.sessions.map((x) => x.id))}>
-              <Icon name="link" size={15} />
-              {joining ? T.joining : T.join}
-            </button>
-          </Banner>
-        ))}
+        {phoneTab !== 'search' && runBanners}
       </>
     )
 
@@ -1835,25 +1898,7 @@ export default function PenApp({
           days late. */}
       {suggestBanners}
       {combineSheet}
-      {runs.map((r) => (
-        <Banner key={r.sessions[0].id} tone="warn">
-          <strong style={{ color: 'var(--ink)' }}>
-            {T.runTitle(r.sessions.length, fmtDur(r.totalSec))}
-          </strong>{' '}
-          {T.runBody}
-          <div className="pen-mono mt-1 text-[13px]" style={{ color: 'var(--faint)' }}>
-            {r.sessions.map((s) => s.source_name || s.title || T.untitledLower).join('  →  ')}
-          </div>
-          <button
-            className="pen-btn mt-2.5"
-            disabled={joining}
-            onClick={() => void joinRun(r.sessions.map((s) => s.id))}
-          >
-            <Icon name="link" size={15} />
-            {joining ? T.joining : T.join}
-          </button>
-        </Banner>
-      ))}
+      {runBanners}
 
       {(pending.length > 0 || progress || importDone) && (
         <>
@@ -3751,6 +3796,33 @@ function Banner({ children, tone, onClose }: { children: React.ReactNode; tone: 
   )
 }
 
+/**
+ * "These look like one meeting": title, one line of why, the files in order, then one row of
+ * actions — join (icon inline with its label) and "No, keep separate".
+ */
+function JoinBanner(p: { title: string; body?: string; names: string[]; joinLabel: string; joinShort?: string; noLabel: string; busy: boolean; onJoin: () => void; onNo: () => void }) {
+  return (
+    <div className="pen-join" role="group" aria-label={p.title}>
+      <strong className="pen-join-title">{p.title}</strong>
+      {p.body && <span className="pen-join-body">{p.body}</span>}
+      <span className="pen-join-files">{p.names.join('  →  ')}</span>
+      <span className="pen-join-acts">
+        <button className="pen-btn pen-btn-primary" disabled={p.busy} onClick={p.onJoin}>
+          <Icon name="link" size={16} />
+          {p.joinShort ? (
+            <>
+              {/* A phone's row has room for both buttons only with the short label. */}
+              <span className="pen-join-long">{p.joinLabel}</span>
+              <span className="pen-join-short">{p.joinShort}</span>
+            </>
+          ) : p.joinLabel}
+        </button>
+        <button className="pen-btn" disabled={p.busy} onClick={p.onNo}>{p.noLabel}</button>
+      </span>
+    </div>
+  )
+}
+
 function initials(s: string) {
   const parts = s.trim().split(/\s+/).filter(Boolean)
   if (!parts.length) return '?'
@@ -3803,6 +3875,32 @@ function groupByDay(sessions: PenSession[], lang: Lang, order: RecOrder = 'date'
 }
 
 /** fetch() gives no upload progress, and these files are big enough that it matters. */
+/** Pieces of an as-is upload in flight at once on a computer. */
+const PIECE_CONCURRENCY = 4
+
+/** Runs `fn` over `items`, at most `n` at a time. Rejects on the first failure. */
+async function pool<T>(items: T[], n: number, fn: (x: T) => Promise<void>): Promise<void> {
+  let next = 0
+  const lane = async () => { while (next < items.length) await fn(items[next++]) }
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, lane))
+}
+
+/**
+ * The browser's prep fell back (worker → page, or to the original as-is): one line in the
+ * server log (/api/pen/prep-log) so real-world failures show up in Vercel. Never throws, never
+ * waits.
+ */
+function logPrep(file: File, outcome: 'worker' | 'main-thread' | 'as-is', trail: PrepFallback[]) {
+  try {
+    void fetch('/api/pen/prep-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true,
+      body: JSON.stringify({ name: file.name, bytes: file.size, outcome, trail: trail.slice(0, 4) }),
+    }).catch(() => {})
+  } catch {}
+}
+
 function putWithProgress(url: string, blob: Blob, mime: string, onPct: (pct: number) => void) {
   return new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest()

@@ -755,16 +755,31 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
     .pen-combine-foot .pen-btn { flex: 1; justify-content: center; }
   }
 
-  /* ---- a join suggestion (join-suggest.ts), in the run banner's place ---- */
-  .pen-suggest-reason { display: block; margin-top: 4px; color: var(--soft); }
-  .pen-suggest-pair { display: block; margin-top: 4px; font-size: 13px; color: var(--dim); }
-  .pen-suggest-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
-  /* The join suggestion sits above the Home greeting: keep them apart. */
-  div:has(> div > .pen-suggest-btns) { margin-bottom: 20px; }
+  /* ---- "these look like one meeting" (JoinBanner): the filename rule's runs and join-suggest.ts ---- */
+  .pen-join {
+    margin: 12px 0 20px; /* sits above the Home greeting: keep them apart */
+    display: flex; flex-direction: column; gap: 4px;
+    padding: 14px 16px; border-radius: 16px;
+    background: var(--warn-wash); border: 1px solid var(--warn-line);
+    font-size: 14.5px; line-height: 1.45; color: var(--warn);
+  }
+  .pen-join-title { color: var(--ink); font-weight: 600; font-size: 15.5px; letter-spacing: -0.01em; text-wrap: balance; }
+  .pen-join-body { color: var(--soft); }
+  .pen-join-files { font-size: 13px; color: var(--dim); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .pen-join-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+  .pen-join-acts .pen-btn { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 0 16px; font-size: 15px; }
+  .pen-join-acts .pen-btn svg { flex: none; }
+  .pen-join + .pen-join { margin-top: -8px; }
+  .pen-join-short { display: none; }
+  @media (max-width: 640px) {
+    .pen-join { padding: 14px; }
+    .pen-join-acts .pen-btn { min-height: 44px; flex: 1 1 auto; justify-content: center; padding: 0 14px; }
+    .pen-join-long { display: none; }
+    .pen-join-short { display: inline; }
+  }
   /* "Ready to import" opens above the Home grid: give the greeting and the Recent recordings
      card room below it instead of butting against its bottom edge. */
   .pen-import-panel { margin-bottom: 32px; }
-  .pen-suggest-btns .pen-btn { min-height: 40px; }
 
   /* A pre-existing cascade slip, fixed here because the white card made it visible: between
      901 and 1280px the rail is static and full width (pen-theme.css, "workspace, narrow"), but

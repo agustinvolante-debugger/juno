@@ -160,6 +160,15 @@ body:has(.pen-root) {
 }
 .pen-btn:hover:not(:disabled) { background: var(--sunk); border-color: #DAD5C9; }
 .pen-btn:disabled { opacity: .42; cursor: not-allowed; }
+/* JoinBanner ("these look like one meeting"); app-skin.css restyles it inside the app. */
+.pen-join { margin-top: 16px; display: flex; flex-direction: column; gap: 4px; padding: 12px 16px; border-radius: 8px; background: var(--warn-wash); border: 1px solid var(--warn-line); color: var(--warn); font-size: 14.5px; }
+.pen-join-title { color: var(--ink); }
+.pen-join-body { color: var(--soft); }
+.pen-join-files { font-size: 13px; color: var(--dim); }
+.pen-join-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.pen-join-acts .pen-btn { display: inline-flex; align-items: center; gap: 7px; }
+.pen-join-short { display: none; }
+@media (max-width: 640px) { .pen-join-long { display: none; } .pen-join-short { display: inline; } }
 .pen-btn-primary { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 .pen-btn-primary:hover:not(:disabled) { background: #302D24; border-color: #302D24; }
 .pen-btn-accent { background: var(--accent); border-color: var(--accent); color: #fff; }

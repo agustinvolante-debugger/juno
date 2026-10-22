@@ -5,7 +5,8 @@ import { getSession, updateSession, listSessions } from '@/lib/pen/store'
 import { writeNotes } from '@/lib/pen/pipeline'
 import { joinSegments, splitGroup, groupSessions, findRuns } from '@/lib/pen/merge'
 import { sendBriefing, hasSomethingToSay } from '@/lib/pen/briefing'
-import { openJoinSuggestions, dismissJoinSuggestion } from '@/lib/pen/join-suggest'
+import { openJoinSuggestions, dismissJoinSuggestion, separateSeams, keepSeparate } from '@/lib/pen/join-suggest'
+import { readPenSettings } from '@/lib/pen/pen-device-server'
 
 export const dynamic = 'force-dynamic'
 // Rewrites the notes over the combined transcript — the same Opus call the notes route makes.
@@ -18,6 +19,7 @@ export const maxDuration = 300
 // POST — { action: 'join', ids } links them and rewrites the notes over the whole thing.
 //        { action: 'split', group } undoes it.
 //        { action: 'dismiss', a, b } turns down a suggestion for good.
+//        { action: 'separate', ids } "No, keep separate" on a filename-rule run, for good.
 //
 // Nothing is destroyed either way: each segment keeps its own audio and its own transcript,
 // so a join that reads badly is one button from being undone.
@@ -26,8 +28,16 @@ export async function GET() {
   const email = await authedEmail()
   if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-  const runs = findRuns(await listSessions(email, 200))
+  const [list, splitMin, separate] = await Promise.all([
+    listSessions(email, 200),
+    readPenSettings(email).then((r) => r.settings.splitMin).catch(() => null),
+    separateSeams(email).catch(() => new Set<string>()),
+  ])
+  const runs = findRuns(list, { splitMin, separate })
   return NextResponse.json({
+    // What the browser's own detector needs to agree with this one.
+    splitMin,
+    separate: Array.from(separate),
     runs: runs.map((r) => ({
       ids: r.sessions.map((s) => s.id),
       names: r.sessions.map((s) => s.source_name),
@@ -56,6 +66,13 @@ export async function POST(req: Request) {
   if (b.action === 'dismiss') {
     if (!b.a || !b.b) return NextResponse.json({ error: 'a and b required' }, { status: 400 })
     await dismissJoinSuggestion(email, b.a, b.b)
+    return NextResponse.json({ ok: true })
+  }
+
+  if (b.action === 'separate') {
+    const ids = Array.isArray(b.ids) ? b.ids.filter((x) => typeof x === 'string').slice(0, 20) : []
+    if (ids.length < 2) return NextResponse.json({ error: 'ids required' }, { status: 400 })
+    await keepSeparate(email, ids)
     return NextResponse.json({ ok: true })
   }
 

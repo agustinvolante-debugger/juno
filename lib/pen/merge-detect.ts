@@ -19,7 +19,42 @@ import { namedDialogue, type SpeakerMap } from './speakers'
 
 /** Two files count as one meeting if the second starts within this many seconds of the
  *  first ending. The pen is sample-accurate, but a second of slack costs nothing. */
-const SEAM_TOLERANCE_SEC = 90
+export const SEAM_TOLERANCE_SEC = 90
+
+/**
+ * The pen only starts a new file ON ITS OWN when the current one reaches its split length
+ * (MRECSET PART, 10-240 min; Juno's default 60). A file that ends short of it was stopped by
+ * someone, so whatever starts next is a new recording, however close: the founder's 22 Oct pair
+ * (27 min, then a new call 9 s later) was two calls back to back, not one cut in half. So the
+ * EARLIER file must last a split length, give or take this much, for the next to continue it.
+ */
+export const SPLIT_SLACK_SEC = 20
+/** Split lengths always accepted, besides the user's saved one: older settings and other pens. */
+export const COMMON_SPLITS_MIN = [30, 60, 120, 180, 240]
+/**
+ * What a split-length file MEASURES as, relative to its nominal length. Every real 60-minute pen
+ * split in the database (22 Sep, 24 Sep, 26 Sep, 30 Sep; next file 0-1 s after) is stored as
+ * 3552 s, not 3600: the pen's clock runs ~1.3% fast, so it cuts at 59:12 of real audio. Both
+ * the nominal and the measured length are accepted.
+ */
+export const PEN_CLOCK = 3552 / 3600
+
+export type RunOptions = {
+  /** The user's saved split length in minutes (profile pen.splitMin), if any. */
+  splitMin?: number | null
+  /** Seams the user said are NOT one recording ("No, keep separate"), as "earlierId:laterId". */
+  separate?: Set<string> | null
+}
+
+/** Did a file of this length end because the pen reached its split length? */
+export function endsAtSplit(durationSec: number, splitMin?: number | null): boolean {
+  const lengths = splitMin && splitMin > 0 ? [splitMin, ...COMMON_SPLITS_MIN] : COMMON_SPLITS_MIN
+  return lengths.some((m) =>
+    Math.abs(durationSec - m * 60) <= SPLIT_SLACK_SEC || Math.abs(durationSec - m * 60 * PEN_CLOCK) <= SPLIT_SLACK_SEC)
+}
+
+/** The key a "keep separate" seam is stored under. */
+export const seamKey = (earlierId: string, laterId: string) => `${earlierId}:${laterId}`
 
 /** Pen filenames look like R20260922-213209.WAV — date and wall-clock start. */
 export function startFromName(name: string | null | undefined): Date | null {
@@ -42,9 +77,11 @@ export type SegmentRun = { sessions: PenSession[]; totalSec: number }
  *
  * Only considers recordings that are not already joined, have a duration, and whose filename
  * carries a start time — a file the user renamed or uploaded from elsewhere cannot be placed
- * on the timeline and is left alone rather than guessed at.
+ * on the timeline and is left alone rather than guessed at. A file continues the one before it
+ * only if that one lasted a split length (endsAtSplit) and this one starts within the seam
+ * tolerance of its end, and the user hasn't marked that seam as separate.
  */
-export function findRuns(sessions: PenSession[]): SegmentRun[] {
+export function findRuns(sessions: PenSession[], opts: RunOptions = {}): SegmentRun[] {
   const candidates = sessions
     .filter((s) => !s.merge_group && (s.duration_sec ?? 0) > 0 && startFromName(s.source_name))
     .map((s) => ({ s, start: startOf(s)! }))
@@ -72,7 +109,11 @@ export function findRuns(sessions: PenSession[]): SegmentRun[] {
     const prevEnd = prev.start.getTime() + (prev.s.duration_sec ?? 0) * 1000
     const gapSec = (c.start.getTime() - prevEnd) / 1000
     // Negative gap means overlap, which is not a seam — treat it as a separate recording.
-    if (gapSec >= -2 && gapSec <= SEAM_TOLERANCE_SEC) current.push(c)
+    const continues =
+      gapSec >= -2 && gapSec <= SEAM_TOLERANCE_SEC &&
+      endsAtSplit(prev.s.duration_sec ?? 0, opts.splitMin) &&
+      !opts.separate?.has(seamKey(prev.s.id, c.s.id))
+    if (continues) current.push(c)
     else {
       flush()
       current = [c]
@@ -80,6 +121,17 @@ export function findRuns(sessions: PenSession[]): SegmentRun[] {
   }
   flush()
   return runs
+}
+
+
+/**
+ * The runs worth a "Join into one meeting" banner: every part written up. While a part is still
+ * transcribing or being written up, the server joins the run itself when the last transcript
+ * lands (lib/pen/merge.ts autoJoin), so offering a button then only invites a double join. (A
+ * part that failed or is held can't be joined either: the join needs every transcript.)
+ */
+export function runsToOffer(sessions: PenSession[], opts: RunOptions = {}): SegmentRun[] {
+  return findRuns(sessions, opts).filter((r) => r.sessions.every((s) => s.status === 'noted'))
 }
 
 /**

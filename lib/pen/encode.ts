@@ -391,6 +391,17 @@ export function fmtDur(sec: number) {
 /** Each piece stays well under Supabase's 50 MiB object limit. */
 export const PIECE_BYTES = 40 * 1024 * 1024
 
+/** Same cap as lib/pen/store.ts MAX_PARTS (server-only there). */
+const MAX_PIECES = 40
+
+/**
+ * Piece size for an as-is upload: 16 MB, so an hour of pen audio (~85 MB) is 6 pieces that go up
+ * several at a time; bigger only when a file would need more than MAX_PIECES of them.
+ */
+export function pieceSizeFor(size: number): number {
+  return Math.min(PIECE_BYTES, Math.max(16 * 1024 * 1024, Math.ceil(size / MAX_PIECES)))
+}
+
 /**
  * A file this device can't prepare safely (decoding it whole would crash a phone): it goes up
  * as it is, in pieces, and AssemblyAI reads the original. Same test prepareAudio refuses on.

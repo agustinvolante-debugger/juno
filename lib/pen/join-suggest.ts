@@ -197,6 +197,33 @@ export async function openJoinSuggestions(email: string): Promise<Suggestion[]> 
   return rows.filter((r) => free.has(r.a_id) && free.has(r.b_id))
 }
 
+/**
+ * Seams the user said are separate recordings, as "earlierId:laterId": any dismissed row, a
+ * turned-down model suggestion or a "No, keep separate" on the filename rule's banner. Empty when
+ * the table doesn't exist yet.
+ */
+export async function separateSeams(email: string): Promise<Set<string>> {
+  const { data, error } = await supabaseAdmin
+    .from('pen_join_suggestions')
+    .select('a_id,b_id')
+    .eq('user_email', email)
+    .not('dismissed_at', 'is', null)
+  if (error) return new Set()
+  return new Set((data ?? []).map((r: { a_id: string; b_id: string }) => `${r.a_id}:${r.b_id}`))
+}
+
+/**
+ * "No, keep separate" on a run the filename rule found: every seam in it is stored as a dismissed
+ * pair (same=false), so the banner never comes back and autoJoin never joins them. Ids in order.
+ */
+export async function keepSeparate(email: string, ids: string[]): Promise<void> {
+  const now = new Date().toISOString()
+  const rows = ids.slice(1).map((b, i) => ({ user_email: email, a_id: ids[i], b_id: b, same: false, confidence: 1, reason: 'kept separate by the user', dismissed_at: now }))
+  if (!rows.length) return
+  const { error } = await supabaseAdmin.from('pen_join_suggestions').upsert(rows, { onConflict: 'user_email,a_id,b_id' })
+  if (error && !isMissingSchema(error.message)) throw new Error(error.message)
+}
+
 /** "Not the same": the pair is never suggested again. */
 export async function dismissJoinSuggestion(email: string, a: string, b: string): Promise<void> {
   const { error } = await supabaseAdmin
