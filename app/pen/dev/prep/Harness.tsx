@@ -10,7 +10,7 @@ export default function Harness() {
   const [log, setLog] = useState<string[]>([])
   useEffect(() => {
     const w = window as unknown as Record<string, unknown>
-    w.__runPrep = async (index = 0, opts: { watchdogMs?: number; decode?: boolean; b64?: boolean } = {}) => {
+    w.__runPrep = async (index = 0, opts: { watchdogMs?: number; decode?: boolean; b64?: boolean; mode?: 'worker' | 'main-thread' } = {}) => {
       const input = document.getElementById('f') as HTMLInputElement
       const file = input.files?.[index]
       if (!file) throw new Error('no file')
@@ -21,7 +21,7 @@ export default function Harness() {
       let lastPct = -1
       const t0 = performance.now()
       try {
-        const prep = await streamPrepare(file, (f) => { events++; lastPct = Math.floor(f * 100) }, { watchdogMs: opts.watchdogMs })
+        const prep = await streamPrepare(file, (f) => { events++; lastPct = Math.floor(f * 100) }, { watchdogMs: opts.watchdogMs, mode: opts.mode })
         const wall = (performance.now() - t0) / 1000
         const headerDur = await durationWithoutDecoding(file)
         let decodedDur = -1
