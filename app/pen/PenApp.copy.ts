@@ -233,6 +233,12 @@ const en = {
   clear: 'clear',
   whoOnCall: 'Who was on this call (optional)',
   whoHint: 'Leave it empty and the notes will suggest who they heard.',
+  whoPerFile: 'Who was on each? Optional: tap + Who on a file. Leave them empty and Juno asks once the notes are written.',
+  whoAdd: 'Who',
+  whoEdit: (n: number) => `Edit (${n})`,
+  whoFor: (f: string) => `Who was on ${f}`,
+  whoDoneAdding: 'Done',
+  upWhoEach: 'Who was in each?',
   importN: (n: number) => (n ? `Import ${n} and transcribe` : 'Import and transcribe'),
 
   // detail
@@ -568,6 +574,12 @@ const es: AppCopy = {
   clear: 'limpiar',
   whoOnCall: 'Quién estuvo en esta reunión (opcional)',
   whoHint: 'Si lo dejas vacío, las notas sugerirán a quién escucharon.',
+  whoPerFile: '¿Quién estuvo en cada una? Opcional: toca + Quién en un archivo. Si lo dejas vacío, Juno te pregunta cuando las notas estén listas.',
+  whoAdd: 'Quién',
+  whoEdit: (n) => `Editar (${n})`,
+  whoFor: (f) => `Quién estuvo en ${f}`,
+  whoDoneAdding: 'Listo',
+  upWhoEach: '¿Quién estuvo en cada una?',
   importN: (n) => (n ? `Importar ${n} y transcribir` : 'Importar y transcribir'),
 
   noPartTranscript: 'Esta parte todavía no tiene transcripción.',
@@ -896,6 +908,12 @@ const pt: AppCopy = {
   clear: 'limpar',
   whoOnCall: 'Quem estava nesta reunião (opcional)',
   whoHint: 'Se deixar vazio, as notas sugerem quem foi ouvido.',
+  whoPerFile: 'Quem estava em cada uma? Opcional: toque em + Quem num arquivo. Se deixar vazio, o Juno pergunta quando as notas estiverem prontas.',
+  whoAdd: 'Quem',
+  whoEdit: (n) => `Editar (${n})`,
+  whoFor: (f) => `Quem estava em ${f}`,
+  whoDoneAdding: 'Pronto',
+  upWhoEach: 'Quem estava em cada uma?',
   importN: (n) => (n ? `Importar ${n} e transcrever` : 'Importar e transcrever'),
 
   noPartTranscript: 'Esta parte ainda não tem transcrição.',

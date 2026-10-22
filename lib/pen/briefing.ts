@@ -72,9 +72,10 @@ export async function emailConversations(session: PenSession): Promise<EmailConv
   }
 }
 
-export function renderBriefing(session: PenSession, lang: Lang = 'en', ask: { href: string; label: string } | null = null, conversations: EmailConvo[] = []): string {
+export function renderBriefing(session: PenSession, lang: Lang = 'en', ask: { href: string; label: string } | null = null, conversations: EmailConvo[] = [], askWho = false): string {
   const base = (process.env.PEN_PUBLIC_URL || process.env.NEXTAUTH_URL || '').replace(/\/$/, '')
   return buildBriefingHtml({
+    whoUrl: askWho && !conversations.length ? `${(process.env.PEN_PUBLIC_URL || base || 'https://www.tryjunoapp.com').replace(/\/$/, '')}/pen?who=${encodeURIComponent(session.id)}` : undefined,
     conversations,
     nameUrl: conversations.length ? `${(process.env.PEN_PUBLIC_URL || base || 'https://www.tryjunoapp.com').replace(/\/$/, '')}/pen?open=${encodeURIComponent(session.id)}` : undefined,
     notes: session.notes ?? {},
@@ -147,6 +148,8 @@ export async function sendBriefing(opts: {
       lang,
       isOwnCopy(opts) ? await askLink(opts.session, lang).catch(() => null) : null,
       isOwnCopy(opts) ? await emailConversations(opts.session) : [],
+      // "Who was there?" only in the owner's copy, and only while nobody has said (who.ts).
+      isOwnCopy(opts) && !opts.session.event_mode && (await askWhoFor(opts.session)),
     ),
     replyTo: opts.replyTo,
   })
@@ -221,6 +224,16 @@ export async function briefOnce(opts: { email: string; session: PenSession; part
   const { updateSession } = await import('./store')
   await updateSession(s.id, { briefing_sent_at: new Date().toISOString() })
   return 'sent'
+}
+
+/** Whether the briefing should ask who was there: nobody linked by the user yet. Never throws. */
+async function askWhoFor(session: PenSession): Promise<boolean> {
+  try {
+    const { unconfirmed } = await import('./who-server')
+    return (await unconfirmed(session.user_email, [session.id])).length > 0
+  } catch {
+    return false
+  }
 }
 
 function isOwnCopy(opts: { session: PenSession; to: string[] }): boolean {

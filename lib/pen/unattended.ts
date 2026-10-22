@@ -19,6 +19,7 @@ import { joinEventImport, pool, hasEventMates } from './event-day'
 import type { PenSession } from './store'
 import { enrichPerson, peopleOnSession } from './people'
 import { sendWhatsAppBriefing, sendWhatsAppFailure } from './whatsapp/bot'
+import { linkCalendarGuests } from './who-server'
 
 /** Notes, then the briefing. Runs with nobody watching, so every failure has to say so. */
 export async function runUnattended(sessionId: string, email: string) {
@@ -44,6 +45,7 @@ export async function runUnattended(sessionId: string, email: string) {
  * after-upload message. Never throws.
  */
 export async function afterNotesFollowUps(email: string, sessionId: string): Promise<void> {
+  await linkCalendarGuests(email, sessionId)
   await scanSuggestions(email, sessionId).catch(() => {})
   await import('./proactive').then((m) => m.runForUser(email, { justNoted: sessionId })).catch((e) => console.warn(`pen proactive after notes: ${(e as Error).message}`))
 }
@@ -131,6 +133,12 @@ async function notesAndBriefing(sessionId: string, email: string) {
       if (combined === 'taken') return
       noted = combined.session
     }
+
+    // Who was on it, from the calendar: the matching past meeting's guests become people on the
+    // recording (lib/pen/who.ts). After the notes, not at upload: the notes and the transcriber
+    // treat linked people as the confirmed attendee list, and an invited guest who never showed
+    // up must not be written into the notes as present. Never throws.
+    if (noted) await linkCalendarGuests(email, noted.id)
 
     // New notes mean something new about whoever was on the call. Refresh their cards.
     if (noted) {

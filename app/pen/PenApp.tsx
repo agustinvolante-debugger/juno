@@ -34,6 +34,7 @@ import { useNames, startSplit, useSplitting } from './names-store'
 import { isOwner } from '@/lib/pen/owner'
 import { isMine } from '@/lib/pen/todo-labels'
 import PeoplePicker, { type Picked } from './PeoplePicker'
+import { carryBox, peopleForUploads } from '@/lib/pen/who'
 import type { ArchiveStats } from '@/lib/pen/stats'
 import DeliverableSheet, { DeliverableActions, type SheetRequest } from './DeliverableSheet'
 import SendBriefing from './SendBriefing'
@@ -113,9 +114,10 @@ function useAccept(): string | undefined {
   return accept
 }
 
-type Pending = { file: File; picked: boolean }
+/** `people`: who was on this file, when 2+ files are selected (each file its own; 22 Oct). */
+type Pending = { file: File; picked: boolean; people?: Picked[] }
 type Progress = { name: string; phase: string; pct: number }
-type UploadItem = { key: string; name: string; phase: string; pct: number; short?: string; state: 'waiting' | 'working' | 'done' | 'held' | 'error'; error?: string }
+type UploadItem = { key: string; name: string; phase: string; pct: number; short?: string; state: 'waiting' | 'working' | 'done' | 'held' | 'error'; error?: string; sessionId?: string; tagged?: boolean }
 
 export default function PenApp({
   initial,
@@ -218,6 +220,22 @@ export default function PenApp({
     }
     const u = new URL(window.location.href)
     u.searchParams.delete('open')
+    window.history.replaceState(null, '', u.toString())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  // ?who=<id>,<id>: the briefing email's "Who was there? Tap to confirm" opens Home's review of
+  // those recordings (WhoHere.tsx). Dropped afterwards, like ?open=.
+  const [whoIds, setWhoIds] = useState<string[] | null>(null)
+  useEffect(() => {
+    const u = new URL(window.location.href)
+    const v = u.searchParams.get('who')
+    if (!v) return
+    const ids = v.split(',').filter((x) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 40)
+    if (ids.length) {
+      setView({ k: 'archive' })
+      setWhoIds(ids)
+    }
+    u.searchParams.delete('who')
     window.history.replaceState(null, '', u.toString())
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -689,6 +707,27 @@ export default function PenApp({
     void penFlow.connect()
   }
 
+  // Two or more files selected: the one "Who was on this call" box gives way to each file's own
+  // "+ Who" (22 Oct). People already in the box move onto each selected file, where they can be
+  // kept or removed per file; back to one file, that file's people fill the box again.
+  const pickedCount = pending.filter((p) => p.picked).length
+  const wasMulti = useRef(false)
+  useEffect(() => {
+    const next = carryBox(pending, callPeople, wasMulti.current)
+    if (next.files !== pending) setPending(next.files)
+    if (next.box !== callPeople) setCallPeople(next.box)
+    wasMulti.current = pickedCount > 1
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickedCount])
+
+  /** "Who was in each?" after a multi-file upload: Home, with those recordings to confirm. */
+  const openWho = (ids: string[]) => {
+    setView({ k: 'archive' })
+    setPhoneTab('home')
+    setWhoIds(ids)
+    setUploads((prev) => prev.filter((u) => u.state === 'waiting' || u.state === 'working'))
+  }
+
   function addFiles(files: FileList | File[]) {
     if (locked) return
     const list = Array.from(files).filter((f) => MEDIA_RE.test(f.name))
@@ -727,7 +766,7 @@ export default function PenApp({
   }
 
   /** One file: prepare, upload, save, send for transcription. 'held' = saved, waiting for hours. */
-  async function uploadOne(file: File, people: Picked[], step: (p: { phase: string; pct: number; short?: string }) => void, event = false): Promise<'done' | 'held'> {
+  async function uploadOne(file: File, people: Picked[], step: (p: { phase: string; pct: number; short?: string }) => void, event = false): Promise<{ state: 'done' | 'held'; id: string }> {
     const callPeople = people
     // What goes up, and where it lands. Normally the audio is prepared (compressed) in the
     // browser first. A file too big to prepare safely on this device (a long recording on a
@@ -854,13 +893,13 @@ export default function PenApp({
         if (j.allowance) setAllowance(j.allowance)
         setSessions((prev) => prev.map((x) => (x.id === session.id ? { ...x, status: 'held' as const } : x)))
         setHeldNotice(true)
-        return 'held'
+        return { state: 'held', id: session.id }
       }
       if (!tRes.ok) throw new Error((await tRes.json()).error ?? T.transcribeFailed)
       setSessions((prev) => prev.map((x) => (x.id === session.id ? { ...x, status: 'transcribing' as const } : x)))
       setWatchReady((w) => ({ ...w, [session.id]: Date.now() }))
     }
-    return 'done'
+    return { state: 'done', id: session.id }
   }
 
   async function importPicked() {
@@ -870,9 +909,11 @@ export default function PenApp({
     if (!consent) {
       return setErr(T.consentFirst)
     }
-    const people = callPeople
+    // One file: the "Who was on this call" box. Two or more: each file's own "+ Who" (22 Oct),
+    // so tagging Chris on one recording no longer tags all ten.
     const event = eventMode
-    const batch = picked.map((p, i) => ({ key: `${Date.now()}-${i}-${p.file.name}`, file: p.file }))
+    const tags = peopleForUploads(picked, callPeople)
+    const batch = picked.map((p, i) => ({ key: `${Date.now()}-${i}-${p.file.name}`, file: p.file, people: tags[i] }))
     // Finished rows from an earlier batch make way for this one; rows still going stay.
     setUploads((prev) => [
       ...prev.filter((u) => u.state === 'waiting' || u.state === 'working'),
@@ -890,8 +931,8 @@ export default function PenApp({
         const b = batch[next++]
         patchUpload(b.key, { state: 'working', phase: T.phasePreparing, pct: 2 })
         try {
-          const r = await uploadOne(b.file, people, ({ phase, pct, short }) => patchUpload(b.key, { phase, pct, short }), event)
-          patchUpload(b.key, { state: r, pct: 100 })
+          const r = await uploadOne(b.file, b.people, ({ phase, pct, short }) => patchUpload(b.key, { phase, pct, short }), event)
+          patchUpload(b.key, { state: r.state, pct: 100, sessionId: r.id, tagged: b.people.length > 0 })
           wentUp.push(b.file)
         } catch (e) {
           patchUpload(b.key, { state: 'error', error: (e as Error).message })
@@ -1201,6 +1242,9 @@ export default function PenApp({
           }}
           onOpen={(id) => { openSession(id); setTab('note') }}
           sheets={Boolean(google) && !readOnly}
+          readOnly={locked}
+          whoIds={whoIds}
+          onWhoClosed={() => setWhoIds(null)}
         />
         </>
       ) : (
@@ -1462,7 +1506,7 @@ export default function PenApp({
         )}
         {promoOpen && !tourOpen && <ReferralPromo T={T} onClose={closePromo} />}
         {askOpen && !tourOpen && !promoOpen && <FeedbackAsk T={T} onClose={closeAsk} />}
-        <UploadCard uploads={uploads} onClose={() => setUploads((prev) => prev.filter((u) => u.state === 'waiting' || u.state === 'working'))} whatsapp={whatsapp ?? null} phone={isPhone} byHand={mounted && !supportsPicker} T={T} />
+        <UploadCard uploads={uploads} onClose={() => setUploads((prev) => prev.filter((u) => u.state === 'waiting' || u.state === 'working'))} onWho={openWho} whatsapp={whatsapp ?? null} phone={isPhone} byHand={mounted && !supportsPicker} T={T} />
         {readyToast}
       </LangProvider>
     )
@@ -1562,7 +1606,7 @@ export default function PenApp({
       {tourOpen && <Tour lang={appLang} linked={Boolean(whatsapp?.linked)} onClose={closeTour} onUpload={() => fileInput.current?.click()} onOpenFirst={tourFirst} />}
       {promoOpen && !tourOpen && <ReferralPromo T={T} onClose={closePromo} />}
       {askOpen && !tourOpen && !promoOpen && <FeedbackAsk T={T} onClose={closeAsk} />}
-      <UploadCard uploads={uploads} onClose={() => setUploads((prev) => prev.filter((u) => u.state === 'waiting' || u.state === 'working'))} whatsapp={whatsapp ?? null} phone={isPhone} byHand={mounted && !supportsPicker} T={T} />
+      <UploadCard uploads={uploads} onClose={() => setUploads((prev) => prev.filter((u) => u.state === 'waiting' || u.state === 'working'))} onWho={openWho} whatsapp={whatsapp ?? null} phone={isPhone} byHand={mounted && !supportsPicker} T={T} />
       {readyToast}
       {txImport && (
         <TranscriptImport
@@ -1930,6 +1974,9 @@ export default function PenApp({
                   window.scrollTo({ top: 0, behavior: 'smooth' })
                 }}
                 sheets={Boolean(google) && !readOnly}
+                readOnly={locked}
+                whoIds={whoIds}
+                onWhoClosed={() => setWhoIds(null)}
               />
               </>
             ) : (
@@ -2472,6 +2519,9 @@ function ImportTray({
 }) {
   const T = useCopy(APP_COPY)
   const lang = useLang()
+  // Two or more files selected: each file gets its own "+ Who" instead of one box for all.
+  const multi = pending.filter((p) => p.picked).length > 1
+  const [whoOpen, setWhoOpen] = useState<number | null>(null)
   // On a phone this is a full-screen sheet with one job. The desktop tray assumes you have
   // just plugged the pen in and are triaging a batch; a phone user has finished one meeting
   // and wants that one file in, so the multi-select, the client field and the inline progress
@@ -2575,7 +2625,7 @@ function ImportTray({
   }
 
   return (
-    <section className="pen-panel pen-import-panel mt-6 p-6">
+    <section className="pen-panel pen-import-panel mt-6 p-6" data-multi={multi || undefined}>
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="pen-display text-[21px]">
           {penName ? T.onPen(pending.length, penName) : T.readyImport}
@@ -2589,19 +2639,51 @@ function ImportTray({
 
       <ul className="mt-4">
         {pending.map((p, i) => (
-          <li key={`${p.file.name}-${i}`} className="flex items-center gap-3 border-t py-2.5" style={{ borderColor: 'var(--hair)' }}>
-            <input type="checkbox" className="pen-act-box" checked={p.picked} aria-label={p.file.name}
-                   onChange={(e) => setPending((prev) => prev.map((x, j) => (j === i ? { ...x, picked: e.target.checked } : x)))} />
-            <span className="min-w-0 flex-1 truncate text-[14.5px]">{p.file.name}</span>
-            <span className="pen-mono text-[13px]" style={{ color: 'var(--dim)' }}>{fmtMB(p.file.size)}</span>
-            <span className="pen-mono text-[13px]" style={{ color: 'var(--faint)' }}>
-              {new Date(p.file.lastModified).toLocaleDateString(LOCALE[lang])}
-            </span>
+          <li key={`${p.file.name}-${i}`} className="pen-imp-row border-t" style={{ borderColor: 'var(--hair)' }}>
+            <div className="pen-imp-row-main">
+              <input type="checkbox" className="pen-act-box" checked={p.picked} aria-label={p.file.name}
+                     onChange={(e) => setPending((prev) => prev.map((x, j) => (j === i ? { ...x, picked: e.target.checked } : x)))} />
+              <span className="min-w-0 flex-1 truncate text-[14.5px]">{p.file.name}</span>
+              {/* Two or more files: who was on THIS one (22 Oct). The chips stay on the row. */}
+              {multi && p.picked && (
+                <span className="pen-imp-who">
+                  {(p.people ?? []).length > 0 && whoOpen !== i && (
+                    <span className="pen-imp-who-names" title={(p.people ?? []).map((x) => x.name).join(', ')}>
+                      {(p.people ?? []).map((x) => <span key={x.id ?? x.name} className="pen-imp-who-chip">{x.name}</span>)}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className="pen-imp-who-btn"
+                    aria-expanded={whoOpen === i}
+                    aria-label={T.whoFor(p.file.name)}
+                    onClick={() => setWhoOpen(whoOpen === i ? null : i)}
+                  >
+                    {whoOpen === i ? T.whoDoneAdding : (p.people ?? []).length ? T.whoEdit((p.people ?? []).length) : <><Icon name="plus" size={14} />{T.whoAdd}</>}
+                  </button>
+                </span>
+              )}
+              <span className="pen-mono text-[13px]" style={{ color: 'var(--dim)' }}>{fmtMB(p.file.size)}</span>
+              <span className="pen-mono text-[13px]" style={{ color: 'var(--faint)' }}>
+                {new Date(p.file.lastModified).toLocaleDateString(LOCALE[lang])}
+              </span>
+            </div>
+            {multi && p.picked && whoOpen === i && (
+              <div className="pen-imp-who-pick" role="group" aria-label={T.whoFor(p.file.name)}>
+                <PeoplePicker
+                  people={people}
+                  value={p.people ?? []}
+                  onChange={(v) => setPending((prev) => prev.map((x, j) => (j === i ? { ...x, people: v } : x)))}
+                />
+              </div>
+            )}
           </li>
         ))}
       </ul>
+      {multi && <p className="pen-imp-who-hint">{T.whoPerFile}</p>}
 
-      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+      <div className={`mt-5 grid gap-4 ${multi ? '' : 'sm:grid-cols-2'}`}>
+        {!multi && (
         <div className="block">
           <span className="pen-label">{T.whoOnCall}</span>
           <div className="mt-1.5">
@@ -2611,6 +2693,7 @@ function ImportTray({
             {T.whoHint}
           </span>
         </div>
+        )}
         <label className="flex cursor-pointer items-start gap-3 rounded-lg p-3.5" style={{ background: 'var(--warn-wash)', border: '1px solid #EFE2C4' }}>
           <input type="checkbox" className="pen-act-box mt-0" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
           <span className="text-[14.5px] leading-snug" style={{ color: 'var(--warn)' }}>
@@ -3809,7 +3892,7 @@ function ReferralPromo({ T, onClose }: { T: AppCopy; onClose: () => void }) {
  * this page open" note while uploading, and after pen recordings went up, how to delete them
  * from the pen by hand.
  */
-function UploadCard({ uploads, onClose, whatsapp, phone, byHand = false, T }: { uploads: UploadItem[]; onClose: () => void; whatsapp: { number: string; linked: boolean } | null; phone: boolean; byHand?: boolean; T: AppCopy }) {
+function UploadCard({ uploads, onClose, onWho, whatsapp, phone, byHand = false, T }: { uploads: UploadItem[]; onClose: () => void; onWho?: (ids: string[]) => void; whatsapp: { number: string; linked: boolean } | null; phone: boolean; byHand?: boolean; T: AppCopy }) {
   const [open, setOpen] = useState(false)
   // Finished without errors: the card goes away on its own 10 s later (16 Oct), held while the
   // pointer or focus is on it. Errors stay until closed.
@@ -3830,6 +3913,7 @@ function UploadCard({ uploads, onClose, whatsapp, phone, byHand = false, T }: { 
   const held = uploads.filter((u) => u.state === 'held').length
   const failed = uploads.filter((u) => u.state === 'error')
   const preparing = uploads.find((u) => u.state === 'working' && u.short && u.short !== T.upPrepQueue)
+  const untagged = uploads.flatMap((u) => ((u.state === 'done' || u.state === 'held') && u.sessionId && !u.tagged ? [u.sessionId] : []))
   // Portalled to .pen-root like the referral pop-up: inside the shell, the recordings rail
   // painted over it (5 Oct).
   const host = typeof document !== 'undefined' ? document.querySelector('.pen-root') ?? document.body : null
@@ -3854,6 +3938,13 @@ function UploadCard({ uploads, onClose, whatsapp, phone, byHand = false, T }: { 
       ) : (
         <>
           {ok + held > 0 && <p className="pen-upcard-note">{T.upDoneBody}</p>}
+          {/* Several went up and some have nobody on them: say who was in each, now or later. */}
+          {onWho && untagged.length > 0 && ok + held > 1 && (
+            <button type="button" className="pen-btn pen-upcard-who" onClick={() => onWho(untagged)}>
+              <Icon name="people" size={16} />
+              {T.upWhoEach}
+            </button>
+          )}
           {byHand && uploads.some((u) => u.state !== 'error' && PEN_NAME_RE.test(u.name)) && <PenSpaceHelp />}
           {held > 0 && <p className="pen-upcard-note">{T.upHeld(held)}</p>}
           {failed.length > 0 && (

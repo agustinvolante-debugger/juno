@@ -509,3 +509,108 @@
 .pen-root .pen-m-addsheet .pen-gw-sheet-title { padding-right: 48px; }
 .pen-root .pen-m-addsheet .pen-m-upload { min-height: 0; gap: 14px; }
 .pen-root .pen-m-addsheet .pen-m-upload-actions { margin-top: 0; }
+
+/* ====================================================== Who was here? (22 Oct, WhoHere.tsx)
+   Home's card wears the same glass as "Worth a second look"; inside, one block per recording.
+   Chips are toggles: ticked = the blue wash with a filled box, unticked = a plain outline, so the
+   state reads without colour too (the box carries the check). Sized for a thumb and for older
+   eyes: 40px chips, 15px names, real words on every button. */
+.pen-root:has(.pen-page, .pen-m) {
+  .pen-whocard {
+    border-radius: var(--sk-r-card);
+    background: var(--g-fill); -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+    border: 1px solid var(--g-edge); box-shadow: var(--g-shadow);
+  }
+  .pen-who-cardhead { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 16px 18px 4px; }
+  .pen-who-cardhead .pen-card-title { font-size: 17px; }
+  .pen-who-sub { flex-basis: 100%; margin: 0; font-size: 14px; color: var(--dim); }
+  .pen-card-icon[data-kind='who'] { background: var(--accent-wash); color: var(--accent-ink); }
+  .pen-whocard .pen-card-more { width: 100%; margin: 0; padding: 12px 18px; border-top: 1px solid var(--hair); border-radius: 0 0 var(--sk-r-card) var(--sk-r-card); }
+
+  .pen-who-list { list-style: none; margin: 0; padding: 0; }
+  .pen-who-list > li + li { border-top: 1px solid var(--hair); }
+  .pen-who-item { display: flex; flex-direction: column; gap: 10px; padding: 14px 18px 16px; }
+  .pen-who-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; min-width: 0; }
+  .pen-who-title {
+    min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-family: var(--ui); font-size: 16px; font-weight: 600; color: var(--ink);
+  }
+  .pen-who-meta { font-size: 13.5px; color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .pen-who-note { margin: 0; font-size: 14px; line-height: 1.45; color: var(--soft); }
+
+  .pen-who-group { display: flex; flex-direction: column; gap: 6px; }
+  .pen-who-label { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 600; color: var(--soft); }
+  .pen-who-label svg { color: var(--accent-ink); }
+  .pen-who-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+  .pen-who-chip {
+    display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px 0 10px; border-radius: 9999px;
+    font-family: var(--ui); font-size: 15px; font-weight: 500; color: var(--ink);
+    background: var(--panel); border: 1px solid var(--line);
+    transition: background .15s ease, border-color .15s ease, color .15s ease;
+  }
+  .pen-who-chip:hover:not(:disabled) { border-color: var(--accent-line); }
+  .pen-who-chip:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 2px; }
+  .pen-who-chip[aria-pressed='true'] { background: var(--accent-wash); border-color: var(--accent-line); color: var(--accent-ink); font-weight: 600; }
+  .pen-who-chip:disabled { cursor: default; }
+  .pen-who-box {
+    flex: none; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 6px;
+    border: 1.5px solid var(--line); background: var(--panel); color: #fff;
+    transition: background .15s ease, border-color .15s ease;
+  }
+  .pen-who-chip[aria-pressed='true'] .pen-who-box { background: var(--accent); border-color: var(--accent); }
+  .pen-who-chip-name { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .pen-who-else { max-width: 520px; }
+  .pen-who-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 2px; }
+  .pen-who-add {
+    display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px 0 8px; border-radius: 9999px;
+    font-family: var(--ui); font-size: 14.5px; font-weight: 600; color: var(--accent-ink);
+  }
+  .pen-who-add:hover:not(:disabled) { background: var(--accent-wash); }
+  .pen-who-add:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 2px; }
+  .pen-who-acts { display: inline-flex; gap: 8px; margin-left: auto; }
+  .pen-who-acts .pen-btn { min-height: 40px; padding: 0 18px; font-size: 15px; justify-content: center; }
+  .pen-who-err { margin: 0; font-size: 14px; color: var(--bad); }
+  .pen-who-result { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 14.5px; font-weight: 500; color: var(--good); }
+  .pen-who-item[data-done] { gap: 6px; }
+  .pen-who-item[data-done] .pen-who-title { color: var(--soft); }
+
+  /* In the panel: the same blocks, a little more air, no glass inside glass. */
+  .pen-who-panel { padding: 4px 4px 12px; }
+  .pen-who-panel-sub { margin: 0; padding: 4px 18px 8px; font-size: 14.5px; color: var(--soft); }
+  .pen-who-empty { margin: 0; padding: 22px 20px; font-size: 15px; color: var(--soft); }
+  .pen-who-retry { font-weight: 600; color: var(--accent-ink); text-decoration: underline; text-underline-offset: 3px; }
+
+  /* Phone: Save and Skip share the width under the chips, full thumb height. */
+  .pen-m .pen-who-item, .pen-whocard[data-phone] .pen-who-item { padding: 14px 16px 16px; }
+  .pen-m .pen-who-acts { flex: 1 1 100%; margin-left: 0; }
+  .pen-m .pen-who-acts .pen-btn { flex: 1; min-height: 48px; font-size: 16px; }
+  .pen-m .pen-who-chip { min-height: 44px; }
+  .pen-m .pen-who-add { min-height: 44px; }
+  @media (max-width: 520px) {
+    .pen-who-acts { flex: 1 1 100%; margin-left: 0; }
+    .pen-who-acts .pen-btn { flex: 1; min-height: 48px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .pen-who-chip, .pen-who-box { transition: none; } }
+
+  /* ------------------------------------------- upload: who was on each file */
+  .pen-imp-row { padding: 0; }
+  .pen-imp-row-main { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 6px 0; }
+  .pen-imp-who { flex: none; display: inline-flex; align-items: center; gap: 8px; max-width: 46%; min-width: 0; }
+  .pen-imp-who-names { display: inline-flex; gap: 4px; min-width: 0; overflow: hidden; mask-image: linear-gradient(90deg, #000 85%, transparent); }
+  .pen-imp-who-chip {
+    flex: none; padding: 3px 10px; border-radius: 9999px; white-space: nowrap;
+    font-size: 13.5px; font-weight: 600; color: var(--accent-ink); background: var(--accent-wash); border: 1px solid var(--accent-line);
+  }
+  .pen-imp-who-btn {
+    flex: none; display: inline-flex; align-items: center; gap: 4px; min-height: 34px; padding: 0 12px 0 9px; border-radius: 9999px;
+    font-family: var(--ui); font-size: 14px; font-weight: 600; color: var(--accent-ink);
+    background: var(--panel); border: 1px solid var(--line);
+  }
+  .pen-imp-who-btn:hover { border-color: var(--accent-line); background: var(--accent-wash); }
+  .pen-imp-who-btn:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 2px; }
+  .pen-imp-who-btn[aria-expanded='true'] { background: var(--accent); border-color: var(--accent); color: #fff; padding: 0 14px; }
+  .pen-imp-who-pick { padding: 2px 0 14px 32px; max-width: 560px; }
+  .pen-imp-who-hint { margin: 10px 0 0; font-size: 13.5px; line-height: 1.45; color: var(--dim); }
+  .pen-upcard-who { justify-content: center; gap: 7px; }
+}

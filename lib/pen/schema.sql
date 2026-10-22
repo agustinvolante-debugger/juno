@@ -500,3 +500,7 @@ alter table public.pen_segments enable row level security;  -- service role only
 -- alter table public.pen_chats add column if not exists agent_state jsonb;
 -- Reminders set in the web chat by someone with no WhatsApp / iMessage that can reach them are emailed at the due time: no phone (lib/pen/reminders.ts reminderPhone / fireDue). Until it runs, those inserts fail and set_reminder returns the error.
 -- alter table public.pen_reminders alter column phone drop not null;
+
+-- 2026-10-22, who was in each recording (lib/pen/who.ts, who-server.ts). who_at = the user answered Home's "Who was here?" card for this recording (Save or Skip); cal_people_at = the matching calendar event's guests were linked (source 'calendar' in pen_session_people, a value the text column already takes). Until these run: guests are still linked once, Save still works, and Skip only hides the card on that device. ONE line each.
+-- alter table public.pen_sessions add column if not exists who_at timestamptz;
+-- alter table public.pen_sessions add column if not exists cal_people_at timestamptz;
