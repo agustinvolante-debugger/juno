@@ -141,7 +141,7 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
     border-radius: var(--sk-r-card);
     box-shadow: none;
   }
-  .pen-cats-list, .pen-side-meter { border-color: var(--hair); }
+  .pen-cats-list { border-color: var(--hair); }
   .pen-meter-n strong { white-space: nowrap; font-weight: 600; letter-spacing: -0.02em; }
   .pen-meter-n { flex-wrap: wrap; row-gap: 2px; }
   .pen-meter-un { white-space: nowrap; }
@@ -238,14 +238,6 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
 
   /* =================================================== Home dashboard (Oct 13) */
 
-  /* ---- sidebar: scrolls on its own; the month's recording meter pinned at the foot ---- */
-  .pen-side-meter {
-    /* bottom 0 and room under the last line: at -12px the "Resets Nov 1." line was cut off by
-       the sidebar's rounded foot (critique 15 Oct). */
-    position: sticky; bottom: 0; z-index: 2;
-    margin-top: auto; padding-bottom: 16px;
-    background: var(--panel); border-color: var(--hair);
-  }
   .pen-saved { border-color: var(--hair); }
 
   /* ---- "More ways to import" ---- */
@@ -314,6 +306,73 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
     .pen-chatrow-more { opacity: 1; width: 44px; height: 44px; right: 0; }
     .pen-chatrow-open { padding-right: 48px; }
   }
+
+  /* ---- sidebar chats (22 Oct): ~15 recent threads in their own scrolling list ----
+     The sidebar is a flex column capped at the window: the mini month keeps its size and the
+     list takes what is left, scrolling inside itself. Short windows still scroll the sidebar,
+     but only once the list is down to about three rows. */
+  @media (min-width: 901px) {
+    .pen-page > .pen-side .pen-saved {
+      flex: 1 1 auto; min-height: 150px; display: flex; flex-direction: column;
+    }
+    .pen-saved-list {
+      flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+      margin: 0 -6px; padding: 0 6px 6px;
+      scrollbar-width: thin; scrollbar-color: transparent transparent;
+    }
+    .pen-saved-list:hover { scrollbar-color: #d2d2d7 transparent; }
+    .pen-saved-list[data-fade] {
+      -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent);
+      mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent);
+    }
+  }
+  .pen-saved-all {
+    display: inline-flex; align-items: center; gap: 4px; align-self: flex-start;
+    margin: 6px 0 0; padding: 6px 8px; border-radius: var(--sk-r-ctl);
+    font-family: var(--ui); font-size: 13.5px; font-weight: 500; color: var(--accent);
+    transition: background .15s, color .15s;
+  }
+  .pen-saved-all:hover { background: var(--accent-wash); color: var(--accent-ink); }
+
+  /* ---- header: this month's recording, between the search and the account ---- */
+  .pen-hrs { position: relative; flex: none; }
+  .pen-hrs-btn {
+    display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px 0 12px;
+    border-radius: 9999px; white-space: nowrap;
+    font-family: var(--ui); font-size: 14px; font-weight: 500; color: var(--dim);
+    font-variant-numeric: tabular-nums; letter-spacing: -0.005em;
+    background: var(--g-pill); border: 1px solid var(--g-pill-line); box-shadow: var(--g-pill-shadow);
+    transition: background .15s, border-color .15s;
+  }
+  .pen-hrs-btn:hover, .pen-hrs-btn[aria-expanded='true'] {
+    background: linear-gradient(180deg, #fff, rgba(255, 255, 255, .88)); border-color: rgba(29, 29, 31, .16);
+  }
+  .pen-hrs-ic { flex: none; color: var(--accent); }
+  .pen-hrs-n { color: var(--ink); font-weight: 600; letter-spacing: -0.015em; }
+  /* Warm only near the fair-use ceiling; red once past it. */
+  .pen-hrs-btn[data-tone='close'] { border-color: var(--warn-line); }
+  .pen-hrs-btn[data-tone='close'] :is(.pen-hrs-ic, .pen-hrs-of) { color: var(--warn); }
+  .pen-hrs-btn[data-tone='over'] { border-color: #f3c6c2; }
+  .pen-hrs-btn[data-tone='over'] :is(.pen-hrs-ic, .pen-hrs-n, .pen-hrs-of) { color: var(--bad); }
+  .pen-hrs-pop {
+    position: absolute; z-index: 50; top: calc(100% + 8px); right: 0; width: 296px;
+    padding: 16px 18px; border-radius: 18px;
+    background: var(--g-fill-solid); -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
+    border: 1px solid var(--g-edge); box-shadow: var(--g-shadow-pop);
+  }
+  .pen-hrs-pop .pen-meter { padding: 0; }
+  .pen-hrs-all {
+    margin: 12px 0 0; padding-top: 11px; border-top: 1px solid var(--hair);
+    font-family: var(--ui); font-size: 13px; line-height: 1.45; color: var(--dim); font-variant-numeric: tabular-nums;
+  }
+  /* The 336px column holds the pill and the account; the account drops to its avatar (the
+     name is in its menu), and beside a trial countdown the pill drops to just the hours. */
+  .pen-head-right:has(.pen-hrs) .pen-acct2-name { display: none; }
+  .pen-head-right:has(.pen-clock) .pen-hrs-t,
+  .pen-hrs-btn:is([data-tone='close'], [data-tone='over']) .pen-hrs-t { display: none; }
+
+  /* ---- pill inputs: the pill shows focus, the text field inside it doesn't draw its own box ---- */
+  .pen-search-input:focus, .pen-search-input:focus-visible { outline: none; }
 
   /* ---- header ---- */
   .pen-home-title[data-ready='false'] { visibility: hidden; }
@@ -443,11 +502,6 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
       linear-gradient(150deg, rgba(255, 246, 228, .92), rgba(255, 240, 214, .7));
   }
 
-  /* The sticky month meter fades in over the scrolling sidebar instead of sitting as a slab. */
-  /* Pinned at the bottom of a scrolling sidebar: it must hide what scrolls under it (it was a
-     see-through fade, so the Chats/Pages rows showed through the hours). A short fade above
-     keeps the edge soft. */
-  .pen-side-meter { background: #fbfbfd; box-shadow: 0 -14px 14px -6px #fbfbfd; z-index: 1; }
 
   /* ---- things that pop over the page: glass, more opaque for legibility, deeper shadow ---- */
   .pen-menu, .pen-d-menu, .pen-do-menu, .pen-acct2-menu, .pen-catpick-menu, .pen-search-sugg, .pen-promo-card,

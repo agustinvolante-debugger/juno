@@ -1,9 +1,9 @@
-/* The sidebar's mini month (MiniCalendar.tsx). Sits in .pen-side between the Chats list and the
-   pinned recording meter, in the sidebar's own language: Inter, small tabular numerals, hairline
-   above, the app blue only for today. Event days carry one neutral dot, never a calendar hue.
+/* The sidebar's mini month (MiniCalendar.tsx). Sits in .pen-side above the Chats list, in the
+   sidebar's own language: Inter, small tabular numerals, hairline above, the app blue only for
+   today. Event days carry one neutral dot, never a calendar hue.
 
-   Short windows: .pen-side is a scrolling flex column and the meter is sticky at its foot, so the
-   mini month keeps its size (flex: none) and the sidebar scrolls under the meter instead. */
+   Short windows: .pen-side is a flex column capped at the window, so the mini month keeps its
+   size (flex: none) and the Chats list below it shrinks and scrolls instead. */
 
 .pen-root .pen-page .pen-mcal {
   flex: none;
