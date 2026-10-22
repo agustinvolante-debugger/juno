@@ -8,6 +8,7 @@ import './assistant-first.css'
 import './get-whatsapp.css'
 import './settings-connections.css'
 import './pen/pen-device.css'
+import UploadsProvider from './uploads/UploadsProvider'
 
 // Self-hosted at build time rather than fetched from Google at render.
 //
@@ -90,7 +91,9 @@ export const viewport: Viewport = {
 export default function PenLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className={`pen-root ${display.variable} ${serif.variable} ${mono.variable} ${ui.variable} ${lpHead.variable} ${lpBody.variable}`}>
-      {children}
+      {/* The upload queue and its card, shared by every page under /pen so uploads carry on
+          while the person moves between Home, Settings and the rest (22 Oct). */}
+      <UploadsProvider>{children}</UploadsProvider>
     </div>
   )
 }

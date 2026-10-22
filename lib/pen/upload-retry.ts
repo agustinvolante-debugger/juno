@@ -16,7 +16,9 @@ export function isRetryableStatus(status: number): boolean {
 }
 
 /** Why a row failed, in a word the tray can say in plain language. */
-export type UploadFailure = 'busy' | 'network' | 'stalled' | 'too-big' | 'paused' | 'server'
+/** 'unplugged': a file from the pen stopped being readable mid-upload (the pen came out); Retry
+ *  reads it again. 'gone': it still can't be read, so it has to be chosen again. */
+export type UploadFailure = 'busy' | 'network' | 'stalled' | 'too-big' | 'paused' | 'server' | 'unplugged' | 'gone'
 
 export class UploadError extends Error {
   constructor(readonly kind: UploadFailure, message: string, readonly status = 0) {
@@ -49,7 +51,23 @@ export function classifyUploadError(e: unknown): UploadFailure {
 
 /** Worth offering Retry for: everything but a file that's too big or a paused plan. */
 export function canRetry(kind: UploadFailure): boolean {
-  return kind !== 'too-big' && kind !== 'paused'
+  return kind !== 'too-big' && kind !== 'paused' && kind !== 'gone'
+}
+
+/** What the browser throws reading a File whose disk went away (a USB pen pulled out). */
+export function isUnreadable(e: unknown): boolean {
+  const name = (e as { name?: string } | null)?.name
+  return name === 'NotFoundError' || name === 'NotReadableError'
+}
+
+/** Can this file still be read? False when its disk went away (the pen was unplugged). */
+export async function stillReadable(file: Blob): Promise<boolean> {
+  try {
+    await file.slice(0, 1).arrayBuffer()
+    return true
+  } catch (e) {
+    return !isUnreadable(e)
+  }
 }
 
 export type RetryFetchOptions = {
@@ -163,6 +181,8 @@ const COPY = {
     'too-big': 'This file is too big to upload.',
     paused: 'Your plan doesn’t allow new recordings right now.',
     server: 'Something went wrong on our side. Tap Retry; if it keeps failing, write to us.',
+    unplugged: 'Your pen was unplugged. Plug it back in and tap Retry.',
+    gone: 'Juno can’t read this file anymore. Plug your pen in and add this recording again.',
     retry: 'Retry',
     retryAll: (n: number) => (n === 1 ? 'Retry the failed one' : `Retry the ${n} failed`),
     retrying: 'Busy, trying again…',
@@ -175,6 +195,8 @@ const COPY = {
     'too-big': 'Este archivo es demasiado grande para subirlo.',
     paused: 'Tu plan no permite grabaciones nuevas por ahora.',
     server: 'Algo falló de nuestro lado. Toca Reintentar; si sigue fallando, escríbenos.',
+    unplugged: 'Se desconectó tu lápiz. Vuelve a conectarlo y toca Reintentar.',
+    gone: 'Juno ya no puede leer este archivo. Conecta tu lápiz y vuelve a agregar esta grabación.',
     retry: 'Reintentar',
     retryAll: (n: number) => (n === 1 ? 'Reintentar la que falló' : `Reintentar las ${n} que fallaron`),
     retrying: 'Ocupado, reintentando…',
@@ -187,6 +209,8 @@ const COPY = {
     'too-big': 'Este arquivo é grande demais para enviar.',
     paused: 'Seu plano não permite novas gravações agora.',
     server: 'Algo deu errado do nosso lado. Toque em Tentar de novo; se continuar falhando, fale com a gente.',
+    unplugged: 'Sua caneta foi desconectada. Conecte de novo e toque em Tentar de novo.',
+    gone: 'O Juno não consegue mais ler este arquivo. Conecte sua caneta e adicione esta gravação de novo.',
     retry: 'Tentar de novo',
     retryAll: (n: number) => (n === 1 ? 'Tentar de novo a que falhou' : `Tentar de novo as ${n} que falharam`),
     retrying: 'Ocupado, tentando de novo…',

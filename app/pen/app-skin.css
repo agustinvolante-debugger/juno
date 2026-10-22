@@ -505,7 +505,7 @@ body:has(.pen-root .pen-page, .pen-root .pen-m, .pen-root .pen-set, .pen-root .p
 
   /* ---- things that pop over the page: glass, more opaque for legibility, deeper shadow ---- */
   .pen-menu, .pen-d-menu, .pen-do-menu, .pen-acct2-menu, .pen-catpick-menu, .pen-search-sugg, .pen-promo-card,
-  .pen-tximp, .pen-bigpanel, .pen-sheet, .pen-upcard, .pen-tour-card {
+  .pen-tximp, .pen-bigpanel, .pen-sheet, .pen-upcard, .pen-uppill, .pen-tour-card {
     background: var(--g-fill-solid);
     -webkit-backdrop-filter: var(--g-blur);
     backdrop-filter: var(--g-blur);
