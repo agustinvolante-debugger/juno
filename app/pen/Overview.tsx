@@ -20,11 +20,12 @@ import { RowMenu, RenameInput } from './RowMenu'
 import { JunoCard, NextLine, DateChip, type Lists, type NextUpView, type WaLink } from './JunoNoticed'
 import Icon, { type IconName } from './Icon'
 import DeliverableSheet, { DeliverableActions, type SheetRequest } from './DeliverableSheet'
+import { useWho, WhoCardHome, WhoList } from './WhoHere'
 import { isMine } from '@/lib/pen/todo-labels'
 import { useCopy, useLang } from './LangContext'
 import { shortDate as fmtShort, ago as fmtAgo, plural, type Copy } from '@/lib/pen/i18n'
 
-type Kind = 'todo' | 'missed' | 'people'
+type Kind = 'todo' | 'missed' | 'people' | 'who'
 type Heard = { name: string; count: number; moments: { session_id: string; title: string; when: string; at_sec: number; context: string | null }[] }
 
 const MORPH = { type: 'spring' as const, stiffness: 420, damping: 40, mass: 0.8 }
@@ -126,6 +127,7 @@ const OV_EN = {
   emailWho: (n: string) => `Email ${n}`,
   worthSub: 'From this week. Said once, easy to lose.',
   recentPeople: 'Recent people',
+  whoTitle: 'Who was here?',
   emptyBody: 'Plug the pen in and import one recording. From the second one on, Juno Pen starts joining them up: what the same people keep asking for, what you keep forgetting, what is still outstanding across everything.',
 }
 
@@ -222,6 +224,7 @@ const OV: Copy<typeof OV_EN> = {
     emailWho: (n) => `Escribir a ${n}`,
     worthSub: 'De esta semana. Se dijo una vez, fácil de perder.',
     recentPeople: 'Personas recientes',
+    whoTitle: '¿Quién estuvo?',
     emptyBody: 'Conecta el lápiz e importa una grabación. Desde la segunda, Juno Pen empieza a conectarlas: lo que las mismas personas siguen pidiendo, lo que se te sigue olvidando, lo que sigue pendiente en todo.',
   },
   pt: {
@@ -315,6 +318,7 @@ const OV: Copy<typeof OV_EN> = {
     emailWho: (n) => `Escrever para ${n}`,
     worthSub: 'Desta semana. Dito uma vez, fácil de perder.',
     recentPeople: 'Pessoas recentes',
+    whoTitle: 'Quem estava lá?',
     emptyBody: 'Conecte a caneta e importe uma gravação. A partir da segunda, o Juno Pen começa a ligar os pontos: o que as mesmas pessoas continuam pedindo, o que você continua esquecendo, o que ainda está pendente em tudo.',
   },
 }
@@ -335,7 +339,16 @@ export default function Overview({
   onUpload,
   next = null,
   whatsapp = null,
+  whoIds = null,
+  onWhoClosed,
+  readOnly = false,
 }: {
+  /** A read-only (cancelled) account: nothing on Home asks it to change anything. */
+  readOnly?: boolean
+  /** Open "Who was in each?" for these recordings (after a multi-file upload, or ?who= from the email). */
+  whoIds?: string[] | null
+  /** That review was closed: the caller forgets the ids. */
+  onWhoClosed?: () => void
   /** The phone's Home: the Juno card, Today (3) and the WhatsApp line, nothing else. */
   phone?: boolean
   /** Recordings of the user's own (not the sample). None = the first-week prompt. */
@@ -392,6 +405,13 @@ export default function Overview({
   }, [stats])
 
   const [open, setOpen] = useState<Kind | null>(null)
+  // "Who was here?" (WhoHere.tsx): Home's cards, and the review of just-uploaded recordings.
+  const who = useWho(null, !readOnly)
+  useEffect(() => { if (whoIds?.length) setOpen('who') }, [whoIds])
+  const closePanel = useCallback(() => {
+    if (open === 'who' && whoIds) onWhoClosed?.()
+    setOpen(null)
+  }, [open, whoIds, onWhoClosed])
   const [sheet, setSheet] = useState<{ sessionId: string; req: SheetRequest } | null>(null)
   const [toast, setToast] = useState<{ text: string; undo?: () => void; tone?: 'bad' } | null>(null)
   const settle = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -566,6 +586,10 @@ export default function Overview({
       <LayoutGroup>
         <Today actions={mineList} max={phone ? 3 : 5} total={openCount} onTick={tick} onOpen={onOpen} onDraft={draft} onSeeAll={() => setOpen('todo')} />
 
+        {!readOnly && (
+          <WhoCardHome who={who} people={people} max={phone ? 2 : 3} onReviewAll={() => setOpen('who')} onAnswered={onPeopleChanged} />
+        )}
+
         {phone ? (
           <NextLine next={next} whatsapp={whatsapp} hideConnect={connectInHead} />
         ) : (
@@ -575,13 +599,14 @@ export default function Overview({
           </>
         )}
 
-        <Panel open={open} onClose={() => setOpen(null)}>
+        <Panel open={open} onClose={closePanel}>
           {open === 'todo' && (
             <TodoPanel actions={mineList} others={othersList} count={openCount} onTick={tick} onOpen={(id) => { setOpen(null); onOpen(id) }} sheets={sheets} />
           )}
           {open === 'missed' && (
             <MissedPanel missed={missed} count={missedCount} onHandle={handle} onPromote={promote} onOpen={(id) => { setOpen(null); onOpen(id) }} />
           )}
+          {open === 'who' && <WhoList ids={whoIds} home={who} people={people} onAnswered={onPeopleChanged} />}
           {open === 'people' && (
             <PeoplePanel people={people} clients={stats.clients} clientsByName={clientsByName} onAsk={(p) => { setOpen(null); onAskPerson(p) }} actions={personActions} onOpenRecording={(id) => { setOpen(null); onOpen(id) }} sheets={sheets} />
           )}
@@ -596,10 +621,11 @@ export default function Overview({
 
 /* ================================================================== panels */
 
-const TITLES: Record<Kind, { title: 'todo' | 'missed' | 'people'; icon: IconName }> = {
+const TITLES: Record<Kind, { title: 'todo' | 'missed' | 'people' | 'whoTitle'; icon: IconName }> = {
   todo: { title: 'todo', icon: 'checklist' },
   missed: { title: 'missed', icon: 'alert' },
   people: { title: 'people', icon: 'people' },
+  who: { title: 'whoTitle', icon: 'people' },
 }
 
 /* ================================================================== rows */

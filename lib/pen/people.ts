@@ -8,6 +8,11 @@
 // those appear as suggestions on the recording page, never as automatic links: a transcript
 // mentions "the lender" and "my wife", and a contact list that fills itself with those is a
 // list nobody trusts.
+//
+// One exception (22 Oct): the guests of the calendar event a recording matches are linked on
+// their own, with source 'calendar' (lib/pen/who.ts has the rules), because an invitation is a
+// fact about who was asked to be there, not a guess from a transcript. Home's "Who was here?"
+// card then asks the user to confirm, and an unticked guest is unlinked.
 
 import { userLang } from './user-lang'
 import Anthropic from '@anthropic-ai/sdk'
@@ -144,10 +149,15 @@ export async function updatePerson(
   return data as PenPerson
 }
 
-export async function linkPerson(userEmail: string, sessionId: string, personId: string, source: 'user' | 'import' = 'user') {
+/**
+ * Puts someone on a recording. 'calendar' = a guest of the matching calendar event, linked
+ * automatically (lib/pen/who-server.ts); 'user' and 'import' are the user's own word. An existing
+ * link keeps its source, unless `relabel`: the user confirming a calendar guest makes it theirs.
+ */
+export async function linkPerson(userEmail: string, sessionId: string, personId: string, source: 'user' | 'import' | 'calendar' = 'user', relabel = false) {
   const { error } = await supabaseAdmin
     .from('pen_session_people')
-    .upsert({ session_id: sessionId, person_id: personId, user_email: userEmail, source }, { onConflict: 'session_id,person_id', ignoreDuplicates: true })
+    .upsert({ session_id: sessionId, person_id: personId, user_email: userEmail, source }, { onConflict: 'session_id,person_id', ignoreDuplicates: !relabel })
   if (error) throw new Error(schemaHint(error.message))
 }
 

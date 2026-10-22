@@ -34,7 +34,7 @@ type RecRow = { id: string; title: string | null; source_name: string | null; so
 /** Recordings that started in the range or up to 4 h before it (recorded_at is the START; a pen
  *  file runs at most PART = 240 min, so one begun before the range can still overlap it), with
  *  their people's emails. */
-async function recordingsIn(email: string, from: Date, to: Date): Promise<MatchRecording[]> {
+export async function recordingsIn(email: string, from: Date, to: Date): Promise<MatchRecording[]> {
   const { data, error } = await supabaseAdmin
     .from('pen_sessions')
     .select('id,title,source_name,source_channel,storage_path,recorded_at,duration_sec')

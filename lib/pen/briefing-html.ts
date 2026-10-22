@@ -32,6 +32,7 @@ const EN = {
   noName: 'name not said',
   more: (n: number) => `and ${n} more`,
   nameThem: 'Name the people you met',
+  whoConfirm: 'Who was there? Tap to confirm',
 }
 export const BRIEFING_COPY: Record<Lang, typeof EN> = {
   en: EN,
@@ -55,6 +56,7 @@ export const BRIEFING_COPY: Record<Lang, typeof EN> = {
     noName: 'no se dijo el nombre',
     more: (n) => `y ${n} más`,
     nameThem: 'Ponle nombre a quienes conociste',
+    whoConfirm: '¿Quién estuvo? Toca para confirmar',
   },
   pt: {
     summary: 'Resumo',
@@ -76,6 +78,7 @@ export const BRIEFING_COPY: Record<Lang, typeof EN> = {
     noName: 'nome não dito',
     more: (n) => `e mais ${n}`,
     nameThem: 'Dê nome a quem você conheceu',
+    whoConfirm: 'Quem estava lá? Toque para confirmar',
   },
 }
 
@@ -117,6 +120,8 @@ export function buildBriefingHtml(opts: {
   /** An event's conversations (lib/pen/conference.ts) and where to name them. */
   conversations?: { when: string; topic: string; confirmed: string | null; likely: string | null }[]
   nameUrl?: string
+  /** Only in the owner's own copy, when nobody has said who was on it: Home's "Who was here?". */
+  whoUrl?: string
 }): string {
   const { notes: n, title, dateStr, clientName, durationStr, appUrl } = opts
   const C = BRIEFING_COPY[opts.lang ?? 'en']
@@ -212,6 +217,9 @@ export function buildBriefingHtml(opts: {
     rows.push(section(`${label(C.open)}<ul style="margin:0;padding-left:20px">${items}</ul>`))
   }
 
+  const whoLink = opts.whoUrl
+    ? `<div style="margin-top:8px"><a href="${esc(opts.whoUrl)}" style="color:${ACCENT};font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:14px;font-weight:600;text-decoration:none">${esc(C.whoConfirm)} &rarr;</a></div>`
+    : ''
   if (n.people?.length) {
     const chips = n.people
       .map((p) => {
@@ -220,7 +228,9 @@ export function buildBriefingHtml(opts: {
         return `<span style="display:inline-block;font-size:13px;color:${SOFT};border:1px solid ${LINE};border-radius:999px;padding:4px 11px;margin:0 5px 5px 0">${esc(who)}${sub}</span>`
       })
       .join('')
-    rows.push(section(`${label(C.room)}<div>${chips}</div>`))
+    rows.push(section(`${label(C.room)}<div>${chips}</div>${whoLink}`))
+  } else if (whoLink) {
+    rows.push(section(`${label(C.room)}${whoLink}`))
   }
 
   if (!rows.length) {

@@ -128,6 +128,10 @@ export type PenSession = {
   audio_deleted_at?: string | null
   /** "Keep this audio": never deleted by the 90-day rule. */
   keep_audio?: boolean | null
+  /** Home's "Who was here?" was answered (Save or Skip). Absent until the 2026-10-22 ALTER. */
+  who_at?: string | null
+  /** The matching calendar event's guests were linked (lib/pen/who-server.ts). Same ALTER. */
+  cal_people_at?: string | null
   created_at: string
   updated_at: string
 }

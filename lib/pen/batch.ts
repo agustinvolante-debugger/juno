@@ -65,9 +65,9 @@ export async function briefBatch(email: string, session: { id: string; created_a
 }
 
 const T = {
-  en: { convos: (n: number) => `${n} conversations at this event: name the people you met`, subject: (n: number) => `${n} recordings ready in Juno Pen`, lead: (n: number) => `${n} recordings are transcribed and written up.`, todo: 'To do', open: 'Open', nothing: 'Nothing to follow up.', untitled: 'Untitled recording', all: 'Open Juno Pen' },
-  es: { convos: (n: number) => `${n} conversaciones en este evento: ponle nombre a quienes conociste`, subject: (n: number) => `${n} grabaciones listas en Juno Pen`, lead: (n: number) => `${n} grabaciones están transcritas y con sus notas.`, todo: 'Pendientes', open: 'Abrir', nothing: 'Nada pendiente.', untitled: 'Grabación sin título', all: 'Abrir Juno Pen' },
-  pt: { convos: (n: number) => `${n} conversas neste evento: dê nome a quem você conheceu`, subject: (n: number) => `${n} gravações prontas no Juno Pen`, lead: (n: number) => `${n} gravações estão transcritas e com as notas.`, todo: 'Tarefas', open: 'Abrir', nothing: 'Nada pendente.', untitled: 'Gravação sem título', all: 'Abrir o Juno Pen' },
+  en: { convos: (n: number) => `${n} conversations at this event: name the people you met`, subject: (n: number) => `${n} recordings ready in Juno Pen`, lead: (n: number) => `${n} recordings are transcribed and written up.`, todo: 'To do', open: 'Open', nothing: 'Nothing to follow up.', untitled: 'Untitled recording', all: 'Open Juno Pen', who: 'Who was in each? Tap to confirm' },
+  es: { convos: (n: number) => `${n} conversaciones en este evento: ponle nombre a quienes conociste`, subject: (n: number) => `${n} grabaciones listas en Juno Pen`, lead: (n: number) => `${n} grabaciones están transcritas y con sus notas.`, todo: 'Pendientes', open: 'Abrir', nothing: 'Nada pendiente.', untitled: 'Grabación sin título', all: 'Abrir Juno Pen', who: '¿Quién estuvo en cada una? Toca para confirmar' },
+  pt: { convos: (n: number) => `${n} conversas neste evento: dê nome a quem você conheceu`, subject: (n: number) => `${n} gravações prontas no Juno Pen`, lead: (n: number) => `${n} gravações estão transcritas e com as notas.`, todo: 'Tarefas', open: 'Abrir', nothing: 'Nada pendente.', untitled: 'Gravação sem título', all: 'Abrir o Juno Pen', who: 'Quem estava em cada uma? Toque para confirmar' },
 } satisfies Record<Lang, unknown>
 
 async function sendBatchEmail(email: string, sessions: PenSession[]) {
@@ -77,6 +77,9 @@ async function sendBatchEmail(email: string, sessions: PenSession[]) {
   const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   const clip = (t: string, n: number) => (t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t)
   const convos = await Promise.all(sessions.map((s) => emailConversations(s)))
+  // "Who was in each?": the recordings nobody has said who was on (events name theirs per
+  // conversation). One line under the lead, to the review screen for just those (who.ts).
+  const askWho = await import('./who-server').then((m) => m.unconfirmed(email, sessions.filter((s) => !s.event_mode).map((s) => s.id))).catch(() => [] as string[])
   const items = sessions.map((s, i) => {
     const n = s.notes ?? {}
     const title = esc(s.title || s.source_name || M.untitled)
@@ -99,6 +102,7 @@ async function sendBatchEmail(email: string, sessions: PenSession[]) {
       `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:28px 16px">` +
       `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#FFFFFF;border:1px solid #DCD5C4;border-radius:16px"><tr><td style="padding:24px 24px 8px">` +
       `<p style="font-size:16px;margin:0 0 6px">${M.lead(sessions.length)}</p>` +
+      (askWho.length ? `<p style="margin:0 0 10px"><a href="${base}/pen?who=${askWho.map(encodeURIComponent).join(',')}" style="color:#0B6B44;font-size:14px;font-weight:600;text-decoration:none">${M.who} →</a></p>` : '') +
       `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${items}</table>` +
       `<p style="margin:12px 0 16px"><a href="${base}/pen" style="display:inline-block;background:#0B6B44;color:#fff;text-decoration:none;font-weight:600;font-size:14px;padding:10px 18px;border-radius:10px">${M.all}</a></p>` +
       `</td></tr></table></td></tr></table></body></html>`,
