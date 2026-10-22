@@ -589,20 +589,64 @@ export default function PenApp({
     setSessions((prev) => prev.map((x) => (x.id === s.id ? s : x)))
   }, [])
 
-  const removeSession = useCallback(async (id: string) => {
-    const r = await fetch(`/api/pen/sessions/${id}`, { method: 'DELETE' })
-    if (!r.ok) {
-      setErr((await r.json().catch(() => ({}))).error ?? T.deleteFailed)
+  // Delete with a 5-second Undo (founder, 22 Oct): the recording leaves the screen at once and a
+  // toast offers Undo; the server delete (audio, AssemblyAI's copy, the row) runs only when the 5 s
+  // are up, so Undo just puts it back and nothing waits on the network. A second delete, or the
+  // tab closing, sends the pending one straight away (keepalive, so it survives the unload).
+  const [undoDelete, setUndoDelete] = useState<{ session: PenSession; index: number } | null>(null)
+  const pendingDel = useRef<{ id: string; timer: number; session: PenSession; index: number } | null>(null)
+  const commitDelete = useCallback(async (p: { id: string; session: PenSession; index: number }, keepalive = false) => {
+    const r = await fetch(`/api/pen/sessions/${p.id}`, { method: 'DELETE', keepalive }).catch(() => null)
+    if (keepalive) return
+    if (!r || !r.ok) {
+      // It didn't go: put it back where it was and say so.
+      setSessions((prev) => (prev.some((x) => x.id === p.id) ? prev : [...prev.slice(0, p.index), p.session, ...prev.slice(p.index)]))
+      setErr((r && (await r.json().catch(() => ({}))).error) || T.deleteFailed)
       return
     }
-    setSessions((prev) => {
-      const next = prev.filter((x) => x.id !== id)
-      // Move to the neighbouring recording rather than dumping the user on an empty pane.
-      setView((v) => (v.k === 'session' && v.id === id ? { k: 'archive' } : v))
-      return next
-    })
     router.refresh()
-  }, [router])
+  }, [router, T.deleteFailed])
+  const flushDelete = useCallback((keepalive = false) => {
+    const p = pendingDel.current
+    if (!p) return
+    window.clearTimeout(p.timer)
+    pendingDel.current = null
+    setUndoDelete(null)
+    void commitDelete(p, keepalive)
+  }, [commitDelete])
+  useEffect(() => {
+    const out = () => flushDelete(true)
+    window.addEventListener('pagehide', out)
+    return () => window.removeEventListener('pagehide', out)
+  }, [flushDelete])
+  const removeSession = useCallback(async (id: string) => {
+    flushDelete()
+    const index = sessions.findIndex((x) => x.id === id)
+    const session = sessions[index]
+    if (!session) return
+    setSessions((prev) => prev.filter((x) => x.id !== id))
+    // Back to the list rather than an empty pane.
+    setView((v) => (v.k === 'session' && v.id === id ? { k: 'archive' } : v))
+    const timer = window.setTimeout(() => flushDelete(), 5000)
+    pendingDel.current = { id, timer, session, index }
+    setUndoDelete({ session, index })
+  }, [sessions, flushDelete])
+  const undoRemove = useCallback(() => {
+    const p = pendingDel.current
+    if (!p) return
+    window.clearTimeout(p.timer)
+    pendingDel.current = null
+    setUndoDelete(null)
+    setSessions((prev) => (prev.some((x) => x.id === p.id) ? prev : [...prev.slice(0, p.index), p.session, ...prev.slice(p.index)]))
+  }, [])
+  const undoToast = undoDelete && (
+    <div className="pen-toast-wrap" role="status" aria-live="polite">
+      <div className="pen-toast">
+        <span>{T.deletedOne}</span>
+        <button type="button" onClick={undoRemove}>{T.undo}</button>
+      </div>
+    </div>
+  )
 
   const makeNotes = useCallback(
     async (id: string, type?: MeetingType, auto = false) => {
@@ -3368,19 +3412,11 @@ function Detail({
             <summary className="pen-btn" aria-label={T.moreActions}><Icon name="more" size={16} /><span className="pen-d-more-l">{T.more}</span></summary>
             <div className="pen-d-menu" role="menu">
           {actions.slice(actFit).map((a) => <Fragment key={a.key}>{a.node(true)}</Fragment>)}
-          {/* Two-step, inline. Deletion takes the audio with it and cannot be undone, so it
-              asks — but a modal for one row would be heavier than the action deserves. */}
-          {confirmDelete ? (
-            <span className="pen-confirm">
-              <span>{T.deleteForGood}</span>
-              <button className="pen-confirm-no" onClick={() => setConfirmDelete(false)}>{T.keep}</button>
-              <button className="pen-confirm-yes" onClick={onDelete}>{T.delete}</button>
-            </span>
-          ) : (
-            <button className="pen-btn pen-btn-quiet" role="menuitem" onClick={() => setConfirmDelete(true)} title={T.deleteTitle}>
-              <Icon name="trash" size={15} />{T.delete}
-            </button>
-          )}
+          {/* One tap: the recording goes at once and a toast offers Undo for 5 s; the server
+              delete waits for those 5 s (removeSession). */}
+          <button className="pen-btn pen-btn-quiet" role="menuitem" onClick={(e) => { (e.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open'); onDelete() }} title={T.deleteTitle}>
+            <Icon name="trash" size={15} />{T.delete}
+          </button>
             </div>
           </details>
           {/* Static copies of every optional action at its row size, measured once per label set. */}

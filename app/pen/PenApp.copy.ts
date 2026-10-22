@@ -7,6 +7,8 @@ import type { PenStatus } from '@/lib/pen/store'
 const en = {
   // errors and progress
   deleteFailed: 'Could not delete that recording.',
+  deletedOne: 'Recording deleted',
+  undo: 'Undo',
   notesFailed: 'Could not write the notes.',
   noRecordingsIn: (dir: string) => `No recordings in “${dir}”. Recorders often keep files in a subfolder — try picking that one.`,
   notMedia: 'Those files aren’t audio or video that can be read here.',
@@ -357,6 +359,8 @@ export type AppCopy = typeof en
 
 const es: AppCopy = {
   deleteFailed: 'No se pudo borrar esa grabación.',
+  deletedOne: 'Grabación borrada',
+  undo: 'Deshacer',
   notesFailed: 'No se pudieron escribir las notas.',
   noRecordingsIn: (dir) => `No hay grabaciones en “${dir}”. Las grabadoras suelen guardarlas en una subcarpeta: prueba eligiendo esa.`,
   notMedia: 'Esos archivos no son audio ni video que se pueda leer aquí.',
@@ -692,6 +696,8 @@ const es: AppCopy = {
 
 const pt: AppCopy = {
   deleteFailed: 'Não foi possível apagar essa gravação.',
+  deletedOne: 'Gravação apagada',
+  undo: 'Desfazer',
   notesFailed: 'Não foi possível escrever as notas.',
   noRecordingsIn: (dir) => `Nenhuma gravação em “${dir}”. Gravadores costumam guardar os arquivos numa subpasta — tente escolher essa.`,
   notMedia: 'Esses arquivos não são áudio ou vídeo que dê para ler aqui.',
