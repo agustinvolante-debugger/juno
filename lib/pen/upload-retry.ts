@@ -173,6 +173,152 @@ export async function runLanes<T>(items: T[], lanes: Lanes, fn: (item: T) => Pro
   })
 }
 
+/* ------------------------------------------------------------ automatic retry (23 Oct) */
+//
+// Founder, 23 Oct: "When adding files and one file fails, instead of the user clicking Retry,
+// make it automatic." A row that failed for a passing reason (busy, the connection, a stall, a
+// storage PUT) tries again by itself, up to 3 times, after ~10 s, ~30 s and ~60 s. Offline, the
+// countdown waits for the connection. A pen pulled out (Chrome / Edge, drive connected) goes again
+// as soon as the pen is back. A file that can never go up (too big, unreadable, no hours, a
+// refused request) says why at once, as before.
+
+/** Automatic tries per file after the first failure. */
+export const AUTO_RETRY_MAX = 3
+/** Before automatic try n (1-based): ~10 s, ~30 s, ~60 s. */
+export const AUTO_RETRY_DELAYS = [10_000, 30_000, 60_000] as const
+
+/** The wait before automatic try `attempt` (1-based), jittered ±15% so rows don't go in step. */
+export function autoRetryDelay(attempt: number, rand: () => number = Math.random): number {
+  const base = AUTO_RETRY_DELAYS[Math.min(AUTO_RETRY_DELAYS.length, Math.max(1, attempt)) - 1]
+  return Math.round(base * (0.85 + rand() * 0.3))
+}
+
+/**
+ * Worth trying again by itself? Busy, a dropped connection, a stall, a storage PUT: yes. 'server'
+ * only when the answer was a 5xx (a refused 4xx, or a file the browser couldn't decode, won't get
+ * better). Too big, no hours / read-only, gone: never. 'unplugged' is the pen's own path.
+ */
+export function isTransient(kind: UploadFailure, status = 0): boolean {
+  if (kind === 'busy' || kind === 'network' || kind === 'stalled') return true
+  if (kind === 'server') return status >= 500 || status === 408 || status === 429
+  return false
+}
+
+export type AutoRetryLog = { key: string; attempt: number; outcome: 'start' | 'ok' | 'failed' | 'gave-up'; reason: string }
+
+/** What a failed row does now. */
+export type AutoRetryPlan =
+  | { do: 'countdown'; attempt: number; at: number | null; left: number }
+  | { do: 'pen'; attempt: number }
+  | { do: 'stop' }
+
+type Wait = { batch: string; attempt: number; reason: string; pen: boolean; at: number | null; left: number }
+
+/**
+ * The automatic retries, without React or timers, so the tests drive it with their own clock.
+ * The tray calls failed() when a row fails, due() once a second (it hands back the rows to start,
+ * at most one per batch at a time, and only while the batch has a free lane), started rows report
+ * back with failed() or succeeded(). setOnline() pauses and resumes the countdowns; penBack()
+ * makes the rows waiting for the pen due at once.
+ */
+export class AutoRetry {
+  private tries = new Map<string, number>()
+  private waits = new Map<string, Wait>()
+  /** batch → the row of it retrying right now. */
+  private running = new Map<string, string>()
+  online: boolean
+  constructor(private readonly o: { max?: number; delay?: (attempt: number) => number; log?: (e: AutoRetryLog) => void; online?: boolean } = {}) {
+    this.online = o.online ?? true
+  }
+  private get max() { return this.o.max ?? AUTO_RETRY_MAX }
+  private release(key: string) {
+    for (const [b, k] of this.running) if (k === key) this.running.delete(b)
+  }
+  /** Automatic tries used so far. */
+  attempts(key: string): number {
+    return this.tries.get(key) ?? 0
+  }
+  /** A row failed (first time, or an automatic try). `penDrive`: the pen can be watched for. */
+  failed(key: string, batch: string, f: { kind: UploadFailure; status?: number; reason: string; penDrive?: boolean }, now: number): AutoRetryPlan {
+    const n = this.attempts(key)
+    const wasRunning = [...this.running.values()].includes(key)
+    this.release(key)
+    if (wasRunning) this.o.log?.({ key, attempt: n, outcome: 'failed', reason: `${f.kind}${f.status ? ` ${f.status}` : ''}: ${f.reason}` })
+    const pen = f.kind === 'unplugged' && Boolean(f.penDrive)
+    if (!pen && !isTransient(f.kind, f.status)) { this.waits.delete(key); return { do: 'stop' } }
+    if (n >= this.max) {
+      this.waits.delete(key)
+      this.o.log?.({ key, attempt: n, outcome: 'gave-up', reason: f.kind })
+      return { do: 'stop' }
+    }
+    const attempt = n + 1
+    if (pen) {
+      this.waits.set(key, { batch, attempt, reason: f.kind, pen: true, at: null, left: 0 })
+      return { do: 'pen', attempt }
+    }
+    const left = (this.o.delay ?? autoRetryDelay)(attempt)
+    const at = this.online ? now + left : null
+    this.waits.set(key, { batch, attempt, reason: f.kind, pen: false, at, left })
+    return { do: 'countdown', attempt, at, left }
+  }
+  succeeded(key: string): void {
+    if ([...this.running.values()].includes(key)) this.o.log?.({ key, attempt: this.attempts(key), outcome: 'ok', reason: '' })
+    this.release(key)
+    this.waits.delete(key)
+  }
+  /** Closed from the card, or retried by hand: no longer ours. */
+  forget(key: string): void {
+    this.release(key)
+    this.waits.delete(key)
+  }
+  /** Offline: every countdown stops where it is. Back online: it goes on from there. */
+  setOnline(on: boolean, now: number): void {
+    if (on === this.online) return
+    this.online = on
+    for (const w of this.waits.values()) {
+      if (w.pen) continue
+      if (!on && w.at !== null) { w.left = Math.max(0, w.at - now); w.at = null }
+      else if (on && w.at === null) w.at = now + w.left
+    }
+  }
+  /** The pen is plugged in again: rows waiting for it go next. */
+  penBack(now: number): string[] {
+    const keys: string[] = []
+    for (const [k, w] of this.waits) if (w.pen && w.at === null) { w.at = now; keys.push(k) }
+    return keys
+  }
+  waitingForPen(): boolean {
+    for (const w of this.waits.values()) if (w.pen && w.at === null) return true
+    return false
+  }
+  /**
+   * The rows to start now: due, online (a pen row needs no network to be read, but does to go
+   * up), one per batch at a time, and only where `canStart(batch)` (a free lane) says so.
+   */
+  due(now: number, canStart: (batch: string) => boolean = () => true): string[] {
+    if (!this.online) return []
+    const out: string[] = []
+    const ready = [...this.waits].filter(([, w]) => w.at !== null && w.at <= now).sort((a, b) => a[1].at! - b[1].at!)
+    for (const [k, w] of ready) {
+      if (this.running.has(w.batch) || !canStart(w.batch)) continue
+      this.running.set(w.batch, k)
+      this.waits.delete(k)
+      this.tries.set(k, w.attempt)
+      out.push(k)
+      this.o.log?.({ key: k, attempt: w.attempt, outcome: 'start', reason: w.reason })
+    }
+    return out
+  }
+  /** What the row shows: seconds left, waiting for the connection, or for the pen. */
+  view(key: string, now: number): { secs: number } | { offline: true } | { pen: true } | null {
+    const w = this.waits.get(key)
+    if (!w) return null
+    if (w.pen) return w.at === null ? { pen: true } : { secs: 0 }
+    if (w.at === null) return { offline: true }
+    return { secs: Math.max(0, Math.ceil((w.at - now) / 1000)) }
+  }
+}
+
 const COPY = {
   en: {
     busy: 'Juno was busy and didn’t answer in time. Nothing is lost: tap Retry.',
@@ -186,6 +332,9 @@ const COPY = {
     retry: 'Retry',
     retryAll: (n: number) => (n === 1 ? 'Retry the failed one' : `Retry the ${n} failed`),
     retrying: 'Busy, trying again…',
+    retryIn: (n: number) => `Retrying in ${n} s…`,
+    waitOnline: 'Waiting for your connection…',
+    waitPen: 'Retrying as soon as your pen is plugged in…',
     why: 'Why?',
   },
   es: {
@@ -200,6 +349,9 @@ const COPY = {
     retry: 'Reintentar',
     retryAll: (n: number) => (n === 1 ? 'Reintentar la que falló' : `Reintentar las ${n} que fallaron`),
     retrying: 'Ocupado, reintentando…',
+    retryIn: (n: number) => `Reintentando en ${n} s…`,
+    waitOnline: 'Esperando tu conexión…',
+    waitPen: 'Se reintentará apenas conectes tu lápiz…',
     why: '¿Por qué?',
   },
   pt: {
@@ -214,9 +366,12 @@ const COPY = {
     retry: 'Tentar de novo',
     retryAll: (n: number) => (n === 1 ? 'Tentar de novo a que falhou' : `Tentar de novo as ${n} que falharam`),
     retrying: 'Ocupado, tentando de novo…',
+    retryIn: (n: number) => `Tentando de novo em ${n} s…`,
+    waitOnline: 'Aguardando sua conexão…',
+    waitPen: 'Vamos tentar de novo assim que sua caneta for conectada…',
     why: 'Por quê?',
   },
-} satisfies Record<Lang, Record<UploadFailure, string> & { retry: string; retryAll: (n: number) => string; retrying: string; why: string }>
+} satisfies Record<Lang, Record<UploadFailure, string> & { retry: string; retryAll: (n: number) => string; retrying: string; retryIn: (n: number) => string; waitOnline: string; waitPen: string; why: string }>
 
 export const UPLOAD_RETRY_COPY = COPY
 

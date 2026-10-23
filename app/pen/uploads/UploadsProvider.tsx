@@ -22,7 +22,8 @@ import { LangProvider } from '../LangContext'
 import { APP_COPY, type AppCopy } from '../PenApp.copy'
 import type { Picked } from '../PeoplePicker'
 import { PenSpaceHelp } from '../pen/PenDevice'
-import { penStartOf, loadPick, permissionOf, listRecordings } from '../pen/pen-drive'
+import { penStartOf, loadPick, permissionOf, listRecordings, canUsePenDrive } from '../pen/pen-drive'
+import { PEN_CONNECTED_EVENT } from '../pen/usePenDrive'
 import type { PenSession } from '@/lib/pen/store'
 import type { Allowance } from '@/lib/pen/allowance'
 import type { Lang } from '@/lib/pen/i18n'
@@ -31,12 +32,17 @@ import { prepareAudio, fmtMB, SOFT_SIZE_LIMIT, needsPiecedUpload, durationWithou
 import { canStreamPrep, streamPrepare, PrepFailed, type StreamExtra } from '@/lib/pen/stream-prep-client'
 import { logClientEvent } from '@/lib/pen/client-events'
 import { trackVisibility, WATCHDOG_GRACE_MS } from '@/lib/pen/watchdog'
-import { postJsonRetry, UploadError, classifyUploadError, canRetry, isStalled, STALL_MS, Lanes, runLanes, uploadReason, stillReadable, UPLOAD_RETRY_COPY, type UploadFailure } from '@/lib/pen/upload-retry'
+import { postJsonRetry, UploadError, classifyUploadError, canRetry, isStalled, STALL_MS, Lanes, runLanes, uploadReason, stillReadable, UPLOAD_RETRY_COPY, failureFor, AutoRetry, AUTO_RETRY_MAX, type UploadFailure } from '@/lib/pen/upload-retry'
 
 /* ------------------------------------------------------------------- types */
 
 export type UploadItem = {
-  key: string; name: string; phase: string; pct: number; short?: string; state: 'waiting' | 'working' | 'done' | 'held' | 'error'; error?: string; sessionId?: string; tagged?: boolean
+  key: string; name: string; phase: string; pct: number; short?: string; state: 'waiting' | 'working' | 'retrying' | 'done' | 'held' | 'error'; error?: string; sessionId?: string; tagged?: boolean
+  /** 'retrying' (23 Oct): failed for a passing reason and will go again by itself. What it waits for:
+   *  seconds left, the connection, or the pen. Counted as in progress, not failed. */
+  wait?: { secs: number } | { offline: true } | { pen: true }
+  /** The HTTP status of the failure, when there was one (0 = no answer). */
+  status?: number
   /** Why it failed, in a word the tray says in plain language (lib/pen/upload-retry.ts). */
   kind?: UploadFailure
   /** 'prep' while the audio is prepared or waits its turn for that; 'upload' for the rest, the part that can stall. */
@@ -46,7 +52,9 @@ export type UploadItem = {
   /** Came off the pen: the card asks to keep it plugged in, and an unreadable file means it came out. */
   fromPen?: boolean
 }
-type UploadJob = { key: string; file: File; people: Picked[]; event: boolean; fromPen: boolean }
+type UploadJob = { key: string; file: File; people: Picked[]; event: boolean; fromPen: boolean; batch?: string }
+/** One batch's lanes and how many of its files are going right now (automatic retries wait for a free lane). */
+type Batch = { lanes: Lanes; running: number }
 
 /** One file to upload: who was on it, and whether it is being read off the pen right now. */
 export type EnqueueFile = { file: File; people: Picked[]; fromPen?: boolean }
@@ -186,7 +194,7 @@ export default function UploadsProvider({ children }: { children: React.ReactNod
   // decoding a long recording already uses most of the memory). Transcription, notes and the
   // briefing email were always server-side, so once a file is up nothing waits on this tab.
   const [uploads, setUploads] = useState<UploadItem[]>([])
-  const uploading = uploads.some((u) => u.state === 'waiting' || u.state === 'working')
+  const uploading = uploads.some((u) => u.state === 'waiting' || u.state === 'working' || u.state === 'retrying')
   const patchUpload = useCallback((key: string, patch: Partial<UploadItem>) => {
     setUploads((prev) => prev.map((u) => (u.key === key ? { ...u, ...patch } : u)))
   }, [])
@@ -200,7 +208,7 @@ export default function UploadsProvider({ children }: { children: React.ReactNod
   // Rows closed from the card let go of their files.
   useEffect(() => {
     const keep = new Set(uploads.map((u) => u.key))
-    for (const k of [...uploadJobs.current.keys()]) if (!keep.has(k)) { uploadJobs.current.delete(k); savedIds.current.delete(k) }
+    for (const k of [...uploadJobs.current.keys()]) if (!keep.has(k)) { uploadJobs.current.delete(k); savedIds.current.delete(k); auto.current.forget(k) }
   }, [uploads])
   // No progress for 90 s while uploading (not while preparing or waiting a turn): stop it, so the
   // row shows a reason and a Retry instead of sitting at 5% (22 Oct).
@@ -433,7 +441,7 @@ export default function UploadsProvider({ children }: { children: React.ReactNod
       emit({ type: 'held', id, allowance: j.allowance })
       return 'held'
     }
-    if (!tRes.ok) throw new UploadError(tRes.status === 599 ? 'network' : tRes.status >= 502 ? 'busy' : 'server', ((await tRes.json().catch(() => ({}))) as { error?: string }).error ?? T.transcribeFailed, tRes.status)
+    if (!tRes.ok) throw new UploadError(tRes.status === 599 ? 'network' : failureFor(tRes.status), ((await tRes.json().catch(() => ({}))) as { error?: string }).error ?? T.transcribeFailed, tRes.status)
     emit({ type: 'sent', id })
     return 'done'
   }
@@ -451,57 +459,182 @@ export default function UploadsProvider({ children }: { children: React.ReactNod
     return withWebLock('juno-pen-uploads', () => runUploadsNow(jobs))
   }
   async function runUploadsNow(jobs: UploadJob[]) {
-    for (const j of jobs) uploadJobs.current.set(j.key, j)
-    const lanes = new Lanes(phoneNow.current ? 1 : 3)
+    const batchId = `b${++batchSeq.current}`
+    const batch: Batch = { lanes: new Lanes(phoneNow.current ? 1 : 3), running: 0 }
+    batches.current.set(batchId, batch)
+    for (const j of jobs) { j.batch = batchId; uploadJobs.current.set(j.key, j) }
     const wentUp: File[] = []
-    await runLanes(jobs, lanes, async (j) => {
-      const T = APP_COPY[langNow.current]
-      const ctl = new AbortController()
-      uploadAborts.current.set(j.key, ctl)
-      patchUpload(j.key, { state: 'working', phase: T.phasePreparing, pct: 2, stage: 'upload', movedAt: Date.now(), error: undefined, kind: undefined })
-      const step = ({ phase, pct, short, stage }: { phase: string; pct: number; short?: string; stage?: 'prep' | 'upload' }) =>
-        patchUpload(j.key, { phase, pct, short, stage: stage ?? 'upload', movedAt: Date.now() })
-      // The stall check aborts: the row fails over at once, whatever step it was waiting on.
-      const stalled = new Promise<never>((_, reject) => ctl.signal.addEventListener('abort', () => reject(new UploadError('stalled', 'stalled')), { once: true }))
-      stalled.catch(() => {})
-      const startedAt = Date.now()
+    await runLanes(jobs, batch.lanes, async (j) => {
+      batch.running++
       try {
-        // Saved already (it failed at "sending"): only that step again, not the whole upload.
-        const saved = savedIds.current.get(j.key)
-        const r = await Promise.race([
-          saved
-            ? sendOff(saved, step, ctl.signal).then((state) => ({ state, id: saved }))
-            : uploadOne(j.file, j.people, step, j.event, ctl.signal, (id) => {
-              savedIds.current.set(j.key, id)
-              patchUpload(j.key, { sessionId: id })
-            }),
-          stalled,
-        ])
-        patchUpload(j.key, { state: r.state, pct: 100, sessionId: r.id, tagged: j.people.length > 0 })
-        wentUp.push(j.file)
-        return true
-      } catch (e) {
-        let kind = classifyUploadError(e)
-        // Whatever the read failure looked like on the way (a worker error, an XHR "network
-        // error"), a pen file that can't be read any more means the pen came out.
-        if (j.fromPen && kind !== 'unplugged' && !savedIds.current.has(j.key) && !(await stillReadable(j.file))) kind = 'unplugged'
-        patchUpload(j.key, { state: 'error', kind, error: (e as Error).message })
-        const row = uploadsNow.current.find((u) => u.key === j.key)
-        logClientEvent({
-          kind: 'upload-failed', name: j.file.name, bytes: j.file.size,
-          stage: `${row?.stage ?? 'upload'}:${kind}`, pct: row ? Math.round(row.pct) : null,
-          reason: `${(e as Error).message}${row?.phase ? ` (at: ${row.phase})` : ''}`.slice(0, 500), since: startedAt,
-        })
-        // Only a busy or dropped answer slows the batch down; a too-big file says nothing about
-        // the server, and neither does a pen pulled out.
-        return !canRetry(kind) || kind === 'unplugged'
+        const ok = await runJob(j)
+        if (ok === true) wentUp.push(j.file)
+        return ok !== false
       } finally {
-        uploadAborts.current.delete(j.key)
+        batch.running--
       }
     })
     // PenApp: refresh the list, offer to free up the pen, pick up new contacts.
     emit({ type: 'batch', files: wentUp })
   }
+
+  /**
+   * One row, once: true = went up, false = failed in a way that should slow the batch down,
+   * 'quiet' = failed in a way that says nothing about the server (too big, the pen came out).
+   * A passing failure hands the row to the automatic retries (AutoRetry) instead of stopping it.
+   */
+  async function runJob(j: UploadJob): Promise<true | false | 'quiet'> {
+    const T = APP_COPY[langNow.current]
+    const ctl = new AbortController()
+    uploadAborts.current.set(j.key, ctl)
+    patchUpload(j.key, { state: 'working', phase: T.phasePreparing, pct: 2, stage: 'upload', movedAt: Date.now(), error: undefined, kind: undefined, wait: undefined, status: undefined })
+    const step = ({ phase, pct, short, stage }: { phase: string; pct: number; short?: string; stage?: 'prep' | 'upload' }) =>
+      patchUpload(j.key, { phase, pct, short, stage: stage ?? 'upload', movedAt: Date.now() })
+    // The stall check aborts: the row fails over at once, whatever step it was waiting on.
+    const stalled = new Promise<never>((_, reject) => ctl.signal.addEventListener('abort', () => reject(new UploadError('stalled', 'stalled')), { once: true }))
+    stalled.catch(() => {})
+    const startedAt = Date.now()
+    try {
+      // Saved already (it failed at "sending"): only that step again, not the whole upload.
+      const saved = savedIds.current.get(j.key)
+      const r = await Promise.race([
+        saved
+          ? sendOff(saved, step, ctl.signal).then((state) => ({ state, id: saved }))
+          : uploadOne(j.file, j.people, step, j.event, ctl.signal, (id) => {
+            savedIds.current.set(j.key, id)
+            patchUpload(j.key, { sessionId: id })
+          }),
+        stalled,
+      ])
+      patchUpload(j.key, { state: r.state, pct: 100, sessionId: r.id, tagged: j.people.length > 0, wait: undefined })
+      auto.current.succeeded(j.key)
+      return true
+    } catch (e) {
+      let kind = classifyUploadError(e)
+      const status = e instanceof UploadError ? e.status : 0
+      // Whatever the read failure looked like on the way (a worker error, an XHR "network
+      // error"), a pen file that can't be read any more means the pen came out.
+      if (j.fromPen && kind !== 'unplugged' && !savedIds.current.has(j.key) && !(await stillReadable(j.file))) kind = 'unplugged'
+      const row = uploadsNow.current.find((u) => u.key === j.key)
+      logClientEvent({
+        kind: 'upload-failed', name: j.file.name, bytes: j.file.size,
+        stage: `${row?.stage ?? 'upload'}:${kind}`, pct: row ? Math.round(row.pct) : null,
+        reason: `${(e as Error).message}${row?.phase ? ` (at: ${row.phase})` : ''}`.slice(0, 500), since: startedAt,
+      })
+      // A passing failure goes again by itself (23 Oct); a pen pulled out too, where the drive
+      // can be watched for it coming back. Anything else stops here with its reason.
+      const penDrive = kind === 'unplugged' && (await penWatchable())
+      const plan = auto.current.failed(j.key, j.batch ?? '', { kind, status, reason: (e as Error).message, penDrive }, Date.now())
+      patchUpload(j.key, plan.do === 'stop'
+        ? { state: 'error', kind, status, error: (e as Error).message, wait: undefined }
+        : { state: 'retrying', kind, status, error: (e as Error).message, pct: 0, short: undefined, wait: auto.current.view(j.key, Date.now()) ?? undefined })
+      // Only a busy or dropped answer slows the batch down; a too-big file says nothing about
+      // the server, and neither does a pen pulled out.
+      return !canRetry(kind) || kind === 'unplugged' ? 'quiet' : false
+    } finally {
+      uploadAborts.current.delete(j.key)
+    }
+  }
+
+  /* ---------------------------------------------------- automatic retry */
+
+  // Founder, 23 Oct: a failed file goes again by itself instead of waiting for a Retry click.
+  // lib/pen/upload-retry.ts AutoRetry decides (3 tries, ~10/30/60 s, never a permanent failure,
+  // one at a time per batch); this part runs its clock, the connection and the pen.
+  const batchSeq = useRef(0)
+  const batches = useRef(new Map<string, Batch>())
+  const auto = useRef<AutoRetry>(null as unknown as AutoRetry)
+  if (!auto.current) {
+    auto.current = new AutoRetry({
+      log: ({ key, attempt, outcome, reason }) => {
+        const job = uploadJobs.current.get(key)
+        logClientEvent({ kind: 'auto_retry', name: job?.file.name ?? key, bytes: job?.file.size ?? 0, stage: `attempt ${attempt}/${AUTO_RETRY_MAX}:${outcome}`, reason: reason.slice(0, 500) })
+      },
+    })
+  }
+  const retrying = uploads.some((u) => u.state === 'retrying')
+  /** The rows' countdowns, from AutoRetry. */
+  const syncWaits = useCallback(() => {
+    const now = Date.now()
+    setUploads((prev) => {
+      let changed = false
+      const next = prev.map((u) => {
+        if (u.state !== 'retrying') return u
+        const w = auto.current.view(u.key, now) ?? undefined
+        if (JSON.stringify(w) === JSON.stringify(u.wait)) return u
+        changed = true
+        return { ...u, wait: w }
+      })
+      return changed ? next : prev
+    })
+  }, [])
+  async function startAuto(key: string) {
+    const job = uploadJobs.current.get(key)
+    const row = uploadsNow.current.find((u) => u.key === key)
+    if (!job || row?.state !== 'retrying') return void auto.current.forget(key)
+    const batch = batches.current.get(job.batch ?? '')
+    if (batch) batch.running++
+    try {
+      if (row.kind === 'unplugged') {
+        // Read off the pen again, by name, from the drive's own handle.
+        const file = await rereadFromPen(job.file)
+        if (!file) {
+          auto.current.failed(key, job.batch ?? '', { kind: 'gone', reason: 'file not on the pen' }, Date.now())
+          patchUpload(key, { state: 'error', kind: 'gone', wait: undefined })
+          return
+        }
+        job.file = file
+      }
+      const ok = await withWebLock('juno-pen-uploads', () => runJob(job))
+      if (ok === true) { batch?.lanes.succeeded(); emit({ type: 'batch', files: [job.file] }) }
+      else if (ok === false) batch?.lanes.failed()
+    } finally {
+      if (batch) batch.running--
+    }
+  }
+  const startAutoRef = useRef(startAuto)
+  startAutoRef.current = startAuto
+  // The clock: once a second while a row is retrying, start what is due and move the countdowns.
+  useEffect(() => {
+    if (!retrying) return
+    const tick = () => {
+      const keys = auto.current.due(Date.now(), (b) => {
+        const batch = batches.current.get(b)
+        return !batch || batch.running < batch.lanes.limit
+      })
+      for (const k of keys) void startAutoRef.current(k)
+      syncWaits()
+    }
+    tick()
+    const t = window.setInterval(tick, 1000)
+    return () => window.clearInterval(t)
+  }, [retrying, syncWaits])
+  // The connection: offline, the countdowns stop where they are; back online, they go on.
+  useEffect(() => {
+    const sync = () => { auto.current.setOnline(navigator.onLine !== false, Date.now()); syncWaits() }
+    sync()
+    window.addEventListener('online', sync)
+    window.addEventListener('offline', sync)
+    return () => { window.removeEventListener('online', sync); window.removeEventListener('offline', sync) }
+  }, [syncWaits])
+  // The pen (Chrome / Edge): usePenDrive says when it is plugged in again; while a row waits for
+  // it and no page is watching the drive, look every 3 s here too.
+  const waitingPen = uploads.some((u) => u.state === 'retrying' && u.wait && 'pen' in u.wait)
+  useEffect(() => {
+    if (!waitingPen) return
+    let busy = false
+    const look = async (known = false) => {
+      if (busy || !auto.current.waitingForPen()) return
+      busy = true
+      try {
+        if (known || (await penReachable())) { auto.current.penBack(Date.now()); syncWaits() }
+      } finally { busy = false }
+    }
+    const onPen = () => void look(true)
+    window.addEventListener(PEN_CONNECTED_EVENT, onPen)
+    const t = window.setInterval(() => { if (document.visibilityState === 'visible') void look() }, 3000)
+    return () => { window.removeEventListener(PEN_CONNECTED_EVENT, onPen); window.clearInterval(t) }
+  }, [waitingPen, syncWaits])
 
   const enqueue = useCallback((files: EnqueueFile[], opts: EnqueueOpts) => {
     if (!files.length) return
@@ -513,7 +646,7 @@ export default function UploadsProvider({ children }: { children: React.ReactNod
     // Finished rows from an earlier batch make way for this one; rows still going stay, and so do
     // failed ones (they can still be retried).
     setUploads((prev) => [
-      ...prev.filter((u) => u.state === 'waiting' || u.state === 'working' || u.state === 'error'),
+      ...prev.filter((u) => u.state === 'waiting' || u.state === 'working' || u.state === 'retrying' || u.state === 'error'),
       ...batch.map((b) => ({ key: b.key, name: b.file.name, phase: T.upWaiting, pct: 0, state: 'waiting' as const, fromPen: b.fromPen })),
     ])
     void runUploads(batch)
@@ -534,6 +667,7 @@ export default function UploadsProvider({ children }: { children: React.ReactNod
       const job = uploadJobs.current.get(k)
       const row = rows.find((u) => u.key === k)
       if (!job || row?.state !== 'error' || !canRetry(row.kind ?? 'server')) continue
+      auto.current.forget(k)
       if (row.kind === 'unplugged') {
         const file = await rereadFromPen(job.file)
         if (!file) {
@@ -553,7 +687,7 @@ export default function UploadsProvider({ children }: { children: React.ReactNod
   retryRef.current = retryUploads
   const retry = useCallback((keys: string[]) => { void retryRef.current(keys) }, [])
 
-  const clearFinished = useCallback(() => setUploads((prev) => prev.filter((u) => u.state === 'waiting' || u.state === 'working')), [])
+  const clearFinished = useCallback(() => setUploads((prev) => prev.filter((u) => u.state === 'waiting' || u.state === 'working' || u.state === 'retrying')), [])
 
   /** "Who was in each?": PenApp's Home with those recordings to confirm; from another page, Home first. */
   const onWho = useCallback((ids: string[]) => {
@@ -597,6 +731,17 @@ async function rereadFromPen(old: File): Promise<File | null> {
   } catch {}
   // Otherwise the same File, which reads again once the same drive is back.
   return (await stillReadable(old)) ? old : null
+}
+
+/** Can this browser watch the pen come back (Chrome / Edge, a remembered pen it may read)? */
+async function penWatchable(): Promise<boolean> {
+  try {
+    if (!canUsePenDrive()) return false
+    const p = await loadPick()
+    return Boolean(p && (await permissionOf(p)) === 'granted')
+  } catch {
+    return false
+  }
 }
 
 /** Is a remembered pen plugged in now? (Then a still-unreadable file has to be chosen again.) */
@@ -644,8 +789,10 @@ function putWithProgress(url: string, blob: Blob, mime: string, onPct: (pct: num
     xhr.onload = () =>
       xhr.status >= 200 && xhr.status < 300
         ? resolve()
-        : reject(new Error(`upload failed ${xhr.status}: ${xhr.responseText.slice(0, 200)}`))
-    xhr.onerror = () => reject(new Error('upload network error'))
+        // Storage refusing a PUT (busy, an expired signed URL) is worth another go with a fresh
+        // URL; only "too large" isn't (23 Oct).
+        : reject(new UploadError(xhr.status === 413 ? 'too-big' : xhr.status === 0 ? 'network' : 'busy', `upload failed ${xhr.status}: ${xhr.responseText.slice(0, 200)}`, xhr.status))
+    xhr.onerror = () => reject(new UploadError('network', 'upload network error'))
     xhr.send(blob)
   })
 }
@@ -700,7 +847,8 @@ function UploadCard({ uploads, onClose, onWho, onRetry, lang = 'en', whatsapp, p
   // A batch that ended with failures opens up, so the Retry is in sight.
   const endedBadly = !going && failed.length > 0
   // So does the pen coming out mid-batch: the person has to act on it now.
-  const unpluggedCount = failed.filter((u) => u.kind === 'unplugged').length
+  // A row waiting for the pen to come back counts too (Chrome / Edge, 23 Oct).
+  const unpluggedCount = failed.filter((u) => u.kind === 'unplugged').length + uploads.filter((u) => u.state === 'retrying' && u.wait && 'pen' in u.wait).length
   useEffect(() => {
     if (endedBadly || unpluggedCount > 0) setSmallState(false)
   }, [endedBadly, unpluggedCount])
@@ -724,7 +872,7 @@ function UploadCard({ uploads, onClose, onWho, onRetry, lang = 'en', whatsapp, p
     return () => { ro?.disconnect(); window.removeEventListener('resize', measure); root.style.setProperty('--pen-upload-h', '0px') }
   })
   if (!uploads.length || !host) return null
-  const pct = Math.round(uploads.reduce((n, u) => n + (u.state === 'waiting' ? 0 : u.state === 'working' ? u.pct : 100), 0) / uploads.length)
+  const pct = Math.round(uploads.reduce((n, u) => n + (u.state === 'waiting' || u.state === 'retrying' ? 0 : u.state === 'working' ? u.pct : 100), 0) / uploads.length)
   const ok = uploads.filter((u) => u.state === 'done').length
   const held = uploads.filter((u) => u.state === 'held').length
   const retryable = failed.filter((u) => canRetry(u.kind ?? 'server'))
@@ -732,7 +880,13 @@ function UploadCard({ uploads, onClose, onWho, onRetry, lang = 'en', whatsapp, p
   const preparing = uploads.find((u) => u.state === 'working' && u.short && u.short !== T.upPrepQueue)
   const untagged = uploads.flatMap((u) => ((u.state === 'done' || u.state === 'held') && u.sessionId && !u.tagged ? [u.sessionId] : []))
   // Files still being read off the pen: it has to stay in until they are.
-  const penBusy = uploads.some((u) => u.fromPen && (u.state === 'waiting' || u.state === 'working'))
+  const penBusy = uploads.some((u) => u.fromPen && (u.state === 'waiting' || u.state === 'working' || u.state === 'retrying'))
+  // Going again by itself (23 Oct): what it waits for, in words. Counted as in progress, not failed.
+  const waitText = (u: UploadItem) =>
+    !u.wait ? RC.retryIn(0) : 'pen' in u.wait ? RC.waitPen : 'offline' in u.wait ? RC.waitOnline : RC.retryIn(Math.max(1, u.wait.secs))
+  const againRows = uploads.filter((u) => u.state === 'retrying')
+  const penWait = againRows.find((u) => u.wait && 'pen' in u.wait)
+  const nextAgain = againRows.find((u) => !(u.wait && 'pen' in u.wait))
   // The pen came out: said where it can't be missed, not only behind a row's "!".
   const unplugged = failed.filter((u) => u.kind === 'unplugged' || u.kind === 'gone')
   const allGood = !going && failed.length === 0 && held === 0
@@ -788,8 +942,11 @@ function UploadCard({ uploads, onClose, onWho, onRetry, lang = 'en', whatsapp, p
           )}
           {/* A long recording spends a while being prepared: say so with a moving number (22 Oct). */}
           {preparing && <p className="pen-upcard-note pen-mono">{preparing.name} · {preparing.short}</p>}
+          {nextAgain && <p className="pen-upcard-note"><span className="pen-mono">{nextAgain.name}</span> · {waitText(nextAgain)}</p>}
           <p className="pen-upcard-note">{phone || byHand ? T.upKeepOpenPhone : C.keepOpen}</p>
-          {unplugged.length > 0 && (
+          {penWait ? (
+            <p className="pen-upcard-unplug"><Icon name="usb" size={15} />{RC.waitPen}</p>
+          ) : unplugged.length > 0 && (
             <p className="pen-upcard-unplug"><Icon name="alert" size={15} />{reasonOf(unplugged[0])}</p>
           )}
           {/* Failed while the rest still go: say so now, with the way to try again. */}
@@ -859,7 +1016,7 @@ function UploadCard({ uploads, onClose, onWho, onRetry, lang = 'en', whatsapp, p
                         <> <button type="button" className="pen-linkbtn pen-upcard-retry-one" onClick={() => onRetry([u.key])}>{RC.retry}</button></>
                       )}
                     </>
-                  ) : u.state === 'done' ? '✓' : u.state === 'held' ? '⏸' : u.state === 'waiting' ? T.upWaiting : u.short ?? `${Math.round(u.pct)}%`}
+                  ) : u.state === 'retrying' ? waitText(u) : u.state === 'done' ? '✓' : u.state === 'held' ? '⏸' : u.state === 'waiting' ? T.upWaiting : u.short ?? `${Math.round(u.pct)}%`}
                 </span>
                 {u.state === 'error' && (loud || why === u.key) && <span className="pen-upcard-why">{reasonOf(u)}</span>}
               </li>

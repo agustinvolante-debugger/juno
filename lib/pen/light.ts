@@ -40,7 +40,11 @@ export function fullKey(row: { status?: string | null; updated_at?: string | nul
  * that arrives while a run is in flight gets one more run after it (never two at once). Every
  * caller's promise settles when the run that covers its call has finished.
  */
-export function coalesce(fn: () => Promise<void>, waitMs: number, timers: { set: typeof setTimeout; clear: typeof clearTimeout } = { set: setTimeout, clear: clearTimeout }): () => Promise<void> {
+export function coalesce(fn: () => Promise<void>, waitMs: number, timers: { set: typeof setTimeout; clear: typeof clearTimeout } = {
+  // Wrapped: a browser's setTimeout called as timers.set(…) throws "Illegal invocation".
+  set: ((h: () => void, ms?: number) => setTimeout(h, ms)) as typeof setTimeout,
+  clear: (t) => clearTimeout(t),
+}): () => Promise<void> {
   let timer: ReturnType<typeof setTimeout> | null = null
   let waiting: { resolve: () => void; reject: (e: unknown) => void }[] = []
   let running = false

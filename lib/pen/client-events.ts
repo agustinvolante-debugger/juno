@@ -9,8 +9,9 @@
 
 import { visibilitySnapshot, type VisibilitySnapshot } from './watchdog'
 
-export type ClientEventKind = 'prep-fallback' | 'prep-as-is' | 'upload-failed'
-export const CLIENT_EVENT_KINDS: readonly ClientEventKind[] = ['prep-fallback', 'prep-as-is', 'upload-failed']
+/** 'auto_retry' (23 Oct): an automatic retry of a failed upload row starting, and how it ended. */
+export type ClientEventKind = 'prep-fallback' | 'prep-as-is' | 'upload-failed' | 'auto_retry'
+export const CLIENT_EVENT_KINDS: readonly ClientEventKind[] = ['prep-fallback', 'prep-as-is', 'upload-failed', 'auto_retry']
 
 export type ClientEventBody = {
   kind: ClientEventKind

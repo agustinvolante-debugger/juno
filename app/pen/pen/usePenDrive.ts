@@ -19,6 +19,9 @@ import {
 } from './pen-drive'
 import { parseMrecset, parseTime, penSettingsToKeys, timeLine, writeMrecset } from '@/lib/pen/pen-settings'
 
+/** Fired on window each time the pen is found plugged in (a fresh connection). */
+export const PEN_CONNECTED_EVENT = 'juno:pen-connected'
+
 export type PenDriveState = 'off' | 'none' | 'prompt' | 'unplugged' | 'connected'
 
 const POLL_MS = 5_000
@@ -159,6 +162,9 @@ export function usePenDrive({ files: wantFiles = true }: { files?: boolean } = {
   /** A fresh connection: list, ask Juno, then the clock and the settings. */
   const onConnected = useCallback(async (p: PenPick) => {
     set('connected')
+    // The upload tray (app/pen/uploads/UploadsProvider.tsx) retries rows that failed when the pen
+    // came out as soon as it is back (23 Oct).
+    try { window.dispatchEvent(new Event(PEN_CONNECTED_EVENT)) } catch {}
     await refreshFiles(p)
     // Asked again on every connection: an event set-up starts or ends between two of them.
     const st = await fetchPenSettingsState()
