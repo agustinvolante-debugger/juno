@@ -93,7 +93,8 @@ declare global {
 /** A category has to group at least this many recordings before it is worth navigating by. */
 const MIN_CAT = 3
 /** Recent recordings in the rail before "All recordings". */
-const RAIL_MAX = 5
+// The rail fills the full-height card on a computer (founder, 23 Oct); the phone keeps it short.
+const RAIL_MAX = 14
 
 const MEDIA_RE = /\.(wav|wave|mp3|m4a|aac|ogg|opus|webm|amr|3gp|wma|flac|aif|aiff|mp4|m4v|mov|qt)$/i
 
@@ -2050,8 +2051,8 @@ export default function PenApp({
               )}
             </p>
           ) : (
-            <div className="mt-6">
-              {/* Five, newest first, unless the whole list was asked for or a category is picked. */}
+            <div className="mt-6 pen-rail-list">
+              {/* The newest RAIL_MAX, unless the whole list was asked for or a category is picked. */}
               {railGroups.map(([day, rows]) => (
                 <div key={day} className="mb-5">
                   <div className="pen-label mb-1.5">{day}</div>
@@ -4569,7 +4570,13 @@ function catTint(label: string): string {
   if (/(product|plan|strategy|brainstorm|idea|roadmap|design|pitch|demo)/.test(c)) return 'product'
   if (/(talk|lecture|class|lesson|coach|mentor|course|conference|webinar|seminar)/.test(c)) return 'talk'
   if (/(meeting|call|interview|one-on-one|1:1|sync|discussion|client|sales|discovery|board|review|catch|coffee|viewing)/.test(c)) return 'meet'
-  return 'neutral'
+  if (/(casual|family|friend|personal|social|chat|dinner|lunch|party|familia|amigo|charla|conversa)/.test(c)) return 'social'
+  // Any other label still gets a colour (founder, 23 Oct: new free-form categories came out grey),
+  // the same one every time for the same words.
+  const tints = ['meet', 'talk', 'product', 'notes', 'shop', 'social'] as const
+  let h = 0
+  for (const ch of c) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  return tints[h % tints.length]
 }
 
 /**
