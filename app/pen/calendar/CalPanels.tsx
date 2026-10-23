@@ -59,7 +59,9 @@ export function Floating({
     if (!el) return
     const place = () => {
       const vw = window.innerWidth
-      const vh = window.innerHeight
+      // The upload card's share of the bottom (UploadsProvider sets --pen-upload-h): end above it.
+      const below = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--pen-upload-h')) || 0
+      const vh = window.innerHeight - below
       const h = Math.min(el.offsetHeight, vh - 24)
       const a = anchor ?? { left: vw / 2 - width / 2, right: vw / 2 - width / 2, top: vh / 4, bottom: vh / 4 }
       let left = anchor ? a.right + GAP : a.left

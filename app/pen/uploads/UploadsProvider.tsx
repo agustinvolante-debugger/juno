@@ -683,6 +683,23 @@ function UploadCard({ uploads, onClose, onWho, onRetry, lang = 'en', whatsapp, p
   }, [endedBadly, unpluggedCount])
   const [host, setHost] = useState<Element | null>(null)
   useEffect(() => { setHost(document.querySelector('.pen-root') ?? document.body) }, [])
+  // How much of the window's bottom the card (or pill) takes on a computer, as --pen-upload-h on
+  // <html>, so panels end above it instead of under it (founder, 23 Oct: the Calendar's Edit event
+  // panel had its Save hidden behind the card). 0 when there is no card or on a phone.
+  useEffect(() => {
+    const root = document.documentElement
+    const measure = () => {
+      const el = phone ? null : (document.querySelector('.pen-upcard, .pen-uppill') as HTMLElement | null)
+      const r = el?.getBoundingClientRect()
+      root.style.setProperty('--pen-upload-h', r ? `${Math.ceil(window.innerHeight - r.top + 12)}px` : '0px')
+    }
+    measure()
+    const el = document.querySelector('.pen-upcard, .pen-uppill')
+    const ro = el ? new ResizeObserver(measure) : null
+    if (el) ro!.observe(el)
+    window.addEventListener('resize', measure)
+    return () => { ro?.disconnect(); window.removeEventListener('resize', measure); root.style.setProperty('--pen-upload-h', '0px') }
+  })
   if (!uploads.length || !host) return null
   const pct = Math.round(uploads.reduce((n, u) => n + (u.state === 'waiting' ? 0 : u.state === 'working' ? u.pct : 100), 0) / uploads.length)
   const ok = uploads.filter((u) => u.state === 'done').length

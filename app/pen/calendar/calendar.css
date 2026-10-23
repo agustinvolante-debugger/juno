@@ -336,7 +336,7 @@
 
 /* --------------------------------------------------------------------- floating panel */
 .pen-root .pen-cal-float {
-  position: fixed; z-index: 80; max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain;
+  position: fixed; z-index: 80; max-height: calc(100dvh - 24px - var(--pen-upload-h, 0px)); overflow-y: auto; overscroll-behavior: contain;
   border-radius: var(--sk-r-card);
   background: var(--g-fill-solid);
   -webkit-backdrop-filter: var(--g-blur); backdrop-filter: var(--g-blur);
@@ -977,3 +977,7 @@
   .pen-root :is(.pen-cal-pday-body, .pen-cal-strip-days, .pen-cal-pmonth-grid) { transform: none !important; }
   .pen-root :is(.pen-cal-strip-n, .pen-cal-pev, .pen-cal-ph-btn) { transition: none; }
 }
+
+/* Phone: an open sheet (event detail, new event, calendars) takes the bottom of the screen; the
+   upload pill/card steps aside until it closes, so it never covers the sheet's buttons (23 Oct). */
+.pen-root:has(.pen-cal-sheet-wrap) :is(.pen-upcard, .pen-uppill)[data-phone='true'] { visibility: hidden; }
