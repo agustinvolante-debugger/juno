@@ -6,6 +6,7 @@
 
 import { streamWavTo16k, STREAM_TARGET_RATE } from './stream-prep'
 import { OggOpusWriter } from './ogg'
+import { StallClock, WATCHDOG_CAP_MS, WATCHDOG_GRACE_MS } from './watchdog'
 
 const OPUS_BITRATE = 24000 // same as encode.ts: speech at 24 kbps mono, ~11 MB an hour
 const FRAME = STREAM_TARGET_RATE // 1 s per AudioData
@@ -19,8 +20,11 @@ const MAX_QUEUE = 4 // encoder back-pressure: at most ~4 s of audio waiting
  */
 const MAX_LAG_US = 8_000_000
 /** The encoder's queue not moving for this long = it has hung (it never errored, it just stopped
- *  taking work). Normally the queue drains in milliseconds. */
+ *  taking work). Normally the queue drains in milliseconds. VISIBLE time only (23 Oct): a hidden
+ *  tab runs WebCodecs and timers at a lower priority, and that is not a hang; hidden time counts
+ *  towards ENCODER_STUCK_CAP_MS instead (lib/pen/watchdog.ts). */
 export const ENCODER_STUCK_MS = 10_000
+export const ENCODER_STUCK_CAP_MS = WATCHDOG_CAP_MS
 
 type Enc = {
   configure: (c: { codec: string; sampleRate: number; numberOfChannels: number; bitrate: number }) => void
@@ -71,7 +75,15 @@ function macrotask(): Promise<void> {
 export async function prepWavToOgg(
   file: Blob,
   onProgress: (done: number, total: number) => void,
-  opts: { yieldEachSlice?: boolean; fault?: PrepFault } = {},
+  opts: {
+    yieldEachSlice?: boolean
+    fault?: PrepFault
+    /** Is the page hidden right now? The worker hears it from the page; absent = always visible. */
+    hidden?: () => boolean
+    /** Test hooks for the stuck check. */
+    stuckMs?: number
+    now?: () => number
+  } = {},
 ): Promise<{ blob: Blob; durationSec: number; from: string; packets: number; clipped: number }> {
   const Ctor = (globalThis as unknown as { AudioEncoder?: EncCtor }).AudioEncoder
   const DataCtor = (globalThis as unknown as { AudioData?: typeof AudioData }).AudioData
@@ -83,6 +95,17 @@ export async function prepWavToOgg(
   let clipped = 0
   let encodedUs = 0 // end of the latest Opus packet out
   let failed: Error | null = null
+  // Back-pressure waits wake on the encoder's own output (and dequeue), not only on a timer: a
+  // hidden page's timers are clamped to 1 s or worse, and the encoder keeps calling back.
+  let wake: (() => void) | null = null
+  const nudge = () => { const w = wake; wake = null; w?.() }
+  const waitTick = () => new Promise<void>((r) => {
+    wake = r
+    setTimeout(() => { if (wake === r) wake = null; r() }, 2)
+  })
+  const hidden = opts.hidden ?? (() => false)
+  const now = opts.now ?? Date.now
+  const stuckMs = opts.stuckMs ?? ENCODER_STUCK_MS
   // An encoder error ends the prep AT ONCE (the whole loop races this), rather than whenever the
   // loop next happens to look, or never if it is parked on a read.
   let rejectFailed: (e: Error) => void = () => {}
@@ -107,9 +130,11 @@ export async function prepWavToOgg(
       ogg.add({ data, granule: Math.round((endUs * 48000) / 1e6) })
       packets++
       if (endUs > encodedUs) encodedUs = endUs
+      nudge()
     },
     error: (err) => fail(err instanceof Error ? new Error(`encoder error: ${err.message}`) : err),
   })
+  try { (enc as unknown as { ondequeue: (() => void) | null }).ondequeue = nudge } catch {}
   try {
     enc.configure({ codec: 'opus', sampleRate: STREAM_TARGET_RATE, numberOfChannels: 1, bitrate: OPUS_BITRATE })
   } catch (e) {
@@ -146,16 +171,22 @@ export async function prepWavToOgg(
     // Decoding outruns Opus; without this the encoder would hold the whole recording. An encoder
     // that stops producing altogether has hung: say so now instead of waiting on the watchdog.
     const fedUs = (fed / STREAM_TARGET_RATE) * 1e6
-    let since = Date.now()
+    let clock: StallClock | null = null
     let lastQ = enc.encodeQueueSize
     let lastOut = encodedUs
     while (enc.encodeQueueSize > MAX_QUEUE || fedUs - encodedUs > MAX_LAG_US) {
-      await new Promise((r) => setTimeout(r, 2))
+      clock ??= new StallClock(now, hidden(), WATCHDOG_GRACE_MS)
+      await waitTick()
       if (failed) throw failed
-      if (enc.encodeQueueSize !== lastQ || encodedUs !== lastOut) { lastQ = enc.encodeQueueSize; lastOut = encodedUs; since = Date.now() }
-      else if (Date.now() - since > ENCODER_STUCK_MS) {
-        fail(new Error(`encoder stopped: no output for ${ENCODER_STUCK_MS / 1000} s (queue ${lastQ}, ${Math.round((fedUs - encodedUs) / 1e6)} s behind)`))
-        throw failed!
+      clock.setHidden(hidden())
+      if (enc.encodeQueueSize !== lastQ || encodedUs !== lastOut) { lastQ = enc.encodeQueueSize; lastOut = encodedUs; clock.kick() }
+      else {
+        const r = clock.read()
+        if (r.visibleMs > stuckMs || r.wallMs > ENCODER_STUCK_CAP_MS) {
+          const secs = Math.round((r.visibleMs > stuckMs ? stuckMs : r.wallMs) / 1000)
+          fail(new Error(`encoder stopped: no output for ${secs} s${r.visibleMs > stuckMs ? '' : ' (tab in the background)'} (queue ${lastQ}, ${Math.round((fedUs - encodedUs) / 1e6)} s behind)`))
+          throw failed!
+        }
       }
     }
   }

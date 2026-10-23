@@ -5,13 +5,17 @@
 
 import { fmtMB, type Prepared } from './encode'
 import type { PrepFault } from './stream-encode'
+import { startWatchdog, pageVisibility, type Visibility } from './watchdog'
 
 /** WAVs above this go through the worker; smaller ones keep the old in-memory path (fast and
  *  proven for short files). ~8.5 minutes of pen ADPCM. */
 export const STREAM_ABOVE = 12 * 1024 * 1024
 
 /** No progress for this long during prep = that attempt has stalled. Progress normally ticks
- *  every ~0.2 s, so 20 s is a hundred missed ticks (it was 60 s until the 22 Oct stall). */
+ *  every ~0.2 s, so 20 s is a hundred missed ticks (it was 60 s until the 22 Oct stall).
+ *  VISIBLE time (23 Oct): while the tab is hidden, and for 10 s after it comes back, the clock
+ *  stops; hidden time only counts towards a 3-minute cap (lib/pen/watchdog.ts). The founder's
+ *  Chrome fell back to as-is every time he switched apps mid-upload; headless Chrome never did. */
 export const PREP_WATCHDOG_MS = 20_000
 
 const WAV_NAME = /\.(wav|wave)$/i
@@ -65,7 +69,11 @@ function toPrepared(file: File, m: Done, events: number, path: StreamExtra['path
   }
 }
 
-const stalled = (ms: number) => new Error(`prep stalled: no progress for ${ms < 10_000 ? (ms / 1000).toFixed(1) : Math.round(ms / 1000)} s`)
+const secs = (ms: number) => (ms < 10_000 ? (ms / 1000).toFixed(1) : String(Math.round(ms / 1000)))
+const stalled = (ms: number, why?: { capped: boolean; wallMs: number }) =>
+  new Error(why?.capped
+    ? `prep stalled: no progress for ${secs(why.wallMs)} s (tab in the background)`
+    : `prep stalled: no progress for ${secs(ms)} s`)
 
 /**
  * Long WAV → Ogg/Opus with progress. Tries the Web Worker first. If the worker can't start (or
@@ -77,14 +85,15 @@ const stalled = (ms: number) => new Error(`prep stalled: no progress for ${ms < 
 export async function streamPrepare(
   file: File,
   onProgress: (fraction: number) => void,
-  opts: { watchdogMs?: number; startMs?: number; mode?: 'worker' | 'main-thread'; fault?: PrepFault } = {},
+  opts: { watchdogMs?: number; startMs?: number; capMs?: number; graceMs?: number; mode?: 'worker' | 'main-thread'; fault?: PrepFault; visibility?: Visibility } = {},
 ): Promise<Prepared & { extra: StreamExtra }> {
   const watchdogMs = opts.watchdogMs ?? PREP_WATCHDOG_MS
+  const wd: WD = { visibleMs: watchdogMs, capMs: opts.capMs, graceMs: opts.graceMs, visibility: opts.visibility ?? pageVisibility() }
   const trail: PrepFallback[] = []
   if (opts.mode !== 'main-thread') {
     let pct = 0
     try {
-      return await inWorker(file, (f) => { pct = Math.floor(f * 100); onProgress(f) }, watchdogMs, opts.startMs ?? WORKER_START_MS, opts.fault)
+      return await inWorker(file, (f) => { pct = Math.floor(f * 100); onProgress(f) }, wd, opts.startMs ?? WORKER_START_MS, opts.fault)
     } catch (e) {
       const msg = (e as Error).message
       if (opts.mode === 'worker') throw new PrepFailed([{ path: 'worker', stage: e instanceof WorkerUnavailable ? 'start' : 'prep', pct, error: msg }])
@@ -97,14 +106,16 @@ export async function streamPrepare(
   }
   let pct = 0
   try {
-    return await onMainThread(file, (f) => { pct = Math.floor(f * 100); onProgress(f) }, watchdogMs, trail, opts.mode === 'main-thread' ? opts.fault : undefined)
+    return await onMainThread(file, (f) => { pct = Math.floor(f * 100); onProgress(f) }, wd, trail, opts.mode === 'main-thread' ? opts.fault : undefined)
   } catch (e) {
     trail.push({ path: 'main-thread', stage: 'prep', pct, error: (e as Error).message })
     throw new PrepFailed(trail)
   }
 }
 
-function inWorker(file: File, onProgress: (f: number) => void, watchdogMs: number, startMs: number, fault?: PrepFault): Promise<Prepared & { extra: StreamExtra }> {
+type WD = { visibleMs: number; capMs?: number; graceMs?: number; visibility: Visibility }
+
+function inWorker(file: File, onProgress: (f: number) => void, wd: WD, startMs: number, fault?: PrepFault): Promise<Prepared & { extra: StreamExtra }> {
   return new Promise((resolve, reject) => {
     let worker: Worker
     try {
@@ -116,15 +127,16 @@ function inWorker(file: File, onProgress: (f: number) => void, watchdogMs: numbe
     }
     let events = 0
     let started = false
-    let timer: ReturnType<typeof setTimeout> | undefined
+    // Until the worker says it runs: `startMs` of visible time (a hidden tab can be slow to
+    // start one), then the progress watchdog takes over.
+    let dog = startWatchdog({ ...wd, visibleMs: startMs, capMs: Math.max(60_000, startMs), onStall: () => finish(() => reject(new WorkerUnavailable(`no answer from the worker in ${startMs} ms`))) })
+    // The worker has no document: tell it when the page is hidden, for the encoder's stuck check.
+    const offVis = wd.visibility.onChange?.(() => { try { worker.postMessage({ type: 'visibility', hidden: wd.visibility.hidden() }) } catch {} })
     const finish = (fn: () => void) => {
-      clearTimeout(timer)
+      dog.stop()
+      offVis?.()
       worker.terminate()
       fn()
-    }
-    const arm = () => {
-      clearTimeout(timer)
-      timer = setTimeout(() => finish(() => reject(stalled(watchdogMs))), watchdogMs)
     }
     worker.onmessage = (e: MessageEvent) => {
       const m = e.data as
@@ -134,11 +146,12 @@ function inWorker(file: File, onProgress: (f: number) => void, watchdogMs: numbe
         | { type: 'error'; message: string; noEncoder?: boolean }
       if (!started) {
         started = true
-        arm()
+        dog.stop()
+        dog = startWatchdog({ ...wd, onStall: (why) => finish(() => reject(stalled(wd.visibleMs, why))) })
       }
       if (m.type === 'progress') {
         events++
-        arm()
+        dog.kick()
         onProgress(m.total > 0 ? m.done / m.total : 0)
       } else if (m.type === 'done') {
         finish(() => resolve(toPrepared(file, m, events, 'worker')))
@@ -151,38 +164,33 @@ function inWorker(file: File, onProgress: (f: number) => void, watchdogMs: numbe
       // Failing before saying anything = the script never ran (bad bundle, CSP, old browser).
       finish(() => reject(started ? new Error(e.message || 'prep worker failed') : new WorkerUnavailable(e.message || 'worker failed to load')))
     }
-    timer = setTimeout(() => finish(() => reject(new WorkerUnavailable(`no answer from the worker in ${startMs} ms`))), startMs)
-    worker.postMessage(fault ? { file, fault } : { file })
+    const job = { file, hidden: wd.visibility.hidden() }
+    worker.postMessage(fault ? { ...job, fault } : job)
   })
 }
 
-async function onMainThread(file: File, onProgress: (f: number) => void, watchdogMs: number, trail: PrepFallback[], fault?: PrepFault): Promise<Prepared & { extra: StreamExtra }> {
+async function onMainThread(file: File, onProgress: (f: number) => void, wd: WD, trail: PrepFallback[], fault?: PrepFault): Promise<Prepared & { extra: StreamExtra }> {
   const { prepWavToOgg } = await import('./stream-encode')
   let events = 0
-  let timer: ReturnType<typeof setTimeout> | undefined
   let stop: Error | null = null
   let rejectStall: (e: Error) => void = () => {}
   const stall = new Promise<never>((_, rej) => { rejectStall = rej })
-  const arm = () => {
-    clearTimeout(timer)
-    timer = setTimeout(() => { stop = stalled(watchdogMs); rejectStall(stop) }, watchdogMs)
-  }
-  arm()
+  const dog = startWatchdog({ ...wd, onStall: (why) => { stop = stalled(wd.visibleMs, why); rejectStall(stop) } })
   try {
     const work = prepWavToOgg(
       file,
       (done, total) => {
         if (stop) throw stop // the watchdog fired: end the loop at the next slice
         events++
-        arm()
+        dog.kick()
         onProgress(total > 0 ? done / total : 0)
       },
-      { yieldEachSlice: true, fault },
+      { yieldEachSlice: true, fault, hidden: wd.visibility.hidden },
     )
     work.catch(() => {})
     const m = await Promise.race([work, stall])
     return toPrepared(file, m, events, 'main-thread', trail)
   } finally {
-    clearTimeout(timer)
+    dog.stop()
   }
 }

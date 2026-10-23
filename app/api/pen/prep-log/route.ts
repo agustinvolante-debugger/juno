@@ -1,29 +1,27 @@
 import { NextResponse } from 'next/server'
 import { authedEmail } from '@/lib/news/auth'
+import { clientEventRow } from '@/lib/pen/client-events'
+import { storeClientEvent } from '@/lib/pen/client-events-server'
 
 export const dynamic = 'force-dynamic'
 
-// The browser's audio prep fell back (worker → page, or to uploading the original as-is): one
-// line in the server log, so real-world prep failures are visible in Vercel. No table, nothing
-// stored; the client sends it fire-and-forget (lib/pen/stream-prep-client.ts PrepFailed trail).
+// The browser's audio prep fell back (worker → page, or to uploading the original as-is), or an
+// upload ended in an error: one line in the server log AND one pen_client_events row (23 Oct),
+// with how long the tab had been hidden, so real-world failures can be counted. The client sends
+// it fire-and-forget (lib/pen/client-events.ts logClientEvent). Before the table exists (the
+// 2026-10-23 CREATE in lib/pen/schema.sql) it only logs.
 export async function POST(req: Request) {
   const email = await authedEmail()
   if (!email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  const b = (await req.json().catch(() => ({}))) as {
-    name?: unknown
-    bytes?: unknown
-    outcome?: unknown
-    trail?: unknown
-  }
-  const str = (v: unknown, n: number) => (typeof v === 'string' ? v.slice(0, n) : '')
-  const trail = (Array.isArray(b.trail) ? b.trail : []).slice(0, 4).map((t) => {
-    const x = (t ?? {}) as Record<string, unknown>
-    return `${str(x.path, 12)}/${str(x.stage, 8)}@${typeof x.pct === 'number' ? Math.round(x.pct) : '?'}%: ${str(x.error, 200)}`
-  })
-  const mb = typeof b.bytes === 'number' ? (b.bytes / 1048576).toFixed(1) : '?'
+  const b = (await req.json().catch(() => ({}))) as Record<string, unknown>
+  const row = clientEventRow(email, b, req.headers.get('user-agent'))
+  if (!row) return NextResponse.json({ error: 'unknown event' }, { status: 400 })
+  const mb = row.file_bytes !== null ? (row.file_bytes / 1048576).toFixed(1) : '?'
+  const vis = row.visibility ? `${row.visibility.state}, hidden ${Math.round(row.visibility.hidden_ms_last_min / 1000)} s of the last min` : '?'
   console.warn(
-    `[pen prep-log] ${email} file=${str(b.name, 80)} ${mb} MB outcome=${str(b.outcome, 12)} ` +
-      `trail=[${trail.join(' | ')}] ua=${str(req.headers.get('user-agent'), 200)}`,
+    `[pen prep-log] ${email} ${row.kind} file=${row.file_name} ${mb} MB stage=${row.stage ?? '-'}@${row.pct ?? '?'}% ` +
+      `vis=[${vis}] reason=${row.reason ?? '-'} ua=${row.ua ?? '-'}`,
   )
+  await storeClientEvent(row)
   return NextResponse.json({ ok: true })
 }

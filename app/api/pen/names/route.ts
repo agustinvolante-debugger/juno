@@ -36,13 +36,16 @@ async function payload(email: string, sessions: PenSession[]) {
   }
 }
 
-async function owned(email: string, ids: string[]): Promise<PenSession[]> {
+/** What payload() reads. The recording page asks for this on open (useNames): no transcripts. */
+const NAME_COLS = 'id,merge_group,names_at,segments_at,event_mode'
+
+async function owned(email: string, ids: string[], cols = '*'): Promise<PenSession[]> {
   // A whole event day is dozens of files (Carlos's 30 Sep: 34); one query, kept in the order asked.
   const want = Array.from(new Set(ids.filter((x) => UUID.test(x)))).slice(0, 80)
   if (!want.length) return []
-  const { data, error } = await supabaseAdmin.from('pen_sessions').select('*').eq('user_email', email).in('id', want)
+  const { data, error } = await supabaseAdmin.from('pen_sessions').select(cols).eq('user_email', email).in('id', want)
   if (error) throw new Error(error.message)
-  const byId = new Map(((data ?? []) as PenSession[]).map((s) => [s.id, s]))
+  const byId = new Map(((data ?? []) as unknown as PenSession[]).map((s) => [s.id, s]))
   return want.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : []))
 }
 
@@ -58,7 +61,7 @@ export async function GET(req: Request) {
   const day = url.searchParams.get('day')
   if (day && UUID.test(day)) return NextResponse.json({ day: await dayCandidates(email, day) })
   const ids = (url.searchParams.get('ids') ?? '').split(',')
-  const sessions = await owned(email, ids)
+  const sessions = await owned(email, ids, NAME_COLS)
   if (!sessions.length) return NextResponse.json({ error: 'not found' }, { status: 404 })
   return NextResponse.json(await payload(email, sessions))
 }
@@ -128,7 +131,7 @@ export async function POST(req: Request) {
     } else {
       return NextResponse.json({ error: 'unknown action' }, { status: 400 })
     }
-    return NextResponse.json(await payload(email, await owned(email, sessions.map((s) => s.id))))
+    return NextResponse.json(await payload(email, await owned(email, sessions.map((s) => s.id), NAME_COLS)))
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }

@@ -522,3 +522,8 @@ alter table public.pen_segments enable row level security;  -- service role only
 -- create index if not exists pen_segments_user_session on public.pen_segments(user_email, session_id);
 -- Suggestions per recording (split-server, suggestions.ts after every write-up).
 -- create index if not exists pen_suggestions_user_session on public.pen_suggestions(user_email, session_id);
+
+-- 2026-10-23, upload diagnostics (lib/pen/client-events.ts, POST /api/pen/prep-log). One row per prep fallback (kind 'prep-fallback' = the worker failed and the page's own prep finished; 'prep-as-is' = every prep failed and the original went up uncompressed) and per upload that ended in an error ('upload-failed'). visibility = { state, hidden_ms_last_min, hidden_ms_since_start, hidden_spans } at the time, to test the background-tab theory. Until it runs the route only logs (one console warning per event). ONE line each.
+-- create table if not exists public.pen_client_events (id uuid primary key default gen_random_uuid(), user_email text not null, at timestamptz not null default now(), kind text not null, file_name text, file_bytes bigint, stage text, pct real, reason text, visibility jsonb, ua text);
+-- create index if not exists pen_client_events_user_at on public.pen_client_events(user_email, at desc);
+-- alter table public.pen_client_events enable row level security;  -- service role only

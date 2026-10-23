@@ -174,6 +174,9 @@ const en = {
   close: 'Close',
   closeNav: 'Close navigation',
   chooseRecording: 'Choose a recording on the left.',
+  openingRecording: 'Opening the recording…',
+  openFailed: 'This recording didn’t open.',
+  openRetry: 'Try again',
   askPerson: (label: string) => `Show me all the conversations with @${label}`,
 
   // rail
@@ -523,6 +526,9 @@ const es: AppCopy = {
   close: 'Cerrar',
   closeNav: 'Cerrar el menú',
   chooseRecording: 'Elige una grabación a la izquierda.',
+  openingRecording: 'Abriendo la grabación…',
+  openFailed: 'Esta grabación no se abrió.',
+  openRetry: 'Reintentar',
   askPerson: (label) => `Muéstrame todas las conversaciones con @${label}`,
 
   recent: 'Grabaciones recientes',
@@ -860,6 +866,9 @@ const pt: AppCopy = {
   close: 'Fechar',
   closeNav: 'Fechar o menu',
   chooseRecording: 'Escolha uma gravação à esquerda.',
+  openingRecording: 'Abrindo a gravação…',
+  openFailed: 'Esta gravação não abriu.',
+  openRetry: 'Tentar de novo',
   askPerson: (label) => `Mostre todas as conversas com @${label}`,
 
   recent: 'Gravações recentes',

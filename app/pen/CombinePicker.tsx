@@ -60,7 +60,9 @@ export default function CombinePicker({ session, sessions, T, lang, onJoin, onCl
   const options = useMemo(() => {
     const ok = sessions.filter((s) =>
       s.id !== session.id && !s.merge_group && s.source_channel !== 'sample' &&
-      ((s.transcript?.utterances?.length ?? 0) > 0 || !!s.transcript?.text))
+      // Transcribed, judged on the light list row (23 Oct: the list carries no transcripts).
+      // Silent or notes-only recordings have nothing to join; the server checks again anyway.
+      (s.status === 'transcribed' || s.status === 'noting' || s.status === 'noted') && !s.notes?.empty && !s.notes?.notes_only)
     return ok
       .map((s) => ({ s, t: startMs(s), day: sameDay(startMs(s), here) }))
       .sort((a, b) => Number(b.day) - Number(a.day) || b.t - a.t)

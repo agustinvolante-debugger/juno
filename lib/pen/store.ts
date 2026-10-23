@@ -2,6 +2,7 @@ import { supabaseAdmin } from '@/lib/supabase'
 import type { MeetingType } from '@/lib/pen/categories'
 import { deleteTranscript } from '@/lib/pen/aai'
 import { withDbRetry } from '@/lib/pen/db-retry'
+import { HEAVY_COLS } from '@/lib/pen/light'
 
 export const BUCKET = 'pen-audio'
 
@@ -220,8 +221,18 @@ export async function createReadUrl(path: string, expiresInSec = 60 * 60 * 4) {
  */
 export const RUN_COLS = 'id,user_email,title,status,storage_path,source_name,mime,duration_sec,bytes,aai_id,client_name,error_text,recorded_at,merge_group,merge_index,source_channel,briefing_sent_at,meeting_type,created_at,updated_at'
 export const META_COLS = `${RUN_COLS},notes,action_done,action_meta,user_notes,consent,language,speaker_map,event_mode,names_at,segments_at`
-/** Never in a list read. Exported for the tests. */
-export const HEAVY_COLS = ['transcript', 'translation', 'chat', 'deliverables', 'note_blocks', 'transcript_edits'] as const
+/** Never in a list read (lib/pen/light.ts). Re-exported for the tests. */
+export { HEAVY_COLS }
+/**
+ * What the browser's recordings list reads (23 Oct): every column but the heavy ones. The list,
+ * Home, the calendar match, the join detector, the Who card and the audio line all read these;
+ * the recording page loads the rest itself (GET /api/pen/sessions/[id]). Measured on the
+ * founder's account: notes is ≤ 5 KB a row, a transcript up to 2 MB.
+ */
+export const CLIENT_COLS = `${META_COLS},missed_done,audio_deleted_at,keep_audio,who_at,cal_people_at,notes_attempts,notes_retry_at`
+/** The status poll (GET /api/pen/transcribe): what it decides on, and what the row shows. */
+export const STATUS_COLS = 'id,user_email,status,error_text,aai_id,title,meeting_type,language,duration_sec,merge_group,merge_index,created_at,updated_at,notes_attempts,notes_retry_at'
+export const STATUS_COLS_OLD = 'id,user_email,status,error_text,aai_id,title,meeting_type,language,duration_sec,merge_group,merge_index,created_at,updated_at'
 
 /**
  * Runs a pen_sessions read with `cols`, and again with each fallback when the database says a
@@ -265,17 +276,28 @@ export async function listSessions(userEmail: string, limit = 100): Promise<PenS
 }
 
 /**
- * The list the app sends to the browser. Same rows as listSessions minus each utterance's
- * word-level timings (`words`): ~85% of the payload (~10 MB of HTML for a heavy account) and no
- * screen uses them. Server code that rewrites transcripts (merge, transcribe) keeps listSessions.
+ * The list the app sends to the browser: light rows, no transcripts (CLIENT_COLS; 23 Oct). It
+ * used to be select('*') minus word timings, which for a two-hour recording is still megabytes,
+ * read on every page load, refresh and finished upload: the 4-file batch timed the database out.
+ * Falls back to fewer columns while a newer ALTER hasn't run.
  */
 export async function listSessionsForClient(userEmail: string, limit = 100): Promise<PenSession[]> {
-  const rows = await listSessions(userEmail, limit)
-  return rows.map((s) => {
-    const t = s.transcript as { utterances?: Record<string, unknown>[] } | null | undefined
-    if (!t?.utterances?.length) return s
-    return { ...s, transcript: { ...t, utterances: t.utterances.map(({ words: _w, ...u }) => u) } } as PenSession
-  })
+  return selectCols<PenSession>(
+    (cols) => supabaseAdmin.from('pen_sessions').select(cols).eq('user_email', userEmail).order('created_at', { ascending: false }).limit(limit),
+    CLIENT_COLS, META_COLS, `${RUN_COLS},notes,action_done,user_notes,consent`,
+  )
+}
+
+/** One recording's status for the poll: no transcript, no notes (only whether a summary exists). */
+export async function getSessionStatus(userEmail: string, id: string): Promise<(PenSession & { has_summary?: boolean }) | null> {
+  const rows = await selectCols<PenSession & { summary?: string | null }>(
+    (cols) => supabaseAdmin.from('pen_sessions').select(cols).eq('user_email', userEmail).eq('id', id).limit(1),
+    `${STATUS_COLS},summary:notes->>summary`, `${STATUS_COLS_OLD},summary:notes->>summary`,
+  )
+  const r = rows[0]
+  if (!r) return null
+  const { summary, ...rest } = r
+  return { ...(rest as PenSession), has_summary: Boolean(summary) }
 }
 
 export async function getSession(userEmail: string, id: string): Promise<PenSession | null> {

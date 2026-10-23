@@ -28,8 +28,10 @@ import type { Allowance } from '@/lib/pen/allowance'
 import type { Lang } from '@/lib/pen/i18n'
 import { PEN_NAME_RE } from '@/lib/pen/pen-device'
 import { prepareAudio, fmtMB, SOFT_SIZE_LIMIT, needsPiecedUpload, durationWithoutDecoding, pieceSizeFor, type Prepared } from '@/lib/pen/encode'
-import { canStreamPrep, streamPrepare, PrepFailed, type PrepFallback, type StreamExtra } from '@/lib/pen/stream-prep-client'
-import { postJsonRetry, UploadError, classifyUploadError, canRetry, isStalled, Lanes, runLanes, uploadReason, stillReadable, UPLOAD_RETRY_COPY, type UploadFailure } from '@/lib/pen/upload-retry'
+import { canStreamPrep, streamPrepare, PrepFailed, type StreamExtra } from '@/lib/pen/stream-prep-client'
+import { logClientEvent } from '@/lib/pen/client-events'
+import { trackVisibility, WATCHDOG_GRACE_MS } from '@/lib/pen/watchdog'
+import { postJsonRetry, UploadError, classifyUploadError, canRetry, isStalled, STALL_MS, Lanes, runLanes, uploadReason, stillReadable, UPLOAD_RETRY_COPY, type UploadFailure } from '@/lib/pen/upload-retry'
 
 /* ------------------------------------------------------------------- types */
 
@@ -202,11 +204,21 @@ export default function UploadsProvider({ children }: { children: React.ReactNod
   }, [uploads])
   // No progress for 90 s while uploading (not while preparing or waiting a turn): stop it, so the
   // row shows a reason and a Retry instead of sitting at 5% (22 Oct).
+  // Background-tab aware (23 Oct): while the tab is hidden, and for a grace period after it comes
+  // back (a frozen tab's progress events arrive late), only a far longer silence counts.
+  const shownAt = useRef(0)
+  useEffect(() => {
+    trackVisibility()
+    const on = () => { if (document.visibilityState === 'visible') shownAt.current = Date.now() }
+    document.addEventListener('visibilitychange', on)
+    return () => document.removeEventListener('visibilitychange', on)
+  }, [])
   useEffect(() => {
     if (!uploading) return
     const t = window.setInterval(() => {
       const now = Date.now()
-      for (const u of uploadsNow.current) if (isStalled(u, now)) uploadAborts.current.get(u.key)?.abort()
+      const away = document.visibilityState === 'hidden' || now - shownAt.current < WATCHDOG_GRACE_MS
+      for (const u of uploadsNow.current) if (isStalled(u, now, away ? STALL_MS * 4 : STALL_MS)) uploadAborts.current.get(u.key)?.abort()
     }, 5000)
     return () => window.clearInterval(t)
   }, [uploading])
@@ -328,6 +340,7 @@ export default function UploadsProvider({ children }: { children: React.ReactNod
       // Prep is the long part here (~20-30 s an hour), so it gets most of the bar: 2 → 45%.
       step({ phase: T.phasePrepQueue, pct: 2, short: T.upPrepQueue, stage: 'prep' })
       let prep: (Prepared & { extra?: StreamExtra }) | null = null
+      const prepStart = Date.now()
       try {
         prep = await onePrepAtATime(() => {
           step({ phase: T.phasePreparingPct(0), pct: 2, short: T.upPreparing(0), stage: 'prep' })
@@ -340,10 +353,13 @@ export default function UploadsProvider({ children }: { children: React.ReactNod
         // The pen came out: nothing to send as it is either, so say so now (22 Oct).
         if (!(await stillReadable(file))) throw new UploadError('unplugged', 'file unreadable')
         console.warn('[pen] streaming prep failed, uploading as-is:', (e as Error).message)
-        logPrep(file, 'as-is', e instanceof PrepFailed ? e.trail : [{ path: 'worker', stage: 'prep', pct: 0, error: (e as Error).message }])
+        const trail = e instanceof PrepFailed ? e.trail : [{ path: 'worker' as const, stage: 'prep' as const, pct: 0, error: (e as Error).message }]
+        logClientEvent({ kind: 'prep-as-is', name: file.name, bytes: file.size, trail, since: prepStart })
       }
       // The worker failed part-way but the page's own prep finished: worth knowing too.
-      if (prep?.extra?.fallbacks.some((f) => f.stage === 'prep')) logPrep(file, prep.extra.path, prep.extra.fallbacks)
+      if (prep?.extra?.fallbacks.some((f) => f.stage === 'prep')) {
+        logClientEvent({ kind: 'prep-fallback', name: file.name, bytes: file.size, trail: prep.extra.fallbacks, since: prepStart })
+      }
       up = prep ? await upPrepared(prep, 45) : await asIs()
     } else if (needsPiecedUpload(file)) {
       up = await asIs()
@@ -429,6 +445,12 @@ export default function UploadsProvider({ children }: { children: React.ReactNod
    * (onePrepAtATime). Each job can be stopped by the stall check and retried from its row.
    */
   async function runUploads(jobs: UploadJob[]) {
+    // Held for the whole batch: Chrome doesn't freeze (or discard) a background tab that holds a
+    // Web Lock, so a batch left running while the founder works in another app keeps going.
+    // It does not lift timer throttling; the watchdogs handle that (lib/pen/watchdog.ts).
+    return withWebLock('juno-pen-uploads', () => runUploadsNow(jobs))
+  }
+  async function runUploadsNow(jobs: UploadJob[]) {
     for (const j of jobs) uploadJobs.current.set(j.key, j)
     const lanes = new Lanes(phoneNow.current ? 1 : 3)
     const wentUp: File[] = []
@@ -442,6 +464,7 @@ export default function UploadsProvider({ children }: { children: React.ReactNod
       // The stall check aborts: the row fails over at once, whatever step it was waiting on.
       const stalled = new Promise<never>((_, reject) => ctl.signal.addEventListener('abort', () => reject(new UploadError('stalled', 'stalled')), { once: true }))
       stalled.catch(() => {})
+      const startedAt = Date.now()
       try {
         // Saved already (it failed at "sending"): only that step again, not the whole upload.
         const saved = savedIds.current.get(j.key)
@@ -463,6 +486,12 @@ export default function UploadsProvider({ children }: { children: React.ReactNod
         // error"), a pen file that can't be read any more means the pen came out.
         if (j.fromPen && kind !== 'unplugged' && !savedIds.current.has(j.key) && !(await stillReadable(j.file))) kind = 'unplugged'
         patchUpload(j.key, { state: 'error', kind, error: (e as Error).message })
+        const row = uploadsNow.current.find((u) => u.key === j.key)
+        logClientEvent({
+          kind: 'upload-failed', name: j.file.name, bytes: j.file.size,
+          stage: `${row?.stage ?? 'upload'}:${kind}`, pct: row ? Math.round(row.pct) : null,
+          reason: `${(e as Error).message}${row?.phase ? ` (at: ${row.phase})` : ''}`.slice(0, 500), since: startedAt,
+        })
         // Only a busy or dropped answer slows the batch down; a too-big file says nothing about
         // the server, and neither does a pen pulled out.
         return !canRetry(kind) || kind === 'unplugged'
@@ -592,20 +621,14 @@ async function pool<T>(items: T[], n: number, fn: (x: T) => Promise<void>): Prom
   await Promise.all(Array.from({ length: Math.min(n, items.length) }, lane))
 }
 
-/**
- * The browser's prep fell back (worker → page, or to the original as-is): one line in the
- * server log (/api/pen/prep-log) so real-world failures show up in Vercel. Never throws, never
- * waits.
- */
-function logPrep(file: File, outcome: 'worker' | 'main-thread' | 'as-is', trail: PrepFallback[]) {
-  try {
-    void fetch('/api/pen/prep-log', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      keepalive: true,
-      body: JSON.stringify({ name: file.name, bytes: file.size, outcome, trail: trail.slice(0, 4) }),
-    }).catch(() => {})
-  } catch {}
+/** Runs `fn` holding a shared Web Lock where the browser has them; otherwise just runs it. */
+function withWebLock<R>(name: string, fn: () => Promise<R>): Promise<R> {
+  const locks = (typeof navigator !== 'undefined' ? (navigator as Navigator & { locks?: LockManager }).locks : undefined)
+  if (!locks?.request) return fn()
+  let out: Promise<R> | null = null
+  const held = locks.request(name, { mode: 'shared' }, () => (out = fn()))
+  // A lock request that fails (old browser, sandboxed frame) must not cost the upload.
+  return held.then(() => out!, () => out ?? fn()) as Promise<R>
 }
 
 /** fetch() gives no upload progress, and these files are big enough that it matters. */

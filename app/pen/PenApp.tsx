@@ -62,6 +62,8 @@ import { useUploads, type UploadEvent } from './uploads/UploadsProvider'
 import { usePenFlow, PenCard } from './pen/PenDevice'
 import { PEN_DEVICE_COPY } from './pen/pen-device.copy'
 import { canUsePenDrive } from './pen/pen-drive'
+import { useFullRows } from './useFullRows'
+import { splitHeavy, coalesce } from '@/lib/pen/light'
 
 
 /**
@@ -509,6 +511,7 @@ export default function PenApp({
   }, [sessions])
 
   const activeId = view.k === 'session' ? view.id : null
+  // The open recording's LIST row (light: no transcript). The recording page gets activeFull.
   const active = useMemo(() => sessions.find((s) => s.id === activeId) ?? null, [sessions, activeId])
   const inRec = Boolean(active)
   useEffect(() => { if (!inRec) setRecUnfold(false) }, [inRec])
@@ -562,14 +565,20 @@ export default function PenApp({
     }
   }
 
-  const refresh = useCallback(async () => {
+  // One list read for a burst of reasons (23 Oct): a batch finishing, each recording's write-up
+  // landing (twice), an import. Calls within a second share one read, and never two at once
+  // (lib/pen/light.ts coalesce). The rows are light: no transcripts (the recording page loads
+  // its own, useFullRows).
+  const refreshNow = useRef<() => Promise<void>>(async () => {})
+  refreshNow.current = async () => {
     const r = await fetch('/api/pen/sessions', { cache: 'no-store' })
     if (r.ok) setSessions(((await r.json()) as { sessions: PenSession[] }).sessions)
     void loadAllowance()
     // `stats` arrives as a server prop; re-running the server component is the only thing
     // that refreshes it. Without this the Overview and categories sit frozen at page load.
     router.refresh()
-  }, [router, loadAllowance])
+  }
+  const refresh = useMemo(() => coalesce(() => refreshNow.current(), 1000), [])
 
   // Recordings held for lack of time go through on their own once there is time again: after
   // the 1st, or after hours were bought somewhere the webhook could not reach. Once per load.
@@ -583,8 +592,13 @@ export default function PenApp({
     })()
   }, [allowance, sessions, refresh])
 
+  // A row from the server (a write-up, a chat answer) or the status poll's light row: merged into
+  // the list, its heavy fields kept for the recording page (useFullRows), never in the list.
+  const absorbRef = useRef<(id: string, row: Record<string, unknown>) => void>(() => {})
   const patchLocal = useCallback((s: PenSession) => {
-    setSessions((prev) => prev.map((x) => (x.id === s.id ? s : x)))
+    const { light } = splitHeavy(s as unknown as Record<string, unknown>)
+    absorbRef.current(s.id, s as unknown as Record<string, unknown>)
+    setSessions((prev) => prev.map((x) => (x.id === s.id ? ({ ...x, ...light } as PenSession) : x)))
   }, [])
 
   // Delete with a 5-second Undo (founder, 22 Oct): the recording leaves the screen at once and a
@@ -691,10 +705,16 @@ export default function PenApp({
     // 'noting' too: the notes are being written on the server, and this is how they appear.
     const watching = sessions.filter((s) => s.status === 'transcribing' || s.status === 'transcribed' || s.status === 'noting')
     if (!watching.length) return
+    // One round at a time: a slow database must not stack polls on top of each other (23 Oct).
+    // The answer is a light row (status, error, title; no transcript), merged into the list.
+    let polling = false
     const t = setInterval(async () => {
+      if (polling) return
+      polling = true
+      try {
       for (const s of watching) {
-        const r = await fetch(`/api/pen/transcribe?id=${s.id}`, { cache: 'no-store' })
-        if (!r.ok) continue
+        const r = await fetch(`/api/pen/transcribe?id=${s.id}`, { cache: 'no-store' }).catch(() => null)
+        if (!r?.ok) continue
         const j = (await r.json()) as { session?: PenSession }
         if (!j.session) continue
         if (j.session.status !== s.status) patchLocal(j.session)
@@ -711,6 +731,9 @@ export default function PenApp({
         } else {
           delete seenTranscribed.current[j.session.id]
         }
+      }
+      } finally {
+        polling = false
       }
     }, 6000)
     return () => clearInterval(t)
@@ -816,7 +839,7 @@ export default function PenApp({
     switch (e.type) {
       case 'saved':
         // Not opened: the user is busy elsewhere in the app while these upload.
-        setSessions((prev) => [e.session, ...prev.filter((x) => x.id !== e.session.id)])
+        setSessions((prev) => [splitHeavy(e.session as unknown as Record<string, unknown>).light as unknown as PenSession, ...prev.filter((x) => x.id !== e.session.id)])
         break
       case 'sent':
         // A replay may find it written up already: keep that, the ready toast still comes.
@@ -920,6 +943,41 @@ export default function PenApp({
             .sort((a, b) => (a.merge_index ?? 0) - (b.merge_index ?? 0))
         : [s],
     [sessions],
+  )
+
+  // The open recording with its transcript, chat and edits, loaded on open (useFullRows). Until
+  // they are here the recording page shows "Opening…": its editors start from these fields, so
+  // rendering it early would start them empty.
+  const activeParts = useMemo(() => (active ? partsOf(active) : []), [active, partsOf])
+  const full = useFullRows(activeParts)
+  absorbRef.current = full.absorb
+  const mergeFull = full.merge
+  const absorbFull = full.absorb
+  const activeFull = useMemo(() => (active ? mergeFull(active) : null), [active, mergeFull])
+  const activePartsFull = useMemo(() => activeParts.map(mergeFull), [activeParts, mergeFull])
+  const detailPatch = useCallback(async (patch: Record<string, unknown>) => {
+    if (!active) return
+    const r = await fetch(`/api/pen/sessions/${active.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    })
+    if (!r.ok) {
+      const msg = (await r.json().catch(() => ({}))).error ?? T.saveFailed(r.status)
+      setErr(msg)
+      // Rethrow so the editor can show "not saved" rather than a false "saved".
+      throw new Error(msg)
+    }
+    // Note blocks and transcript edits stay with the open recording, not in the list.
+    const { light, heavy } = splitHeavy(patch)
+    absorbFull(active.id, heavy)
+    setSessions((prev) => prev.map((x) => (sameUnit(x, active, patch) ? { ...x, ...light } : x)))
+  }, [active, absorbFull, T])
+  const opening = !full.ready && (
+    <div className="pen-panel px-8 py-16 text-center" role="status" aria-live="polite">
+      <p className="text-[16.5px]" style={{ color: 'var(--dim)' }}>{full.failed ? T.openFailed : T.openingRecording}</p>
+      {full.failed && <button type="button" className="pen-btn mt-4" onClick={full.retry}>{T.openRetry}</button>}
+    </div>
   )
 
   // What the server's detector knows that this one needs to agree with it (GET /api/pen/merge):
@@ -1230,13 +1288,14 @@ export default function PenApp({
         onBack = () => setView({ k: 'archive' })
         screen = (
           <>
+            {opening || (<>
             <Detail
               selfEmail={email}
               notion={notion}
               onPeopleChanged={() => void refreshPeople()}
               onBack={() => setView({ k: 'archive' })}
-              session={active} tab={tab} setTab={setTab}
-              parts={partsOf(active)}
+              session={activeFull!} tab={tab} setTab={setTab}
+              parts={activePartsFull}
               split={splitApi}
               splitting={joining}
               onSplit={() => active.merge_group && void splitGroup(active.merge_group)}
@@ -1246,21 +1305,10 @@ export default function PenApp({
               onNotes={(type) => makeNotes(active.id, type)}
               askCategory={catAsk[active.id]}
               onDelete={() => removeSession(active.id)}
-              onPatch={async (patch) => {
-                const r = await fetch(`/api/pen/sessions/${active.id}`, {
-                  method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(patch),
-                })
-                if (!r.ok) {
-                  const msg = (await r.json().catch(() => ({}))).error ?? T.saveFailed(r.status)
-                  setErr(msg)
-                  throw new Error(msg)
-                }
-                setSessions((prev) => prev.map((x) => (sameUnit(x, active, patch) ? { ...x, ...patch } : x)))
-              }}
+              onPatch={detailPatch}
             />
-            {chatOpen && <ChatPanel session={active} onChat={patchLocal} onClose={() => setChatOpen(false)} />}
+            {chatOpen && <ChatPanel session={activeFull!} onChat={patchLocal} onClose={() => setChatOpen(false)} />}
+            </>)}
           </>
         )
       } else {
@@ -1944,14 +1992,15 @@ export default function PenApp({
             )
           ) : (
             <div className={chatOpen ? 'grid gap-7 xl:grid-cols-[minmax(0,1fr)_352px]' : ''}>
+              {opening || (<>
               <Detail
                 selfEmail={email}
                 notion={notion}
                 google={readOnly ? null : google}
                 onPeopleChanged={() => void refreshPeople()}
                 onBack={() => setView({ k: 'archive' })}
-                session={active} tab={tab} setTab={setTab}
-                parts={partsOf(active)}
+                session={activeFull!} tab={tab} setTab={setTab}
+                parts={activePartsFull}
               split={splitApi}
                 splitting={joining}
                 onSplit={() => active.merge_group && void splitGroup(active.merge_group)}
@@ -1961,22 +2010,10 @@ export default function PenApp({
                 onNotes={(type) => makeNotes(active.id, type)}
                 askCategory={catAsk[active.id]}
                 onDelete={() => removeSession(active.id)}
-                onPatch={async (patch) => {
-                  const r = await fetch(`/api/pen/sessions/${active.id}`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(patch),
-                  })
-                  if (!r.ok) {
-                    const msg = (await r.json().catch(() => ({}))).error ?? T.saveFailed(r.status)
-                    setErr(msg)
-                    // Rethrow so the editor can show "not saved" rather than a false "saved".
-                    throw new Error(msg)
-                  }
-                  setSessions((prev) => prev.map((x) => (sameUnit(x, active, patch) ? { ...x, ...patch } : x)))
-                }}
+                onPatch={detailPatch}
               />
-              {chatOpen && <ChatPanel session={active} onChat={patchLocal} onClose={() => setChatOpen(false)} />}
+              {chatOpen && <ChatPanel session={activeFull!} onChat={patchLocal} onClose={() => setChatOpen(false)} />}
+              </>)}
             </div>
           )}
         </section>
