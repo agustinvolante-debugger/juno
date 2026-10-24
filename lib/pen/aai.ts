@@ -67,7 +67,14 @@ export async function submit(opts: { audioUrl: string; webhookUrl?: string } & S
   // calls with a phantom third, five-person meetings squeezed into three. So: a range when we
   // know who was there, nothing at all when we don't.
   if (opts.speakers) body.speaker_options = { min_speakers_expected: opts.speakers.min, max_speakers_expected: opts.speakers.max }
-  if (opts.languages?.length) body.language_detection_options = { expected_languages: opts.languages }
+  if (opts.languages?.length) {
+    // AssemblyAI's fallback language defaults to 'en' and must be one of the expected languages
+    // (23 Oct: a Spanish-only account got 400 "fallback_language 'en' is not in expected_languages
+    // ['es']" on every upload, pen and WhatsApp). Fall back to English when it's expected, else to
+    // the first expected language.
+    const fallback = opts.languages.includes('en') ? 'en' : opts.languages[0]
+    body.language_detection_options = { expected_languages: opts.languages, fallback_language: fallback }
+  }
   if (opts.keyterms?.length) body.keyterms_prompt = opts.keyterms
   if (opts.context) body.prompt = opts.context
   if (opts.names && opts.names.length >= 2) {
